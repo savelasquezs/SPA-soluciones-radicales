@@ -2,22 +2,16 @@
 
 Esta guía configura el backend aprobado para Soluciones Radicales MIP.
 
-## 1. Crear el proyecto
+## 1. Proyecto actual
 
-Desde Neon Console:
+El proyecto aprobado ya existe:
 
-1. crear un proyecto llamado `soluciones-radicales`;
-2. seleccionar PostgreSQL 17;
-3. escoger la región disponible con menor latencia para la operación;
-4. conservar `main` como rama base;
-5. no aplicar todavía las migraciones del producto.
+- proyecto: `patient-pine-80293508`;
+- PostgreSQL 18;
+- rama productiva: `production`;
+- rama de desarrollo: `desarrollo`.
 
-También puede crearse por CLI:
-
-```bash
-npx -y neon@6.2.4 auth
-npx -y neon@6.2.4 projects create --name soluciones-radicales --pg-version 17
-```
+No crear otro proyecto ni aplicar cambios directamente sobre `production`.
 
 ## 2. Enlazar el repositorio
 
@@ -25,7 +19,7 @@ Desde la raíz del repo:
 
 ```bash
 npx -y neon@6.2.4 auth
-npx -y neon@6.2.4 link
+npx -y neon@6.2.4 link --project-id patient-pine-80293508 --branch desarrollo -y
 ```
 
 `neon link` crea el contexto local `.neon`. Ese archivo es específico del desarrollador y no debe tratarse como configuración compartida.
@@ -35,7 +29,7 @@ npx -y neon@6.2.4 link
 No desarrollar directamente sobre la rama productiva.
 
 ```bash
-npx -y neon@6.2.4 checkout dev-main
+npx -y neon@6.2.4 checkout desarrollo
 ```
 
 Para una feature aislada puede usarse, por ejemplo:
@@ -145,7 +139,7 @@ npm run db:status
 npm run db:diff
 ```
 
-Aplicar solo sobre `dev-main` o la rama de desarrollo seleccionada:
+Aplicar solo sobre `desarrollo` o una rama de desarrollo aislada autorizada:
 
 ```bash
 npm run db:migrate

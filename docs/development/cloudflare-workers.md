@@ -19,7 +19,7 @@ La raíz del repositorio contiene `wrangler.jsonc`:
 
 ```jsonc
 {
-  "name": "soluciones-radicales-mip",
+  "name": "spa-soluciones-radicales",
   "compatibility_date": "2026-10-04",
   "assets": {
     "directory": "./dist",
@@ -29,6 +29,8 @@ La raíz del repositorio contiene `wrangler.jsonc`:
 ```
 
 No agregar `main` hasta que exista una necesidad real de ejecutar código Worker.
+
+El nombre coincide con el Worker existente conectado a este repositorio; cambiarlo crearía un despliegue separado.
 
 ## Configuración en Cloudflare Builds
 

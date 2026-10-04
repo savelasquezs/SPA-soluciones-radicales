@@ -28,7 +28,7 @@ El runner de migraciones crea `app_meta.schema_migrations` y registra nombre + c
 
 ## Ramas Neon
 
-- `main` de Neon queda reservado para el entorno que se designe como productivo.
+- `production` de Neon queda reservada para producción.
 - Desarrollo usa ramas hijas.
 - Un cambio de esquema importante debe aislarse en una rama Neon antes de tocar producción.
 - El checkout de Git no cambia automáticamente la rama Neon: verificar ambas.
