@@ -82,7 +82,7 @@ Distinguir:
 - pruebas unitarias locales;
 - build local;
 - rama Neon de desarrollo;
-- preview Cloudflare;
+- preview de Cloudflare Workers;
 - producción.
 
 Una validación en una capa no demuestra las demás.
