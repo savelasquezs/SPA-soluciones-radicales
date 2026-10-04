@@ -94,6 +94,7 @@ El runner registra cada archivo y su checksum en `app_meta.schema_migrations`. U
 - [Arquitectura](docs/architecture/overview.md)
 - [Decisiones técnicas](docs/architecture/decisions.md)
 - [Base de datos y migraciones](database/README.md)
+- [Configuración de Neon](docs/development/neon-setup.md)
 - [Reutilización frontend](docs/frontend/reuse.md)
 - [Flujo de desarrollo](docs/development/workflow.md)
 - [UX](docs/ux-guidelines.md)
