@@ -24,11 +24,14 @@ La raíz del repositorio contiene `wrangler.jsonc`:
   "assets": {
     "directory": "./dist",
     "not_found_handling": "single-page-application"
-  }
+  },
+  "previews": {}
 }
 ```
 
 No agregar `main` hasta que exista una necesidad real de ejecutar código Worker.
+
+El bloque `previews` habilita `wrangler preview` para los despliegues aislados de ramas y PR.
 
 El nombre coincide con el Worker existente conectado a este repositorio; cambiarlo crearía un despliegue separado.
 
