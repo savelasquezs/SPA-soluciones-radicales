@@ -8,7 +8,7 @@ Soluciones Radicales MIP administra el ciclo completo de servicios de Manejo Int
 
 | Componente | Responsabilidad |
 |---|---|
-| Cloudflare Pages | Publicar la SPA y previews |
+| Cloudflare Workers + Static Assets | Publicar la SPA y previews sin ejecutar lógica dinámica para las rutas estáticas |
 | Vue 3 | Interfaz, navegación y composición |
 | Pinia | Estado compartido entre rutas y procesos |
 | Neon Managed Better Auth | Inicio de sesión con Google e identidad |
@@ -24,7 +24,7 @@ Soluciones Radicales MIP administra el ciclo completo de servicios de Manejo Int
 ## Flujo principal
 
 ```text
-Cloudflare Pages
+Cloudflare Workers + Static Assets
   └─ Vue SPA
       ├─ Neon Managed Better Auth
       ├─ Neon Data API + PostgreSQL RLS
@@ -138,6 +138,19 @@ Retención:
 - informes y certificados PDF: hasta un año;
 - archivos maestros: mientras estén activos.
 
+## Cloudflare Workers y assets estáticos
+
+La primera versión se despliega como un Worker de **Static Assets únicamente**, sin script `main`.
+
+`wrangler.jsonc` define:
+
+- `assets.directory = "./dist"`;
+- `assets.not_found_handling = "single-page-application"`.
+
+Esto conserva la SPA como contenido estático, permite recargar rutas de Vue Router y deja preparado el proyecto para añadir capacidades de Worker cuando exista una necesidad concreta.
+
+Si posteriormente se agregan endpoints Cloudflare, se prefieren rutas explícitas como `/api/*` y ejecución selectiva del Worker, evitando que las navegaciones y assets estáticos invoquen código dinámico innecesariamente.
+
 ## Integraciones
 
 Gmail y Calendar usan exclusivamente `solucionesradicales1@gmail.com`. El refresh token nunca llega al navegador.
@@ -157,7 +170,7 @@ La aplicación debe cargarse y autenticarse antes de perder conexión.
 
 ## Entornos y despliegue
 
-- Frontend: Cloudflare Pages.
+- Frontend: Cloudflare Workers + Static Assets.
 - Base/Auth/Data API/Functions: Neon.
 - Archivos: Cloudflare R2.
 - Desarrollo de esquema: ramas Neon.

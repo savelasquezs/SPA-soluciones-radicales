@@ -4,10 +4,10 @@ Este archivo registra decisiones permanentes. Las tareas pendientes se mantienen
 
 ## ADR-001 · Plataforma
 
-- **Estado:** Aprobada
+- **Estado:** Supersedida por ADR-018
 - **Fecha:** 2026-10-04
-- **Decisión:** Cloudflare Pages sirve el frontend; Neon provee PostgreSQL, Managed Better Auth, Data API y Functions; Cloudflare R2 almacena archivos; Google APIs provee Gmail y Calendar.
-- **Consecuencia:** Supabase queda fuera de la arquitectura activa. La SPA permanece estática y los secretos se ejecutan únicamente en backend.
+- **Decisión original:** Cloudflare Pages servía el frontend; Neon proveía PostgreSQL, Managed Better Auth, Data API y Functions; Cloudflare R2 almacenaba archivos; Google APIs proveía Gmail y Calendar.
+- **Consecuencia:** La elección de Pages fue reemplazada el mismo día por Workers + Static Assets; el resto de la plataforma se mantiene.
 
 ## ADR-002 · Desarrollo de base con ramas Neon
 
@@ -120,3 +120,14 @@ Este archivo registra decisiones permanentes. Las tareas pendientes se mantienen
 - **Fecha:** 2026-10-04
 - **Decisión:** La fuente de migraciones es `database/migrations/`, no una carpeta propia de un proveedor.
 - **Consecuencia:** El nombre obligatorio es `YYYYMMDD_NNN_descripcion.sql`; las migraciones aplicadas son inmutables y se registran con checksum.
+
+
+## ADR-018 · Cloudflare Workers + Static Assets
+
+- **Estado:** Aprobada
+- **Fecha:** 2026-10-04
+- **Decisión:** Cloudflare Workers + Static Assets reemplaza a Cloudflare Pages como plataforma de despliegue de la SPA.
+- **Motivo:** Workers permite comenzar con assets estáticos y ampliar posteriormente con bindings, rutas edge y otras capacidades sin migrar de plataforma.
+- **Implementación inicial:** `wrangler.jsonc` publica `./dist` con `not_found_handling = "single-page-application"` y no declara un script `main`.
+- **Consecuencia:** La SPA permanece estática en esta fase. No se ejecuta código Worker dinámico para servir los assets. Cualquier Worker futuro debe responder a una necesidad concreta y preferir rutas selectivas.
+- **Despliegue:** Cloudflare Builds ejecuta `npm run build` y luego `npx wrangler deploy`; los preview builds permanecen habilitados.

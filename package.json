@@ -19,7 +19,9 @@
     "db:migrate": "node scripts/database/migrate.mjs",
     "lint": "run-s \"lint:*\"",
     "lint:oxlint": "oxlint . --fix",
-    "lint:eslint": "eslint . --fix --cache"
+    "lint:eslint": "eslint . --fix --cache",
+    "cloudflare:dev": "npm run build && npx wrangler dev",
+    "cloudflare:deploy": "npm run build && npx wrangler deploy"
   },
   "dependencies": {
     "pinia": "^4.0.3",

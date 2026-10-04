@@ -6,7 +6,7 @@ Este repositorio reconstruye Soluciones Radicales MIP como una SPA rápida, mant
 
 La arquitectura aprobada es:
 
-- Cloudflare Pages para el frontend.
+- Cloudflare Workers + Static Assets para publicar el frontend Vue/Vite.
 - Neon para PostgreSQL, Managed Better Auth, Data API y Functions.
 - Cloudflare R2 para archivos privados y documentos generados.
 - Google APIs para Gmail y Calendar mediante la cuenta empresarial.
@@ -88,6 +88,17 @@ No inventar requisitos. Ante una contradicción, detener únicamente la parte af
 - No crear una fila PostgreSQL por cada campo respondido.
 - Cada grupo conserva las respuestas de campos en JSONB, incluyendo valor, evaluación, observación y referencias a evidencias cuando apliquen.
 - El documento histórico debe permanecer interpretable contra la versión exacta del formulario.
+
+## Cloudflare Workers
+
+- La SPA se despliega con Workers Static Assets usando `wrangler.jsonc`.
+- El build de Vue sigue generando `dist/`; Wrangler publica ese directorio.
+- Mantener `assets.not_found_handling = "single-page-application"` para soportar Vue Router al recargar rutas internas.
+- En la fase actual no existe un Worker dinámico `main`: las peticiones de la SPA deben resolverse como assets estáticos.
+- No agregar un Worker runtime, rutas `/api/*` ni `run_worker_first` salvo que una necesidad real de edge/backend lo justifique.
+- Si posteriormente se agrega código Worker, mantener los assets como ruta predeterminada y ejecutar el Worker solo en rutas explícitas cuando sea posible.
+- Las variables `VITE_*` son públicas y se inyectan en build; secretos y credenciales nunca usan prefijo `VITE_`.
+- R2 puede enlazarse mediante bindings de Worker cuando exista código backend Cloudflare; mientras tanto los secretos R2 permanecen fuera de la SPA.
 
 ## Cloudflare R2
 
