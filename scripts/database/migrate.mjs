@@ -27,9 +27,15 @@ function psql(args, input) {
   return result.stdout ?? '';
 }
 
-spawnSync(process.execPath, [resolve('scripts/database/check-migrations.mjs')], {
-  stdio: 'inherit',
-});
+const validation = spawnSync(
+  process.execPath,
+  [resolve('scripts/database/check-migrations.mjs')],
+  { stdio: 'inherit' },
+);
+
+if (validation.status !== 0) {
+  process.exit(validation.status ?? 1);
+}
 
 psql([
   '-v', 'ON_ERROR_STOP=1',
