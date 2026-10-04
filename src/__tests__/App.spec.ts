@@ -1,6 +1,11 @@
 import { mount } from '@vue/test-utils'
+import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
+vi.mock('@/stores/session', () => ({
+  useSessionStore: () => ({ status: 'authenticated' }),
+}))
 
 import App from '../App.vue'
 
@@ -19,7 +24,7 @@ describe('App', () => {
     await router.push('/')
     await router.isReady()
 
-    const wrapper = mount(App, { global: { plugins: [router] } })
+    const wrapper = mount(App, { global: { plugins: [createPinia(), router] } })
 
     expect(wrapper.get('[data-testid="route-content"]').text()).toBe('Soluciones Radicales MIP')
   })

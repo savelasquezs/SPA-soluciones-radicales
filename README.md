@@ -24,6 +24,7 @@ Copiar `.env.example` como `.env`. Las únicas variables de Neon que puede consu
 ```env
 VITE_NEON_AUTH_URL=
 VITE_NEON_DATA_API_URL=
+VITE_NEON_FUNCTION_URL=
 ```
 
 `DATABASE_URL`, credenciales de R2 y secretos de Google son secretos de servidor y nunca llevan prefijo `VITE_`.
@@ -102,6 +103,8 @@ Ejemplo:
 ```text
 20261004_001_initial_schema.sql
 20261004_002_integrity_and_rls.sql
+20261004_003_fix_correlated_rls_policies.sql
+20261004_004_mvp_backend_support.sql
 ```
 
 Aplicarlas únicamente sobre la rama Neon autorizada:
@@ -111,6 +114,12 @@ npm run db:migrate
 ```
 
 El runner registra cada archivo y su checksum en `app_meta.schema_migrations`. Una migración aplicada no se modifica: se crea una nueva.
+
+El bootstrap mínimo de un entorno autorizado es idempotente y se ejecuta, también solo sobre la rama Neon autorizada, con:
+
+```bash
+npm run db:bootstrap
+```
 
 ## Documentación
 

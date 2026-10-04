@@ -2,10 +2,10 @@
 
 ## Fundación frontend reutilizable
 
-- [ ] Instalar e integrar `@supabase/supabase-js` mediante un cliente compartido.
-- [ ] Crear la estructura base definida en `docs/frontend/reuse.md`.
-- [ ] Implementar primero las primitivas compartidas que necesite el primer módulo funcional.
-- [ ] Crear stores de sesión, notificaciones, conectividad y catálogos cuando sus flujos comiencen a implementarse.
+- [x] Integrar Neon Auth, Data API y Functions mediante services compartidos.
+- [x] Crear la estructura base definida en `docs/frontend/reuse.md`.
+- [x] Implementar las primitivas compartidas requeridas por el MVP.
+- [x] Crear stores de sesión y notificaciones para los flujos implementados.
 - [ ] Crear composables comunes para estado asíncrono, formularios modificados y errores normalizados.
 - [ ] Agregar pruebas unitarias para cada primitiva compartida antes de reutilizarla.
 

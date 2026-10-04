@@ -15,4 +15,4 @@ Reglas:
 5. incluir RLS/grants en la misma migración que expone una tabla a Data API o inmediatamente después dentro del mismo cambio;
 6. validar con `npm run db:check`.
 
-El primer baseline Neon se generará después de configurar Auth/Data API y comprobar el payload real de sesión.
+El baseline Neon se generó después de configurar Auth/Data API y comprobar en `desarrollo` el payload real de sesión.

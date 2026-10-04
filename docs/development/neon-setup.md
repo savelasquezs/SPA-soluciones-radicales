@@ -95,6 +95,7 @@ La SPA necesita únicamente:
 ```env
 VITE_NEON_AUTH_URL=
 VITE_NEON_DATA_API_URL=
+VITE_NEON_FUNCTION_URL=
 ```
 
 `DATABASE_URL` es solo para servidor/CLI y nunca debe importarse desde código Vite ejecutado en el navegador.
@@ -122,7 +123,7 @@ Documentar el resultado antes de implementar el rol activo por sesión. No asumi
 
 ## 10. Crear el baseline Neon
 
-Después de la comprobación anterior, crear:
+Después de la comprobación anterior se crearon:
 
 ```text
 database/migrations/20261004_001_initial_schema.sql
@@ -145,7 +146,31 @@ Aplicar solo sobre `desarrollo` o una rama de desarrollo aislada autorizada:
 npm run db:migrate
 ```
 
-## 11. Configurar Cloudflare R2 por separado
+El soporte operativo del MVP se completa con:
+
+```text
+database/migrations/20261004_003_fix_correlated_rls_policies.sql
+database/migrations/20261004_004_mvp_backend_support.sql
+database/bootstrap/20261004_001_initial_admin.sql
+```
+
+El bootstrap se ejecuta de forma idempotente únicamente después de confirmar la rama:
+
+```bash
+npm run db:bootstrap
+```
+
+## 11. Desplegar Functions
+
+La Function `api` centraliza operaciones privilegiadas, Google OAuth, Gmail y Calendar. Sus secretos se cargan en Neon y no se exponen como variables `VITE_*`.
+
+```bash
+npx -y neon@6.2.4 deploy
+```
+
+`ALLOWED_ORIGINS` debe incluir solo los orígenes locales, productivos y de preview realmente autorizados.
+
+## 12. Configurar Cloudflare R2 por separado
 
 Neon Object Storage no será el almacenamiento de archivos de este proyecto.
 
@@ -159,7 +184,7 @@ sr-generated-documents
 
 Las credenciales R2 se guardan solo en el runtime backend correspondiente.
 
-## 12. Producción
+## 13. Producción
 
 Cuando el producto esté listo:
 

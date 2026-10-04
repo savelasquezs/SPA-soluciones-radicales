@@ -60,6 +60,9 @@ const branch = await loadEnvValue('NEON_BRANCH');
 if (!branch) {
   throw new Error('NEON_BRANCH no está configurada. Confirma la rama antes de migrar.');
 }
+if (branch === 'production' && process.env.ALLOW_NEON_PRODUCTION !== 'true') {
+  throw new Error('Migración bloqueada en production. Requiere ALLOW_NEON_PRODUCTION=true explícito.');
+}
 
 const client = new pg.Client({ connectionString });
 await client.connect();

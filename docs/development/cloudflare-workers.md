@@ -53,6 +53,7 @@ Las variables públicas necesarias por Vite se configuran en el entorno de build
 ```text
 VITE_NEON_AUTH_URL
 VITE_NEON_DATA_API_URL
+VITE_NEON_FUNCTION_URL
 ```
 
 Todo valor `VITE_*` termina disponible para el navegador y, por tanto, nunca puede contener secretos.
@@ -64,6 +65,8 @@ No exponer:
 - credenciales de R2;
 - tokens de Google;
 - claves administrativas de Neon.
+
+Los tres valores públicos deben existir tanto en Production como en Preview. La URL exacta de cada preview autorizado se registra además en los dominios confiables de Neon Auth y en `ALLOWED_ORIGINS` de la Function.
 
 ## Desarrollo
 
