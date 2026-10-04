@@ -6,103 +6,117 @@ Este archivo registra decisiones permanentes. Las tareas pendientes se mantienen
 
 - **Estado:** Aprobada
 - **Fecha:** 2026-10-04
-- **Decisión:** Cloudflare Pages sirve el frontend; Supabase provee Auth, PostgreSQL y Storage; Google APIs provee Gmail y Calendar.
-- **Consecuencia:** La SPA permanece estática y las operaciones con secretos se ejecutan en RPC o Edge Functions.
+- **Decisión:** Cloudflare Pages sirve el frontend; Neon provee PostgreSQL, Managed Better Auth, Data API y Functions; Cloudflare R2 almacena archivos; Google APIs provee Gmail y Calendar.
+- **Consecuencia:** Supabase queda fuera de la arquitectura activa. La SPA permanece estática y los secretos se ejecutan únicamente en backend.
 
-## ADR-002 · Desarrollo remoto sin Docker
+## ADR-002 · Desarrollo de base con ramas Neon
 
 - **Estado:** Aprobada
 - **Fecha:** 2026-10-04
-- **Decisión:** El desarrollo de base de datos usa el proyecto remoto de Supabase enlazado mediante la CLI.
-- **Consecuencia:** Las migraciones se validan con `npm run db:lint` y se aplican con `npm run db:push`. No se requieren contenedores ni stack local.
+- **Decisión:** Los cambios de esquema se desarrollan y validan en ramas Neon asociadas al trabajo en Git.
+- **Consecuencia:** Las migraciones viven en `database/migrations/`, se validan con `npm run db:check`, se inspeccionan con `npm run db:diff` y se aplican con `npm run db:migrate` únicamente sobre la rama autorizada.
 
 ## ADR-003 · Reutilización frontend
 
 - **Estado:** Aprobada
 - **Fecha:** 2026-10-04
-- **Decisión:** Componentes, composables, stores, helpers, services y tipos compartidos se consideran parte de la fundación del frontend.
-- **Consecuencia:** Las vistas ensamblan capacidades existentes. La segunda aparición de lógica o interfaz equivalente obliga a reutilizar o extraer antes de duplicar.
+- **Decisión:** Componentes, composables, stores, helpers, services y tipos compartidos forman la fundación del frontend.
+- **Consecuencia:** Las vistas ensamblan capacidades existentes y se evita duplicación.
 
 ## ADR-004 · Propiedad del estado
 
 - **Estado:** Aprobada
 - **Fecha:** 2026-10-04
-- **Decisión:** El estado efímero permanece local; el comportamiento reactivo reutilizable vive en composables; el estado entre rutas o procesos vive en Pinia; PostgreSQL es la fuente de verdad.
-- **Consecuencia:** No se crean stores por componente ni se duplican tablas completas en memoria sin una necesidad demostrable.
+- **Decisión:** Estado efímero local; comportamiento reactivo reutilizable en composables; estado entre rutas en Pinia; PostgreSQL es fuente de verdad persistente.
+- **Consecuencia:** No se crean stores por componente ni copias completas de tablas sin necesidad.
 
 ## ADR-005 · Acceso remoto desde frontend
 
 - **Estado:** Aprobada
 - **Fecha:** 2026-10-04
-- **Decisión:** Todo acceso remoto del frontend pasa por `services`. Las operaciones sensibles usan RPC o Edge Functions.
-- **Consecuencia:** Vistas y componentes no importan el cliente Supabase directamente y los errores se normalizan en un solo lugar.
+- **Decisión:** Todo I/O remoto pasa por `services`. La SPA usa Neon Auth/Data API para operaciones permitidas por RLS; las operaciones con secretos o privilegios usan Neon Functions.
+- **Consecuencia:** Vistas y componentes no acoplan directamente lógica de proveedor.
 
 ## ADR-006 · Una empresa operadora
 
 - **Estado:** Aprobada
 - **Fecha:** 2026-10-04
-- **Decisión:** Soluciones Radicales es la única empresa operadora. `negocios` representa clientes atendidos, no tenants.
+- **Decisión:** Soluciones Radicales es la única empresa operadora. `negocios` representa clientes, no tenants.
 - **Consecuencia:** No se agrega `tenant_id` ni infraestructura multiempresa.
 
 ## ADR-007 · Usuarios y rol activo
 
 - **Estado:** Aprobada
 - **Fecha:** 2026-10-04
-- **Decisión:** Solo Administradores y Técnicos tienen cuentas. El usuario inicial `solucionesradicales1@gmail.com` tiene ambos roles y selecciona uno por sesión.
-- **Consecuencia:** El backend y RLS validan el rol activo; la selección del navegador no concede permisos.
+- **Decisión:** Neon Auth gestiona identidad/sesión; `usuarios` autoriza el acceso interno y conserva roles Administrador/Técnico. Un usuario puede tener ambos y opera con uno activo por sesión.
+- **Consecuencia:** El backend y RLS validan identidad y rol. Antes de persistir el mecanismo del rol activo se inspeccionará el payload real de `auth.session()` para no depender de claims inventados.
 
 ## ADR-008 · Acceso público
 
 - **Estado:** Aprobada
 - **Fecha:** 2026-10-04
-- **Decisión:** La consulta pública usa una RPC limitada y un token aleatorio almacenado como hash, revocable y válido hasta un año después de `fin_real`.
-- **Consecuencia:** La página pública no consulta directamente `servicios` ni recibe datos internos.
+- **Decisión:** La consulta pública usa una operación limitada y un token aleatorio almacenado como hash, revocable y válido hasta un año después de `fin_real`.
+- **Consecuencia:** La página pública no obtiene acceso general a `servicios` ni a archivos privados.
 
 ## ADR-009 · Almacenamiento y retención
 
 - **Estado:** Aprobada
 - **Fecha:** 2026-10-04
-- **Decisión:** Supabase Storage es el almacenamiento principal y todos los buckets son privados.
-- **Consecuencia:** Imágenes operativas: siete días después de validar el documento final. PDF generados: un año. Archivos maestros: mientras estén activos.
+- **Decisión:** Cloudflare R2 es el almacenamiento de objetos. Buckets: `sr-master-files`, `sr-service-media`, `sr-generated-documents`.
+- **Consecuencia:** Fotos/firmas operativas se eliminan siete días después de validar el documento final; PDF generados se conservan hasta un año; archivos maestros mientras estén activos.
 
 ## ADR-010 · Gmail y Calendar
 
 - **Estado:** Aprobada
 - **Fecha:** 2026-10-04
-- **Decisión:** Gmail y Calendar operan únicamente mediante `solucionesradicales1@gmail.com`, una cuenta personal dedicada a la empresa.
-- **Consecuencia:** La aplicación OAuth es externa, el refresh token permanece cifrado en backend y los usuarios no autorizan recursos personales.
+- **Decisión:** Gmail y Calendar operan únicamente mediante `solucionesradicales1@gmail.com`.
+- **Consecuencia:** Los usuarios no autorizan recursos personales y los secretos permanecen en backend.
 
 ## ADR-011 · Integraciones tolerantes a fallos
 
 - **Estado:** Aprobada
 - **Fecha:** 2026-10-04
 - **Decisión:** Los efectos externos son asíncronos, reintentables e idempotentes.
-- **Consecuencia:** Un fallo de Gmail, Calendar o generación documental no revierte ni bloquea la operación interna ya validada.
+- **Consecuencia:** Un fallo de Gmail, Calendar, R2 o generación documental no revierte una operación interna ya validada.
 
 ## ADR-012 · Datos iniciales
 
 - **Estado:** Aprobada
 - **Fecha:** 2026-10-04
-- **Decisión:** No se migran registros de los Spreadsheets a producción. Los datos anteriores se convierten únicamente en seeds de prueba.
-- **Consecuencia:** Producción recibe solo el primer usuario, configuración global, catálogos aprobados y formularios oficiales.
+- **Decisión:** No se migran registros de los Spreadsheets a producción. Los anteriores solo pueden convertirse en seeds de prueba.
+- **Consecuencia:** Producción recibe bootstrap mínimo y datos maestros aprobados.
 
 ## ADR-013 · Datos estructurados y moneda
 
 - **Estado:** Aprobada
 - **Fecha:** 2026-10-04
 - **Decisión:** El histórico estructurado se conserva indefinidamente y los valores monetarios se almacenan como enteros en COP.
-- **Consecuencia:** La expiración de archivos o tokens no elimina registros; no se agrega columna de moneda mientras el sistema sea exclusivamente COP.
+- **Consecuencia:** Expirar archivos o tokens no elimina el histórico estructurado.
 
 ## ADR-014 · Operación offline
 
 - **Estado:** Aprobada
 - **Fecha:** 2026-10-04
-- **Decisión:** La SPA conserva localmente borradores y operaciones después de perder conexión, siempre que haya sido cargada y autenticada previamente.
-- **Consecuencia:** Las entidades sincronizables usan UUID, versión, idempotencia y resolución explícita de conflictos.
+- **Decisión:** La SPA conserva localmente borradores y operaciones después de perder conexión, si fue cargada y autenticada previamente.
+- **Consecuencia:** Las entidades sincronizables usan IDs estables, versión, idempotencia y resolución explícita de conflictos.
 
 ## ADR-015 · Autoridad del servidor
 
 - **Estado:** Aprobada
 - **Fecha:** 2026-10-04
-- **Decisión:** Roles, consecutivos, valores, relaciones, transiciones y autorización se derivan y validan en PostgreSQL, RPC o Edge Functions.
-- **Consecuencia:** La interfaz puede anticipar validaciones para UX, pero el servidor repite y decide todas las reglas relevantes.
+- **Decisión:** Roles, consecutivos, valores, relaciones, transiciones y autorización se derivan y validan en PostgreSQL o backend.
+- **Consecuencia:** La interfaz puede anticipar validaciones por UX, pero no reemplaza la validación autoritativa.
+
+## ADR-016 · Respuestas de formularios agrupadas en JSONB
+
+- **Estado:** Aprobada
+- **Fecha:** 2026-10-04
+- **Decisión:** Se reemplaza el modelo de una fila por campo de `respuestas_mip` por una fila por Servicio + Formulario + Versión + Área, con las respuestas de campos agrupadas en JSONB.
+- **Consecuencia:** Se reduce drásticamente la cantidad de filas, claves e índices repetidos. `formularios` continúa normalizado y versionado para poder interpretar el histórico.
+
+## ADR-017 · Migraciones independientes del proveedor
+
+- **Estado:** Aprobada
+- **Fecha:** 2026-10-04
+- **Decisión:** La fuente de migraciones es `database/migrations/`, no una carpeta propia de un proveedor.
+- **Consecuencia:** El nombre obligatorio es `YYYYMMDD_NNN_descripcion.sql`; las migraciones aplicadas son inmutables y se registran con checksum.
