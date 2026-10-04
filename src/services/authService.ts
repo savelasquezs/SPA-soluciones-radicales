@@ -24,14 +24,22 @@ export async function getAccessToken(): Promise<string> {
   return data.token
 }
 
-export async function signInWithGoogle(): Promise<void> {
-  const { error } = await authClient.signIn.social({
+export async function signInWithGoogle(selectAccount = false): Promise<void> {
+  const { data, error } = await authClient.signIn.social({
     provider: 'google',
     callbackURL: window.location.origin,
+    disableRedirect: true,
   })
   if (error) {
     throw new Error(error.message)
   }
+  if (!data?.url) {
+    throw new Error('Neon Auth no devolvió la URL de acceso de Google')
+  }
+
+  const authorizationUrl = new URL(data.url)
+  if (selectAccount) authorizationUrl.searchParams.set('prompt', 'select_account')
+  window.location.assign(authorizationUrl)
 }
 
 export async function signOut(): Promise<void> {

@@ -1,13 +1,16 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseInput from '@/components/base/BaseInput.vue'
 import BaseTextarea from '@/components/base/BaseTextarea.vue'
+import ConfirmDialog from '@/components/base/ConfirmDialog.vue'
+import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import StatusPanel from '@/components/base/StatusPanel.vue'
 import AppShell from '@/components/layout/AppShell.vue'
 import { useFormValidation } from '@/composables/useFormValidation'
+import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
 import { apiRequest } from '@/services/apiService'
 import { useNotificationsStore } from '@/stores/notifications'
 
@@ -25,6 +28,13 @@ const emailForm = reactive({
   subject: 'Prueba de integración Gmail',
   body: 'Esta es una prueba real de Gmail enviada desde Soluciones Radicales MIP.',
 })
+const emailBaseline = ref(JSON.stringify(emailForm))
+const emailDirty = computed(() => JSON.stringify(emailForm) !== emailBaseline.value)
+const {
+  confirmOpen: discardConfirmOpen,
+  cancelDiscard,
+  confirmDiscard,
+} = useUnsavedChanges(emailDirty)
 const emailValidation = useFormValidation(emailForm, {
   recipient: (value) => {
     if (!String(value).trim()) return 'El destinatario es obligatorio'
@@ -78,6 +88,7 @@ async function sendTest(): Promise<void> {
       method: 'POST',
       body: JSON.stringify({ to: emailForm.recipient, subject: emailForm.subject, text: emailForm.body }),
     })
+    emailBaseline.value = JSON.stringify(emailForm)
     notifications.show('Correo de prueba enviado por Gmail', 'success')
   } catch (sendError) {
     notifications.show(sendError instanceof Error ? sendError.message : 'No fue posible enviar el correo', 'danger')
@@ -97,7 +108,7 @@ async function sendTest(): Promise<void> {
         </div>
       </header>
 
-      <StatusPanel v-if="loading" title="Verificando Google" busy />
+      <LoadingSkeleton v-if="loading" label="Verificando Google" :lines="3" />
       <StatusPanel v-else-if="error" title="No pudimos verificar la integración" :message="error" tone="danger">
         <BaseButton variant="secondary" @click="loadStatus">Reintentar</BaseButton>
       </StatusPanel>
@@ -153,6 +164,15 @@ async function sendTest(): Promise<void> {
           </div>
         </form>
       </template>
+      <ConfirmDialog
+        :open="discardConfirmOpen"
+        title="Descartar mensaje"
+        message="El correo de prueba tiene cambios que todavía no se han enviado."
+        confirm-label="Descartar y salir"
+        danger
+        @cancel="cancelDiscard"
+        @confirm="confirmDiscard"
+      />
     </div>
   </AppShell>
 </template>

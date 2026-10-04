@@ -1,5 +1,11 @@
 import { expect, test } from '@playwright/test'
 
+test.beforeEach(async ({ page }) => {
+  await page.route('**/get-session', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: 'null' })
+  })
+})
+
 test('redirige una sesión anónima al acceso', async ({ page }) => {
   await page.goto('/')
 

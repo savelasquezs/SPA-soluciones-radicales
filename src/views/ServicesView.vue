@@ -2,17 +2,23 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 
 import BaseButton from '@/components/base/BaseButton.vue'
+import BaseCheckbox from '@/components/base/BaseCheckbox.vue'
 import BaseInput from '@/components/base/BaseInput.vue'
 import BaseSelect from '@/components/base/BaseSelect.vue'
 import BaseTextarea from '@/components/base/BaseTextarea.vue'
+import ConfirmDialog from '@/components/base/ConfirmDialog.vue'
+import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import StatusPanel from '@/components/base/StatusPanel.vue'
 import AppShell from '@/components/layout/AppShell.vue'
 import { useFormValidation } from '@/composables/useFormValidation'
+import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
 import { apiRequest } from '@/services/apiService'
 import { clearServiceDraft, loadServiceDraft, saveServiceDraft } from '@/services/draftService'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useSessionStore } from '@/stores/session'
 import type { ClientSite, ServiceDraft, ServiceRecord, Technician } from '@/types/domain'
+
+type ClientSiteWire = Omit<ClientSite, 'valorServicio'> & { valorServicio: number | string }
 
 const session = useSessionStore()
 const notifications = useNotificationsStore()
@@ -24,9 +30,11 @@ const loadError = ref<string | null>(null)
 const saving = ref(false)
 const savingClient = ref(false)
 const showClientForm = ref(false)
+const closeClientConfirmOpen = ref(false)
 const retryingId = ref<string | null>(null)
 const online = ref(navigator.onLine)
 let draftReady = false
+let draftPersistenceWarningShown = false
 
 const defaultStart = () => {
   const date = new Date(Date.now() + 24 * 60 * 60 * 1000)
@@ -44,7 +52,8 @@ const form = reactive<ServiceDraft>({
   observaciones: '',
 })
 
-const clientForm = reactive({
+const emptyClientForm = () => ({
+  negocioId: '',
   nit: '',
   negocioNombre: '',
   sedeNombre: '',
@@ -58,8 +67,22 @@ const clientForm = reactive({
   duracionServicioMinutos: '120',
   correos: [] as string[],
 })
+const clientForm = reactive(emptyClientForm())
+const clientFormDirty = computed(() => JSON.stringify(clientForm) !== JSON.stringify(emptyClientForm()))
+const {
+  confirmOpen: discardConfirmOpen,
+  cancelDiscard,
+  confirmDiscard,
+} = useUnsavedChanges(computed(() => showClientForm.value && clientFormDirty.value))
 
 const selectedSite = computed(() => clients.value.find((client) => client.sedeId === form.sedeId))
+const businesses = computed(() => Array.from(
+  new Map(clients.value.map((client) => [client.negocioId, {
+    id: client.negocioId,
+    nombre: client.negocioNombre,
+    nit: client.nit,
+  }])).values(),
+).sort((a, b) => a.nombre.localeCompare(b.nombre)))
 const serviceValidation = useFormValidation(form, {
   sedeId: (value) => String(value).trim() ? null : 'Selecciona una Sede',
   tecnicoResponsableId: (value) => String(value).trim() ? null : 'Selecciona el Técnico responsable',
@@ -69,8 +92,10 @@ const serviceValidation = useFormValidation(form, {
     : 'La duración debe ser un entero mayor que cero',
 })
 const clientValidation = useFormValidation(clientForm, {
-  nit: (value) => String(value).trim() ? null : 'El NIT es obligatorio',
-  negocioNombre: (value) => String(value).trim() ? null : 'El nombre del Negocio es obligatorio',
+  nit: (value, current) => current.negocioId || String(value).trim() ? null : 'El NIT es obligatorio',
+  negocioNombre: (value, current) => current.negocioId || String(value).trim()
+    ? null
+    : 'El nombre del Negocio es obligatorio',
   sedeNombre: (value) => String(value).trim() ? null : 'El nombre de la Sede es obligatorio',
   direccion: (value) => String(value).trim() ? null : 'La dirección es obligatoria',
   contactoNombre: (value) => String(value).trim() ? null : 'El contacto principal es obligatorio',
@@ -92,7 +117,15 @@ watch(
   form,
   async (draft) => {
     if (draftReady) {
-      await saveServiceDraft({ ...draft, tecnicosColaboradoresIds: [...draft.tecnicosColaboradoresIds] })
+      try {
+        await saveServiceDraft({ ...draft, tecnicosColaboradoresIds: [...draft.tecnicosColaboradoresIds] })
+        draftPersistenceWarningShown = false
+      } catch {
+        if (!draftPersistenceWarningShown) {
+          notifications.show('No pudimos guardar el borrador local', 'warning')
+          draftPersistenceWarningShown = true
+        }
+      }
     }
   },
   { deep: true },
@@ -121,11 +154,11 @@ async function loadData(): Promise<void> {
   try {
     if (session.isAdmin) {
       const [clientRows, technicianRows, serviceRows] = await Promise.all([
-        apiRequest<ClientSite[]>('api/clients'),
+        apiRequest<ClientSiteWire[]>('api/clients'),
         apiRequest<Technician[]>('api/catalogs/technicians'),
         apiRequest<ServiceRecord[]>('api/services'),
       ])
-      clients.value = clientRows
+      clients.value = clientRows.map(normalizeClientSite)
       technicians.value = technicianRows
       services.value = serviceRows
     } else {
@@ -142,7 +175,8 @@ async function createClient(): Promise<void> {
   if (!clientValidation.validate()) return
   savingClient.value = true
   try {
-    const result = await apiRequest<{ negocioId: string; sedeId: string }>('api/clients', {
+    const addedToExistingBusiness = Boolean(clientForm.negocioId)
+    const result = normalizeClientSite(await apiRequest<ClientSiteWire>('api/clients', {
       method: 'POST',
       body: JSON.stringify({
         ...clientForm,
@@ -151,13 +185,16 @@ async function createClient(): Promise<void> {
         duracionServicioMinutos: Number(clientForm.duracionServicioMinutos),
         correos: clientForm.contactoCorreo ? [clientForm.contactoCorreo] : [],
       }),
-    })
-    clients.value = await apiRequest<ClientSite[]>('api/clients')
+    }))
+    clients.value = [...clients.value, result].sort((a, b) =>
+      `${a.negocioNombre}\u0000${a.sedeNombre}`.localeCompare(`${b.negocioNombre}\u0000${b.sedeNombre}`),
+    )
     form.sedeId = result.sedeId
     form.duracionMinutos = clientForm.duracionServicioMinutos
     showClientForm.value = false
+    Object.assign(clientForm, emptyClientForm())
     clientValidation.resetValidation()
-    notifications.show('Negocio y Sede creados', 'success')
+    notifications.show(addedToExistingBusiness ? 'Sede creada y seleccionada' : 'Negocio y Sede creados', 'success')
   } catch (error) {
     notifications.show(error instanceof Error ? error.message : 'No fue posible crear el cliente', 'danger')
   } finally {
@@ -182,7 +219,7 @@ async function createService(): Promise<void> {
         duracionMinutos: Number(form.duracionMinutos),
       }),
     })
-    await clearServiceDraft()
+    draftReady = false
     services.value = [created, ...services.value]
     form.sedeId = ''
     form.tecnicoResponsableId = ''
@@ -190,6 +227,13 @@ async function createService(): Promise<void> {
     form.inicioProgramado = defaultStart()
     form.duracionMinutos = '120'
     form.observaciones = ''
+    try {
+      await clearServiceDraft()
+    } catch {
+      notifications.show('El Servicio se creó, pero no pudimos limpiar el borrador local', 'warning')
+    } finally {
+      draftReady = true
+    }
     serviceValidation.resetValidation()
     notifications.show(
       created.calendarSyncEstado === 'SINCRONIZADO'
@@ -222,6 +266,25 @@ async function retryCalendar(service: ServiceRecord): Promise<void> {
 
 function updateConnectivity(): void {
   online.value = navigator.onLine
+}
+
+function toggleClientForm(): void {
+  if (showClientForm.value && clientFormDirty.value) {
+    closeClientConfirmOpen.value = true
+    return
+  }
+  showClientForm.value = !showClientForm.value
+}
+
+function discardClientForm(): void {
+  Object.assign(clientForm, emptyClientForm())
+  clientValidation.resetValidation()
+  showClientForm.value = false
+  closeClientConfirmOpen.value = false
+}
+
+function normalizeClientSite(client: ClientSiteWire): ClientSite {
+  return { ...client, valorServicio: Number(client.valorServicio) }
 }
 
 function selectSite(sedeId: string): void {
@@ -261,7 +324,7 @@ function formatDate(value?: string): string {
               <h2>Programar Servicio</h2>
               <p class="muted">El valor se deriva de la Sede y la duración puede ajustarse para esta visita.</p>
             </div>
-            <BaseButton variant="secondary" @click="showClientForm = !showClientForm">{{ showClientForm ? 'Cerrar cliente' : 'Nuevo cliente' }}</BaseButton>
+            <BaseButton variant="secondary" @click="toggleClientForm">{{ showClientForm ? 'Cerrar cliente' : 'Nuevo cliente' }}</BaseButton>
           </div>
           <div class="form-grid service-form">
             <BaseSelect
@@ -324,10 +387,18 @@ function formatDate(value?: string): string {
         </form>
 
         <form v-if="showClientForm" class="card" @submit.prevent="createClient">
-          <h2>Nuevo Negocio y Sede</h2>
+          <h2>Nuevo Negocio o Sede</h2>
           <div class="form-grid service-form">
-            <BaseInput v-model="clientForm.nit" label="NIT" name="nit" required :error="clientValidation.error('nit')" @blur="clientValidation.touch('nit')" />
-            <BaseInput v-model="clientForm.negocioNombre" label="Nombre del Negocio" name="negocioNombre" required :error="clientValidation.error('negocioNombre')" @blur="clientValidation.touch('negocioNombre')" />
+            <BaseSelect v-model="clientForm.negocioId" label="Negocio" name="negocioId" help="Selecciona uno existente o crea uno nuevo.">
+              <option value="">Crear nuevo Negocio</option>
+              <option v-for="business in businesses" :key="business.id" :value="business.id">
+                {{ business.nombre }} · {{ business.nit }}
+              </option>
+            </BaseSelect>
+            <template v-if="!clientForm.negocioId">
+              <BaseInput v-model="clientForm.nit" label="NIT" name="nit" required :error="clientValidation.error('nit')" @blur="clientValidation.touch('nit')" />
+              <BaseInput v-model="clientForm.negocioNombre" label="Nombre del Negocio" name="negocioNombre" required :error="clientValidation.error('negocioNombre')" @blur="clientValidation.touch('negocioNombre')" />
+            </template>
             <BaseInput v-model="clientForm.sedeNombre" label="Nombre de la Sede" name="sedeNombre" required :error="clientValidation.error('sedeNombre')" @blur="clientValidation.touch('sedeNombre')" />
             <BaseInput v-model="clientForm.direccion" label="Dirección" name="direccion" autocomplete="street-address" required :error="clientValidation.error('direccion')" @blur="clientValidation.touch('direccion')" />
             <BaseInput v-model="clientForm.contactoNombre" label="Contacto principal" name="contactoNombre" autocomplete="name" required :error="clientValidation.error('contactoNombre')" @blur="clientValidation.touch('contactoNombre')" />
@@ -339,6 +410,11 @@ function formatDate(value?: string): string {
               <option value="NEGOCIO">Negocio</option>
               <option value="RESIDENCIAL">Residencial</option>
             </BaseSelect>
+            <BaseCheckbox
+              v-model="clientForm.manejaRefuerzo"
+              label="La Sede maneja visita de refuerzo"
+              name="manejaRefuerzo"
+            />
           </div>
           <div class="form-actions">
             <BaseButton type="submit" :loading="savingClient">Crear y seleccionar</BaseButton>
@@ -346,7 +422,7 @@ function formatDate(value?: string): string {
         </form>
       </template>
 
-      <StatusPanel v-if="loading" title="Cargando Servicios" busy />
+      <LoadingSkeleton v-if="loading" label="Cargando Servicios" :lines="5" />
       <StatusPanel v-else-if="loadError" title="No pudimos cargar los Servicios" :message="loadError" tone="danger">
         <BaseButton variant="secondary" @click="loadData">Reintentar</BaseButton>
       </StatusPanel>
@@ -365,10 +441,14 @@ function formatDate(value?: string): string {
           <tbody>
             <tr v-for="service in services" :key="service.id">
               <td data-label="Servicio"><strong>{{ service.solicitud }}</strong><br /><span class="muted">{{ service.negocioNombre }} · {{ service.sedeNombre }}</span></td>
-              <td data-label="Programación">{{ formatDate(service.inicioProgramado) }}</td>
+              <td data-label="Programación">
+                {{ formatDate(service.inicioProgramado) }}<br />
+                <small class="muted">Hasta {{ formatDate(service.finProgramado) }}</small>
+              </td>
               <td data-label="Técnico">{{ service.tecnicoNombre ?? '—' }}</td>
               <td data-label="Calendar">
                 <span class="badge" :class="calendarBadge(service.calendarSyncEstado)">{{ service.calendarSyncEstado }}</span>
+                <small v-if="service.calendarEventId" class="calendar-event">Evento {{ service.calendarEventId }}</small>
                 <small v-if="service.calendarSyncError" class="calendar-error">{{ service.calendarSyncError }}</small>
               </td>
               <td v-if="session.isAdmin" data-label="Acción">
@@ -385,6 +465,25 @@ function formatDate(value?: string): string {
           </tbody>
         </table>
       </section>
+
+      <ConfirmDialog
+        :open="closeClientConfirmOpen"
+        title="Descartar cliente"
+        message="Hay datos del Negocio o la Sede que todavía no se han guardado."
+        confirm-label="Descartar"
+        danger
+        @cancel="closeClientConfirmOpen = false"
+        @confirm="discardClientForm"
+      />
+      <ConfirmDialog
+        :open="discardConfirmOpen"
+        title="Descartar cambios"
+        message="Hay datos del Negocio o la Sede que todavía no se han guardado."
+        confirm-label="Descartar y salir"
+        danger
+        @cancel="cancelDiscard"
+        @confirm="confirmDiscard"
+      />
     </div>
   </AppShell>
 </template>
@@ -425,6 +524,14 @@ function formatDate(value?: string): string {
   max-width: 22rem;
   margin-top: 0.35rem;
   color: var(--danger);
+}
+
+.calendar-event {
+  display: block;
+  max-width: 22rem;
+  margin-top: 0.35rem;
+  overflow-wrap: anywhere;
+  color: var(--text-muted);
 }
 
 @media (max-width: 620px) {

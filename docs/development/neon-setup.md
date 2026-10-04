@@ -68,6 +68,8 @@ npx -y neon@6.2.4 neon-auth oauth-provider add --provider-id google
 
 La autenticación con Google no significa autorización automática. El usuario también debe existir y estar activo en la tabla de dominio `usuarios`.
 
+La SPA solicita la URL OAuth con redirección desactivada en el cliente y navega explícitamente a la URL devuelta por Neon Auth. La acción **Usar otra cuenta** agrega `prompt=select_account` a esa URL ya firmada para volver al selector de Google sin ampliar scopes ni implementar autenticación propia.
+
 ## 6. Registrar dominios permitidos
 
 Agregar primero desarrollo local:

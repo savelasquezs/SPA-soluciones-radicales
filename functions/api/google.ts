@@ -62,7 +62,7 @@ function decrypt(stored: StoredIntegration): string {
 }
 
 async function tokenRequest(params: URLSearchParams): Promise<TokenResponse> {
-  const response = await fetch('https://oauth2.googleapis.com/token', {
+  const response = await googleFetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: params,
@@ -160,7 +160,7 @@ export async function completeGoogleAuthorization(code: string, state: string): 
     throw new ApiError(409, 'Google no entregó un refresh token; vuelve a autorizar la cuenta')
   }
 
-  const userInfoResponse = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
+  const userInfoResponse = await googleFetch('https://openidconnect.googleapis.com/v1/userinfo', {
     headers: { Authorization: `Bearer ${token.access_token}` },
   })
   const userInfo = (await userInfoResponse.json()) as { email?: string }
@@ -227,7 +227,7 @@ export async function sendGmailMessage(input: {
     input.text,
   ].join('\r\n')
   const raw = Buffer.from(mime).toString('base64url')
-  const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+  const response = await googleFetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -266,13 +266,13 @@ export async function upsertCalendarEvent(input: {
     Authorization: `Bearer ${accessToken}`,
     'Content-Type': 'application/json',
   }
-  let response = await fetch(
+  let response = await googleFetch(
     `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
     { method: 'PUT', headers, body: JSON.stringify(event) },
   )
 
   if (response.status === 404) {
-    response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+    response = await googleFetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
       method: 'POST',
       headers,
       body: JSON.stringify(event),
@@ -286,4 +286,12 @@ export async function upsertCalendarEvent(input: {
   }
 
   return result.id
+}
+
+async function googleFetch(input: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(input, { ...init, signal: AbortSignal.timeout(20_000) })
+  } catch {
+    throw new ApiError(502, 'No fue posible comunicarse con Google')
+  }
 }

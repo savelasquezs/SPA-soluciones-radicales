@@ -2,13 +2,16 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 
 import BaseButton from '@/components/base/BaseButton.vue'
+import BaseCheckbox from '@/components/base/BaseCheckbox.vue'
 import BaseInput from '@/components/base/BaseInput.vue'
 import BaseSelect from '@/components/base/BaseSelect.vue'
 import BaseTextarea from '@/components/base/BaseTextarea.vue'
 import ConfirmDialog from '@/components/base/ConfirmDialog.vue'
+import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import StatusPanel from '@/components/base/StatusPanel.vue'
 import AppShell from '@/components/layout/AppShell.vue'
 import { useFormValidation } from '@/composables/useFormValidation'
+import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
 import { apiRequest } from '@/services/apiService'
 import { dataApiSelect } from '@/services/dataApiService'
 import { useNotificationsStore } from '@/stores/notifications'
@@ -39,6 +42,13 @@ const emptyForm = (): UserInput => ({
 })
 
 const form = reactive<UserInput>(emptyForm())
+const formBaseline = ref(JSON.stringify(form))
+const formDirty = computed(() => JSON.stringify(form) !== formBaseline.value)
+const {
+  confirmOpen: discardConfirmOpen,
+  cancelDiscard,
+  confirmDiscard,
+} = useUnsavedChanges(formDirty)
 const validation = useFormValidation(form, {
   nombreCompleto: (value) => String(value).trim().length >= 2 ? null : 'Ingresa el nombre completo',
   correoGoogle: (value) => {
@@ -101,6 +111,7 @@ function edit(user: UserRecord): void {
     certificadoObservaciones: user.certificadoObservaciones,
     version: user.version,
   })
+  formBaseline.value = JSON.stringify(form)
   validation.resetValidation()
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
@@ -108,6 +119,7 @@ function edit(user: UserRecord): void {
 function reset(): void {
   editingId.value = null
   Object.assign(form, emptyForm())
+  formBaseline.value = JSON.stringify(form)
   validation.resetValidation()
 }
 
@@ -166,6 +178,11 @@ async function confirmToggle(): Promise<void> {
 function dateOnly(value: string | null): string | null {
   return value ? value.slice(0, 10) : null
 }
+
+function formatCertificateDate(value: string | null): string {
+  if (!value) return 'Sin fecha'
+  return new Intl.DateTimeFormat('es-CO', { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(value))
+}
 </script>
 
 <template>
@@ -203,9 +220,9 @@ function dateOnly(value: string | null): string | null {
 
           <fieldset class="role-field form-grid__wide" :aria-invalid="Boolean(validation.error('esAdmin'))">
             <legend>Roles <span class="required" aria-hidden="true">*</span></legend>
-            <label><input v-model="form.esAdmin" type="checkbox" @change="validation.touch('esAdmin')" /> Administrador</label>
-            <label><input v-model="form.esTecnico" type="checkbox" @change="validation.touch('esAdmin')" /> Técnico</label>
-            <label><input v-model="form.activo" type="checkbox" /> Usuario activo</label>
+            <BaseCheckbox v-model="form.esAdmin" label="Administrador" name="esAdmin" @blur="validation.touch('esAdmin')" />
+            <BaseCheckbox v-model="form.esTecnico" label="Técnico" name="esTecnico" @blur="validation.touch('esAdmin')" />
+            <BaseCheckbox v-model="form.activo" label="Usuario activo" name="activo" />
             <small v-if="validation.error('esAdmin')" class="field-error" role="alert">{{ validation.error('esAdmin') }}</small>
           </fieldset>
 
@@ -241,7 +258,7 @@ function dateOnly(value: string | null): string | null {
         </div>
       </form>
 
-      <StatusPanel v-if="loading" title="Cargando usuarios" busy />
+      <LoadingSkeleton v-if="loading" label="Cargando usuarios" :lines="5" />
       <StatusPanel v-else-if="loadError" title="No pudimos cargar los usuarios" :message="loadError" tone="danger">
         <BaseButton variant="secondary" @click="loadUsers">Reintentar</BaseButton>
       </StatusPanel>
@@ -272,6 +289,7 @@ function dateOnly(value: string | null): string | null {
               <th>Usuario</th>
               <th>Roles</th>
               <th>Estado</th>
+              <th>Certificado Técnico</th>
               <th>Acciones</th>
             </tr>
           </thead>
@@ -289,6 +307,18 @@ function dateOnly(value: string | null): string | null {
                 <span v-if="user.esTecnico" class="badge">Técnico</span>
               </td>
               <td data-label="Estado"><span class="badge" :class="user.activo ? 'badge--success' : 'badge--danger'">{{ user.activo ? 'Activo' : 'Inactivo' }}</span></td>
+              <td data-label="Certificado Técnico">
+                <template v-if="user.esTecnico">
+                  <span :class="user.certificadoStoragePath ? 'auth-state--linked' : 'muted'">
+                    {{ user.certificadoStoragePath ? 'Archivo vinculado' : 'Sin archivo' }}
+                  </span><br />
+                  <small class="muted">
+                    {{ formatCertificateDate(user.certificadoFechaEmision) }} →
+                    {{ formatCertificateDate(user.certificadoFechaVencimiento) }}
+                  </small>
+                </template>
+                <span v-else class="muted">No aplica</span>
+              </td>
               <td class="actions-cell" data-label="Acciones">
                 <BaseButton variant="secondary" @click="edit(user)">Editar</BaseButton>
                 <BaseButton :variant="user.activo ? 'danger' : 'secondary'" @click="requestToggle(user)">
@@ -310,6 +340,15 @@ function dateOnly(value: string | null): string | null {
         :loading="togglingId === pendingToggle?.id"
         @cancel="pendingToggle = null"
         @confirm="confirmToggle"
+      />
+      <ConfirmDialog
+        :open="discardConfirmOpen"
+        title="Descartar cambios"
+        message="Hay cambios del usuario que todavía no se han guardado."
+        confirm-label="Descartar y salir"
+        danger
+        @cancel="cancelDiscard"
+        @confirm="confirmDiscard"
       />
     </div>
   </AppShell>
@@ -335,18 +374,6 @@ function dateOnly(value: string | null): string | null {
   color: var(--text-secondary);
   font-size: 0.9rem;
   font-weight: 700;
-}
-
-.role-field label {
-  display: inline-flex;
-  min-height: 44px;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.role-field input {
-  width: 1.1rem;
-  height: 1.1rem;
 }
 
 .role-field[aria-invalid='true'] {

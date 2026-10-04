@@ -272,17 +272,30 @@ app.post('/api/clients', async (context) => {
   const identity = context.get('identity')
   const clientRecord = await transaction(async (client) => {
     const admin = await requireAdmin(client, identity)
-    const business = await client.query<{ id: string }>(
-      `insert into public.negocios (nit, nombre, correos_json)
-       values ($1, $2, $3::jsonb)
-       returning id`,
-      [
-        requiredString(body, 'nit'),
-        requiredString(body, 'negocioNombre'),
-        JSON.stringify(stringArray(body.correos)),
-      ],
-    )
-    const businessId = business.rows[0]?.id
+    const selectedBusinessId = optionalString(body.negocioId)
+    let businessId = selectedBusinessId
+
+    if (businessId) {
+      const existingBusiness = await client.query<{ id: string }>(
+        'select id from public.negocios where id = $1',
+        [businessId],
+      )
+      if (!existingBusiness.rows[0]) {
+        throw new ApiError(422, 'El Negocio seleccionado no existe')
+      }
+    } else {
+      const business = await client.query<{ id: string }>(
+        `insert into public.negocios (nit, nombre, correos_json)
+         values ($1, $2, $3::jsonb)
+         returning id`,
+        [
+          requiredString(body, 'nit'),
+          requiredString(body, 'negocioNombre'),
+          JSON.stringify(stringArray(body.correos)),
+        ],
+      )
+      businessId = business.rows[0]?.id ?? null
+    }
 
     if (!businessId) {
       throw new ApiError(500, 'No fue posible crear el Negocio')
@@ -316,10 +329,37 @@ app.post('/api/clients', async (context) => {
       throw new ApiError(500, 'No fue posible crear la Sede')
     }
 
-    await audit(client, admin.id, 'NEGOCIO_Y_SEDE_CREADOS', 'Negocios', businessId, {
+    await audit(client, admin.id, selectedBusinessId ? 'SEDE_CREADA' : 'NEGOCIO_Y_SEDE_CREADOS', 'Negocios', businessId, {
       sedeId: siteId,
     })
-    return { negocioId: businessId, sedeId: siteId }
+    const created = await client.query<{
+      negocioId: string
+      nit: string
+      negocioNombre: string
+      sedeId: string
+      sedeNombre: string
+      direccion: string
+      valorServicio: string
+      duracionServicioMinutos: number
+    }>(
+      `select n.id as "negocioId",
+              n.nit,
+              n.nombre as "negocioNombre",
+              s.id as "sedeId",
+              s.nombre as "sedeNombre",
+              s.direccion,
+              s.valor_servicio as "valorServicio",
+              s.duracion_servicio_minutos as "duracionServicioMinutos"
+       from public.negocios n
+       join public.sedes s on s.negocio_id = n.id
+       where s.id = $1`,
+      [siteId],
+    )
+    const clientSite = created.rows[0]
+    if (!clientSite) {
+      throw new ApiError(500, 'No fue posible recuperar la Sede creada')
+    }
+    return clientSite
   })
 
   return context.json(clientRecord, 201)
@@ -338,6 +378,7 @@ app.get('/api/services', async (context) => {
               s.inicio_programado as "inicioProgramado",
               s.fin_programado as "finProgramado",
               s.estado,
+              s.calendar_event_id as "calendarEventId",
               s.calendar_sync_estado as "calendarSyncEstado",
               s.calendar_sync_error as "calendarSyncError"
        from public.servicios s
@@ -532,13 +573,19 @@ app.post('/api/email/test', async (context) => {
     return context.json({ sent: true, messageId })
   } catch (sendError) {
     const message = sendError instanceof Error ? sendError.message : 'No fue posible enviar el correo'
-    await pool.query(
-      `update private.integration_jobs
-       set status = 'FAILED', lease_until = null, last_error = $2,
-           run_after = now() + interval '5 minutes'
-       where id = $1`,
-      [jobId, message.slice(0, 1000)],
-    )
+    await transaction(async (client) => {
+      await client.query(
+        `update private.integration_jobs
+         set status = 'FAILED', lease_until = null, last_error = $2,
+             run_after = now() + interval '5 minutes'
+         where id = $1`,
+        [jobId, message.slice(0, 1000)],
+      )
+      await audit(client, admin.id, 'CORREO_PRUEBA_FALLIDO', 'Integraciones', jobId, {
+        destinatario: recipient,
+        error: message.slice(0, 500),
+      })
+    })
     throw sendError
   }
 })

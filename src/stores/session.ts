@@ -55,9 +55,9 @@ export const useSessionStore = defineStore('session', () => {
     }
   }
 
-  async function login(): Promise<void> {
+  async function login(selectAccount = false): Promise<void> {
     error.value = null
-    await signInWithGoogle()
+    await signInWithGoogle(selectAccount)
   }
 
   async function selectRole(role: ActiveRole): Promise<void> {
@@ -76,7 +76,7 @@ export const useSessionStore = defineStore('session', () => {
 
   async function useAnotherAccount(): Promise<void> {
     await logout()
-    await login()
+    await login(true)
   }
 
   return {

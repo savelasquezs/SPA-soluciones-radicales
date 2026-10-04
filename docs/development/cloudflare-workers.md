@@ -71,6 +71,15 @@ No exponer:
 
 Los tres valores públicos deben existir tanto en Production como en Preview. La URL exacta de cada preview autorizado se registra además en los dominios confiables de Neon Auth y en `ALLOWED_ORIGINS` de la Function.
 
+La configuración actual de Cloudflare Builds no entrega variables de build a los previews. Para que las ramas distintas de `main` sigan siendo verificables, `vite.config.ts` define únicamente durante `WORKERS_CI=1` los endpoints públicos de la rama Neon `desarrollo`. Este fallback:
+
+- solo aplica si `WORKERS_CI_BRANCH` no es `main`;
+- no contiene secretos;
+- no reemplaza una variable `VITE_*` que Cloudflare sí haya definido;
+- nunca configura endpoints productivos.
+
+El build de `main` no tiene fallback y debe recibir explícitamente los tres endpoints públicos de la rama Neon productiva antes de cualquier despliegue de producción.
+
 ## Desarrollo
 
 La aplicación normal se desarrolla con:
