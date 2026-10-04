@@ -5,12 +5,13 @@ SPA para la gestión administrativa y técnica de servicios de Manejo Integrado 
 ## Arquitectura
 
 - Vue 3, TypeScript, Pinia y Vue Router.
-- Cloudflare Pages para el frontend.
-- Supabase Auth, PostgreSQL y Storage para backend y persistencia.
-- Supabase RPC y Edge Functions para operaciones privilegiadas.
+- Cloudflare Pages para publicar la SPA.
+- Neon para PostgreSQL, Managed Better Auth, Data API y Functions.
+- Cloudflare R2 para fotografías, firmas, evidencias, archivos maestros e informes/certificados PDF.
 - Google APIs para Gmail y Calendar.
+- IndexedDB para borradores y cola offline del navegador.
 
-El proyecto no usa Docker. El desarrollo trabaja con el proyecto remoto de Supabase enlazado mediante la CLI.
+Supabase ya no forma parte de la arquitectura activa.
 
 ## Configuración
 
@@ -18,14 +19,28 @@ El proyecto no usa Docker. El desarrollo trabaja con el proyecto remoto de Supab
 npm install
 ```
 
-Copiar `.env.example` como `.env` y completar:
+Copiar `.env.example` como `.env`. Las únicas variables de Neon que puede consumir directamente la SPA son:
 
 ```env
-VITE_SUPABASE_URL=
-VITE_SUPABASE_PUBLISHABLE_KEY=
+VITE_NEON_AUTH_URL=
+VITE_NEON_DATA_API_URL=
 ```
 
-La clave publicable puede llegar al navegador. Nunca agregar `service_role`, secretos de Google ni refresh tokens a variables `VITE_*`.
+`DATABASE_URL`, credenciales de R2 y secretos de Google son secretos de servidor y nunca llevan prefijo `VITE_`.
+
+## Neon CLI
+
+El repositorio no exige una instalación global. Los scripts fijan la versión de la CLI mediante `npx`.
+
+Primera configuración local:
+
+```bash
+npx -y neon@6.2.4 auth
+npx -y neon@6.2.4 link
+npx -y neon@6.2.4 env pull
+```
+
+Antes de trabajar en una rama de base de datos, seleccionar o crear la rama Neon correspondiente con `neon checkout`.
 
 ## Desarrollo
 
@@ -39,16 +54,38 @@ npm run dev
 npm run lint
 npm run test:unit:run
 npm run build
-npm run db:lint
+npm run db:check
+```
+
+Para revisar el estado y diferencias del esquema Neon:
+
+```bash
+npm run db:status
+npm run db:diff
 ```
 
 ## Migraciones
 
-```bash
-npm run db:push
+Las migraciones activas viven en `database/migrations/` y siguen:
+
+```text
+YYYYMMDD_NNN_descripcion.sql
 ```
 
-Las migraciones se aplican al proyecto remoto enlazado. Confirmar siempre el entorno antes de ejecutarlas. Los cambios de esquema no se realizan manualmente en el dashboard.
+Ejemplo:
+
+```text
+20261004_001_initial_schema.sql
+20261004_002_integrity_and_rls.sql
+```
+
+Aplicarlas únicamente sobre la rama Neon autorizada:
+
+```bash
+npm run db:migrate
+```
+
+El runner registra cada archivo y su checksum en `app_meta.schema_migrations`. Una migración aplicada no se modifica: se crea una nueva.
 
 ## Documentación
 
@@ -56,6 +93,8 @@ Las migraciones se aplican al proyecto remoto enlazado. Confirmar siempre el ent
 - [Mapa documental](docs/README.md)
 - [Arquitectura](docs/architecture/overview.md)
 - [Decisiones técnicas](docs/architecture/decisions.md)
+- [Base de datos y migraciones](database/README.md)
+- [Configuración de Neon](docs/development/neon-setup.md)
 - [Reutilización frontend](docs/frontend/reuse.md)
 - [Flujo de desarrollo](docs/development/workflow.md)
 - [UX](docs/ux-guidelines.md)

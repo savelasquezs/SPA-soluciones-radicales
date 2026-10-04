@@ -39,7 +39,7 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 | `plantillas_areas` | Conjuntos reutilizables de Áreas globales o privadas |
 | `servicios` | Programación, ejecución, pago, firmas, informe y publicación |
 | `formularios` | Definición versionada de secciones y campos |
-| `respuestas_mip` | Respuestas históricas por Servicio, formulario y Área |
+| `respuestas_formulario` | Respuestas históricas agrupadas por Servicio, formulario, versión y Área |
 | `productos` | Catálogo de productos utilizados |
 | `productos_aplicados` | Planeación y aplicación de productos por Servicio |
 | `configuracion` | Métodos, plagas, tipos de dispositivo y parámetros globales |
@@ -93,6 +93,9 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 - Al iniciar, el Servicio conserva el snapshot exacto de versiones.
 - Formularios iniciales: FO-PS-02 v03, FO-PS-10 v01 y FO-PS-09 v01.
 - Las respuestas pueden pertenecer a un Área y conservar evidencias.
+- La persistencia agrupa una fila por Servicio + Formulario + Versión + Área; los campos respondidos viven en `respuestas_jsonb`.
+- Cada entrada de `respuestas_jsonb` puede conservar valor, evaluación (`C`, `CP`, `NC`, `NA`), observación y referencias de evidencias.
+- No se crea una fila PostgreSQL por cada campo respondido.
 
 ### Productos
 
@@ -162,7 +165,7 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 - Multiempresa o cuentas para clientes.
 - Inventario y control de stock.
 - Migración automática de datos reales desde Spreadsheets.
-- Dependencia de Docker o Supabase local.
+- Dependencia de Docker o de una instancia PostgreSQL local como requisito de desarrollo.
 - Acceso directo de la SPA a secretos de Google o privilegios de servicio.
 
 ## Cambios funcionales

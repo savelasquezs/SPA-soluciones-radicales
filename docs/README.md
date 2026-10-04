@@ -11,6 +11,7 @@ La documentación versionada es la referencia viva de Soluciones Radicales MIP.
 | Componentes y estilo visual | `docs/design-system.md` |
 | Reutilización frontend | `docs/frontend/reuse.md` |
 | Arquitectura y decisiones | `docs/architecture/` |
+| Base de datos y migraciones | `database/README.md` |
 | Proceso de implementación | `docs/development/workflow.md` |
 | Estado de ejecución | Linear |
 | Comportamiento implementado | Código y pruebas |
@@ -19,7 +20,7 @@ La documentación versionada es la referencia viva de Soluciones Radicales MIP.
 
 Ante una contradicción se debe detener la parte afectada y resolverla. El código no modifica silenciosamente una regla funcional para acomodar una implementación.
 
-La aplicación anterior y sus Spreadsheets son referencia histórica. La documentación de producto conserva el comportamiento aprobado; la nueva arquitectura técnica es la definida en este repositorio.
+La aplicación anterior y sus Spreadsheets son referencia histórica. La documentación de producto conserva el comportamiento aprobado; la arquitectura técnica vigente es Neon + Cloudflare R2 + Cloudflare Pages.
 
 ## Estructura
 
@@ -32,6 +33,7 @@ docs/
 │   ├── decisions.md
 │   └── overview.md
 ├── development/
+│   ├── neon-setup.md
 │   └── workflow.md
 ├── frontend/
 │   └── reuse.md
@@ -43,6 +45,7 @@ docs/
 
 - Una regla funcional cambia en `docs/product/` junto con su implementación.
 - Una decisión técnica cambia en `docs/architecture/decisions.md`.
+- Una convención de esquema o migraciones cambia en `database/README.md`.
 - Un patrón reutilizable cambia en `docs/frontend/reuse.md`.
 - Un criterio transversal de interacción cambia en `docs/ux-guidelines.md`.
 - Un token o componente visual cambia en `docs/design-system.md`.

@@ -2,129 +2,102 @@
 
 ## Inicio de una tarea
 
-1. Confirmar la issue y su alcance real.
-2. Leer `AGENTS.md` y la documentación aplicable.
-3. Verificar dependencias y decisiones pendientes.
-4. Revisar el código y el flujo actual antes de diseñar una solución.
-5. Buscar piezas reutilizables existentes.
-6. Definir pruebas y evidencia necesaria antes de editar.
-
-Si la issue y la descripción se contradicen, no elegir una interpretación silenciosamente.
-
-## Secuencia de implementación frontend
-
-Para una funcionalidad nueva:
-
-1. definir o reutilizar tipos de dominio;
-2. definir o reutilizar el service remoto;
-3. ubicar el estado local, composable o store;
-4. crear o ampliar primitivas compartidas necesarias;
-5. crear componentes de dominio cuando exista reutilización real;
-6. componer la vista y ruta;
-7. agregar pruebas por capa;
-8. validar el flujo completo en navegador.
-
-No comenzar copiando una pantalla existente para luego corregir duplicación. Compartir primero el comportamiento común y mantener las diferencias como props, slots o composición.
+1. Confirmar issue y alcance.
+2. Leer `AGENTS.md` y documentación aplicable.
+3. Verificar dependencias y decisiones.
+4. Revisar código y flujo actual.
+5. Buscar piezas reutilizables.
+6. Definir pruebas y evidencia antes de editar.
 
 ## Cambios de base de datos
 
-1. Crear una migración nueva; no modificar una migración ya aplicada.
-2. Revisar restricciones, índices, RLS, grants y funciones afectadas.
-3. Ejecutar `npm run db:lint`.
-4. Revisar el SQL y confirmar el proyecto remoto enlazado.
-5. Ejecutar `npm run db:push` solo sobre el entorno autorizado.
-6. Verificar el comportamiento con los roles relevantes.
-7. Limpiar los datos temporales usados en la prueba.
+1. Crear una migración nueva en `database/migrations/`.
+2. Nombrarla `YYYYMMDD_NNN_descripcion.sql`.
+3. No editar migraciones que ya figuren en `app_meta.schema_migrations`.
+4. Revisar restricciones, índices, RLS, grants, funciones y compatibilidad con Neon.
+5. Ejecutar `npm run db:check`.
+6. Confirmar con `npm run db:status` que el repo está enlazado al proyecto y rama Neon correctos.
+7. Revisar `npm run db:diff` cuando corresponda.
+8. Aplicar con `npm run db:migrate` únicamente sobre el entorno autorizado.
+9. Verificar comportamiento con los roles aplicables.
+10. Limpiar datos temporales.
 
-No se usa Docker. No se ejecutan `supabase start`, `supabase status` ni flujos que dependan del stack local.
+No incluir SQL específico de Supabase como `auth.users`, `storage.buckets` o `service_role`.
+
+El runner de migraciones crea `app_meta.schema_migrations` y registra nombre + checksum. Si un archivo aplicado cambia, la ejecución falla.
+
+## Ramas Neon
+
+- `main` de Neon queda reservado para el entorno que se designe como productivo.
+- Desarrollo usa ramas hijas.
+- Un cambio de esquema importante debe aislarse en una rama Neon antes de tocar producción.
+- El checkout de Git no cambia automáticamente la rama Neon: verificar ambas.
+- No aplicar migraciones a producción sin autorización explícita.
+
+## Auth y RLS
+
+Antes de implementar políticas que dependan de claims concretos:
+
+1. habilitar Managed Better Auth;
+2. habilitar Data API;
+3. autenticar un usuario de prueba;
+4. inspeccionar `auth.user_id()` y `auth.session()` desde una petición autenticada;
+5. documentar los campos realmente disponibles;
+6. recién entonces implementar el rol activo por sesión.
+
+No asumir que un identificador de Neon Auth es UUID.
 
 ## Seeds y bootstrap
 
-- Bootstrap contiene únicamente datos estructurales necesarios en producción.
-- Seeds contienen datos ficticios o provenientes de los Spreadsheets de prueba.
-- Un seed debe ser repetible y no depender de IDs generados en una ejecución previa.
-- Nunca ejecutar seeds demostrativos sobre producción.
-- No incluir archivos reales de clientes, tokens ni direcciones sensibles.
+- `database/bootstrap/`: datos estructurales requeridos por producción.
+- `database/seeds/`: datos ficticios de desarrollo/prueba.
+- Un seed debe ser repetible.
+- Nunca ejecutar seeds demostrativos en producción.
+- No incluir archivos reales, tokens ni datos sensibles.
 
 ## Validación local
-
-Ejecutar como mínimo:
 
 ```bash
 npm run lint
 npm run test:unit:run
 npm run build
+npm run db:check
 ```
 
-Cuando cambie SQL:
+Cuando exista una base Neon enlazada:
 
 ```bash
-npm run db:lint
+npm run db:status
+npm run db:diff
 ```
-
-Cuando cambie un flujo navegable, ejecutar las pruebas E2E afectadas y revisar visualmente desktop y mobile.
 
 ## Validación visual
 
-Comprobar:
-
-- carga inicial;
-- contenido con datos;
-- estado vacío;
-- error y reintento;
-- guardado exitoso;
-- fallo conservando la entrada;
-- prevención de doble acción;
-- navegación y retorno;
-- teclado y foco;
-- viewport móvil sin overflow horizontal;
-- ausencia de errores en consola.
-
-No reutilizar selectores o referencias DOM obtenidos antes de una navegación o recarga.
+Comprobar carga, contenido, vacío, error/reintento, guardado, preservación ante fallos, prevención de doble acción, navegación, teclado/foco, móvil sin overflow y consola limpia.
 
 ## Validación remota
 
-Distinguir siempre:
+Distinguir:
 
 - pruebas unitarias locales;
 - build local;
-- base remota de desarrollo;
-- preview de Cloudflare;
+- rama Neon de desarrollo;
+- preview Cloudflare;
 - producción.
 
-Una validación en una capa no demuestra las demás. En autenticación o Google APIs se debe completar el flujo real antes de declararlo funcional.
+Una validación en una capa no demuestra las demás.
 
 ## Datos temporales
 
-- Usar identificadores reconocibles y únicos.
-- Crear los datos mínimos.
-- Limpiarlos incluso si la prueba falla.
-- Verificar que no queden filas, archivos, jobs o usuarios temporales.
-- No modificar registros reales para facilitar una prueba.
-
-## Mejoras fuera de alcance
-
-Si durante una tarea aparece una mejora:
-
-- corregirla directamente solo si es local, segura, no cambia reglas y evita deuda inmediata;
-- solicitar decisión cuando cambie comportamiento o arquitectura;
-- si se aprueba para después, registrarla en `tasks.md` y continuar la tarea actual.
+Crear los mínimos, identificarlos claramente y eliminarlos incluso tras fallos. No modificar registros reales para facilitar pruebas.
 
 ## Pull requests
 
 - Una issue por PR salvo decisión explícita.
-- El PR incluye código, pruebas y documentación correspondiente.
-- No incluir refactors generales no necesarios.
+- Incluir código, pruebas y documentación.
 - No hacer merge sin autorización.
-- No modificar producción como parte de una validación de desarrollo.
+- No modificar producción para validar desarrollo.
 
 ## Entrega
 
-Informar únicamente:
-
-1. rama o URL del PR;
-2. commit final;
-3. pruebas ejecutadas y resultado;
-4. validación remota o visual realizada;
-5. estado de producción y merge;
-6. bloqueos o decisiones pendientes.
+Informar rama/PR, commit, pruebas, validación remota/visual, estado de producción/merge y bloqueos.

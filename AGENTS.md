@@ -7,11 +7,11 @@ Este repositorio reconstruye Soluciones Radicales MIP como una SPA rápida, mant
 La arquitectura aprobada es:
 
 - Cloudflare Pages para el frontend.
-- Supabase Auth, PostgreSQL y Storage para identidad, datos y archivos.
-- RPC y Edge Functions para operaciones privilegiadas e integraciones.
+- Neon para PostgreSQL, Managed Better Auth, Data API y Functions.
+- Cloudflare R2 para archivos privados y documentos generados.
 - Google APIs para Gmail y Calendar mediante la cuenta empresarial.
 
-La aplicación anterior es referencia funcional, no referencia técnica. No se deben trasladar patrones de Apps Script o Google Sheets a la nueva implementación.
+Supabase no forma parte de la arquitectura activa. La aplicación anterior es referencia funcional, no técnica.
 
 ## Fuentes de verdad
 
@@ -22,118 +22,131 @@ Consultar en este orden:
 3. `docs/design-system.md` para componentes, tokens, responsive y accesibilidad visual.
 4. `docs/frontend/reuse.md` para reutilización, componentes, composables y stores.
 5. `docs/architecture/` para decisiones técnicas vigentes.
-6. Linear para alcance, prioridad, dependencias y estado de la tarea.
-7. Código y pruebas como evidencia de lo implementado.
+6. `database/README.md` para reglas de esquema y migraciones.
+7. Linear para alcance, prioridad, dependencias y estado.
+8. Código y pruebas como evidencia de lo implementado.
 
-No inventar requisitos para completar vacíos. Si existe una contradicción, informar y detener únicamente la parte afectada.
+No inventar requisitos. Ante una contradicción, detener únicamente la parte afectada.
 
 ## Antes de implementar
 
 - Partir de `main` actualizado salvo instrucción contraria.
-- Leer la issue completa y comprobar que su identificador coincide con el comportamiento solicitado.
+- Leer la issue completa y comprobar el comportamiento solicitado.
 - Revisar reglas, entidades y criterios de aceptación afectados.
-- Inspeccionar el flujo existente en el navegador cuando ya sea ejecutable.
-- Buscar componentes, composables, stores, helpers, servicios y tipos reutilizables antes de crear otros.
-- Identificar qué estado es local, compartido, remoto o persistido antes de escribir código.
+- Inspeccionar el flujo existente cuando ya sea ejecutable.
+- Buscar piezas reutilizables antes de crear otras.
+- Identificar qué estado es local, compartido, remoto o persistido.
 - No adelantar issues ni funcionalidades futuras.
-- Registrar en `tasks.md` una mejora aprobada que quede fuera del alcance, sin abandonar el trabajo actual.
+- Registrar en `tasks.md` una mejora aprobada que quede fuera del alcance.
 
-## Reutilización obligatoria en frontend
+## Reutilización frontend
 
-La reutilización se diseña desde el inicio. Las vistas ensamblan comportamiento; no concentran acceso a datos, reglas repetidas ni componentes completos.
-
-- Crear primitivas visuales compartidas para botones, campos, selectores, diálogos, estados de carga, estados vacíos, errores, toasts y confirmaciones.
-- Extraer a `composables` el comportamiento Vue reutilizable: estado asíncrono, formularios modificados, filtros, paginación, conectividad, autosave, carga de archivos y sincronización.
-- Usar stores Pinia para estado compartido entre rutas o módulos: sesión, rol activo, notificaciones, conectividad, sincronización y catálogos reutilizados.
-- Mantener en el componente el estado efímero que no necesite sobrevivir ni compartirse.
-- Mantener helpers como funciones puras y sin dependencias de Vue.
-- Centralizar acceso a Supabase y servicios externos en la capa `services`; componentes y vistas no ejecutan consultas directas.
-- Centralizar tipos de dominio y contratos de entrada/salida.
+- Las vistas ensamblan; no concentran acceso a datos ni reglas repetidas.
+- Crear primitivas compartidas para botones, campos, selectores, diálogos, loadings, vacíos, errores, toasts y confirmaciones.
+- Extraer a composables comportamiento Vue reutilizable.
+- Usar Pinia solo para estado compartido entre rutas o procesos.
+- Mantener helpers puros.
+- Centralizar Neon Auth/Data API y otros I/O en `services`; componentes y vistas no consultan proveedores directamente.
+- Centralizar tipos de dominio y contratos.
 - Extraer una segunda implementación equivalente antes de aceptar duplicación.
-- No crear abstracciones genéricas sin un contrato real ni stores para estado exclusivamente local.
-
-Las responsabilidades y dependencias permitidas están definidas en `docs/frontend/reuse.md`.
 
 ## Autoridad y seguridad
 
 - La interfaz nunca es autoridad para roles, permisos, precios, consecutivos, estados o relaciones.
-- Toda tabla expuesta debe tener RLS y permisos mínimos.
-- Las operaciones sensibles se ejecutan mediante RPC o Edge Functions.
-- La SPA nunca contiene `service_role`, refresh tokens de Google ni secretos.
-- El acceso público usa únicamente RPC limitada y token aleatorio, hasheado, revocable y con vencimiento.
-- Los archivos permanecen privados; se entregan mediante autorización o URL firmada de corta duración.
-- No confiar en IDs, roles, correos o relaciones enviados por el navegador cuando puedan derivarse de la sesión o de datos persistidos.
+- Toda tabla accesible mediante Data API debe tener RLS y privilegios mínimos.
+- Para identidad en RLS usar las capacidades de Neon Data API/`pg_session_jwt`, preferentemente `auth.user_id()` y `auth.session()`.
+- No asumir nombres de claims de sesión: verificarlos en el entorno Neon real antes de depender de ellos.
+- La SPA nunca contiene `DATABASE_URL`, credenciales de R2, secretos de Google ni claves administrativas.
+- El acceso público usa una operación limitada y token aleatorio, hasheado, revocable y con vencimiento.
+- Los archivos permanecen privados y se entregan mediante backend autorizado o URL firmada de corta duración.
 - Mantener auditoría append-only para eventos sensibles.
 
-## Supabase y datos
+## Neon y datos
 
-- No usar Docker ni depender de Supabase local.
-- Trabajar con migraciones versionadas contra el proyecto remoto de desarrollo enlazado.
-- No realizar cambios permanentes manuales desde el dashboard si pueden expresarse como migración.
-- Ejecutar `npm run db:lint` después de modificar SQL.
-- Aplicar migraciones con `npm run db:push` únicamente al entorno autorizado.
+- PostgreSQL de Neon es la fuente de verdad estructurada.
+- Managed Better Auth provee identidad; el registro de aplicación en `usuarios` sigue decidiendo si una identidad está autorizada y qué roles internos posee.
+- Data API es la vía HTTP desde la SPA y trabaja con JWT + RLS.
+- Functions ejecuta operaciones que requieren secretos o privilegios y las integraciones asíncronas.
+- No usar una conexión PostgreSQL administrativa desde el navegador.
+- Las migraciones activas viven exclusivamente en `database/migrations/`.
+- Formato obligatorio: `YYYYMMDD_NNN_descripcion.sql`.
+- Nunca modificar una migración aplicada; crear otra.
+- Ejecutar `npm run db:check` después de modificar SQL.
+- Ejecutar `npm run db:migrate` únicamente sobre la rama Neon autorizada.
+- Usar ramas Neon para aislar cambios de esquema; producción corresponde a la rama Neon aprobada para producción.
 - Separar bootstrap productivo y seeds de prueba.
-- Los Spreadsheets anteriores son datos de prueba; no se migran automáticamente a producción.
-- Usar UUID estables, idempotencia y control de versión en operaciones sincronizables.
-- Conservar los montos en COP como enteros.
-- No agregar multitenancy: Soluciones Radicales es la única empresa operadora y los Negocios son clientes.
+- Los Spreadsheets anteriores son datos de prueba; no se migran automáticamente.
+- Usar UUID estables para entidades del dominio e idempotencia/control de versión en operaciones sincronizables.
+- Los identificadores de Neon Auth se tratan con el tipo real expuesto por `neon_auth`/`auth.user_id()`; no asumir UUID.
+- Conservar montos en COP como enteros.
+- No agregar multitenancy.
+
+## Respuestas de formularios
+
+- `formularios` define campos y versiones de forma normalizada.
+- Las respuestas históricas se agrupan por Servicio + formulario + versión + Área.
+- No crear una fila PostgreSQL por cada campo respondido.
+- Cada grupo conserva las respuestas de campos en JSONB, incluyendo valor, evaluación, observación y referencias a evidencias cuando apliquen.
+- El documento histórico debe permanecer interpretable contra la versión exacta del formulario.
+
+## Cloudflare R2
+
+- R2 es el almacén de archivos; PostgreSQL guarda claves/rutas y metadatos, no blobs.
+- Buckets privados: `sr-master-files`, `sr-service-media`, `sr-generated-documents`.
+- Imágenes operativas: eliminar siete días después de validar el documento final.
+- PDF generados: conservar hasta un año.
+- Archivos maestros: conservar mientras estén activos.
+- Acceso y firma de URLs ocurren en backend; nunca exponer credenciales R2 al navegador.
 
 ## Google APIs
 
 - Gmail y Calendar operan exclusivamente desde backend con `solucionesradicales1@gmail.com`.
-- Los usuarios no autorizan sus buzones o calendarios personales.
-- Los efectos externos deben ser asíncronos, idempotentes y reintentables.
-- Un fallo de Gmail o Calendar no debe impedir guardar la operación interna.
-- No registrar tokens, destinatarios sensibles, contenido de correos ni secretos en logs.
+- Los efectos externos son asíncronos, idempotentes y reintentables.
+- Un fallo externo no impide guardar la operación interna.
+- No registrar tokens ni secretos en logs.
 
 ## UX obligatoria
 
-- Diseñar mobile-first para el trabajo del Técnico.
-- No crear una página, ruta o entrada de navegación únicamente porque exista una tabla.
-- Mantener el contexto Negocio → Sede → Área → Servicio.
-- Usar el sistema global de loading, toast, confirmación y errores.
-- Prevenir doble envío y mostrar progreso donde ocurre la acción.
-- Preservar datos capturados cuando falle una operación.
-- Toda pantalla de datos contempla carga, contenido, vacío, error y reintento.
-- Los formularios largos no se implementan en modales.
-- Validar teclado, foco, Escape, lector de pantalla y ausencia de overflow horizontal.
-- Los controles táctiles deben medir al menos 44 px.
+- Diseñar mobile-first para el Técnico.
+- Mantener contexto Negocio → Sede → Área → Servicio.
+- Usar loading, toast, confirmación y errores globales.
+- Prevenir doble envío y preservar datos ante fallos.
+- Toda pantalla contempla carga, contenido, vacío, error y reintento.
+- Formularios largos no van en modales.
+- Controles táctiles de al menos 44 px.
 
 ## Código
 
-- Usar Vue 3, TypeScript, Composition API, Pinia y Vue Router.
+- Vue 3, TypeScript, Composition API, Pinia y Vue Router.
 - Preferir `<script setup lang="ts">`.
-- Mantener componentes pequeños, con props y emits tipados.
-- Evitar `any`, estado global mutable fuera de Pinia y efectos secundarios ocultos.
+- Evitar `any`, estado global mutable fuera de Pinia y efectos ocultos.
 - No duplicar validaciones, formatos, mapeos de errores ni consultas.
-- No introducir dependencias cuando la plataforma o una utilidad pequeña resuelvan el caso con claridad.
-- No dejar código muerto, compatibilidad temporal, mocks o archivos de prueba sin uso.
-- No hacer refactors generales fuera del alcance.
+- No introducir dependencias sin uso real.
+- No dejar código muerto, mocks o compatibilidad temporal.
+- No hacer refactors generales fuera de alcance.
 
 ## Pruebas y validación
 
 Antes de terminar una tarea:
 
-- ejecutar `npm run lint`;
-- ejecutar `npm run test:unit:run`;
-- ejecutar `npm run build`;
-- ejecutar `npm run db:lint` si cambió la base de datos;
-- ejecutar las pruebas E2E afectadas cuando exista un flujo navegable;
-- revisar visualmente las interfaces modificadas en desktop y mobile;
-- comprobar loading, vacío, error, éxito, doble acción, navegación y consola;
-- verificar autorización y RLS con el rol aplicable;
-- eliminar datos y archivos temporales de validación.
-
-No presentar un build, una respuesta HTTP o una pantalla de login como evidencia de que autenticación, autorización o integración funcionan de punta a punta.
+- `npm run lint`;
+- `npm run test:unit:run`;
+- `npm run build`;
+- `npm run db:check` si cambió SQL;
+- `npm run db:diff` antes de proponer un cambio de esquema ya aplicado a una rama Neon;
+- pruebas E2E afectadas cuando exista flujo navegable;
+- revisión visual desktop/mobile;
+- validación de RLS con rol aplicable;
+- limpieza de datos y archivos temporales.
 
 ## Git y entrega
 
-- Mantener cambios pequeños, trazables y limitados a la tarea.
+- Cambios pequeños y trazables.
 - No hacer merge ni desplegar a producción sin autorización explícita.
-- No mezclar dos issues independientes en un mismo PR.
-- Actualizar documentación y pruebas en el mismo cambio que modifica comportamiento.
-- Informar al terminar: rama o PR, commit, pruebas ejecutadas, validación real, producción/merge y bloqueos.
+- No mezclar issues independientes.
+- Actualizar documentación y pruebas junto con el comportamiento.
+- Informar: rama/PR, commit, pruebas, validación real, estado de merge/producción y bloqueos.
 
 ## Definición de terminado
 
-Una tarea termina cuando cumple sus criterios, reutiliza correctamente la arquitectura compartida, pasa las validaciones proporcionales al riesgo, no deja residuos temporales, actualiza la documentación afectada y no introduce alcance futuro.
+Una tarea termina cuando cumple criterios, respeta arquitectura y UX, pasa validaciones proporcionales al riesgo, no deja residuos y actualiza la documentación afectada.
