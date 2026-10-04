@@ -92,7 +92,10 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 - Un Servicio Programado usa la configuración vigente de la Sede al iniciar.
 - Al iniciar, el Servicio conserva el snapshot exacto de versiones.
 - Formularios iniciales: FO-PS-02 v03, FO-PS-10 v01 y FO-PS-09 v01.
-- Las respuestas pueden pertenecer a un Área y conservar evidencias.\n- La persistencia agrupa una fila por Servicio + Formulario + Versión + Área; los campos respondidos viven en `respuestas_jsonb`.\n- Cada entrada de `respuestas_jsonb` puede conservar valor, evaluación (`C`, `CP`, `NC`, `NA`), observación y referencias de evidencias.\n- No se crea una fila PostgreSQL por cada campo respondido.
+- Las respuestas pueden pertenecer a un Área y conservar evidencias.
+- La persistencia agrupa una fila por Servicio + Formulario + Versión + Área; los campos respondidos viven en `respuestas_jsonb`.
+- Cada entrada de `respuestas_jsonb` puede conservar valor, evaluación (`C`, `CP`, `NC`, `NA`), observación y referencias de evidencias.
+- No se crea una fila PostgreSQL por cada campo respondido.
 
 ### Productos
 
