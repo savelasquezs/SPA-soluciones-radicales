@@ -82,7 +82,7 @@ Agregar primero desarrollo local:
 npx -y neon@6.2.4 neon-auth domain add http://localhost:5173
 ```
 
-Cuando exista URL definitiva de Cloudflare Pages, agregar también ese origen. Los previews solo se habilitan cuando sean necesarios.
+Cuando exista URL definitiva de Cloudflare Workers, agregar también ese origen. Los previews solo se habilitan cuando sean necesarios.
 
 ## 7. Habilitar Data API
 
@@ -164,4 +164,4 @@ Cuando el producto esté listo:
 3. validar Functions e integraciones;
 4. revisar `npm run db:diff`;
 5. aplicar/promover cambios a la rama Neon designada para producción únicamente con autorización explícita;
-6. configurar Cloudflare Pages con los endpoints públicos de Auth/Data API de producción.
+6. configurar Cloudflare Workers con los endpoints públicos de Auth/Data API de producción.
