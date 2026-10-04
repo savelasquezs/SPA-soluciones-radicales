@@ -8,9 +8,12 @@
     "build": "run-p type-check \"build-only {@}\" --",
     "preview": "vite preview",
     "test:unit": "vitest",
+    "test:unit:run": "vitest run",
     "test:e2e": "playwright test",
     "build-only": "vite build",
     "type-check": "vue-tsc --build",
+    "db:push": "supabase db push --linked",
+    "db:lint": "supabase db lint --linked --level warning",
     "lint": "run-s \"lint:*\"",
     "lint:oxlint": "oxlint . --fix",
     "lint:eslint": "eslint . --fix --cache"

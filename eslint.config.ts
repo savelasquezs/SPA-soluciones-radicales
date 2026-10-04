@@ -1,5 +1,5 @@
 import { globalIgnores } from 'eslint/config'
-import { defineConfigWithVueTs, vueTsConfigs } from '@vue/eslint-config-typescript'
+import vueTsEslintConfig from '@vue/eslint-config-typescript'
 import pluginVue from 'eslint-plugin-vue'
 import pluginPlaywright from 'eslint-plugin-playwright'
 import pluginVitest from '@vitest/eslint-plugin'
@@ -10,7 +10,7 @@ import pluginOxlint from 'eslint-plugin-oxlint'
 // configureVueProject({ scriptLangs: ['ts', 'tsx'] })
 // More info at https://github.com/vuejs/eslint-config-typescript/#advanced-setup
 
-export default defineConfigWithVueTs(
+export default [
   {
     name: 'app/files-to-lint',
     files: ['**/*.{vue,ts,mts,tsx}'],
@@ -19,7 +19,7 @@ export default defineConfigWithVueTs(
   globalIgnores(['**/dist/**', '**/dist-ssr/**', '**/coverage/**']),
 
   ...pluginVue.configs['flat/essential'],
-  vueTsConfigs.recommended,
+  ...vueTsEslintConfig(),
 
   {
     ...pluginPlaywright.configs['flat/recommended'],
@@ -32,4 +32,4 @@ export default defineConfigWithVueTs(
   },
 
   ...pluginOxlint.buildFromOxlintConfigFile('.oxlintrc.json'),
-)
+]
