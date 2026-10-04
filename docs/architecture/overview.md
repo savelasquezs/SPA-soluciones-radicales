@@ -2,21 +2,22 @@
 
 ## Objetivo
 
-Soluciones Radicales MIP administra el ciclo completo de los servicios de Manejo Integrado de Plagas con una experiencia ágil en escritorio y móvil. La arquitectura mantiene el frontend estático y delega identidad, persistencia, autorización, archivos y procesos privilegiados a Supabase.
+Soluciones Radicales MIP administra el ciclo completo de servicios de Manejo Integrado de Plagas con una SPA ágil en escritorio y móvil. La arquitectura separa interfaz, datos estructurados y archivos para mantener costos bajos y límites claros.
 
 ## Componentes
 
 | Componente | Responsabilidad |
 |---|---|
-| Cloudflare Pages | Publicar la SPA, servir recursos estáticos y previews |
-| Vue 3 | Interfaz, navegación y composición de módulos |
+| Cloudflare Pages | Publicar la SPA y previews |
+| Vue 3 | Interfaz, navegación y composición |
 | Pinia | Estado compartido entre rutas y procesos |
-| Supabase Auth | Inicio de sesión con Google e identidad de sesión |
-| PostgreSQL | Fuente de verdad de datos estructurados |
-| Row Level Security | Autorización de lectura por usuario y rol activo |
-| RPC | Operaciones transaccionales y acceso público limitado |
-| Edge Functions | Integraciones, secretos, archivos y trabajos privilegiados |
-| Supabase Storage | Archivos privados y documentos generados |
+| Neon Managed Better Auth | Inicio de sesión con Google e identidad |
+| Neon PostgreSQL | Fuente de verdad de datos estructurados |
+| Neon Data API | Acceso HTTPS/PostgREST a PostgreSQL con JWT + RLS |
+| PostgreSQL RLS | Autorización de lectura/escritura por identidad y rol |
+| PostgreSQL functions | Operaciones transaccionales cercanas a los datos |
+| Neon Functions | Integraciones y operaciones con secretos |
+| Cloudflare R2 | Evidencias, firmas, maestros y documentos generados |
 | Google APIs | Gmail y Calendar de la cuenta empresarial |
 | IndexedDB | Borradores y cola offline del navegador |
 
@@ -25,21 +26,18 @@ Soluciones Radicales MIP administra el ciclo completo de los servicios de Manejo
 ```text
 Cloudflare Pages
   └─ Vue SPA
-      ├─ Supabase Auth
-      ├─ Data API protegida por RLS
-      ├─ RPC transaccionales
-      ├─ Storage privado
-      └─ Edge Functions
+      ├─ Neon Managed Better Auth
+      ├─ Neon Data API + PostgreSQL RLS
+      └─ Neon Functions
+          ├─ PostgreSQL privilegiado cuando corresponda
+          ├─ Cloudflare R2
           ├─ Gmail API
-          ├─ Calendar API
-          └─ procesamiento de archivos
+          └─ Calendar API
 ```
 
-La SPA solo utiliza la URL y clave publicable de Supabase. Los secretos permanecen en Supabase o en la configuración segura del entorno que los ejecuta.
+La SPA solo recibe endpoints públicos de Auth/Data API. Las cadenas PostgreSQL, credenciales R2 y secretos de Google permanecen fuera del navegador.
 
 ## Arquitectura frontend
-
-La estructura objetivo es:
 
 ```text
 src/
@@ -56,7 +54,7 @@ src/
 └── views/
 ```
 
-Las dependencias avanzan en una sola dirección:
+Dependencias:
 
 ```text
 views
@@ -65,93 +63,105 @@ views
 
 views / composables / stores
   → services
-  → Supabase
+  → Neon / backend
 
 helpers y types
   ← reutilizables por todas las capas
 ```
 
-Reglas:
-
-- Una vista coordina la pantalla y no contiene consultas repetidas ni lógica transversal.
-- Un componente base no conoce Supabase, rutas ni entidades de negocio.
-- Un componente de dominio puede conocer tipos de negocio, pero recibe datos y emite eventos.
-- Un composable encapsula comportamiento reactivo reutilizable.
-- Un store conserva estado compartido o de ciclo de vida superior a una vista.
-- Un helper es puro y no depende de Vue.
-- Un service es el único punto de entrada frontend para I/O remoto.
-
-La guía detallada está en `docs/frontend/reuse.md`.
+Las vistas coordinan. Los componentes base no conocen proveedores. Los services son el único punto de I/O remoto del frontend.
 
 ## Estado
 
 | Estado | Ubicación |
 |---|---|
-| Visual y efímero de un componente | `ref` o `reactive` local |
-| Reutilizable dentro de un flujo | composable |
-| Compartido entre rutas o módulos | store Pinia |
-| Datos persistentes | PostgreSQL |
+| Visual y efímero | `ref` / `reactive` local |
+| Reutilizable en un flujo | composable |
+| Compartido entre rutas | Pinia |
+| Datos persistentes | Neon PostgreSQL |
 | Borradores y operaciones offline | IndexedDB |
-| Parámetros no sensibles | configuración persistida |
-| Secretos | Supabase Secrets o proveedor seguro |
+| Archivos binarios | Cloudflare R2 |
+| Secretos | Neon Secrets / Cloudflare Secrets según runtime |
 
-No se replica en Pinia una tabla completa sin una necesidad concreta. Los stores mantienen contexto, cachés acotadas y estado de proceso; PostgreSQL continúa siendo la fuente de verdad.
+PostgreSQL continúa siendo la fuente de verdad estructurada.
 
 ## Autenticación y roles
 
-Los usuarios internos ingresan con Google mediante Supabase Auth. Solo los registros activos de `usuarios` pueden operar.
+Los usuarios internos ingresan con Google mediante Neon Managed Better Auth. Neon conserva identidad y sesiones en el esquema administrado `neon_auth`.
 
-Los roles disponibles son Administrador y Técnico. Un usuario puede tener ambos, pero utiliza un único rol activo por sesión y puede cambiarlo sin cerrar sesión. El rol se valida en backend; ocultar una acción en la interfaz no constituye autorización.
+La tabla de dominio `usuarios` determina qué identidad está autorizada a usar Soluciones Radicales y si tiene rol Administrador, Técnico o ambos. Un usuario con dos roles utiliza uno activo por sesión.
 
-Clientes, contactos y destinatarios son datos informativos y no tienen cuentas. El sistema no es multiempresa.
+La autorización efectiva vive en servidor/PostgreSQL. Ocultar una acción en la interfaz no concede ni revoca permisos.
+
+Los IDs de Neon Auth se modelan con el tipo realmente expuesto por Neon; no se asumen UUID.
 
 ## Datos y autorización
 
-Las 18 tablas funcionales documentadas conservan el modelo de negocio anterior. Las tablas técnicas privadas soportan sesiones, leases de edición, sincronización offline y trabajos externos.
+Las tablas funcionales conservan el modelo de negocio. Las tablas privadas soportan leases, sincronización offline, trabajos externos y metadatos técnicos.
 
-- RLS está habilitada en todas las tablas públicas.
-- Las lecturas se filtran por usuario y rol activo.
-- Las escrituras de negocio se implementan mediante RPC transaccionales.
-- Las relaciones, transiciones y valores derivados se validan en servidor.
+- RLS se habilita en toda tabla accesible desde Data API.
+- Las políticas usan el contexto JWT provisto por Neon, principalmente `auth.user_id()` y `auth.session()`.
+- Los nombres concretos de claims de sesión se verifican contra el proyecto Neon antes de crear dependencias permanentes.
+- Las relaciones, transiciones y valores derivados se validan en PostgreSQL o Functions.
 - Auditoría es append-only.
-- Los IDs son UUID estables y pueden generarse antes de sincronizar.
+- Las entidades del dominio usan UUID estables e idempotencia cuando aplica.
+
+## Respuestas MIP
+
+`formularios` conserva la definición versionada de secciones y campos.
+
+Las respuestas históricas no se almacenan como una fila por campo. Se agrupan por:
+
+```text
+Servicio + Formulario + Versión + Área
+```
+
+Cada fila contiene un objeto JSONB con las respuestas de sus campos. Cada campo puede conservar valor, evaluación, observación y referencias a evidencias.
+
+Esto reduce filas e índices repetidos sin perder la capacidad de interpretar el histórico contra la versión exacta del formulario.
 
 ## Archivos
 
-Los buckets son privados:
+Cloudflare R2 reemplaza a Supabase Storage. Los buckets privados son:
 
-- `master-files`: planos, fichas, plantillas y certificados vigentes.
-- `service-media`: fotografías, evidencias y firmas operativas.
-- `generated-documents`: informes y certificados generados.
+- `sr-master-files`: planos, fichas, plantillas y certificados vigentes de técnicos.
+- `sr-service-media`: fotografías, evidencias y firmas operativas.
+- `sr-generated-documents`: informes y certificados generados.
 
-Las imágenes se optimizan antes de persistir y los PDF se generan comprimidos con librerías mantenidas. No se desarrollan códecs propios.
+PostgreSQL almacena únicamente claves/rutas, metadatos y estado del archivo.
 
-Las fotografías operativas se eliminan después de siete días únicamente cuando el documento final fue generado y validado. Los PDF generados se conservan hasta un año. Los archivos maestros permanecen mientras estén activos.
+Las imágenes se optimizan antes de persistir y los PDF se generan comprimidos.
+
+Retención:
+
+- fotografías y firmas operativas: siete días después de validar el documento final;
+- informes y certificados PDF: hasta un año;
+- archivos maestros: mientras estén activos.
 
 ## Integraciones
 
 Gmail y Calendar usan exclusivamente `solucionesradicales1@gmail.com`. El refresh token nunca llega al navegador.
 
-Cada efecto externo se representa como un trabajo idempotente, reintentable y desacoplado de la escritura principal. Guardar un Servicio no depende de que Google esté disponible. El estado de sincronización y el último error se conservan para diagnóstico y reintento.
+Los efectos externos se modelan como trabajos idempotentes y reintentables. Guardar un Servicio no depende de que Google o R2 estén disponibles en ese instante.
 
 ## Trabajo offline
 
-La aplicación debe haberse cargado y autenticado antes de perder conexión.
+La aplicación debe cargarse y autenticarse antes de perder conexión.
 
 - IndexedDB conserva borradores, archivos pendientes y operaciones.
 - Cada operación tiene ID estable e idempotente.
-- El servidor vuelve a validar permisos, versión e integridad.
-- Cambios en campos distintos pueden combinarse.
-- Un conflicto sobre el mismo campo no se sobrescribe silenciosamente.
+- El servidor revalida permisos, versión e integridad.
+- Cambios independientes pueden combinarse.
+- Un conflicto del mismo dato no se sobrescribe silenciosamente.
 - Evidencias nuevas se tratan como adiciones independientes.
-
-El Service Worker podrá conservar el shell y recursos estáticos, pero no reemplaza autenticación, autorización ni la base de datos.
 
 ## Entornos y despliegue
 
-- El frontend se valida localmente y se publica mediante previews de Cloudflare Pages.
-- La base se desarrolla contra un proyecto remoto enlazado de Supabase.
-- No se usa Docker ni Supabase local.
-- Toda modificación de esquema se versiona como migración.
+- Frontend: Cloudflare Pages.
+- Base/Auth/Data API/Functions: Neon.
+- Archivos: Cloudflare R2.
+- Desarrollo de esquema: ramas Neon.
+- Producción: rama Neon explícitamente designada y protegida.
+- Toda modificación del esquema se versiona en `database/migrations/`.
+- No se usa Docker ni una instancia PostgreSQL local como requisito.
 - Producción no se modifica sin autorización explícita.
-- Un resultado local o preview no demuestra por sí solo el comportamiento productivo.
