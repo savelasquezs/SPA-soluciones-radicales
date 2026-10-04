@@ -24,6 +24,8 @@
     "cloudflare:deploy": "npm run build && npx wrangler deploy"
   },
   "dependencies": {
+    "@neon/config": "^1.8.3",
+    "pg": "^8.23.1",
     "pinia": "^4.0.3",
     "vue": "^3.5.42",
     "vue-router": "^5.3.1"

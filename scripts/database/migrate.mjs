@@ -2,29 +2,40 @@ import { createHash } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import pg from 'pg';
 
 const migrationsDir = resolve('database/migrations');
-const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-const cli = ['-y', 'neon@6.2.4', 'psql', '--'];
 
-function sqlLiteral(value) {
-  return "'" + value.replaceAll("'", "''") + "'";
+function parseEnvValue(content, key) {
+  const line = content
+    .split(/\r?\n/u)
+    .find((entry) => entry.startsWith(`${key}=`));
+
+  if (!line) return undefined;
+
+  const value = line.slice(key.length + 1).trim();
+  if (
+    (value.startsWith('"') && value.endsWith('"'))
+    || (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    return value.slice(1, -1);
+  }
+  return value;
 }
 
-function psql(args, input) {
-  const result = spawnSync(npx, [...cli, ...args], {
-    encoding: 'utf8',
-    input,
-    stdio: input === undefined ? ['inherit', 'pipe', 'pipe'] : ['pipe', 'pipe', 'pipe'],
-  });
+async function loadEnvValue(key) {
+  if (process.env[key]) return process.env[key];
 
-  if (result.status !== 0) {
-    if (result.stdout) process.stdout.write(result.stdout);
-    if (result.stderr) process.stderr.write(result.stderr);
-    process.exit(result.status ?? 1);
+  for (const file of ['.env', '.env.local']) {
+    try {
+      const value = parseEnvValue(await readFile(resolve(file), 'utf8'), key);
+      if (value) return value;
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
   }
 
-  return result.stdout ?? '';
+  return undefined;
 }
 
 const validation = spawnSync(
@@ -37,53 +48,72 @@ if (validation.status !== 0) {
   process.exit(validation.status ?? 1);
 }
 
-psql([
-  '-v', 'ON_ERROR_STOP=1',
-  '-c',
-  `create schema if not exists app_meta;
-   create table if not exists app_meta.schema_migrations (
-     filename text primary key,
-     checksum text not null,
-     applied_at timestamptz not null default now()
-   );`,
-]);
-
-const files = (await readdir(migrationsDir))
-  .filter((name) => name.endsWith('.sql'))
-  .sort();
-
-for (const file of files) {
-  const content = await readFile(resolve(migrationsDir, file), 'utf8');
-  const checksum = createHash('sha256').update(content).digest('hex');
-
-  const previous = psql([
-    '-At',
-    '-c',
-    `select checksum from app_meta.schema_migrations where filename = ${sqlLiteral(file)};`,
-  ]).trim();
-
-  if (previous) {
-    if (previous !== checksum) {
-      console.error(`[db:migrate] ERROR: ${file} ya fue aplicada pero su checksum cambió.`);
-      process.exit(1);
-    }
-    console.log(`[db:migrate] omitida: ${file}`);
-    continue;
-  }
-
-  const script = [
-    '\\set ON_ERROR_STOP on',
-    'begin;',
-    content,
-    `insert into app_meta.schema_migrations (filename, checksum) values (${sqlLiteral(file)}, ${sqlLiteral(checksum)});`,
-    'commit;',
-    '',
-  ].join('\n');
-
-  psql([], script);
-  console.log(`[db:migrate] aplicada: ${file}`);
+const connectionString = await loadEnvValue('DATABASE_URL_UNPOOLED');
+if (!connectionString) {
+  throw new Error('DATABASE_URL_UNPOOLED no está configurada. Ejecuta neon env pull.');
+}
+if (new URL(connectionString).hostname.includes('-pooler')) {
+  throw new Error('DATABASE_URL_UNPOOLED apunta a una conexión pooled.');
 }
 
-if (files.length === 0) {
-  console.log('[db:migrate] No hay migraciones activas para aplicar.');
+const branch = await loadEnvValue('NEON_BRANCH');
+if (!branch) {
+  throw new Error('NEON_BRANCH no está configurada. Confirma la rama antes de migrar.');
+}
+
+const client = new pg.Client({ connectionString });
+await client.connect();
+
+try {
+  await client.query(`
+    create schema if not exists app_meta;
+    create table if not exists app_meta.schema_migrations (
+      filename text primary key,
+      checksum text not null,
+      applied_at timestamptz not null default now()
+    );
+  `);
+
+  const files = (await readdir(migrationsDir))
+    .filter((name) => name.endsWith('.sql'))
+    .sort();
+
+  for (const file of files) {
+    const content = await readFile(resolve(migrationsDir, file), 'utf8');
+    const checksum = createHash('sha256').update(content).digest('hex');
+    const previous = await client.query(
+      'select checksum from app_meta.schema_migrations where filename = $1',
+      [file],
+    );
+
+    if (previous.rowCount > 0) {
+      if (previous.rows[0].checksum !== checksum) {
+        throw new Error(`${file} ya fue aplicada pero su checksum cambió.`);
+      }
+      console.log(`[db:migrate] omitida: ${file}`);
+      continue;
+    }
+
+    try {
+      await client.query('begin');
+      await client.query(content);
+      await client.query(
+        'insert into app_meta.schema_migrations (filename, checksum) values ($1, $2)',
+        [file, checksum],
+      );
+      await client.query('commit');
+      console.log(`[db:migrate] aplicada: ${file}`);
+    } catch (error) {
+      await client.query('rollback');
+      throw error;
+    }
+  }
+
+  if (files.length === 0) {
+    console.log('[db:migrate] No hay migraciones activas para aplicar.');
+  }
+
+  console.log(`[db:migrate] rama Neon: ${branch}`);
+} finally {
+  await client.end();
 }

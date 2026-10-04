@@ -116,6 +116,16 @@ select auth.session();
 
 Documentar el resultado antes de implementar el rol activo por sesión. No asumir que el ID del usuario es UUID ni que existe un claim con un nombre concreto.
 
+### Resultado verificado en desarrollo el 2026-10-04
+
+- `auth.user_id()` retorna `text` y coincide con `sub`.
+- `auth.session()` retorna `jsonb`.
+- La sesión observada expone `id`, `sub`, `name`, `email`, `emailVerified`, `role`, `banned`, `banReason`, `banExpires`, `createdAt`, `updatedAt`, `iss`, `aud`, `iat` y `exp`.
+- La sesión no expone el proveedor OAuth ni un identificador de la sesión Better Auth.
+- `usuarios.auth_user_id` usa `text`, alineado con `auth.user_id()`.
+- Google se valida contra `neon_auth.account.providerId`, no contra un claim inventado.
+- El baseline identifica el contexto de rol con un hash de `sub + iat + exp`. El rol debe renovarse cuando Neon renueve el JWT.
+
 ## 10. Crear el baseline Neon
 
 Después de la comprobación anterior, crear:

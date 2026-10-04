@@ -49,7 +49,7 @@ Este archivo registra decisiones permanentes. Las tareas pendientes se mantienen
 - **Estado:** Aprobada
 - **Fecha:** 2026-10-04
 - **Decisión:** Neon Auth gestiona identidad/sesión; `usuarios` autoriza el acceso interno y conserva roles Administrador/Técnico. Un usuario puede tener ambos y opera con uno activo por sesión.
-- **Consecuencia:** El backend y RLS validan identidad y rol. Antes de persistir el mecanismo del rol activo se inspeccionará el payload real de `auth.session()` para no depender de claims inventados.
+- **Consecuencia:** El backend y RLS validan identidad y rol. `auth.user_id()` retorna `text`; `auth.session()` no incluye un identificador de la sesión Better Auth. El baseline usa el contexto verificable `sub + iat + exp`, por lo que una renovación del JWT exige renovar la selección de rol activo.
 
 ## ADR-008 · Acceso público
 
