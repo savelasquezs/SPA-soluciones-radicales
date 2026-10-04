@@ -20,7 +20,7 @@ La documentación versionada es la referencia viva de Soluciones Radicales MIP.
 
 Ante una contradicción se debe detener la parte afectada y resolverla. El código no modifica silenciosamente una regla funcional para acomodar una implementación.
 
-La aplicación anterior y sus Spreadsheets son referencia histórica. La documentación de producto conserva el comportamiento aprobado; la arquitectura técnica vigente es Neon + Cloudflare R2 + Cloudflare Pages.
+La aplicación anterior y sus Spreadsheets son referencia histórica. La documentación de producto conserva el comportamiento aprobado; la arquitectura técnica vigente es Neon + Cloudflare R2 + Cloudflare Workers.
 
 ## Estructura
 
@@ -33,6 +33,7 @@ docs/
 │   ├── decisions.md
 │   └── overview.md
 ├── development/
+│   ├── cloudflare-workers.md
 │   ├── neon-setup.md
 │   └── workflow.md
 ├── frontend/
