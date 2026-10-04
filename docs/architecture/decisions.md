@@ -4,10 +4,10 @@ Este archivo registra decisiones permanentes. Las tareas pendientes se mantienen
 
 ## ADR-001 · Plataforma
 
-- **Estado:** Aprobada
+- **Estado:** Supersedida por ADR-018
 - **Fecha:** 2026-10-04
-- **Decisión:** Cloudflare Pages sirve el frontend; Neon provee PostgreSQL, Managed Better Auth, Data API y Functions; Cloudflare R2 almacena archivos; Google APIs provee Gmail y Calendar.
-- **Consecuencia:** Supabase queda fuera de la arquitectura activa. La SPA permanece estática y los secretos se ejecutan únicamente en backend.
+- **Decisión original:** Cloudflare Pages servía el frontend; Neon proveía PostgreSQL, Managed Better Auth, Data API y Functions; Cloudflare R2 almacenaba archivos; Google APIs proveía Gmail y Calendar.
+- **Consecuencia:** La elección de Pages fue reemplazada el mismo día por Workers + Static Assets; el resto de la plataforma se mantiene.
 
 ## ADR-002 · Desarrollo de base con ramas Neon
 
