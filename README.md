@@ -5,7 +5,7 @@ SPA para la gestión administrativa y técnica de servicios de Manejo Integrado 
 ## Arquitectura
 
 - Vue 3, TypeScript, Pinia y Vue Router.
-- Cloudflare Pages para publicar la SPA.
+- Cloudflare Workers + Static Assets para publicar la SPA y sus previews.
 - Neon para PostgreSQL, Managed Better Auth, Data API y Functions.
 - Cloudflare R2 para fotografías, firmas, evidencias, archivos maestros e informes/certificados PDF.
 - Google APIs para Gmail y Calendar.
@@ -47,6 +47,31 @@ Antes de trabajar en una rama de base de datos, seleccionar o crear la rama Neon
 ```bash
 npm run dev
 ```
+
+## Cloudflare Workers
+
+La SPA se publica como **Workers Static Assets**. `wrangler.jsonc` apunta a `./dist` y usa fallback SPA para Vue Router.
+
+Desarrollo/preview del artefacto Cloudflare:
+
+```bash
+npm run cloudflare:dev
+```
+
+Despliegue manual:
+
+```bash
+npm run cloudflare:deploy
+```
+
+En Cloudflare Builds usar:
+
+- Build command: `npm run build`
+- Deploy command: `npx wrangler deploy`
+- Preview builds: activados
+- Cloudflare Access: desactivado salvo decisión posterior
+
+Las variables `VITE_*` requeridas por la SPA se configuran como variables de build. No colocar secretos de servidor en variables públicas.
 
 ## Validación
 
@@ -95,6 +120,7 @@ El runner registra cada archivo y su checksum en `app_meta.schema_migrations`. U
 - [Decisiones técnicas](docs/architecture/decisions.md)
 - [Base de datos y migraciones](database/README.md)
 - [Configuración de Neon](docs/development/neon-setup.md)
+- [Despliegue con Cloudflare Workers](docs/development/cloudflare-workers.md)
 - [Reutilización frontend](docs/frontend/reuse.md)
 - [Flujo de desarrollo](docs/development/workflow.md)
 - [UX](docs/ux-guidelines.md)
