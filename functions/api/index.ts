@@ -174,6 +174,20 @@ app.patch('/api/users/:id', async (context) => {
   const userId = context.req.param('id')
   const user = await transaction(async (client) => {
     const admin = await requireAdmin(client, identity)
+    const current = await client.query<{ authUserId: string | null; correoGoogle: string }>(
+      `select auth_user_id as "authUserId", correo_google as "correoGoogle"
+       from public.usuarios
+       where id = $1`,
+      [userId],
+    )
+    const currentUser = current.rows[0]
+
+    if (!currentUser) {
+      throw new ApiError(404, 'El usuario no existe')
+    }
+    if (currentUser.authUserId && currentUser.correoGoogle !== input.correoGoogle) {
+      throw new ApiError(409, 'El correo de una identidad Google vinculada no puede modificarse')
+    }
     const { rows } = await client.query(
       `update public.usuarios
        set nombre_completo = $1,
@@ -614,6 +628,7 @@ async function syncCalendar(serviceId: string) {
   const serviceResult = await pool.query<{
     id: string
     solicitud: string
+    creado_por_id: string
     negocio_nombre: string
     sede_nombre: string
     direccion: string
@@ -621,7 +636,8 @@ async function syncCalendar(serviceId: string) {
     inicio_programado: Date
     fin_programado: Date
   }>(
-    `select s.id, s.solicitud, n.nombre as negocio_nombre, se.nombre as sede_nombre,
+    `select s.id, s.solicitud, s.creado_por_id,
+            n.nombre as negocio_nombre, se.nombre as sede_nombre,
             se.direccion, u.nombre_completo as tecnico_nombre,
             s.inicio_programado, s.fin_programado
      from public.servicios s
@@ -670,6 +686,9 @@ async function syncCalendar(serviceId: string) {
          where job_type = 'CALENDAR' and idempotency_key = $1`,
         [serviceId],
       )
+      await audit(client, service.creado_por_id, 'CALENDAR_SERVICIO_SINCRONIZADO', 'Servicios', serviceId, {
+        calendarEventId: eventId,
+      })
     })
     return {
       id: service.id,
@@ -695,6 +714,9 @@ async function syncCalendar(serviceId: string) {
          where job_type = 'CALENDAR' and idempotency_key = $1`,
         [serviceId, message.slice(0, 1000)],
       )
+      await audit(client, service.creado_por_id, 'CALENDAR_SERVICIO_FALLIDO', 'Servicios', serviceId, {
+        error: message.slice(0, 500),
+      })
     })
     throw error
   }

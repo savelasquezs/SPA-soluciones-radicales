@@ -73,7 +73,15 @@ export async function bootstrapProfile(
     if (error instanceof ApiError) {
       throw error
     }
-    throw new ApiError(403, error instanceof Error ? error.message : 'La cuenta no está autorizada')
+    const message = error instanceof Error ? error.message : ''
+    if (
+      message === 'La cuenta no está autorizada'
+      || message === 'Sesión de Neon Auth inválida'
+      || message === 'El acceso requiere una cuenta Google'
+    ) {
+      throw new ApiError(403, message)
+    }
+    throw new ApiError(403, 'No fue posible autorizar la cuenta')
   }
 }
 

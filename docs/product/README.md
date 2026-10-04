@@ -57,6 +57,7 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 
 - El acceso interno requiere Google, un registro activo en `usuarios` y al menos un rol.
 - Un usuario con dos roles opera con uno activo por sesión.
+- El correo puede corregirse antes del primer acceso; después de vincular `auth_user_id` permanece inmutable para no romper la identidad Google.
 - El servidor valida autorización en cada operación protegida.
 - Los clientes y contactos no son usuarios del sistema.
 
@@ -72,6 +73,7 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 
 - Estados: `PROGRAMADO`, `EN_PROCESO`, `FINALIZADO` y `CANCELADO`.
 - Transiciones normales: `PROGRAMADO → EN_PROCESO → FINALIZADO`.
+- Cada intento de sincronización con Calendar registra su resultado en la auditoría append-only.
 - La cancelación solo parte de un estado no terminal, requiere Administrador y motivo.
 - El Administrador crea el Servicio y el servidor genera el consecutivo.
 - El responsable debe ser Técnico activo y cumplir vigencia de certificado cuando tenga uno registrado.

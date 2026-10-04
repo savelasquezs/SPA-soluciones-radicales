@@ -25,6 +25,22 @@ describe('base form fields', () => {
     expect(wrapper.emitted('update:modelValue')).toEqual([['persona@example.com']])
   })
 
+  it('announces why a linked identity field is disabled', () => {
+    const wrapper = mount(BaseInput, {
+      props: {
+        modelValue: 'persona@example.com',
+        label: 'Correo Google',
+        name: 'correoGoogle',
+        disabled: true,
+        help: 'La identidad Google ya está vinculada.',
+      },
+    })
+
+    expect(wrapper.get('input').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('input').attributes('aria-describedby')).toBe('correoGoogle-help')
+    expect(wrapper.get('#correoGoogle-help').text()).toContain('identidad Google')
+  })
+
   it('emits select and textarea values', async () => {
     const select = mount(BaseSelect, {
       props: { modelValue: '', label: 'Rol', name: 'rol' },

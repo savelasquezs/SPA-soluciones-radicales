@@ -75,6 +75,7 @@ const filteredUsers = computed(() => {
     return matchesSearch && matchesStatus && matchesRole
   })
 })
+const editingUser = computed(() => users.value.find((user) => user.id === editingId.value) ?? null)
 
 onMounted(loadUsers)
 
@@ -214,6 +215,8 @@ function formatCertificateDate(value: string | null): string {
             type="email"
             autocomplete="email"
             required
+            :disabled="Boolean(editingUser?.authUserId)"
+            :help="editingUser?.authUserId ? 'La identidad Google ya está vinculada y su correo no puede cambiarse.' : undefined"
             :error="validation.error('correoGoogle')"
             @blur="validation.touch('correoGoogle')"
           />
