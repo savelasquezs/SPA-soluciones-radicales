@@ -12,8 +12,11 @@
     "test:e2e": "playwright test",
     "build-only": "vite build",
     "type-check": "vue-tsc --build",
-    "db:push": "supabase db push --linked",
-    "db:lint": "supabase db lint --linked --level warning",
+    "db:check": "node scripts/database/check-migrations.mjs",
+    "db:status": "npx -y neon@6.2.4 status",
+    "db:diff": "npx -y neon@6.2.4 diff",
+    "db:psql": "npx -y neon@6.2.4 psql",
+    "db:migrate": "node scripts/database/migrate.mjs",
     "lint": "run-s \"lint:*\"",
     "lint:oxlint": "oxlint . --fix",
     "lint:eslint": "eslint . --fix --cache"
@@ -41,12 +44,11 @@
     "jsdom": "^30.0.1",
     "npm-run-all2": "^9.0.3",
     "oxlint": "~1.82.0",
-    "supabase": "^2.119.0",
     "typescript": "~6.0.0",
     "vite": "^8.2.2",
     "vite-plugin-vue-devtools": "^8.2.1",
     "vitest": "^4.1.11",
-    "vue-eslint-parser": "^10.4.1",
+    "vue-eslint-parser": "~10.4.1",
     "vue-tsc": "^3.3.11"
   },
   "engines": {
