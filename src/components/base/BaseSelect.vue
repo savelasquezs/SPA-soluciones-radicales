@@ -5,24 +5,31 @@ defineProps<{
   name: string
   required?: boolean
   disabled?: boolean
+  error?: string
+  help?: string
 }>()
 
-const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
+const emit = defineEmits<{ 'update:modelValue': [value: string]; blur: [] }>()
 </script>
 
 <template>
   <label class="field" :for="name">
-    <span>{{ label }}</span>
+    <span>{{ label }} <span v-if="required" class="required" aria-hidden="true">*</span></span>
+    <small v-if="help" :id="`${name}-help`" class="help">{{ help }}</small>
     <select
       :id="name"
       :name="name"
       :value="modelValue"
       :required="required"
       :disabled="disabled"
+      :aria-invalid="Boolean(error)"
+      :aria-describedby="error ? `${name}-error` : help ? `${name}-help` : undefined"
       @change="emit('update:modelValue', ($event.target as HTMLSelectElement).value)"
+      @blur="emit('blur')"
     >
       <slot />
     </select>
+    <small v-if="error" :id="`${name}-error`" class="error" role="alert">{{ error }}</small>
   </label>
 </template>
 
@@ -43,5 +50,19 @@ select {
   background: var(--surface);
   padding: 0.65rem 0.75rem;
   color: var(--text);
+}
+
+select[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.required,
+.error {
+  color: var(--danger);
+}
+
+.help {
+  color: var(--text-muted);
+  font-weight: 500;
 }
 </style>

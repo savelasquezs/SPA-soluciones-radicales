@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseInput from '@/components/base/BaseInput.vue'
+import BaseTextarea from '@/components/base/BaseTextarea.vue'
 import StatusPanel from '@/components/base/StatusPanel.vue'
 import AppShell from '@/components/layout/AppShell.vue'
+import { useFormValidation } from '@/composables/useFormValidation'
 import { apiRequest } from '@/services/apiService'
 import { useNotificationsStore } from '@/stores/notifications'
 
@@ -18,8 +20,19 @@ const sending = ref(false)
 const error = ref<string | null>(null)
 const connected = ref(false)
 const connectedEmail = ref<string | null>(null)
-const recipient = ref('')
-const subject = ref('Prueba de integración Gmail')
+const emailForm = reactive({
+  recipient: '',
+  subject: 'Prueba de integración Gmail',
+  body: 'Esta es una prueba real de Gmail enviada desde Soluciones Radicales MIP.',
+})
+const emailValidation = useFormValidation(emailForm, {
+  recipient: (value) => {
+    if (!String(value).trim()) return 'El destinatario es obligatorio'
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value)) ? null : 'Ingresa un correo válido'
+  },
+  subject: (value) => String(value).trim() ? null : 'El asunto es obligatorio',
+  body: (value) => String(value).trim() ? null : 'El mensaje es obligatorio',
+})
 
 onMounted(async () => {
   if (route.query.google === 'connected') {
@@ -58,11 +71,12 @@ async function connectGoogle(): Promise<void> {
 }
 
 async function sendTest(): Promise<void> {
+  if (!emailValidation.validate()) return
   sending.value = true
   try {
     await apiRequest<{ sent: boolean; messageId: string }>('api/email/test', {
       method: 'POST',
-      body: JSON.stringify({ to: recipient.value, subject: subject.value }),
+      body: JSON.stringify({ to: emailForm.recipient, subject: emailForm.subject, text: emailForm.body }),
     })
     notifications.show('Correo de prueba enviado por Gmail', 'success')
   } catch (sendError) {
@@ -106,8 +120,33 @@ async function sendTest(): Promise<void> {
           <h2>Prueba real de Gmail</h2>
           <p class="muted">El mensaje se enviará desde solucionesradicales1@gmail.com.</p>
           <div class="form-grid email-form">
-            <BaseInput v-model="recipient" label="Destinatario" name="recipient" type="email" required />
-            <BaseInput v-model="subject" label="Asunto" name="subject" required />
+            <BaseInput
+              v-model="emailForm.recipient"
+              label="Destinatario"
+              name="recipient"
+              type="email"
+              autocomplete="email"
+              required
+              :error="emailValidation.error('recipient')"
+              @blur="emailValidation.touch('recipient')"
+            />
+            <BaseInput
+              v-model="emailForm.subject"
+              label="Asunto"
+              name="subject"
+              required
+              :error="emailValidation.error('subject')"
+              @blur="emailValidation.touch('subject')"
+            />
+            <BaseTextarea
+              v-model="emailForm.body"
+              class="form-grid__wide"
+              label="Mensaje"
+              name="body"
+              required
+              :error="emailValidation.error('body')"
+              @blur="emailValidation.touch('body')"
+            />
           </div>
           <div class="form-actions">
             <BaseButton type="submit" :loading="sending" :disabled="!connected">Enviar prueba</BaseButton>

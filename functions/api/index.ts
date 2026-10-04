@@ -99,6 +99,7 @@ app.get('/api/users', async (context) => {
     await requireAdmin(client, identity)
     const { rows } = await client.query(
       `select id,
+              auth_user_id as "authUserId",
               nombre_completo as "nombreCompleto",
               correo_google as "correoGoogle",
               es_admin as "esAdmin",
@@ -131,6 +132,7 @@ app.post('/api/users', async (context) => {
          certificado_fecha_vencimiento, certificado_observaciones
        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        returning id,
+                 auth_user_id as "authUserId",
                  nombre_completo as "nombreCompleto",
                  correo_google as "correoGoogle",
                  es_admin as "esAdmin",
@@ -185,6 +187,7 @@ app.patch('/api/users/:id', async (context) => {
            certificado_observaciones = $9
        where id = $10 and version = $11
        returning id,
+                 auth_user_id as "authUserId",
                  nombre_completo as "nombreCompleto",
                  correo_google as "correoGoogle",
                  es_admin as "esAdmin",
@@ -356,18 +359,20 @@ app.post('/api/services', async (context) => {
   const identity = context.get('identity')
   const service = await transaction(async (client) => {
     const admin = await requireAdmin(client, identity)
-    const site = await client.query<{ duracion: number }>(
-      `select duracion_servicio_minutos as duracion
+    const site = await client.query<{ duracion: number; valor: number }>(
+      `select duracion_servicio_minutos as duracion,
+              valor_servicio as valor
        from public.sedes
        where id = $1`,
       [requiredString(body, 'sedeId')],
     )
-    const duration = site.rows[0]?.duracion
+    const siteConfig = site.rows[0]
 
-    if (!duration) {
+    if (!siteConfig) {
       throw new ApiError(422, 'La Sede seleccionada no existe')
     }
 
+    const duration = requiredPositiveInteger(body, 'duracionMinutos')
     const start = dateValue(body.inicioProgramado, 'inicioProgramado')
     const end = new Date(start.getTime() + duration * 60_000)
     const inserted = await client.query<{ id: string; solicitud: string }>(
@@ -378,7 +383,7 @@ app.post('/api/services', async (context) => {
          valor_servicio, observaciones, calendar_sync_estado
        ) values (
          'PENDIENTE', $1, 'PRINCIPAL', 'PROGRAMADO', $2, $3, $4, $5,
-         $6::jsonb, '[]'::jsonb, 0, $7, 'PENDIENTE'
+         $6::jsonb, '[]'::jsonb, $7, $8, 'PENDIENTE'
        )
        returning id, solicitud`,
       [
@@ -388,6 +393,7 @@ app.post('/api/services', async (context) => {
         admin.id,
         requiredString(body, 'tecnicoResponsableId'),
         JSON.stringify(stringArray(body.tecnicosColaboradoresIds)),
+        siteConfig.valor,
         optionalString(body.observaciones),
       ],
     )
@@ -495,6 +501,7 @@ app.post('/api/email/test', async (context) => {
   const identity = context.get('identity')
   const recipient = requiredEmail(body, 'to')
   const subject = optionalString(body.subject) ?? 'Prueba de integración Gmail'
+  const text = requiredString(body, 'text')
   const admin = await transaction((client) => requireAdmin(client, identity))
   const jobId = randomUUID()
 
@@ -508,7 +515,7 @@ app.post('/api/email/test', async (context) => {
     const messageId = await sendGmailMessage({
       to: recipient,
       subject,
-      text: 'Esta es una prueba real de Gmail enviada desde Soluciones Radicales MIP.',
+      text,
     })
     await transaction(async (client) => {
       await client.query(
@@ -691,6 +698,14 @@ function requiredInteger(body: Record<string, unknown>, key: string): number {
     throw new ApiError(422, `${key} debe ser un entero válido`)
   }
   return Number(value)
+}
+
+function requiredPositiveInteger(body: Record<string, unknown>, key: string): number {
+  const value = requiredInteger(body, key)
+  if (value === 0) {
+    throw new ApiError(422, `${key} debe ser mayor que cero`)
+  }
+  return value
 }
 
 function requiredBoolean(body: Record<string, unknown>, key: string): boolean {

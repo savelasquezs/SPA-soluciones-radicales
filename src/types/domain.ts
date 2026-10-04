@@ -12,6 +12,7 @@ export type SessionProfile = {
 
 export type UserRecord = {
   id: string
+  authUserId: string | null
   nombreCompleto: string
   correoGoogle: string
   esAdmin: boolean
@@ -24,7 +25,7 @@ export type UserRecord = {
   version: number
 }
 
-export type UserInput = Omit<UserRecord, 'id' | 'version'> & { version?: number }
+export type UserInput = Omit<UserRecord, 'id' | 'authUserId' | 'version'> & { version?: number }
 
 export type Technician = {
   id: string
@@ -63,6 +64,7 @@ export type ServiceDraft = {
   tecnicoResponsableId: string
   tecnicosColaboradoresIds: string[]
   inicioProgramado: string
+  duracionMinutos: string
   observaciones: string
 }
 

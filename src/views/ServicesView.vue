@@ -4,8 +4,10 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseInput from '@/components/base/BaseInput.vue'
 import BaseSelect from '@/components/base/BaseSelect.vue'
+import BaseTextarea from '@/components/base/BaseTextarea.vue'
 import StatusPanel from '@/components/base/StatusPanel.vue'
 import AppShell from '@/components/layout/AppShell.vue'
+import { useFormValidation } from '@/composables/useFormValidation'
 import { apiRequest } from '@/services/apiService'
 import { clearServiceDraft, loadServiceDraft, saveServiceDraft } from '@/services/draftService'
 import { useNotificationsStore } from '@/stores/notifications'
@@ -38,6 +40,7 @@ const form = reactive<ServiceDraft>({
   tecnicoResponsableId: '',
   tecnicosColaboradoresIds: [],
   inicioProgramado: defaultStart(),
+  duracionMinutos: '120',
   observaciones: '',
 })
 
@@ -57,6 +60,33 @@ const clientForm = reactive({
 })
 
 const selectedSite = computed(() => clients.value.find((client) => client.sedeId === form.sedeId))
+const serviceValidation = useFormValidation(form, {
+  sedeId: (value) => String(value).trim() ? null : 'Selecciona una Sede',
+  tecnicoResponsableId: (value) => String(value).trim() ? null : 'Selecciona el Técnico responsable',
+  inicioProgramado: (value) => Number.isNaN(new Date(String(value)).getTime()) ? 'Ingresa una fecha válida' : null,
+  duracionMinutos: (value) => Number.isSafeInteger(Number(value)) && Number(value) > 0
+    ? null
+    : 'La duración debe ser un entero mayor que cero',
+})
+const clientValidation = useFormValidation(clientForm, {
+  nit: (value) => String(value).trim() ? null : 'El NIT es obligatorio',
+  negocioNombre: (value) => String(value).trim() ? null : 'El nombre del Negocio es obligatorio',
+  sedeNombre: (value) => String(value).trim() ? null : 'El nombre de la Sede es obligatorio',
+  direccion: (value) => String(value).trim() ? null : 'La dirección es obligatoria',
+  contactoNombre: (value) => String(value).trim() ? null : 'El contacto principal es obligatorio',
+  contactoCorreo: (value) => !String(value).trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value))
+    ? null
+    : 'Ingresa un correo válido',
+  valorServicio: (value) => Number.isSafeInteger(Number(value)) && Number(value) >= 0
+    ? null
+    : 'El valor debe ser un entero en COP',
+  periodicidadMeses: (value) => Number.isSafeInteger(Number(value)) && Number(value) > 0
+    ? null
+    : 'La periodicidad debe ser mayor que cero',
+  duracionServicioMinutos: (value) => Number.isSafeInteger(Number(value)) && Number(value) > 0
+    ? null
+    : 'La duración debe ser mayor que cero',
+})
 
 watch(
   form,
@@ -109,6 +139,7 @@ async function loadData(): Promise<void> {
 }
 
 async function createClient(): Promise<void> {
+  if (!clientValidation.validate()) return
   savingClient.value = true
   try {
     const result = await apiRequest<{ negocioId: string; sedeId: string }>('api/clients', {
@@ -123,7 +154,9 @@ async function createClient(): Promise<void> {
     })
     clients.value = await apiRequest<ClientSite[]>('api/clients')
     form.sedeId = result.sedeId
+    form.duracionMinutos = clientForm.duracionServicioMinutos
     showClientForm.value = false
+    clientValidation.resetValidation()
     notifications.show('Negocio y Sede creados', 'success')
   } catch (error) {
     notifications.show(error instanceof Error ? error.message : 'No fue posible crear el cliente', 'danger')
@@ -137,6 +170,7 @@ async function createService(): Promise<void> {
     notifications.show('El borrador quedó guardado. Conéctate para programar el Servicio.', 'warning')
     return
   }
+  if (!serviceValidation.validate()) return
 
   saving.value = true
   try {
@@ -145,6 +179,7 @@ async function createService(): Promise<void> {
       body: JSON.stringify({
         ...form,
         inicioProgramado: new Date(form.inicioProgramado).toISOString(),
+        duracionMinutos: Number(form.duracionMinutos),
       }),
     })
     await clearServiceDraft()
@@ -153,7 +188,9 @@ async function createService(): Promise<void> {
     form.tecnicoResponsableId = ''
     form.tecnicosColaboradoresIds = []
     form.inicioProgramado = defaultStart()
+    form.duracionMinutos = '120'
     form.observaciones = ''
+    serviceValidation.resetValidation()
     notifications.show(
       created.calendarSyncEstado === 'SINCRONIZADO'
         ? `${created.solicitud} programado y sincronizado con Calendar`
@@ -187,6 +224,12 @@ function updateConnectivity(): void {
   online.value = navigator.onLine
 }
 
+function selectSite(sedeId: string): void {
+  form.sedeId = sedeId
+  const site = clients.value.find((client) => client.sedeId === sedeId)
+  if (site) form.duracionMinutos = String(site.duracionServicioMinutos)
+}
+
 function calendarBadge(status: ServiceRecord['calendarSyncEstado']): string {
   if (status === 'SINCRONIZADO') return 'badge--success'
   if (status === 'ERROR') return 'badge--danger'
@@ -216,33 +259,64 @@ function formatDate(value?: string): string {
           <div class="section-heading">
             <div>
               <h2>Programar Servicio</h2>
-              <p class="muted">El valor y la duración se derivan de la Sede.</p>
+              <p class="muted">El valor se deriva de la Sede y la duración puede ajustarse para esta visita.</p>
             </div>
             <BaseButton variant="secondary" @click="showClientForm = !showClientForm">{{ showClientForm ? 'Cerrar cliente' : 'Nuevo cliente' }}</BaseButton>
           </div>
           <div class="form-grid service-form">
-            <BaseSelect v-model="form.sedeId" label="Negocio y Sede" name="sedeId" required>
+            <BaseSelect
+              :model-value="form.sedeId"
+              label="Negocio y Sede"
+              name="sedeId"
+              required
+              :error="serviceValidation.error('sedeId')"
+              @update:model-value="selectSite"
+              @blur="serviceValidation.touch('sedeId')"
+            >
               <option value="" disabled>Selecciona una Sede</option>
               <option v-for="client in clients" :key="client.sedeId" :value="client.sedeId">
                 {{ client.negocioNombre }} · {{ client.sedeNombre }}
               </option>
             </BaseSelect>
-            <BaseSelect v-model="form.tecnicoResponsableId" label="Técnico responsable" name="tecnicoResponsableId" required>
+            <BaseSelect
+              v-model="form.tecnicoResponsableId"
+              label="Técnico responsable"
+              name="tecnicoResponsableId"
+              required
+              :error="serviceValidation.error('tecnicoResponsableId')"
+              @blur="serviceValidation.touch('tecnicoResponsableId')"
+            >
               <option value="" disabled>Selecciona un Técnico</option>
               <option v-for="technician in technicians" :key="technician.id" :value="technician.id">
                 {{ technician.nombreCompleto }}
               </option>
             </BaseSelect>
-            <BaseInput v-model="form.inicioProgramado" label="Inicio programado" name="inicioProgramado" type="datetime-local" required />
-            <div class="summary-field">
-              <span>Duración y valor</span>
-              <strong v-if="selectedSite">{{ selectedSite.duracionServicioMinutos }} min · ${{ selectedSite.valorServicio.toLocaleString('es-CO') }}</strong>
+            <BaseInput
+              v-model="form.inicioProgramado"
+              label="Inicio programado"
+              name="inicioProgramado"
+              type="datetime-local"
+              required
+              :error="serviceValidation.error('inicioProgramado')"
+              @blur="serviceValidation.touch('inicioProgramado')"
+            />
+            <BaseInput
+              v-model="form.duracionMinutos"
+              label="Duración en minutos"
+              name="duracionMinutos"
+              type="number"
+              min="1"
+              step="1"
+              required
+              :error="serviceValidation.error('duracionMinutos')"
+              @blur="serviceValidation.touch('duracionMinutos')"
+            />
+            <div class="summary-field form-grid__wide">
+              <span>Valor del Servicio</span>
+              <strong v-if="selectedSite">${{ selectedSite.valorServicio.toLocaleString('es-CO') }}</strong>
               <strong v-else>Selecciona una Sede</strong>
             </div>
-            <label class="notes-field form-grid__wide">
-              <span>Observaciones</span>
-              <textarea v-model="form.observaciones" rows="3"></textarea>
-            </label>
+            <BaseTextarea v-model="form.observaciones" class="form-grid__wide" label="Observaciones" name="observaciones" :rows="3" />
           </div>
           <div class="form-actions">
             <BaseButton type="submit" :loading="saving" :disabled="!online">Programar Servicio</BaseButton>
@@ -252,15 +326,15 @@ function formatDate(value?: string): string {
         <form v-if="showClientForm" class="card" @submit.prevent="createClient">
           <h2>Nuevo Negocio y Sede</h2>
           <div class="form-grid service-form">
-            <BaseInput v-model="clientForm.nit" label="NIT" name="nit" required />
-            <BaseInput v-model="clientForm.negocioNombre" label="Nombre del Negocio" name="negocioNombre" required />
-            <BaseInput v-model="clientForm.sedeNombre" label="Nombre de la Sede" name="sedeNombre" required />
-            <BaseInput v-model="clientForm.direccion" label="Dirección" name="direccion" required />
-            <BaseInput v-model="clientForm.contactoNombre" label="Contacto principal" name="contactoNombre" required />
-            <BaseInput v-model="clientForm.contactoCorreo" label="Correo del contacto" name="contactoCorreo" type="email" />
-            <BaseInput v-model="clientForm.valorServicio" label="Valor en COP" name="valorServicio" type="number" min="0" required />
-            <BaseInput v-model="clientForm.periodicidadMeses" label="Periodicidad en meses" name="periodicidadMeses" type="number" min="1" required />
-            <BaseInput v-model="clientForm.duracionServicioMinutos" label="Duración en minutos" name="duracionServicioMinutos" type="number" min="1" required />
+            <BaseInput v-model="clientForm.nit" label="NIT" name="nit" required :error="clientValidation.error('nit')" @blur="clientValidation.touch('nit')" />
+            <BaseInput v-model="clientForm.negocioNombre" label="Nombre del Negocio" name="negocioNombre" required :error="clientValidation.error('negocioNombre')" @blur="clientValidation.touch('negocioNombre')" />
+            <BaseInput v-model="clientForm.sedeNombre" label="Nombre de la Sede" name="sedeNombre" required :error="clientValidation.error('sedeNombre')" @blur="clientValidation.touch('sedeNombre')" />
+            <BaseInput v-model="clientForm.direccion" label="Dirección" name="direccion" autocomplete="street-address" required :error="clientValidation.error('direccion')" @blur="clientValidation.touch('direccion')" />
+            <BaseInput v-model="clientForm.contactoNombre" label="Contacto principal" name="contactoNombre" autocomplete="name" required :error="clientValidation.error('contactoNombre')" @blur="clientValidation.touch('contactoNombre')" />
+            <BaseInput v-model="clientForm.contactoCorreo" label="Correo del contacto" name="contactoCorreo" type="email" autocomplete="email" :error="clientValidation.error('contactoCorreo')" @blur="clientValidation.touch('contactoCorreo')" />
+            <BaseInput v-model="clientForm.valorServicio" label="Valor en COP" name="valorServicio" type="number" min="0" step="1" required :error="clientValidation.error('valorServicio')" @blur="clientValidation.touch('valorServicio')" />
+            <BaseInput v-model="clientForm.periodicidadMeses" label="Periodicidad en meses" name="periodicidadMeses" type="number" min="1" step="1" required :error="clientValidation.error('periodicidadMeses')" @blur="clientValidation.touch('periodicidadMeses')" />
+            <BaseInput v-model="clientForm.duracionServicioMinutos" label="Duración en minutos" name="duracionServicioMinutos" type="number" min="1" step="1" required :error="clientValidation.error('duracionServicioMinutos')" @blur="clientValidation.touch('duracionServicioMinutos')" />
             <BaseSelect v-model="clientForm.tipoSede" label="Tipo de Sede" name="tipoSede" required>
               <option value="NEGOCIO">Negocio</option>
               <option value="RESIDENCIAL">Residencial</option>
@@ -290,14 +364,14 @@ function formatDate(value?: string): string {
           </thead>
           <tbody>
             <tr v-for="service in services" :key="service.id">
-              <td><strong>{{ service.solicitud }}</strong><br /><span class="muted">{{ service.negocioNombre }} · {{ service.sedeNombre }}</span></td>
-              <td>{{ formatDate(service.inicioProgramado) }}</td>
-              <td>{{ service.tecnicoNombre ?? '—' }}</td>
-              <td>
+              <td data-label="Servicio"><strong>{{ service.solicitud }}</strong><br /><span class="muted">{{ service.negocioNombre }} · {{ service.sedeNombre }}</span></td>
+              <td data-label="Programación">{{ formatDate(service.inicioProgramado) }}</td>
+              <td data-label="Técnico">{{ service.tecnicoNombre ?? '—' }}</td>
+              <td data-label="Calendar">
                 <span class="badge" :class="calendarBadge(service.calendarSyncEstado)">{{ service.calendarSyncEstado }}</span>
                 <small v-if="service.calendarSyncError" class="calendar-error">{{ service.calendarSyncError }}</small>
               </td>
-              <td v-if="session.isAdmin">
+              <td v-if="session.isAdmin" data-label="Acción">
                 <BaseButton
                   v-if="service.calendarSyncEstado === 'ERROR'"
                   variant="secondary"
@@ -327,8 +401,7 @@ function formatDate(value?: string): string {
   margin-top: 1.25rem;
 }
 
-.summary-field,
-.notes-field {
+.summary-field {
   display: grid;
   gap: 0.45rem;
   color: var(--text-secondary);
@@ -347,15 +420,6 @@ function formatDate(value?: string): string {
   color: var(--text);
 }
 
-textarea {
-  width: 100%;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  padding: 0.75rem;
-  resize: vertical;
-}
-
 .calendar-error {
   display: block;
   max-width: 22rem;
@@ -366,6 +430,49 @@ textarea {
 @media (max-width: 620px) {
   .section-heading {
     display: grid;
+  }
+
+  .table-wrap {
+    overflow: visible;
+  }
+
+  table,
+  tbody,
+  tr,
+  td {
+    display: block;
+  }
+
+  thead {
+    display: none;
+  }
+
+  tbody {
+    display: grid;
+    gap: 0.8rem;
+  }
+
+  tr {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.8rem;
+  }
+
+  td {
+    display: grid;
+    grid-template-columns: minmax(6rem, 0.7fr) minmax(0, 1.3fr);
+    gap: 0.65rem;
+    border: 0;
+    padding: 0.45rem 0;
+  }
+
+  td::before {
+    content: attr(data-label);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-weight: 750;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
   }
 }
 </style>

@@ -9,16 +9,33 @@ withDefaults(
     disabled?: boolean
     placeholder?: string
     min?: string
+    max?: string
+    step?: string
+    autocomplete?: string
+    error?: string
+    help?: string
   }>(),
-  { type: 'text', required: false, disabled: false, placeholder: undefined, min: undefined },
+  {
+    type: 'text',
+    required: false,
+    disabled: false,
+    placeholder: undefined,
+    min: undefined,
+    max: undefined,
+    step: undefined,
+    autocomplete: undefined,
+    error: undefined,
+    help: undefined,
+  },
 )
 
-const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
+const emit = defineEmits<{ 'update:modelValue': [value: string]; blur: [] }>()
 </script>
 
 <template>
   <label class="field" :for="name">
-    <span>{{ label }}</span>
+    <span>{{ label }} <span v-if="required" class="required" aria-hidden="true">*</span></span>
+    <small v-if="help" :id="`${name}-help`" class="help">{{ help }}</small>
     <input
       :id="name"
       :name="name"
@@ -28,8 +45,15 @@ const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
       :disabled="disabled"
       :placeholder="placeholder"
       :min="min"
+      :max="max"
+      :step="step"
+      :autocomplete="autocomplete"
+      :aria-invalid="Boolean(error)"
+      :aria-describedby="error ? `${name}-error` : help ? `${name}-help` : undefined"
       @input="emit('update:modelValue', ($event.target as HTMLInputElement).value)"
+      @blur="emit('blur')"
     />
+    <small v-if="error" :id="`${name}-error`" class="error" role="alert">{{ error }}</small>
   </label>
 </template>
 
@@ -55,5 +79,19 @@ input {
 input:disabled {
   background: var(--surface-hover);
   color: var(--text-muted);
+}
+
+input[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.required,
+.error {
+  color: var(--danger);
+}
+
+.help {
+  color: var(--text-muted);
+  font-weight: 500;
 }
 </style>
