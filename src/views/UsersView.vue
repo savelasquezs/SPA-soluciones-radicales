@@ -126,6 +126,7 @@ async function openEdit(user: UserRecord): Promise<void> {
     formBaseline.value = JSON.stringify(userForm)
   } catch (error) {
     formOpen.value = false
+    editingUserId.value = null
     notifications.show(userMessage(error, 'No fue posible cargar el usuario'), 'error')
   } finally {
     formLoading.value = false
@@ -133,7 +134,7 @@ async function openEdit(user: UserRecord): Promise<void> {
 }
 
 function requestCloseForm(): void {
-  if (savingForm.value) return
+  if (savingForm.value || formLoading.value) return
   if (formDirty.value) discardConfirmOpen.value = true
   else closeForm()
 }
@@ -146,6 +147,7 @@ function discardForm(): void {
 function closeForm(): void {
   formOpen.value = false
   deactivateConfirmOpen.value = false
+  editingUserId.value = null
   resetForm()
 }
 
@@ -390,7 +392,7 @@ function certificateIcon(status: CertificateStatus): 'check' | 'warning' | 'erro
         </section>
       </form>
       <template #footer>
-        <BaseButton variant="secondary" :disabled="savingForm" @click="requestCloseForm">Cancelar</BaseButton>
+        <BaseButton variant="secondary" :disabled="savingForm || formLoading" @click="requestCloseForm">Cancelar</BaseButton>
         <BaseButton type="submit" form="user-form" :loading="savingForm" :disabled="formLoading">{{ formMode === 'create' ? 'Crear usuario' : 'Guardar cambios' }}</BaseButton>
       </template>
     </BaseDialog>
