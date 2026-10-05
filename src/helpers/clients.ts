@@ -56,7 +56,7 @@ export function parseEmails(value: string): string[] {
   return normalizeEmails(value.split(/[\n,;]/))
 }
 
-export function validateClientInput(input: ClientInput): ClientFormErrors {
+export function validateClientInput(input: ClientInput, templateFile: File | null = null): ClientFormErrors {
   const errors: ClientFormErrors = {}
   if (input.nombre.trim().length < 2) errors.nombre = 'Ingresa el nombre del cliente'
 
@@ -68,7 +68,7 @@ export function validateClientInput(input: ClientInput): ClientFormErrors {
     if (!Number.isSafeInteger(input.vigenciaCertificadoMeses) || Number(input.vigenciaCertificadoMeses) <= 0) {
       errors.vigenciaCertificadoMeses = 'La vigencia debe ser mayor que cero'
     }
-    if (!input.plantillaCertificadoStoragePath?.trim()) {
+    if (!input.plantillaCertificadoStoragePath?.trim() && !templateFile) {
       errors.plantillaCertificadoStoragePath = 'La plantilla del certificado es obligatoria'
     }
   } else {
@@ -78,7 +78,7 @@ export function validateClientInput(input: ClientInput): ClientFormErrors {
   return errors
 }
 
-export function validateSiteInput(input: SiteInput): SiteFormErrors {
+export function validateSiteInput(input: SiteInput, vehicleTemplateFile: File | null = null): SiteFormErrors {
   const errors: SiteFormErrors = {}
   if (!input.nombre.trim()) errors.nombre = 'El nombre de la Sede es obligatorio'
   if (!input.direccion.trim()) errors.direccion = 'La dirección es obligatoria'
@@ -96,7 +96,7 @@ export function validateSiteInput(input: SiteInput): SiteFormErrors {
     if (!Number.isSafeInteger(input.vigenciaCertificadoVehiculoMeses) || Number(input.vigenciaCertificadoVehiculoMeses) <= 0) {
       errors.vigenciaCertificadoVehiculoMeses = 'La vigencia debe ser mayor que cero'
     }
-    if (!input.plantillaCertificadoVehiculoStoragePath?.trim()) {
+    if (!input.plantillaCertificadoVehiculoStoragePath?.trim() && !vehicleTemplateFile) {
       errors.plantillaCertificadoVehiculoStoragePath = 'La plantilla del certificado vehicular es obligatoria'
     }
   }
