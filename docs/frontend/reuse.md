@@ -52,6 +52,7 @@ Crear estas capacidades cuando comience la implementación de UI, antes de repli
 - paginación;
 - contenedor responsive para tabla/cards;
 - selector de archivos con progreso y error.
+- selector reutilizable de fecha, hora y fecha-hora sin depender de los controles nativos del navegador.
 
 Un componente base expone una API pequeña, tipada y consistente. No incorpora nombres ni reglas de una entidad.
 
@@ -129,6 +130,8 @@ Una consulta usada por más de un módulo tiene una sola implementación. Los no
 ## Errores y feedback
 
 Los services no muestran toasts. Devuelven datos o errores normalizados. La vista o composable decide el feedback según el contexto.
+
+La carga de archivos requiere un backend autorizado. Mientras no exista el endpoint que entregue una operación segura sobre R2, la SPA conserva el contrato en `services`, informa el bloqueo y nunca intenta usar credenciales R2 ni persistir archivos como base64.
 
 Usar una forma común de error con:
 
