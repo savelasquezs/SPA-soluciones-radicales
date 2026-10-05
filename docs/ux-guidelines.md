@@ -92,6 +92,8 @@ Una confirmación destructiva identifica el objeto, explica la consecuencia y us
 - En desktop usar tabla si se comparan columnas.
 - En mobile transformar a cards o filas apiladas cuando la tabla no sea legible.
 - Las acciones por fila deben ser identificables por teclado y lector de pantalla.
+- En listados administrativos, no renderizar un formulario de edición persistente debajo de la tabla si su contenido depende de la fila seleccionada; ese patrón alarga la página y pierde previsibilidad a medida que crece la lista.
+- Para CRUD compacto, preferir una acción explícita por fila que abra un diálogo o drawer de edición. Crear y editar deben reutilizar el mismo contrato de formulario cuando los campos y validaciones sean equivalentes.
 
 ## Mobile y trabajo de campo
 
