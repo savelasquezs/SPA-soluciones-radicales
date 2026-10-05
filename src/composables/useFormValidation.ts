@@ -31,7 +31,11 @@ export function useFormValidation<T extends object>(
     const valid = !Object.values(errors.value).some(Boolean)
     if (!valid) {
       void nextTick(() => {
-        document.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
+        const invalid = document.querySelector<HTMLElement>('[aria-invalid="true"]')
+        const focusTarget = invalid?.matches('input, select, textarea, button, [tabindex]')
+          ? invalid
+          : invalid?.querySelector<HTMLElement>('input, select, textarea, button, [tabindex]')
+        focusTarget?.focus()
       })
     }
     return valid

@@ -30,4 +30,33 @@ describe('useFormValidation', () => {
     expect(document.activeElement).toBe(wrapper.get('input').element)
     wrapper.unmount()
   })
+
+  it('enfoca el primer control dentro de un grupo inválido', async () => {
+    const wrapper = mount(defineComponent({
+      setup() {
+        const form = reactive({ administrador: false, tecnico: false })
+        const validation = useFormValidation(form, {
+          administrador: (_value, current) => current.administrador || current.tecnico
+            ? null
+            : 'Selecciona al menos un rol',
+        })
+        return { form, validation }
+      },
+      template: `
+        <form novalidate @submit.prevent="validation.validate()">
+          <fieldset :aria-invalid="Boolean(validation.error('administrador'))">
+            <input id="administrador" v-model="form.administrador" type="checkbox" />
+            <input id="tecnico" v-model="form.tecnico" type="checkbox" />
+          </fieldset>
+          <button type="submit">Guardar</button>
+        </form>
+      `,
+    }), { attachTo: document.body })
+
+    await wrapper.get('button').trigger('submit')
+    await nextTick()
+
+    expect(document.activeElement).toBe(wrapper.get('#administrador').element)
+    wrapper.unmount()
+  })
 })
