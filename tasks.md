@@ -17,7 +17,13 @@
 
 ## Archivos privados
 
-- [ ] Implementar el backend autorizado para cargar y reemplazar certificados de usuarios en Cloudflare R2 sin exponer credenciales a la SPA.
+- [x] Implementar backend autorizado y URLs firmadas para certificados de usuarios en Cloudflare R2 sin exponer credenciales a la SPA.
+- [x] Implementar carga directa autorizada, reemplazo, eliminación y lectura firmada para planos de Sede y plantillas de certificados en Cloudflare R2.
+- [ ] Configurar en Neon Functions las credenciales privadas R2 del runtime y ejecutar la validación real contra `sr-master-files`.
+
+## Servicios residenciales
+
+- [ ] Definir valor, duración, programación e informe aplicables a Clientes Casa antes de incluir sus ubicaciones internas en el catálogo de programación.
 
 ## Formularios oficiales
 

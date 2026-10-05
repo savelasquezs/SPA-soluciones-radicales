@@ -6,6 +6,8 @@ export class ApiClientError extends Error {
   constructor(
     message: string,
     public readonly status: number,
+    public readonly code?: string,
+    public readonly details?: Record<string, unknown>,
   ) {
     super(message)
   }
@@ -26,11 +28,21 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
     ...init,
     headers,
   })
-  const body = (await response.json().catch(() => null)) as { error?: string } | T | null
+  const body = (await response.json().catch(() => null)) as {
+    error?: string
+    code?: string
+    details?: Record<string, unknown>
+  } | T | null
 
   if (!response.ok) {
     const message = body && typeof body === 'object' && 'error' in body ? body.error : null
-    throw new ApiClientError(message ?? `La solicitud falló (${response.status})`, response.status)
+    const errorBody = body && typeof body === 'object' ? body : null
+    throw new ApiClientError(
+      message ?? `La solicitud falló (${response.status})`,
+      response.status,
+      errorBody && 'code' in errorBody ? errorBody.code : undefined,
+      errorBody && 'details' in errorBody ? errorBody.details : undefined,
+    )
   }
 
   return body as T

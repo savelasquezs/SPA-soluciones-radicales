@@ -18,10 +18,10 @@ La interfaz sigue las tareas reales de Administradores y Técnicos. Una tabla o 
 
 La navegación principal representa áreas de trabajo globales y frecuentes, no cada CRUD.
 
-La jerarquía operativa es:
+La jerarquía operativa para clientes tipo Negocio es:
 
 ```text
-Negocio
+Cliente Negocio
   └─ Sede
       ├─ Áreas
       ├─ Dispositivos
@@ -30,6 +30,7 @@ Negocio
 ```
 
 - Sedes se administran dentro del contexto de Negocio.
+- Un Cliente Casa oculta la Sede residencial interna y no expone Áreas, formularios MIP, certificados ni vehículos.
 - Áreas, Dispositivos y Vehículos conservan el contexto de Sede.
 - Una ruta puede existir sin aparecer en el sidebar.
 - Usar breadcrumbs cuando la ruta tenga más de un nivel de contexto.
@@ -138,3 +139,10 @@ Las pantallas del Técnico se diseñan primero para teléfono.
 - [ ] Usa feedback global y local correctamente.
 - [ ] No agrega navegación innecesaria.
 - [ ] No genera llamadas remotas redundantes.
+
+## Edición desde listados
+
+- Crear y Editar comparten el mismo formulario cuando sus campos y reglas son equivalentes.
+- Editar usa el snapshot ya cargado si contiene todos los campos ligeros necesarios.
+- Después de una mutación se actualiza el registro con la respuesta definitiva, sin recargar la colección.
+- Solo se vuelve a consultar la entidad por deep link, recarga sin caché, datos pesados, historial, archivos, información omitida o conflicto de versión.

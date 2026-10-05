@@ -22,7 +22,9 @@
     "lint:oxlint": "oxlint . --fix",
     "lint:eslint": "eslint . --fix --cache",
     "cloudflare:dev": "npm run build && npx wrangler dev",
-    "cloudflare:deploy": "npm run build && npx wrangler deploy"
+    "cloudflare:deploy": "npm run build && npx wrangler deploy",
+    "r2:cors:apply": "npx wrangler r2 bucket cors set sr-master-files --file cloudflare/r2-master-cors.json",
+    "r2:cors:check": "npx wrangler r2 bucket cors list sr-master-files"
   },
   "dependencies": {
     "@neon/config": "^1.8.3",

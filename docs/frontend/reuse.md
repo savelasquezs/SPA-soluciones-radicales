@@ -129,9 +129,23 @@ Una consulta usada por más de un módulo tiene una sola implementación. Los no
 - La navegación con cambios sin guardar exige confirmación.
 - El servidor repite todas las validaciones de integridad y autorización.
 
+### Regla Create/Edit
+
+Cuando Crear y Editar usan los mismos campos y reglas deben compartir un único Form Component y un único esquema de validación. El modo, valores iniciales, estado de guardado y errores son entradas del mismo componente; no se mantienen árboles de controles paralelos.
+
+### Regla de reutilización de datos
+
+Si una lista o detalle ya contiene el snapshot editable de un registro, la acción Editar usa ese objeto. No se consulta nuevamente `GET /entidad/:id` solo para abrir el formulario.
+
+El DTO de listado de un CRUD pequeño incluye los campos ligeros necesarios para renderizar y editar, aunque algunos no aparezcan como columnas. Un fetch adicional sí corresponde cuando hay un deep link o recarga sin caché, datos pesados, historiales paginados, archivos, información deliberadamente omitida o un conflicto de versión.
+
+### Regla de actualización
+
+Crear y actualizar devuelven el registro definitivo. El store o listado hace upsert por ID y mueve el registro entre subconjuntos activos/inactivos cuando corresponda. No se recarga automáticamente toda la colección ni se pierden búsqueda, filtros, tab, scroll o página.
+
 ### Caso aplicado: Usuarios
 
-El módulo `/usuarios` usa la tabla únicamente como superficie de consulta y acciones. Cada fila expone **Editar** y abre el mismo diálogo utilizado para el alta, precargado con el registro definitivo obtenido por `GET /api/users/:id`.
+El módulo `/usuarios` usa la tabla únicamente como superficie de consulta y acciones. Cada fila expone **Editar** y abre el mismo diálogo utilizado para el alta, precargado con el registro ya devuelto por `GET /api/users`.
 
 - Crear y editar comparten campos, validaciones y feedback.
 - El formulario de edición no se renderiza debajo de la tabla.

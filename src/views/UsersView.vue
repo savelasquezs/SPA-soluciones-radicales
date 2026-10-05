@@ -22,6 +22,7 @@ import {
   setUserActive,
   updateUser,
 } from '@/services/usersService'
+import { deleteMasterFile, getMasterFileUrl, uploadMasterFile } from '@/services/filesService'
 import { useNotificationsStore } from '@/stores/notifications'
 import type { UserInput, UserRecord } from '@/types/domain'
 
@@ -146,11 +147,6 @@ async function submitForm(): Promise<void> {
     notifications.show('Revisa los campos marcados antes de guardar.', 'error')
     return
   }
-  if (formFile.value) {
-    notifications.show('La carga de certificados estará disponible cuando se conecte el backend autorizado de R2.', 'warning')
-    return
-  }
-
   if (formMode.value === 'create') {
     await persistCreate()
     return
@@ -167,12 +163,19 @@ async function submitForm(): Promise<void> {
 
 async function persistCreate(): Promise<void> {
   savingForm.value = true
+  let uploadedPath: string | null = null
   try {
-    const created = normalizeUser(await createUser(userForm))
+    let input = { ...userForm }
+    if (formFile.value) {
+      uploadedPath = await uploadMasterFile('USER_CERTIFICATE', formFile.value)
+      input = { ...input, certificadoStoragePath: uploadedPath }
+    }
+    const created = normalizeUser(await createUser(input))
     users.value = [...users.value, created].sort((left, right) => left.nombreCompleto.localeCompare(right.nombreCompleto, 'es'))
     closeForm()
     notifications.show('Usuario creado correctamente.', 'success')
   } catch (error) {
+    if (uploadedPath) await deleteMasterFile(uploadedPath).catch(() => undefined)
     notifications.show(userMessage(error, 'No fue posible crear el usuario'), 'error')
   } finally {
     savingForm.value = false
@@ -184,14 +187,25 @@ async function persistEdit(): Promise<void> {
   if (!user || savingForm.value) return
   savingForm.value = true
   deactivateConfirmOpen.value = false
+  let uploadedPath: string | null = null
   try {
-    const updated = userForm.activo === user.activo
-      ? await updateUser(user.id, userForm)
-      : await setUserActive({ ...user, ...userForm }, userForm.activo)
+    let input = { ...userForm }
+    if (formFile.value) {
+      uploadedPath = await uploadMasterFile('USER_CERTIFICATE', formFile.value)
+      input = { ...input, certificadoStoragePath: uploadedPath }
+    }
+    const updated = input.activo === user.activo
+      ? await updateUser(user.id, input)
+      : await setUserActive({ ...user, ...input }, input.activo)
     replaceUser(normalizeUser(updated))
+    if (user.certificadoStoragePath && user.certificadoStoragePath !== updated.certificadoStoragePath) {
+      void deleteMasterFile(user.certificadoStoragePath).catch(() =>
+        notifications.show('El usuario se guardó, pero no fue posible limpiar el certificado anterior.', 'warning'))
+    }
     closeForm()
     notifications.show('Usuario actualizado correctamente.', 'success')
   } catch (error) {
+    if (uploadedPath) await deleteMasterFile(uploadedPath).catch(() => undefined)
     notifications.show(userMessage(error, 'No fue posible actualizar el usuario'), 'error')
   } finally {
     savingForm.value = false
@@ -235,6 +249,18 @@ function toUserInput(user: UserRecord): UserInput {
     certificadoFechaVencimiento: user.certificadoFechaVencimiento,
     certificadoObservaciones: user.certificadoObservaciones,
     version: user.version,
+  }
+}
+
+async function openPrivateFile(storagePath: string): Promise<void> {
+  const popup = window.open('', '_blank')
+  try {
+    const url = await getMasterFileUrl(storagePath)
+    if (popup) popup.location.href = url
+    else window.location.href = url
+  } catch (error) {
+    popup?.close()
+    notifications.show(userMessage(error, 'No fue posible abrir el certificado'), 'error')
   }
 }
 
@@ -384,7 +410,7 @@ function certificateIcon(status: CertificateStatus): 'check' | 'warning' | 'erro
 
           <div v-if="formMode === 'edit' && userForm.certificadoStoragePath" class="current-certificate">
             <strong>Certificado actual</strong>
-            <span>{{ fileName(userForm.certificadoStoragePath) }}</span>
+            <span>{{ fileName(userForm.certificadoStoragePath) }}</span><BaseButton type="button" variant="ghost" @click="openPrivateFile(userForm.certificadoStoragePath)">Ver certificado</BaseButton>
           </div>
 
           <BaseFileUpload
