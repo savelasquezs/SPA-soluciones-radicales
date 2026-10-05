@@ -206,6 +206,8 @@ nav a.router-link-active {
 
   nav {
     display: flex;
+    width: 100%;
+    min-width: 0;
     margin-top: 0.65rem;
     overflow-x: auto;
   }
@@ -229,6 +231,7 @@ nav a.router-link-active {
   .sidebar__actions {
     display: flex;
     width: 100%;
+    min-width: 0;
     overflow-x: auto;
   }
 
