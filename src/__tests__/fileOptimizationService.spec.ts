@@ -1,23 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Mock } from 'vitest'
 import { optimizeFileForStorage } from '@/services/fileOptimizationService'
 import { validateUserInput } from '@/helpers/users'
 import type { UserInput } from '@/types/domain'
 import { MAX_OPTIMIZATION_SOURCE_BYTES } from '@/types/fileOptimization'
-import type { OptimizationResponse } from '@/types/fileOptimization'
+import type { OptimizationRequest, OptimizationResponse } from '@/types/fileOptimization'
 
 type FakeWorker = {
   onmessage: ((event: { data: OptimizationResponse }) => void) | null
   onerror: (() => void) | null
   onmessageerror: (() => void) | null
-  postMessage: ReturnType<typeof vi.fn>
-  terminate: ReturnType<typeof vi.fn>
+  postMessage: Mock<(request: OptimizationRequest) => void>
+  terminate: Mock<() => void>
 }
 let worker: FakeWorker
-let factory: ReturnType<typeof vi.fn>
+let factory: Mock<() => FakeWorker>
 
 beforeEach(() => {
-  worker = { onmessage: null, onerror: null, onmessageerror: null, postMessage: vi.fn(), terminate: vi.fn() }
-  factory = vi.fn(function () { return worker })
+  worker = { onmessage: null, onerror: null, onmessageerror: null, postMessage: vi.fn<(request: OptimizationRequest) => void>(), terminate: vi.fn<() => void>() }
+  factory = vi.fn<() => FakeWorker>(function () { return worker })
   vi.stubGlobal('Worker', factory)
 })
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers() })
@@ -60,7 +61,7 @@ describe('optimización previa al upload', () => {
   it('deduce el MIME cuando el navegador no lo proporciona', async () => {
     const file = new File(['pdf'], 'documento.PDF')
     const pending = optimizeFileForStorage('SITE_PLAN', file)
-    const normalized = worker.postMessage.mock.calls[0]![0].file as File
+    const normalized = worker.postMessage.mock.calls[0]![0].file
     expect(normalized.type).toBe('application/pdf')
     worker.onmessage?.({ data: { ok: true, file: normalized } })
     expect((await pending).type).toBe('application/pdf')
@@ -95,9 +96,8 @@ describe('optimización previa al upload', () => {
     await expect(failed).rejects.toThrow('No se ha subido')
     vi.useFakeTimers()
     const pending = optimizeFileForStorage('SITE_PLAN', original())
-    const rejection = expect(pending).rejects.toThrow('tardó demasiado')
-    await vi.advanceTimersByTimeAsync(120_000)
-    await rejection
+    vi.advanceTimersByTime(120_000)
+    await expect(pending).rejects.toThrow('tardó demasiado')
     expect(worker.terminate).toHaveBeenCalledTimes(2)
   })
 

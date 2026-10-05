@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { MasterFileKind } from '@/services/filesService'
 
-const mocks = vi.hoisted(() => ({ api: vi.fn(), optimize: vi.fn() }))
+type Authorization = { url: string; contentType: string; storagePath: string }
+const mocks = vi.hoisted(() => ({
+  api: vi.fn<(path: string, options: RequestInit) => Promise<Authorization>>(),
+  optimize: vi.fn<(kind: MasterFileKind, file: File) => Promise<File>>(),
+}))
 vi.mock('@/services/apiService', () => ({ apiRequest: mocks.api, ApiClientError: class extends Error {} }))
 vi.mock('@/services/fileOptimizationService', () => ({ optimizeFileForStorage: mocks.optimize }))
 
@@ -9,7 +14,7 @@ import { uploadMasterFile } from '@/services/filesService'
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.api.mockResolvedValue({ url: 'https://r2.example.test/upload', contentType: 'image/webp', storagePath: 'sites/plans/foto.webp' })
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }))
+  vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue({ ok: true } as Response))
 })
 afterEach(() => vi.unstubAllGlobals())
 

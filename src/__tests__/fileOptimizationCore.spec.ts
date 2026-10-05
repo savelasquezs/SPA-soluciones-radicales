@@ -34,6 +34,6 @@ describe('preservación documental', () => {
 
   it('rechaza un PDF corrupto en lugar de devolverlo silenciosamente', async () => {
     const file = new File(['no es un PDF'], 'roto.pdf', { type: 'application/pdf' })
-    await expect(optimizeInWorker({ file, profile: 'standard' })).rejects.toThrow()
+    await expect(optimizeInWorker({ file, profile: 'standard' })).rejects.toThrow(/PDF/)
   })
 })
