@@ -24,11 +24,14 @@ describe('carga centralizada a R2', () => {
     const compressed = new File(['small'], 'foto.webp', { type: 'image/webp' })
     let complete: (file: File) => void = () => undefined
     mocks.optimize.mockReturnValue(new Promise<File>((resolve) => { complete = resolve }))
-    const pending = uploadMasterFile('SITE_PLAN', original)
+    const phases: string[] = []
+    const pending = uploadMasterFile('SITE_PLAN', original, (phase) => phases.push(phase))
+    expect(phases).toEqual(['compressing'])
     expect(mocks.api).not.toHaveBeenCalled()
     expect(fetch).not.toHaveBeenCalled()
     complete(compressed)
     expect(await pending).toBe('sites/plans/foto.webp')
+    expect(phases).toEqual(['compressing', 'uploading'])
     expect(mocks.optimize).toHaveBeenCalledExactlyOnceWith('SITE_PLAN', original)
     expect(mocks.api).toHaveBeenCalledExactlyOnceWith('api/files/master/upload-url', {
       method: 'POST', body: JSON.stringify({ kind: 'SITE_PLAN', fileName: 'foto.webp', contentType: 'image/webp', size: 5 }),

@@ -11,6 +11,7 @@ import ErrorState from '@/components/base/ErrorState.vue'
 import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import StatusBadge from '@/components/base/StatusBadge.vue'
 import WhatsAppPhoneLink from '@/components/base/WhatsAppPhoneLink.vue'
+import { useFileSaveProgress } from '@/composables/useFileSaveProgress'
 import ClientForm from '@/components/domain/clients/ClientForm.vue'
 import SiteForm from '@/components/domain/clients/SiteForm.vue'
 import { ApiClientError } from '@/services/apiService'
@@ -24,6 +25,12 @@ const route = useRoute()
 const router = useRouter()
 const store = useClientsStore()
 const notifications = useNotificationsStore()
+const {
+  phaseLabel: savePhaseLabel,
+  onUploadPhase,
+  markSaving,
+  reset: resetSaveProgress,
+} = useFileSaveProgress()
 const clientId = computed(() => String(route.params.id))
 const client = computed(() => store.clientsById[clientId.value] ?? null)
 const sites = computed(() => store.sitesForClient(clientId.value))
@@ -122,13 +129,15 @@ async function saveClient(): Promise<void> {
   const current = client.value
   if (!current || saving.value) return
   saving.value = true
+  resetSaveProgress()
   let uploadedPath: string | null = null
   try {
     let input = { ...clientForm.value }
     if (input.tipoCliente === 'NEGOCIO' && clientTemplateFile.value) {
-      uploadedPath = await uploadMasterFile('CLIENT_ESTABLISHMENT_TEMPLATE', clientTemplateFile.value)
+      uploadedPath = await uploadMasterFile('CLIENT_ESTABLISHMENT_TEMPLATE', clientTemplateFile.value, onUploadPhase)
       input = { ...input, plantillaCertificadoStoragePath: uploadedPath }
     }
+    markSaving()
     const saved = await store.updateClient(current.id, input)
     clientFormOpen.value = false
     clientTemplateFile.value = null
@@ -143,26 +152,29 @@ async function saveClient(): Promise<void> {
     notifications.show(message(error, 'No fue posible actualizar el Cliente'), 'error')
   } finally {
     saving.value = false
+    resetSaveProgress()
   }
 }
 
 async function saveSite(): Promise<void> {
   if (saving.value) return
   saving.value = true
+  resetSaveProgress()
   const previous = editingSiteId.value ? store.sitesById[editingSiteId.value] ?? null : null
   const uploadedPaths: string[] = []
   try {
     let input = { ...siteForm.value }
     if (sitePlanFile.value) {
-      const path = await uploadMasterFile('SITE_PLAN', sitePlanFile.value)
+      const path = await uploadMasterFile('SITE_PLAN', sitePlanFile.value, onUploadPhase)
       uploadedPaths.push(path)
       input = { ...input, planoStoragePath: path }
     }
     if (input.generaCertificadoVehiculo && siteVehicleTemplateFile.value) {
-      const path = await uploadMasterFile('SITE_VEHICLE_TEMPLATE', siteVehicleTemplateFile.value)
+      const path = await uploadMasterFile('SITE_VEHICLE_TEMPLATE', siteVehicleTemplateFile.value, onUploadPhase)
       uploadedPaths.push(path)
       input = { ...input, plantillaCertificadoVehiculoStoragePath: path }
     }
+    markSaving()
     const saved = siteFormMode.value === 'create'
       ? await store.createSite(clientId.value, input)
       : await store.updateSite(editingSiteId.value!, input)
@@ -184,6 +196,7 @@ async function saveSite(): Promise<void> {
     notifications.show(message(error, 'No fue posible guardar la Sede'), 'error')
   } finally {
     saving.value = false
+    resetSaveProgress()
   }
 }
 
@@ -324,8 +337,8 @@ function formatDate(value: string): string { return new Intl.DateTimeFormat('es-
       <div v-if="historyTotal > 20" class="pagination"><BaseButton size="compact" variant="secondary" :disabled="historyPage === 1" @click="loadHistory(historyPage - 1)">Anterior</BaseButton><span>Página {{ historyPage }}</span><BaseButton size="compact" variant="secondary" :disabled="historyPage * 20 >= historyTotal" @click="loadHistory(historyPage + 1)">Siguiente</BaseButton></div>
     </section>
 
-    <BaseDialog :model-value="clientFormOpen" title="Editar cliente" @update:model-value="clientFormOpen = $event"><ClientForm v-model="clientForm" mode="edit" @submit="saveClient" @invalid="notifications.show('Revisa los campos marcados.', 'error')" @file-selected="clientTemplateFile = $event" @view-template="clientForm.plantillaCertificadoStoragePath && openPrivateFile(clientForm.plantillaCertificadoStoragePath)" /><template #footer><BaseButton variant="secondary" @click="clientFormOpen = false">Cancelar</BaseButton><BaseButton type="submit" form="client-form" :loading="saving">Guardar cambios</BaseButton></template></BaseDialog>
-    <BaseDialog :model-value="siteFormOpen" :title="siteFormMode === 'create' ? 'Crear Sede' : 'Editar Sede'" @update:model-value="siteFormOpen = $event"><SiteForm v-model="siteForm" :mode="siteFormMode" :form-options="forms" :client-name="client.nombre" @submit="saveSite" @invalid="notifications.show('Revisa los campos marcados.', 'error')" @file-selected="selectSiteFile" @view-plan="openPlan(siteForm.planoStoragePath)" @view-vehicle-template="siteForm.plantillaCertificadoVehiculoStoragePath && openPrivateFile(siteForm.plantillaCertificadoVehiculoStoragePath)" /><template #footer><BaseButton variant="secondary" @click="siteFormOpen = false">Cancelar</BaseButton><BaseButton type="submit" form="site-form" :loading="saving">{{ siteFormMode === 'create' ? 'Crear Sede' : 'Guardar cambios' }}</BaseButton></template></BaseDialog>
+    <BaseDialog :model-value="clientFormOpen" title="Editar cliente" @update:model-value="!saving && (clientFormOpen = $event)"><ClientForm v-model="clientForm" mode="edit" :saving="saving" @submit="saveClient" @invalid="notifications.show('Revisa los campos marcados.', 'error')" @file-selected="clientTemplateFile = $event" @view-template="clientForm.plantillaCertificadoStoragePath && openPrivateFile(clientForm.plantillaCertificadoStoragePath)" /><template #footer><BaseButton variant="secondary" :disabled="saving" @click="clientFormOpen = false">Cancelar</BaseButton><BaseButton type="submit" form="client-form" :loading="saving">{{ savePhaseLabel ?? 'Guardar cambios' }}</BaseButton></template></BaseDialog>
+    <BaseDialog :model-value="siteFormOpen" :title="siteFormMode === 'create' ? 'Crear Sede' : 'Editar Sede'" @update:model-value="!saving && (siteFormOpen = $event)"><SiteForm v-model="siteForm" :mode="siteFormMode" :saving="saving" :form-options="forms" :client-name="client.nombre" @submit="saveSite" @invalid="notifications.show('Revisa los campos marcados.', 'error')" @file-selected="selectSiteFile" @view-plan="openPlan(siteForm.planoStoragePath)" @view-vehicle-template="siteForm.plantillaCertificadoVehiculoStoragePath && openPrivateFile(siteForm.plantillaCertificadoVehiculoStoragePath)" /><template #footer><BaseButton variant="secondary" :disabled="saving" @click="siteFormOpen = false">Cancelar</BaseButton><BaseButton type="submit" form="site-form" :loading="saving">{{ savePhaseLabel ?? (siteFormMode === 'create' ? 'Crear Sede' : 'Guardar cambios') }}</BaseButton></template></BaseDialog>
     <ConfirmDialog :open="deleteClientTarget" title="Eliminar cliente" :message="`Se eliminará ${client.nombre} si no tiene historial ni dependencias.`" confirm-label="Eliminar" danger :loading="saving" @cancel="deleteClientTarget = false" @confirm="removeClient" />
     <ConfirmDialog :open="dependencyClientTarget" title="Desactivar cliente" message="El Cliente tiene historial o dependencias. Se conservará toda la información y pasará a Inactivos." confirm-label="Desactivar" danger :loading="saving" @cancel="dependencyClientTarget = false" @confirm="setClientActive(false)" />
     <ConfirmDialog :open="Boolean(deleteSiteTarget)" title="Eliminar Sede" :message="`Se eliminará ${deleteSiteTarget?.nombre ?? 'la Sede'} si no tiene dependencias.`" confirm-label="Eliminar" danger :loading="saving" @cancel="deleteSiteTarget = null" @confirm="removeSite" />

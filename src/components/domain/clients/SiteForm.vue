@@ -10,7 +10,7 @@ import BaseTextarea from '@/components/base/BaseTextarea.vue'
 import { parseEmails, validateSiteInput, type SiteFormErrors } from '@/helpers/clients'
 import type { FormOption, SiteInput } from '@/types/domain'
 
-defineProps<{ mode: 'create' | 'edit'; formOptions: FormOption[]; clientName?: string }>()
+const props = defineProps<{ mode: 'create' | 'edit'; formOptions: FormOption[]; clientName?: string; saving?: boolean }>()
 const model = defineModel<SiteInput>({ required: true })
 const emit = defineEmits<{ submit: []; invalid: []; 'file-selected': [kind: 'plan' | 'vehicle-template', file: File | null]; 'view-plan': []; 'view-vehicle-template': [] }>()
 const touched = reactive<Partial<Record<keyof SiteFormErrors, boolean>>>({})
@@ -51,7 +51,7 @@ function removePlan(): void {
 </script>
 
 <template>
-  <form id="site-form" class="site-form" novalidate @submit.prevent="submit">
+  <form id="site-form" class="site-form" novalidate :inert="props.saving || undefined" :aria-busy="Boolean(props.saving)" @submit.prevent="submit">
     <section>
       <header><h3>Datos de la Sede</h3><p>Información operativa y contacto principal.</p></header>
       <div class="site-form__grid">

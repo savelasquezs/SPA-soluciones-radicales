@@ -2,7 +2,7 @@
 
 ## Contrato
 
-`uploadMasterFile(kind, file)` ejecuta `optimizeFileForStorage(kind, file)` **antes** de solicitar la URL firmada. Solo se firman y envían el nombre, MIME, tamaño y bytes del resultado. La API pública del motor devuelve exclusivamente `Promise<File>`: no métricas, pantallas, notificaciones de ahorro, estados persistidos ni cambios de formularios.
+`uploadMasterFile(kind, file)` ejecuta `optimizeFileForStorage(kind, file)` **antes** de solicitar la URL firmada. Solo se firman y envían el nombre, MIME, tamaño y bytes del resultado. La API pública del motor devuelve exclusivamente `Promise<File>`: no métricas, pantallas, notificaciones de ahorro ni estados persistidos. `uploadMasterFile` acepta opcionalmente un callback efímero de fase para UX (`compressing` / `uploading`); no expone porcentajes ni información de ahorro.
 
 Flujo: archivo → comprimir localmente → autorizar → PUT privado a R2.
 
@@ -23,7 +23,7 @@ El original optimizable puede pesar hasta 64 MiB; la resolución decodificada se
 
 60–90 % es un objetivo para fotografías grandes y PDF con imágenes compatibles, no una garantía para cada archivo. Un PDF ya optimizado, firmado o con imágenes de formatos no soportados puede conservar su tamaño. No se almacenan copias del original junto al resultado y no se modifican archivos existentes en R2.
 
-El alcance actual cubre las cargas centralizadas en `uploadMasterFile`. Los futuros flujos de evidencias o generación deben reutilizar este motor cuando corresponda, sin duplicarlo. La compresión en cliente no es un control de seguridad ni una cuota del bucket: el servidor sigue validando permisos y tipos, y una carga directa externa a la SPA no queda cubierta por este motor.
+El alcance actual cubre las cargas centralizadas en `uploadMasterFile`. Los formularios que guardan archivos usan el patrón compartido `useFileSaveProgress`: `Comprimiendo…` → `Subiendo…` → `Guardando…`, mostrado en su botón principal mientras el formulario queda temporalmente inerte. Si no hay archivo nuevo, solo se muestra `Guardando…`. Los futuros flujos de evidencias o generación deben reutilizar este motor cuando corresponda, sin duplicarlo. Las evidencias operativas que se sincronicen durante un Servicio deben llevar progreso por evidencia en lugar de bloquear la pantalla completa. La compresión en cliente no es un control de seguridad ni una cuota del bucket: el servidor sigue validando permisos y tipos, y una carga directa externa a la SPA no queda cubierta por este motor.
 
 ## Validación
 

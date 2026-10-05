@@ -15,6 +15,7 @@ import ErrorState from '@/components/base/ErrorState.vue'
 import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import ResponsiveTable from '@/components/base/ResponsiveTable.vue'
 import StatusBadge from '@/components/base/StatusBadge.vue'
+import { useFileSaveProgress } from '@/composables/useFileSaveProgress'
 import { certificateStatus, validateUserInput, type CertificateStatus, type UserFormErrors } from '@/helpers/users'
 import {
   createUser,
@@ -43,6 +44,12 @@ const formFile = ref<File | null>(null)
 const formTouched = reactive<Partial<Record<ErrorKey, boolean>>>({})
 const formSubmitted = ref(false)
 const formBaseline = ref('')
+const {
+  phaseLabel: savePhaseLabel,
+  onUploadPhase,
+  markSaving,
+  reset: resetSaveProgress,
+} = useFileSaveProgress()
 
 const blankUser = (): UserInput => ({
   nombreCompleto: '',
@@ -163,13 +170,15 @@ async function submitForm(): Promise<void> {
 
 async function persistCreate(): Promise<void> {
   savingForm.value = true
+  resetSaveProgress()
   let uploadedPath: string | null = null
   try {
     let input = { ...userForm }
     if (formFile.value) {
-      uploadedPath = await uploadMasterFile('USER_CERTIFICATE', formFile.value)
+      uploadedPath = await uploadMasterFile('USER_CERTIFICATE', formFile.value, onUploadPhase)
       input = { ...input, certificadoStoragePath: uploadedPath }
     }
+    markSaving()
     const created = normalizeUser(await createUser(input))
     users.value = [...users.value, created].sort((left, right) => left.nombreCompleto.localeCompare(right.nombreCompleto, 'es'))
     closeForm()
@@ -179,6 +188,7 @@ async function persistCreate(): Promise<void> {
     notifications.show(userMessage(error, 'No fue posible crear el usuario'), 'error')
   } finally {
     savingForm.value = false
+    resetSaveProgress()
   }
 }
 
@@ -186,14 +196,16 @@ async function persistEdit(): Promise<void> {
   const user = editingUser.value
   if (!user || savingForm.value) return
   savingForm.value = true
+  resetSaveProgress()
   deactivateConfirmOpen.value = false
   let uploadedPath: string | null = null
   try {
     let input = { ...userForm }
     if (formFile.value) {
-      uploadedPath = await uploadMasterFile('USER_CERTIFICATE', formFile.value)
+      uploadedPath = await uploadMasterFile('USER_CERTIFICATE', formFile.value, onUploadPhase)
       input = { ...input, certificadoStoragePath: uploadedPath }
     }
+    markSaving()
     const updated = input.activo === user.activo
       ? await updateUser(user.id, input)
       : await setUserActive({ ...user, ...input }, input.activo)
@@ -209,6 +221,7 @@ async function persistEdit(): Promise<void> {
     notifications.show(userMessage(error, 'No fue posible actualizar el usuario'), 'error')
   } finally {
     savingForm.value = false
+    resetSaveProgress()
   }
 }
 
@@ -350,7 +363,7 @@ function certificateIcon(status: CertificateStatus): 'check' | 'warning' | 'erro
       :description="formDescription"
       @update:model-value="!$event && requestCloseForm()"
     >
-      <form id="user-form" class="dialog-form" novalidate @submit.prevent="submitForm">
+      <form id="user-form" class="dialog-form" novalidate :inert="savingForm || undefined" :aria-busy="savingForm" @submit.prevent="submitForm">
         <section class="form-section" aria-labelledby="user-data-heading">
           <header class="form-section__header">
             <div>
@@ -436,7 +449,7 @@ function certificateIcon(status: CertificateStatus): 'check' | 'warning' | 'erro
       </form>
       <template #footer>
         <BaseButton variant="secondary" :disabled="savingForm" @click="requestCloseForm">Cancelar</BaseButton>
-        <BaseButton type="submit" form="user-form" :loading="savingForm">{{ formMode === 'create' ? 'Crear usuario' : 'Guardar cambios' }}</BaseButton>
+        <BaseButton type="submit" form="user-form" :loading="savingForm">{{ savePhaseLabel ?? (formMode === 'create' ? 'Crear usuario' : 'Guardar cambios') }}</BaseButton>
       </template>
     </BaseDialog>
 

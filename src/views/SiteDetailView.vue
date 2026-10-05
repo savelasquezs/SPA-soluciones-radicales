@@ -12,6 +12,7 @@ import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import StatusBadge from '@/components/base/StatusBadge.vue'
 import StatusPanel from '@/components/base/StatusPanel.vue'
 import WhatsAppPhoneLink from '@/components/base/WhatsAppPhoneLink.vue'
+import { useFileSaveProgress } from '@/composables/useFileSaveProgress'
 import AreaForm from '@/components/domain/clients/AreaForm.vue'
 import SiteForm from '@/components/domain/clients/SiteForm.vue'
 import { ApiClientError } from '@/services/apiService'
@@ -27,6 +28,12 @@ const route = useRoute()
 const router = useRouter()
 const store = useClientsStore()
 const notifications = useNotificationsStore()
+const {
+  phaseLabel: savePhaseLabel,
+  onUploadPhase,
+  markSaving,
+  reset: resetSaveProgress,
+} = useFileSaveProgress()
 const siteId = computed(() => String(route.params.siteId))
 const site = computed(() => store.sitesById[siteId.value] ?? null)
 const client = computed(() => site.value ? store.clientsById[site.value.clientId] ?? null : null)
@@ -105,19 +112,21 @@ async function saveSite(): Promise<void> {
   const current = site.value
   if (!current || saving.value) return
   saving.value = true
+  resetSaveProgress()
   const uploadedPaths: string[] = []
   try {
     let input = { ...siteForm.value }
     if (sitePlanFile.value) {
-      const path = await uploadMasterFile('SITE_PLAN', sitePlanFile.value)
+      const path = await uploadMasterFile('SITE_PLAN', sitePlanFile.value, onUploadPhase)
       uploadedPaths.push(path)
       input = { ...input, planoStoragePath: path }
     }
     if (input.generaCertificadoVehiculo && siteVehicleTemplateFile.value) {
-      const path = await uploadMasterFile('SITE_VEHICLE_TEMPLATE', siteVehicleTemplateFile.value)
+      const path = await uploadMasterFile('SITE_VEHICLE_TEMPLATE', siteVehicleTemplateFile.value, onUploadPhase)
       uploadedPaths.push(path)
       input = { ...input, plantillaCertificadoVehiculoStoragePath: path }
     }
+    markSaving()
     const saved = await store.updateSite(current.id, input)
     siteFormOpen.value = false
     sitePlanFile.value = null
@@ -133,7 +142,10 @@ async function saveSite(): Promise<void> {
     await Promise.all(uploadedPaths.map((path) => deleteMasterFile(path).catch(() => undefined)))
     if (error instanceof ApiClientError && error.code === 'VERSION_CONFLICT') store.upsertSite(await getSite(current.id))
     notifications.show(message(error, 'No fue posible actualizar la Sede'), 'error')
-  } finally { saving.value = false }
+  } finally {
+    saving.value = false
+    resetSaveProgress()
+  }
 }
 
 async function createArea(): Promise<void> {
@@ -224,7 +236,7 @@ function formatDate(value: string): string { return new Intl.DateTimeFormat('es-
     <section v-else-if="tab === 'settings'" class="settings-card"><h2>Configuración de la Sede</h2><p>Modifica contacto, operación, formularios, vehículos y plano desde el formulario compartido.</p><BaseButton size="compact" @click="openSiteEdit">Editar configuración</BaseButton></section>
     <StatusPanel v-else :title="tab === 'devices' ? 'Dispositivos' : 'Hallazgos'" message="La navegación queda reservada para su issue funcional; este goal no adelanta su implementación." />
 
-    <BaseDialog :model-value="siteFormOpen" title="Editar Sede" @update:model-value="siteFormOpen = $event"><SiteForm v-model="siteForm" mode="edit" :form-options="forms" :client-name="client.nombre" @submit="saveSite" @invalid="notifications.show('Revisa los campos marcados.', 'error')" @file-selected="selectSiteFile" @view-plan="siteForm.planoStoragePath && openPrivateFile(siteForm.planoStoragePath)" @view-vehicle-template="siteForm.plantillaCertificadoVehiculoStoragePath && openPrivateFile(siteForm.plantillaCertificadoVehiculoStoragePath)" /><template #footer><BaseButton variant="secondary" @click="siteFormOpen = false">Cancelar</BaseButton><BaseButton type="submit" form="site-form" :loading="saving">Guardar cambios</BaseButton></template></BaseDialog>
+    <BaseDialog :model-value="siteFormOpen" title="Editar Sede" @update:model-value="!saving && (siteFormOpen = $event)"><SiteForm v-model="siteForm" mode="edit" :saving="saving" :form-options="forms" :client-name="client.nombre" @submit="saveSite" @invalid="notifications.show('Revisa los campos marcados.', 'error')" @file-selected="selectSiteFile" @view-plan="siteForm.planoStoragePath && openPrivateFile(siteForm.planoStoragePath)" @view-vehicle-template="siteForm.plantillaCertificadoVehiculoStoragePath && openPrivateFile(siteForm.plantillaCertificadoVehiculoStoragePath)" /><template #footer><BaseButton variant="secondary" :disabled="saving" @click="siteFormOpen = false">Cancelar</BaseButton><BaseButton type="submit" form="site-form" :loading="saving">{{ savePhaseLabel ?? 'Guardar cambios' }}</BaseButton></template></BaseDialog>
     <BaseDialog :model-value="Boolean(editingArea)" title="Editar Área" @update:model-value="!$event && (editingArea = null)"><AreaForm v-model="editAreaForm" mode="edit" form-id="area-edit-form" id-prefix="edit-area" @submit="updateArea" @invalid="notifications.show('Ingresa el nombre del Área.', 'error')" /><template #footer><BaseButton variant="secondary" @click="editingArea = null">Cancelar</BaseButton><BaseButton type="submit" form="area-edit-form" :loading="saving">Guardar cambios</BaseButton></template></BaseDialog>
     <ConfirmDialog :open="Boolean(deleteAreaTarget)" title="Eliminar Área" :message="`Se eliminará ${deleteAreaTarget?.nombre ?? 'el Área'} si no tiene historial ni dependencias.`" confirm-label="Eliminar" danger :loading="saving" @cancel="deleteAreaTarget = null" @confirm="removeArea" />
     <ConfirmDialog :open="Boolean(dependencyAreaTarget)" title="Desactivar Área" message="El Área tiene historial o dependencias. Se conservará y quedará inactiva." confirm-label="Desactivar" danger :loading="saving" @cancel="dependencyAreaTarget = null" @confirm="dependencyAreaTarget && setAreaActive(dependencyAreaTarget, false)" />
