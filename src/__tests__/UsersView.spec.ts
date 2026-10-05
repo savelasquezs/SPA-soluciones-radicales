@@ -88,7 +88,11 @@ describe('Usuarios', () => {
     await wrapper.findAll('button').find((button) => button.text() === 'Agregar usuario')!.trigger('click')
     await wrapper.vm.$nextTick()
 
+    expect(wrapper.text()).toContain('Datos del usuario')
+    expect(wrapper.text()).toContain('Acceso y roles')
     expect(wrapper.text()).toContain('Certificado técnico')
+    expect(wrapper.text()).not.toContain('Adjuntar certificado')
+    expect(wrapper.text()).toContain('Seleccionar archivo')
     await wrapper.get('#user-technician').setValue('NO')
     expect(wrapper.find('#user-certificate').exists()).toBe(false)
     await wrapper.get('#user-technician').setValue('SI')
