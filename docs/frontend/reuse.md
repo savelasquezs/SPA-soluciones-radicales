@@ -120,6 +120,8 @@ Una consulta usada por más de un módulo tiene una sola implementación. Los no
 ## Formularios
 
 - Los esquemas, normalizadores y mensajes reutilizables tienen una única implementación.
+- Cuando alta y edición comparten campos y reglas, reutilizar un único formulario con modo `create | edit` en lugar de mantener dos árboles de controles que puedan divergir.
+- En modo edición, cargar el registro definitivo antes de habilitar cambios y conservar bloqueados los campos inmutables por reglas de identidad o negocio.
 - Los errores de campo permanecen junto al campo.
 - Los errores globales pasan por el sistema común de feedback.
 - El submit se bloquea mientras está en curso.
