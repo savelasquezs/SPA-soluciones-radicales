@@ -4,15 +4,15 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createUser, getUser, listUsers, updateUser } from '@/services/usersService'
 import { useNotificationsStore } from '@/stores/notifications'
-import type { UserRecord } from '@/types/domain'
+import type { UserInput, UserRecord } from '@/types/domain'
 import UsersView from '@/views/UsersView.vue'
 
 vi.mock('@/services/usersService', () => ({
   listUsers: vi.fn<() => Promise<UserRecord[]>>(),
   getUser: vi.fn<(id: string) => Promise<UserRecord>>(),
-  createUser: vi.fn<() => Promise<UserRecord>>(),
-  updateUser: vi.fn<() => Promise<UserRecord>>(),
-  setUserActive: vi.fn<() => Promise<UserRecord>>(),
+  createUser: vi.fn<(input: UserInput) => Promise<UserRecord>>(),
+  updateUser: vi.fn<(id: string, input: UserInput) => Promise<UserRecord>>(),
+  setUserActive: vi.fn<(user: UserRecord, active: boolean) => Promise<UserRecord>>(),
 }))
 
 const user = (overrides: Partial<UserRecord> = {}): UserRecord => ({
