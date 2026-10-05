@@ -562,7 +562,7 @@ app.post('/api/email/test', async (context) => {
 
   await pool.query(
     `insert into private.integration_jobs (id, job_type, idempotency_key, payload, status, attempts)
-     values ($1, 'EMAIL', $1::text, $2::jsonb, 'RUNNING', 1)`,
+     values ($1::uuid, 'EMAIL', $1::uuid::text, $2::jsonb, 'RUNNING', 1)`,
     [jobId, JSON.stringify({ to: recipient, subject })],
   )
 
