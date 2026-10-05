@@ -123,7 +123,7 @@ async function openEdit(user: UserRecord): Promise<void> {
   try {
     const fresh = normalizeUser(await getUser(user.id))
     replaceUser(fresh)
-    Object.assign(userForm, fresh)
+    Object.assign(userForm, toUserInput(fresh))
     formBaseline.value = JSON.stringify(userForm)
   } catch (error) {
     formOpen.value = false
@@ -233,6 +233,21 @@ function replaceUser(user: UserRecord): void {
 
 function normalizeUser(user: UserRecord): UserRecord {
   return { ...user, version: Number(user.version) }
+}
+
+function toUserInput(user: UserRecord): UserInput {
+  return {
+    nombreCompleto: user.nombreCompleto,
+    correoGoogle: user.correoGoogle,
+    esAdmin: user.esAdmin,
+    esTecnico: user.esTecnico,
+    activo: user.activo,
+    certificadoStoragePath: user.certificadoStoragePath,
+    certificadoFechaEmision: user.certificadoFechaEmision,
+    certificadoFechaVencimiento: user.certificadoFechaVencimiento,
+    certificadoObservaciones: user.certificadoObservaciones,
+    version: user.version,
+  }
 }
 
 function userMessage(error: unknown, fallback: string): string {
