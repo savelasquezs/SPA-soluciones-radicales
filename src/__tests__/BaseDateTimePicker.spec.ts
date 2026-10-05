@@ -19,6 +19,16 @@ function lastEmission(wrapper: VueWrapper): unknown[] | undefined {
 }
 
 describe('BaseDateTimePicker', () => {
+  it('mantiene una única raíz encogible para layouts en grid', () => {
+    const wrapper = mount(BaseDateTimePicker, {
+      props: { modelValue: null, mode: 'date', label: 'Fecha' },
+    })
+
+    expect(wrapper.element.classList.contains('date-time-picker-root')).toBe(true)
+    expect(wrapper.findAll('.date-time-control')).toHaveLength(1)
+    expect(wrapper.get('.date-time-control input').exists()).toBe(true)
+  })
+
   it('edita una fecha, cambia mes y año y respeta min/max', async () => {
     const wrapper = mount(BaseDateTimePicker, {
       attachTo: document.body,
