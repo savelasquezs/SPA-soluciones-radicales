@@ -15,6 +15,7 @@ import SiteForm from '@/components/domain/clients/SiteForm.vue'
 import { formatPhone } from '@/helpers/clients'
 import { ApiClientError } from '@/services/apiService'
 import { getClient, getSite, listClientHistory, listFormOptions } from '@/services/clientsService'
+import { deleteMasterFile, getMasterFileUrl, uploadMasterFile } from '@/services/filesService'
 import { useClientsStore } from '@/stores/clients'
 import { useNotificationsStore } from '@/stores/notifications'
 import type { ClientInput, ClientRecord, FormOption, ServiceHistoryItem, SiteInput, SiteRecord } from '@/types/domain'
@@ -45,6 +46,9 @@ const deleteClientTarget = ref(false)
 const dependencyClientTarget = ref(false)
 const clientForm = ref<ClientInput>(blankClient())
 const siteForm = ref<SiteInput>(blankSite())
+const clientTemplateFile = ref<File | null>(null)
+const sitePlanFile = ref<File | null>(null)
+const siteVehicleTemplateFile = ref<File | null>(null)
 
 onMounted(load)
 
@@ -92,6 +96,7 @@ async function loadHistory(page = 1): Promise<void> {
 function openClientEdit(): void {
   if (!client.value) return
   clientForm.value = toClientInput(client.value)
+  clientTemplateFile.value = null
   clientFormOpen.value = true
 }
 
@@ -99,6 +104,8 @@ function openSiteCreate(): void {
   siteFormMode.value = 'create'
   editingSiteId.value = null
   siteForm.value = blankSite()
+  sitePlanFile.value = null
+  siteVehicleTemplateFile.value = null
   siteFormOpen.value = true
 }
 
@@ -106,6 +113,8 @@ function openSiteEdit(site: SiteRecord): void {
   siteFormMode.value = 'edit'
   editingSiteId.value = site.id
   siteForm.value = toSiteInput(site)
+  sitePlanFile.value = null
+  siteVehicleTemplateFile.value = null
   siteFormOpen.value = true
 }
 
@@ -113,11 +122,23 @@ async function saveClient(): Promise<void> {
   const current = client.value
   if (!current || saving.value) return
   saving.value = true
+  let uploadedPath: string | null = null
   try {
-    await store.updateClient(current.id, clientForm.value)
+    let input = { ...clientForm.value }
+    if (input.tipoCliente === 'NEGOCIO' && clientTemplateFile.value) {
+      uploadedPath = await uploadMasterFile('CLIENT_ESTABLISHMENT_TEMPLATE', clientTemplateFile.value)
+      input = { ...input, plantillaCertificadoStoragePath: uploadedPath }
+    }
+    const saved = await store.updateClient(current.id, input)
     clientFormOpen.value = false
+    clientTemplateFile.value = null
+    if (current.plantillaCertificadoStoragePath && current.plantillaCertificadoStoragePath !== saved.plantillaCertificadoStoragePath) {
+      void deleteMasterFile(current.plantillaCertificadoStoragePath).catch(() =>
+        notifications.show('El Cliente se guardó, pero no fue posible limpiar la plantilla anterior.', 'warning'))
+    }
     notifications.show('Cliente actualizado correctamente.', 'success')
   } catch (error) {
+    if (uploadedPath) await deleteMasterFile(uploadedPath).catch(() => undefined)
     if (error instanceof ApiClientError && error.code === 'VERSION_CONFLICT') store.upsertClient(await getClient(current.id))
     notifications.show(message(error, 'No fue posible actualizar el Cliente'), 'error')
   } finally {
@@ -128,12 +149,35 @@ async function saveClient(): Promise<void> {
 async function saveSite(): Promise<void> {
   if (saving.value) return
   saving.value = true
+  const previous = editingSiteId.value ? store.sitesById[editingSiteId.value] ?? null : null
+  const uploadedPaths: string[] = []
   try {
-    if (siteFormMode.value === 'create') await store.createSite(clientId.value, siteForm.value)
-    else await store.updateSite(editingSiteId.value!, siteForm.value)
+    let input = { ...siteForm.value }
+    if (sitePlanFile.value) {
+      const path = await uploadMasterFile('SITE_PLAN', sitePlanFile.value)
+      uploadedPaths.push(path)
+      input = { ...input, planoStoragePath: path }
+    }
+    if (input.generaCertificadoVehiculo && siteVehicleTemplateFile.value) {
+      const path = await uploadMasterFile('SITE_VEHICLE_TEMPLATE', siteVehicleTemplateFile.value)
+      uploadedPaths.push(path)
+      input = { ...input, plantillaCertificadoVehiculoStoragePath: path }
+    }
+    const saved = siteFormMode.value === 'create'
+      ? await store.createSite(clientId.value, input)
+      : await store.updateSite(editingSiteId.value!, input)
     siteFormOpen.value = false
+    sitePlanFile.value = null
+    siteVehicleTemplateFile.value = null
+    for (const oldPath of [previous?.planoStoragePath, previous?.plantillaCertificadoVehiculoStoragePath]) {
+      if (oldPath && oldPath !== saved.planoStoragePath && oldPath !== saved.plantillaCertificadoVehiculoStoragePath) {
+        void deleteMasterFile(oldPath).catch(() =>
+          notifications.show('La Sede se guardó, pero no fue posible limpiar un archivo anterior.', 'warning'))
+      }
+    }
     notifications.show(siteFormMode.value === 'create' ? 'Sede creada correctamente.' : 'Sede actualizada correctamente.', 'success')
   } catch (error) {
+    await Promise.all(uploadedPaths.map((path) => deleteMasterFile(path).catch(() => undefined)))
     if (error instanceof ApiClientError && error.code === 'VERSION_CONFLICT' && editingSiteId.value) {
       store.upsertSite(await getSite(editingSiteId.value))
     }
@@ -206,8 +250,26 @@ async function setClientActive(active: boolean): Promise<void> {
   }
 }
 
+function selectSiteFile(kind: 'plan' | 'vehicle-template', file: File | null): void {
+  if (kind === 'plan') sitePlanFile.value = file
+  else siteVehicleTemplateFile.value = file
+}
+
+async function openPrivateFile(storagePath: string): Promise<void> {
+  const popup = window.open('', '_blank')
+  try {
+    const url = await getMasterFileUrl(storagePath)
+    if (popup) popup.location.href = url
+    else window.location.href = url
+  } catch (error) {
+    popup?.close()
+    notifications.show(message(error, 'No fue posible abrir el archivo privado'), 'error')
+  }
+}
+
 function openPlan(): void {
-  notifications.show('La visualización privada del plano requiere el backend autorizado de R2.', 'warning')
+  const path = siteForm.value.planoStoragePath
+  if (path) void openPrivateFile(path)
 }
 
 function blankClient(): ClientInput {
@@ -263,8 +325,8 @@ function formatDate(value: string): string { return new Intl.DateTimeFormat('es-
       <div v-if="historyTotal > 20" class="pagination"><BaseButton variant="secondary" :disabled="historyPage === 1" @click="loadHistory(historyPage - 1)">Anterior</BaseButton><span>Página {{ historyPage }}</span><BaseButton variant="secondary" :disabled="historyPage * 20 >= historyTotal" @click="loadHistory(historyPage + 1)">Siguiente</BaseButton></div>
     </section>
 
-    <BaseDialog :model-value="clientFormOpen" title="Editar cliente" @update:model-value="clientFormOpen = $event"><ClientForm v-model="clientForm" mode="edit" @submit="saveClient" @invalid="notifications.show('Revisa los campos marcados.', 'error')" @file-selected="notifications.show('La carga de plantillas requiere el backend autorizado de R2.', 'warning')" /><template #footer><BaseButton variant="secondary" @click="clientFormOpen = false">Cancelar</BaseButton><BaseButton type="submit" form="client-form" :loading="saving">Guardar cambios</BaseButton></template></BaseDialog>
-    <BaseDialog :model-value="siteFormOpen" :title="siteFormMode === 'create' ? 'Crear Sede' : 'Editar Sede'" @update:model-value="siteFormOpen = $event"><SiteForm v-model="siteForm" :mode="siteFormMode" :form-options="forms" :client-name="client.nombre" @submit="saveSite" @invalid="notifications.show('Revisa los campos marcados.', 'error')" @file-selected="notifications.show('La carga de archivos requiere el backend autorizado de R2.', 'warning')" @view-plan="openPlan" /><template #footer><BaseButton variant="secondary" @click="siteFormOpen = false">Cancelar</BaseButton><BaseButton type="submit" form="site-form" :loading="saving">{{ siteFormMode === 'create' ? 'Crear Sede' : 'Guardar cambios' }}</BaseButton></template></BaseDialog>
+    <BaseDialog :model-value="clientFormOpen" title="Editar cliente" @update:model-value="clientFormOpen = $event"><ClientForm v-model="clientForm" mode="edit" @submit="saveClient" @invalid="notifications.show('Revisa los campos marcados.', 'error')" @file-selected="clientTemplateFile = $event" @view-template="clientForm.plantillaCertificadoStoragePath && openPrivateFile(clientForm.plantillaCertificadoStoragePath)" /><template #footer><BaseButton variant="secondary" @click="clientFormOpen = false">Cancelar</BaseButton><BaseButton type="submit" form="client-form" :loading="saving">Guardar cambios</BaseButton></template></BaseDialog>
+    <BaseDialog :model-value="siteFormOpen" :title="siteFormMode === 'create' ? 'Crear Sede' : 'Editar Sede'" @update:model-value="siteFormOpen = $event"><SiteForm v-model="siteForm" :mode="siteFormMode" :form-options="forms" :client-name="client.nombre" @submit="saveSite" @invalid="notifications.show('Revisa los campos marcados.', 'error')" @file-selected="selectSiteFile" @view-plan="openPlan" @view-vehicle-template="siteForm.plantillaCertificadoVehiculoStoragePath && openPrivateFile(siteForm.plantillaCertificadoVehiculoStoragePath)" /><template #footer><BaseButton variant="secondary" @click="siteFormOpen = false">Cancelar</BaseButton><BaseButton type="submit" form="site-form" :loading="saving">{{ siteFormMode === 'create' ? 'Crear Sede' : 'Guardar cambios' }}</BaseButton></template></BaseDialog>
     <ConfirmDialog :open="deleteClientTarget" title="Eliminar cliente" :message="`Se eliminará ${client.nombre} si no tiene historial ni dependencias.`" confirm-label="Eliminar" danger :loading="saving" @cancel="deleteClientTarget = false" @confirm="removeClient" />
     <ConfirmDialog :open="dependencyClientTarget" title="Desactivar cliente" message="El Cliente tiene historial o dependencias. Se conservará toda la información y pasará a Inactivos." confirm-label="Desactivar" danger :loading="saving" @cancel="dependencyClientTarget = false" @confirm="setClientActive(false)" />
     <ConfirmDialog :open="Boolean(deleteSiteTarget)" title="Eliminar Sede" :message="`Se eliminará ${deleteSiteTarget?.nombre ?? 'la Sede'} si no tiene dependencias.`" confirm-label="Eliminar" danger :loading="saving" @cancel="deleteSiteTarget = null" @confirm="removeSite" />
