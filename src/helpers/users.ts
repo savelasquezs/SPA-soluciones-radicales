@@ -1,12 +1,13 @@
 import { compareDateOnly, todayInTimeZone } from '@/helpers/dateTime'
 import type { DateOnly, UserInput, UserRecord } from '@/types/domain'
+import { MAX_OPTIMIZATION_SOURCE_BYTES } from '@/types/fileOptimization'
 
+export { MAX_CERTIFICATE_BYTES } from '@/types/fileOptimization'
 export type CertificateStatus = 'not-applicable' | 'none' | 'valid' | 'expiring' | 'expired'
 export type UserFormErrors = Partial<Record<'nombreCompleto' | 'correoGoogle' | 'roles' | 'certificateFile' | 'certificadoFechaEmision' | 'certificadoFechaVencimiento', string>>
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const ALLOWED_CERTIFICATE_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png'])
-export const MAX_CERTIFICATE_BYTES = 10 * 1024 * 1024
 
 export function certificateStatus(user: Pick<UserRecord, 'esTecnico' | 'certificadoStoragePath' | 'certificadoFechaVencimiento'>, today = todayInTimeZone()): CertificateStatus {
   if (!user.esTecnico) return 'not-applicable'
@@ -26,7 +27,8 @@ export function validateUserInput(input: UserInput, certificateFile: File | null
   const hasCertificate = Boolean(certificateFile || input.certificadoStoragePath)
   if (certificateFile) {
     if (!ALLOWED_CERTIFICATE_TYPES.has(certificateFile.type)) errors.certificateFile = 'Adjunta un PDF, JPG o PNG'
-    if (certificateFile.size > MAX_CERTIFICATE_BYTES) errors.certificateFile = 'El archivo no puede superar 10 MB'
+    // The existing 10 MB storage limit is checked AFTER optimization, before signing.
+    if (certificateFile.size > MAX_OPTIMIZATION_SOURCE_BYTES) errors.certificateFile = 'El archivo original no puede superar 64 MB'
   }
   if (input.esTecnico && hasCertificate) {
     if (!input.certificadoFechaEmision) errors.certificadoFechaEmision = 'La fecha de emisión es obligatoria'

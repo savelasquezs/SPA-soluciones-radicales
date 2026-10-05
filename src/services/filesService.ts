@@ -1,4 +1,5 @@
 import { apiRequest, ApiClientError } from '@/services/apiService'
+import { optimizeFileForStorage } from '@/services/fileOptimizationService'
 
 export type MasterFileKind =
   | 'USER_CERTIFICATE'
@@ -13,7 +14,8 @@ type UploadAuthorization = {
   expiresIn: number
 }
 
-export async function uploadMasterFile(kind: MasterFileKind, file: File): Promise<string> {
+export async function uploadMasterFile(kind: MasterFileKind, originalFile: File): Promise<string> {
+  const file = await optimizeFileForStorage(kind, originalFile)
   const authorization = await apiRequest<UploadAuthorization>('api/files/master/upload-url', {
     method: 'POST',
     body: JSON.stringify({
