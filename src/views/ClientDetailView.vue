@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Mail, Map, MessageCircle, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-vue-next'
+import { Mail, Map, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-vue-next'
 
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDialog from '@/components/base/BaseDialog.vue'
@@ -10,9 +10,9 @@ import EmptyState from '@/components/base/EmptyState.vue'
 import ErrorState from '@/components/base/ErrorState.vue'
 import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import StatusBadge from '@/components/base/StatusBadge.vue'
+import WhatsAppPhoneLink from '@/components/base/WhatsAppPhoneLink.vue'
 import ClientForm from '@/components/domain/clients/ClientForm.vue'
 import SiteForm from '@/components/domain/clients/SiteForm.vue'
-import { formatPhone } from '@/helpers/clients'
 import { ApiClientError } from '@/services/apiService'
 import { getClient, getSite, listClientHistory, listFormOptions } from '@/services/clientsService'
 import { deleteMasterFile, getMasterFileUrl, uploadMasterFile } from '@/services/filesService'
@@ -298,22 +298,22 @@ function formatDate(value: string): string { return new Intl.DateTimeFormat('es-
   <div v-else-if="client" class="client-detail">
     <header class="detail-header">
       <div><button class="back" @click="router.push('/clientes')">← Clientes</button><h1>{{ client.nombre }}</h1><span><StatusBadge tone="info">{{ client.tipoCliente === 'NEGOCIO' ? 'Negocio' : 'Casa' }}</StatusBadge><StatusBadge :tone="client.activo ? 'success' : 'neutral'">{{ client.activo ? 'Activo' : 'Inactivo' }}</StatusBadge></span></div>
-      <div class="header-actions"><a v-if="client.tipoCliente === 'RESIDENCIAL' && client.residenciaCelular" class="action-link" :href="`https://wa.me/${client.residenciaCelular.replace('+', '')}`" target="_blank" rel="noreferrer"><MessageCircle :size="17" />WhatsApp</a><BaseButton variant="secondary" @click="openClientEdit"><Pencil :size="17" />Editar cliente</BaseButton><BaseButton v-if="client.tipoCliente === 'NEGOCIO' && client.activo" @click="openSiteCreate"><Plus :size="17" />Agregar Sede</BaseButton><BaseButton v-if="client.activo" variant="danger" @click="deleteClientTarget = true"><Trash2 :size="17" />Eliminar / Desactivar</BaseButton><BaseButton v-else variant="secondary" @click="setClientActive(true)"><RotateCcw :size="17" />Reactivar</BaseButton></div>
+      <div class="header-actions"><BaseButton size="compact" variant="secondary" @click="openClientEdit"><Pencil :size="16" />Editar cliente</BaseButton><BaseButton v-if="client.tipoCliente === 'NEGOCIO' && client.activo" size="compact" @click="openSiteCreate"><Plus :size="16" />Agregar Sede</BaseButton><BaseButton v-if="client.activo" size="compact" variant="danger" @click="deleteClientTarget = true"><Trash2 :size="16" />Eliminar / Desactivar</BaseButton><BaseButton v-else size="compact" variant="secondary" @click="setClientActive(true)"><RotateCcw :size="16" />Reactivar</BaseButton></div>
     </header>
 
     <section class="summary-card">
       <template v-if="client.tipoCliente === 'NEGOCIO'"><div><span>NIT</span><strong>{{ client.nit }}</strong></div><div><span>Sedes</span><strong>{{ client.sedesCount }}</strong></div><div><span>Vigencia certificado</span><strong>{{ client.vigenciaCertificadoMeses }} meses</strong></div><div><span>Plantilla</span><strong>{{ client.plantillaCertificadoStoragePath?.split('/').slice(-1)[0] }}</strong></div></template>
-      <template v-else><div><span>Celular</span><strong>{{ formatPhone(client.residenciaCelular) }}</strong></div><div><span>Dirección</span><strong>{{ client.residenciaDireccion }}</strong></div></template>
+      <template v-else><div><span>Celular</span><WhatsAppPhoneLink v-if="client.residenciaCelular" :phone="client.residenciaCelular" /></div><div><span>Dirección</span><strong>{{ client.residenciaDireccion }}</strong></div></template>
     </section>
 
     <div v-if="client.tipoCliente === 'NEGOCIO'" class="tabs" role="tablist"><button :aria-selected="tab === 'sites'" @click="changeTab('sites')">Sedes</button><button :aria-selected="tab === 'history'" @click="changeTab('history')">Historial de servicios</button></div>
 
     <section v-if="client.tipoCliente === 'NEGOCIO' && tab === 'sites'" class="sites-grid">
-      <EmptyState v-if="sites.length === 0" title="Este Cliente aún no tiene Sedes" message="Agrega la primera Sede para configurar su operación."><BaseButton @click="openSiteCreate">Agregar Sede</BaseButton></EmptyState>
+      <EmptyState v-if="sites.length === 0" title="Este Cliente aún no tiene Sedes" message="Agrega la primera Sede para configurar su operación."><BaseButton size="compact" @click="openSiteCreate">Agregar Sede</BaseButton></EmptyState>
       <article v-for="site in sites" :key="site.id" class="site-card">
         <header><button @click="router.push(`/clientes/${client.id}/sedes/${site.id}`)">{{ site.nombre }}</button><StatusBadge :tone="site.activo ? 'success' : 'neutral'">{{ site.activo ? 'Activa' : 'Inactiva' }}</StatusBadge></header>
-        <p>{{ site.direccion }}</p><dl><div><dt>Contacto</dt><dd>{{ site.contactoPrincipalNombre }} · {{ formatPhone(site.contactoPrincipalCelular) }}</dd></div><div><dt>Próximo servicio</dt><dd>{{ site.proximoServicio ? formatDate(site.proximoServicio) : 'Sin programar' }}</dd></div><div><dt>Áreas</dt><dd>{{ site.areasCount }}</dd></div><div><dt>Formularios</dt><dd>{{ site.formulariosCount }}</dd></div></dl>
-        <div class="site-actions"><a v-if="site.contactoPrincipalCelular" :href="`https://wa.me/${site.contactoPrincipalCelular.replace('+', '')}`" target="_blank" rel="noreferrer" aria-label="Abrir WhatsApp"><MessageCircle :size="18" /></a><a v-if="site.contactoPrincipalCorreo" :href="`mailto:${site.contactoPrincipalCorreo}`" aria-label="Enviar correo"><Mail :size="18" /></a><BaseButton v-if="site.planoStoragePath" variant="ghost" @click="openPlan(site.planoStoragePath)"><Map :size="17" />Ver plano</BaseButton><BaseButton variant="secondary" @click="openSiteEdit(site)"><Pencil :size="17" />Editar</BaseButton><BaseButton v-if="site.activo" variant="ghost" @click="deleteSiteTarget = site"><Trash2 :size="17" />Eliminar</BaseButton><BaseButton v-else variant="ghost" @click="setSiteActive(site, true)"><RotateCcw :size="17" />Reactivar</BaseButton></div>
+        <p>{{ site.direccion }}</p><dl><div><dt>Contacto</dt><dd class="contact-value"><span>{{ site.contactoPrincipalNombre }}</span><WhatsAppPhoneLink v-if="site.contactoPrincipalCelular" :phone="site.contactoPrincipalCelular" /></dd></div><div><dt>Próximo servicio</dt><dd>{{ site.proximoServicio ? formatDate(site.proximoServicio) : 'Sin programar' }}</dd></div><div><dt>Áreas</dt><dd>{{ site.areasCount }}</dd></div><div><dt>Formularios</dt><dd>{{ site.formulariosCount }}</dd></div></dl>
+        <div class="site-actions"><a v-if="site.contactoPrincipalCorreo" :href="`mailto:${site.contactoPrincipalCorreo}`" aria-label="Enviar correo"><Mail :size="17" /></a><BaseButton v-if="site.planoStoragePath" size="compact" variant="ghost" @click="openPlan(site.planoStoragePath)"><Map :size="16" />Ver plano</BaseButton><BaseButton size="compact" variant="secondary" @click="openSiteEdit(site)"><Pencil :size="16" />Editar</BaseButton><BaseButton v-if="site.activo" size="compact" variant="ghost" @click="deleteSiteTarget = site"><Trash2 :size="16" />Eliminar</BaseButton><BaseButton v-else size="compact" variant="ghost" @click="setSiteActive(site, true)"><RotateCcw :size="16" />Reactivar</BaseButton></div>
       </article>
     </section>
 
@@ -321,7 +321,7 @@ function formatDate(value: string): string { return new Intl.DateTimeFormat('es-
       <LoadingSkeleton v-if="historyLoading" label="Cargando historial" :lines="5" />
       <EmptyState v-else-if="history.length === 0" title="Sin historial de servicios" message="Los Servicios aparecerán aquí cuando se programen." />
       <div v-else class="history-scroll"><table><thead><tr><th>Servicio</th><th>Fecha</th><th>Tipo</th><th>Técnico</th><th>Estado</th><th>Valor</th></tr></thead><tbody><tr v-for="item in history" :key="item.id"><td><button class="service-link" @click="router.push(`/servicios/${item.id}`)">{{ item.solicitud }}</button></td><td>{{ formatDate(item.fecha) }}</td><td>{{ item.tipo }}</td><td>{{ item.tecnico }}</td><td>{{ item.estado }}</td><td>{{ formatMoney(item.valor) }}</td></tr></tbody></table></div>
-      <div v-if="historyTotal > 20" class="pagination"><BaseButton variant="secondary" :disabled="historyPage === 1" @click="loadHistory(historyPage - 1)">Anterior</BaseButton><span>Página {{ historyPage }}</span><BaseButton variant="secondary" :disabled="historyPage * 20 >= historyTotal" @click="loadHistory(historyPage + 1)">Siguiente</BaseButton></div>
+      <div v-if="historyTotal > 20" class="pagination"><BaseButton size="compact" variant="secondary" :disabled="historyPage === 1" @click="loadHistory(historyPage - 1)">Anterior</BaseButton><span>Página {{ historyPage }}</span><BaseButton size="compact" variant="secondary" :disabled="historyPage * 20 >= historyTotal" @click="loadHistory(historyPage + 1)">Siguiente</BaseButton></div>
     </section>
 
     <BaseDialog :model-value="clientFormOpen" title="Editar cliente" @update:model-value="clientFormOpen = $event"><ClientForm v-model="clientForm" mode="edit" @submit="saveClient" @invalid="notifications.show('Revisa los campos marcados.', 'error')" @file-selected="clientTemplateFile = $event" @view-template="clientForm.plantillaCertificadoStoragePath && openPrivateFile(clientForm.plantillaCertificadoStoragePath)" /><template #footer><BaseButton variant="secondary" @click="clientFormOpen = false">Cancelar</BaseButton><BaseButton type="submit" form="client-form" :loading="saving">Guardar cambios</BaseButton></template></BaseDialog>
@@ -334,13 +334,41 @@ function formatDate(value: string): string { return new Intl.DateTimeFormat('es-
 </template>
 
 <style scoped>
-.client-detail { display: grid; gap: 1.25rem; }
-.detail-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; }
-.detail-header h1 { margin: 0.25rem 0; }.detail-header > div > span, .header-actions, .site-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-.back { border: 0; background: transparent; padding: 0; color: var(--accent); }.action-link, .site-actions a { display: inline-flex; min-height: 44px; align-items: center; gap: 0.4rem; color: var(--accent); text-decoration: none; }
-.summary-card { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: 1rem; }.summary-card div { display: grid; gap: 0.2rem; }.summary-card span, .site-card p, dt { color: var(--text-secondary); }.summary-card strong { overflow-wrap: anywhere; }
-.tabs { display: flex; border-bottom: 1px solid var(--border); }.tabs button { min-height: 44px; border: 0; border-bottom: 2px solid transparent; background: transparent; padding: 0.65rem 1rem; color: var(--text-secondary); }.tabs button[aria-selected='true'] { border-color: var(--accent); color: var(--accent); }
-.sites-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }.site-card, .history-card { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: 1rem; }.site-card header { display: flex; justify-content: space-between; gap: 0.75rem; }.site-card header button, .service-link { border: 0; background: transparent; padding: 0; color: var(--accent); font-weight: 600; }.site-card dl { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; }.site-card dl div { min-width: 0; }.site-card dt, .site-card dd { margin: 0; }.site-card dd { overflow-wrap: anywhere; }
-.history-scroll { overflow-x: auto; }.pagination { display: flex; align-items: center; justify-content: flex-end; gap: 0.75rem; margin-top: 1rem; }
-@media (max-width: 760px) { .detail-header { align-items: stretch; flex-direction: column; }.summary-card, .sites-grid { grid-template-columns: 1fr; }.site-card dl { grid-template-columns: 1fr; } }
+.client-detail { display: grid; gap: 0.8rem; }
+.detail-header { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.detail-header h1 { margin: 0.15rem 0; font-size: 1.65rem; line-height: 1.15; }
+.detail-header > div > span, .header-actions, .site-actions { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.back { border: 0; background: transparent; padding: 0; color: var(--text-secondary); font-weight: 500; cursor: pointer; }
+.back:hover, .back:focus-visible { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
+.site-actions a { display: inline-flex; min-width: 36px; min-height: 36px; align-items: center; justify-content: center; color: var(--text-secondary); text-decoration: none; }
+.site-actions a:hover, .site-actions a:focus-visible { color: var(--text); }
+.summary-card { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: 0.7rem 0.85rem; }
+.summary-card div { display: grid; align-content: start; gap: 0.1rem; min-width: 0; }
+.summary-card span, .site-card p, dt { color: var(--text-secondary); }
+.summary-card > div > span { font-size: 0.75rem; }
+.summary-card strong { overflow-wrap: anywhere; font-size: 0.9rem; }
+.tabs { display: flex; border-bottom: 1px solid var(--border); }
+.tabs button { min-height: 36px; border: 0; border-bottom: 2px solid transparent; background: transparent; padding: 0.4rem 0.75rem; color: var(--text-secondary); cursor: pointer; }
+.tabs button[aria-selected='true'] { border-color: var(--accent); color: var(--accent); }
+.sites-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+.site-card, .history-card { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: 0.8rem; }
+.site-card header { display: flex; justify-content: space-between; gap: 0.65rem; }
+.site-card header button, .service-link { border: 0; background: transparent; padding: 0; color: var(--text); font-weight: 600; cursor: pointer; text-decoration: none; }
+.site-card header button:hover, .site-card header button:focus-visible, .service-link:hover, .service-link:focus-visible { text-decoration: underline; text-underline-offset: 2px; }
+.site-card > p { margin: 0.25rem 0 0.55rem; }
+.site-card dl { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.45rem 0.75rem; margin: 0; }
+.site-card dl div { min-width: 0; }
+.site-card dt, .site-card dd { margin: 0; }
+.site-card dd { overflow-wrap: anywhere; }
+.contact-value { display: flex; flex-wrap: wrap; align-items: center; gap: 0.1rem 0.5rem; }
+.site-actions { margin-top: 0.55rem; }
+.history-scroll { overflow-x: auto; }
+.history-card th, .history-card td { padding: 0.6rem 0.7rem; }
+.pagination { display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; margin-top: 0.75rem; }
+@media (max-width: 760px) {
+  .detail-header { align-items: stretch; flex-direction: column; }
+  .summary-card, .sites-grid { grid-template-columns: 1fr; }
+  .site-card dl { grid-template-columns: 1fr; }
+  .tabs button, .site-actions a { min-height: 44px; }
+}
 </style>

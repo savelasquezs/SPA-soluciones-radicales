@@ -11,9 +11,9 @@ import ErrorState from '@/components/base/ErrorState.vue'
 import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import StatusBadge from '@/components/base/StatusBadge.vue'
 import StatusPanel from '@/components/base/StatusPanel.vue'
+import WhatsAppPhoneLink from '@/components/base/WhatsAppPhoneLink.vue'
 import AreaForm from '@/components/domain/clients/AreaForm.vue'
 import SiteForm from '@/components/domain/clients/SiteForm.vue'
-import { formatPhone } from '@/helpers/clients'
 import { ApiClientError } from '@/services/apiService'
 import { getSite, listFormOptions, listSiteHistory } from '@/services/clientsService'
 import { deleteMasterFile, getMasterFileUrl, uploadMasterFile } from '@/services/filesService'
@@ -209,10 +209,10 @@ function formatDate(value: string): string { return new Intl.DateTimeFormat('es-
   <LoadingSkeleton v-if="loading" label="Cargando Sede" :lines="6" />
   <ErrorState v-else-if="loadError" title="No pudimos cargar la Sede" :message="loadError"><BaseButton variant="secondary" @click="load">Reintentar</BaseButton></ErrorState>
   <div v-else-if="site && client" class="site-detail">
-    <header class="detail-header"><div><button class="back" @click="router.push(`/clientes/${client.id}`)">← {{ client.nombre }}</button><h1>{{ site.nombre }}</h1><StatusBadge :tone="site.activo ? 'success' : 'neutral'">{{ site.activo ? 'Activa' : 'Inactiva' }}</StatusBadge></div><BaseButton variant="secondary" @click="openSiteEdit"><Pencil :size="17" />Editar Sede</BaseButton></header>
+    <header class="detail-header"><div><button class="back" @click="router.push(`/clientes/${client.id}`)">← {{ client.nombre }}</button><h1>{{ site.nombre }}</h1><StatusBadge :tone="site.activo ? 'success' : 'neutral'">{{ site.activo ? 'Activa' : 'Inactiva' }}</StatusBadge></div><BaseButton size="compact" variant="secondary" @click="openSiteEdit"><Pencil :size="16" />Editar Sede</BaseButton></header>
     <nav class="tabs" aria-label="Detalle de Sede"><button v-for="item in ([['summary','Resumen'],['areas','Áreas'],['devices','Dispositivos'],['findings','Hallazgos'],['history','Historial de servicios'],['settings','Configuración']] as const)" :key="item[0]" :aria-current="tab === item[0] ? 'page' : undefined" @click="changeTab(item[0])">{{ item[1] }}</button></nav>
 
-    <section v-if="tab === 'summary'" class="summary-grid"><article><h2>Contacto principal</h2><p>{{ site.contactoPrincipalNombre }}</p><p>{{ formatPhone(site.contactoPrincipalCelular) }}</p><p>{{ site.contactoPrincipalCorreo ?? 'Sin correo' }}</p></article><article><h2>Operación</h2><p>{{ formatMoney(site.valorServicio) }} por Servicio</p><p>Cada {{ site.periodicidadMeses }} mes{{ site.periodicidadMeses === 1 ? '' : 'es' }}</p><p>{{ site.duracionServicioMinutos }} minutos</p></article><article><h2>Configuración</h2><p>{{ site.formulariosCount }} formularios</p><p>{{ site.areasCount }} Áreas</p><p>{{ site.manejaVehiculos ? 'Maneja vehículos' : 'Sin vehículos' }}</p></article><article><h2>Plano</h2><p>{{ site.planoStoragePath?.split('/').slice(-1)[0] ?? 'Sin plano' }}</p><BaseButton v-if="site.planoStoragePath" variant="secondary" @click="site.planoStoragePath && openPrivateFile(site.planoStoragePath)">Ver plano</BaseButton></article></section>
+    <section v-if="tab === 'summary'" class="summary-grid"><article><h2>Contacto principal</h2><p>{{ site.contactoPrincipalNombre }}</p><WhatsAppPhoneLink v-if="site.contactoPrincipalCelular" :phone="site.contactoPrincipalCelular" /><p>{{ site.contactoPrincipalCorreo ?? 'Sin correo' }}</p></article><article><h2>Operación</h2><p>{{ formatMoney(site.valorServicio) }} por Servicio</p><p>Cada {{ site.periodicidadMeses }} mes{{ site.periodicidadMeses === 1 ? '' : 'es' }}</p><p>{{ site.duracionServicioMinutos }} minutos</p></article><article><h2>Configuración</h2><p>{{ site.formulariosCount }} formularios</p><p>{{ site.areasCount }} Áreas</p><p>{{ site.manejaVehiculos ? 'Maneja vehículos' : 'Sin vehículos' }}</p></article><article><h2>Plano</h2><p>{{ site.planoStoragePath?.split('/').slice(-1)[0] ?? 'Sin plano' }}</p><BaseButton v-if="site.planoStoragePath" size="compact" variant="secondary" @click="site.planoStoragePath && openPrivateFile(site.planoStoragePath)">Ver plano</BaseButton></article></section>
 
     <section v-else-if="tab === 'areas'" class="areas-layout">
       <aside class="area-create"><h2>Agregar Área</h2><AreaForm v-model="newArea" mode="create" form-id="area-create-form" id-prefix="new-area" @submit="createArea" @invalid="notifications.show('Ingresa el nombre del Área.', 'error')" /><BaseButton type="submit" form="area-create-form" :loading="saving">Agregar Área</BaseButton></aside>
@@ -220,8 +220,8 @@ function formatDate(value: string): string { return new Intl.DateTimeFormat('es-
       <aside v-if="selectedArea" class="area-drawer" aria-label="Detalle del Área"><button class="drawer-close" aria-label="Cerrar detalle" @click="selectedArea = null"><X :size="20" /></button><h2>{{ selectedArea.nombre }}</h2><StatusBadge :tone="selectedArea.activo ? 'success' : 'neutral'">{{ selectedArea.activo ? 'Activa' : 'Inactiva' }}</StatusBadge><dl><dt>Ubicación</dt><dd>{{ selectedArea.esExterna ? 'Exterior / perímetro' : 'Interior' }}</dd><dt>Dispositivos</dt><dd>{{ selectedArea.dispositivosCount }}</dd><dt>Último servicio</dt><dd>{{ selectedArea.ultimoServicio ? formatDate(selectedArea.ultimoServicio) : 'Sin registro' }}</dd></dl><BaseButton variant="secondary" @click="openAreaEdit(selectedArea)">Editar Área</BaseButton></aside>
     </section>
 
-    <section v-else-if="tab === 'history'" class="history-card"><LoadingSkeleton v-if="historyLoading" label="Cargando historial" :lines="5" /><EmptyState v-else-if="history.length === 0" title="Sin historial" message="Los Servicios de esta Sede aparecerán aquí." /><div v-else class="history-scroll"><table><thead><tr><th>Servicio</th><th>Fecha</th><th>Tipo</th><th>Técnico</th><th>Estado</th><th>Valor</th></tr></thead><tbody><tr v-for="item in history" :key="item.id"><td><button class="service-link" @click="router.push(`/servicios/${item.id}`)">{{ item.solicitud }}</button></td><td>{{ formatDate(item.fecha) }}</td><td>{{ item.tipo }}</td><td>{{ item.tecnico }}</td><td>{{ item.estado }}</td><td>{{ formatMoney(item.valor) }}</td></tr></tbody></table></div><div v-if="historyTotal > 20" class="pagination"><BaseButton variant="secondary" :disabled="historyPage === 1" @click="loadHistory(historyPage - 1)">Anterior</BaseButton><span>Página {{ historyPage }}</span><BaseButton variant="secondary" :disabled="historyPage * 20 >= historyTotal" @click="loadHistory(historyPage + 1)">Siguiente</BaseButton></div></section>
-    <section v-else-if="tab === 'settings'" class="settings-card"><h2>Configuración de la Sede</h2><p>Modifica contacto, operación, formularios, vehículos y plano desde el formulario compartido.</p><BaseButton @click="openSiteEdit">Editar configuración</BaseButton></section>
+    <section v-else-if="tab === 'history'" class="history-card"><LoadingSkeleton v-if="historyLoading" label="Cargando historial" :lines="5" /><EmptyState v-else-if="history.length === 0" title="Sin historial" message="Los Servicios de esta Sede aparecerán aquí." /><div v-else class="history-scroll"><table><thead><tr><th>Servicio</th><th>Fecha</th><th>Tipo</th><th>Técnico</th><th>Estado</th><th>Valor</th></tr></thead><tbody><tr v-for="item in history" :key="item.id"><td><button class="service-link" @click="router.push(`/servicios/${item.id}`)">{{ item.solicitud }}</button></td><td>{{ formatDate(item.fecha) }}</td><td>{{ item.tipo }}</td><td>{{ item.tecnico }}</td><td>{{ item.estado }}</td><td>{{ formatMoney(item.valor) }}</td></tr></tbody></table></div><div v-if="historyTotal > 20" class="pagination"><BaseButton size="compact" variant="secondary" :disabled="historyPage === 1" @click="loadHistory(historyPage - 1)">Anterior</BaseButton><span>Página {{ historyPage }}</span><BaseButton size="compact" variant="secondary" :disabled="historyPage * 20 >= historyTotal" @click="loadHistory(historyPage + 1)">Siguiente</BaseButton></div></section>
+    <section v-else-if="tab === 'settings'" class="settings-card"><h2>Configuración de la Sede</h2><p>Modifica contacto, operación, formularios, vehículos y plano desde el formulario compartido.</p><BaseButton size="compact" @click="openSiteEdit">Editar configuración</BaseButton></section>
     <StatusPanel v-else :title="tab === 'devices' ? 'Dispositivos' : 'Hallazgos'" message="La navegación queda reservada para su issue funcional; este goal no adelanta su implementación." />
 
     <BaseDialog :model-value="siteFormOpen" title="Editar Sede" @update:model-value="siteFormOpen = $event"><SiteForm v-model="siteForm" mode="edit" :form-options="forms" :client-name="client.nombre" @submit="saveSite" @invalid="notifications.show('Revisa los campos marcados.', 'error')" @file-selected="selectSiteFile" @view-plan="siteForm.planoStoragePath && openPrivateFile(siteForm.planoStoragePath)" @view-vehicle-template="siteForm.plantillaCertificadoVehiculoStoragePath && openPrivateFile(siteForm.plantillaCertificadoVehiculoStoragePath)" /><template #footer><BaseButton variant="secondary" @click="siteFormOpen = false">Cancelar</BaseButton><BaseButton type="submit" form="site-form" :loading="saving">Guardar cambios</BaseButton></template></BaseDialog>
@@ -232,12 +232,48 @@ function formatDate(value: string): string { return new Intl.DateTimeFormat('es-
 </template>
 
 <style scoped>
-.site-detail { display: grid; gap: 1.25rem; }.detail-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; }.detail-header h1 { margin: 0.25rem 0; }.back, .area-link { border: 0; background: transparent; padding: 0; color: var(--accent); font-weight: 600; }
-.tabs { display: flex; overflow-x: auto; border-bottom: 1px solid var(--border); }.tabs button { min-width: max-content; min-height: 44px; border: 0; border-bottom: 2px solid transparent; background: transparent; padding: 0.65rem 0.85rem; color: var(--text-secondary); }.tabs button[aria-current='page'] { border-color: var(--accent); color: var(--accent); }
-.summary-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }.summary-grid article, .area-create, .areas-panel, .history-card, .settings-card { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: 1rem; }.summary-grid h2, .summary-grid p, .area-create h2, .settings-card h2 { margin: 0; }.summary-grid article { display: grid; gap: 0.5rem; }
-.areas-layout { position: relative; display: grid; grid-template-columns: minmax(15rem, 0.34fr) minmax(0, 1fr); align-items: start; gap: 1rem; }.area-create { display: grid; gap: 1rem; }.areas-panel { min-width: 0; padding: 0; overflow: hidden; }.areas-table-scroll { height: min(58vh, 34rem); overflow: auto; }.areas-table-scroll thead { position: sticky; z-index: 2; top: 0; background: var(--sidebar); }.row-actions { display: flex; gap: 0.25rem; }.row-actions button, .drawer-close { display: grid; min-width: 44px; min-height: 44px; place-items: center; border: 0; background: transparent; color: var(--text-secondary); }
-.area-drawer { position: fixed; z-index: 45; top: 64px; right: 0; bottom: 0; width: min(26rem, 100vw); overflow-y: auto; border-left: 1px solid var(--border); background: var(--surface-raised); padding: 1.25rem; box-shadow: var(--shadow-lg); }.drawer-close { margin-left: auto; }.area-drawer dl { display: grid; grid-template-columns: auto 1fr; gap: 0.5rem 1rem; }.area-drawer dt { color: var(--text-secondary); }.area-drawer dd { margin: 0; }
-.history-scroll { overflow-x: auto; }.pagination { display: flex; align-items: center; justify-content: flex-end; gap: 0.75rem; margin-top: 1rem; }
-.service-link { border: 0; background: transparent; padding: 0; color: var(--accent); font-weight: 600; }
-@media (max-width: 800px) { .detail-header { align-items: stretch; flex-direction: column; }.summary-grid, .areas-layout { grid-template-columns: 1fr; }.areas-table-scroll { height: auto; max-height: none; overflow-x: auto; }.areas-panel { overflow-x: auto; } }
+.site-detail { display: grid; gap: 0.8rem; }
+.detail-header { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.detail-header h1 { margin: 0.15rem 0; font-size: 1.65rem; line-height: 1.15; }
+.back, .area-link { border: 0; background: transparent; padding: 0; font-weight: 600; cursor: pointer; }
+.back { color: var(--text-secondary); font-weight: 500; }
+.area-link { color: var(--text); }
+.back:hover, .back:focus-visible, .area-link:hover, .area-link:focus-visible { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
+.tabs { display: flex; overflow-x: auto; border-bottom: 1px solid var(--border); }
+.tabs button { min-width: max-content; min-height: 36px; border: 0; border-bottom: 2px solid transparent; background: transparent; padding: 0.4rem 0.7rem; color: var(--text-secondary); cursor: pointer; }
+.tabs button[aria-current='page'] { border-color: var(--accent); color: var(--accent); }
+.summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+.summary-grid article { display: grid; min-width: 0; align-content: start; gap: 0.28rem; padding: 0.75rem 0.85rem; }
+.summary-grid article + article { border-left: 1px solid var(--border); }
+.summary-grid h2, .summary-grid p, .area-create h2, .settings-card h2 { margin: 0; }
+.summary-grid h2 { font-size: 0.9rem; }
+.summary-grid p { color: var(--text-secondary); font-size: 0.875rem; overflow-wrap: anywhere; }
+.area-create, .areas-panel, .history-card, .settings-card { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: 0.8rem; }
+.areas-layout { position: relative; display: grid; grid-template-columns: minmax(13rem, 0.25fr) minmax(0, 1fr); align-items: start; gap: 0.75rem; }
+.area-create { display: grid; gap: 0.75rem; }
+.areas-panel { min-width: 0; padding: 0; overflow: hidden; }
+.areas-table-scroll { height: min(68vh, 42rem); overflow: auto; }
+.areas-table-scroll thead { position: sticky; z-index: 2; top: 0; background: var(--sidebar); }
+.areas-table-scroll th, .areas-table-scroll td, .history-card th, .history-card td { padding: 0.6rem 0.7rem; }
+.row-actions { display: flex; gap: 0.2rem; }
+.row-actions button, .drawer-close { display: grid; min-width: 36px; min-height: 36px; place-items: center; border: 0; background: transparent; color: var(--text-secondary); cursor: pointer; }
+.row-actions button:hover, .drawer-close:hover { background: var(--hover); color: var(--text); }
+.area-drawer { position: fixed; z-index: 45; top: 64px; right: 0; bottom: 0; width: min(26rem, 100vw); overflow-y: auto; border-left: 1px solid var(--border); background: var(--surface-raised); padding: 1rem; box-shadow: var(--shadow-lg); }
+.drawer-close { margin-left: auto; }
+.area-drawer dl { display: grid; grid-template-columns: auto 1fr; gap: 0.5rem 1rem; }
+.area-drawer dt { color: var(--text-secondary); }
+.area-drawer dd { margin: 0; }
+.history-scroll { overflow-x: auto; }
+.pagination { display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; margin-top: 0.75rem; }
+.service-link { border: 0; background: transparent; padding: 0; color: var(--text); font-weight: 600; cursor: pointer; text-decoration: none; }
+.service-link:hover, .service-link:focus-visible { text-decoration: underline; text-underline-offset: 2px; }
+@media (max-width: 800px) {
+  .detail-header { align-items: stretch; flex-direction: column; }
+  .summary-grid, .areas-layout { grid-template-columns: 1fr; }
+  .summary-grid article + article { border-left: 0; border-top: 1px solid var(--border); }
+  .areas-table-scroll { height: auto; max-height: none; overflow-x: auto; }
+  .areas-panel { overflow-x: auto; }
+  .tabs button, .row-actions button, .drawer-close { min-height: 44px; }
+  .row-actions button, .drawer-close { min-width: 44px; }
+}
 </style>

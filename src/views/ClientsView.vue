@@ -14,6 +14,7 @@ import ErrorState from '@/components/base/ErrorState.vue'
 import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import ResponsiveTable from '@/components/base/ResponsiveTable.vue'
 import StatusBadge from '@/components/base/StatusBadge.vue'
+import WhatsAppPhoneLink from '@/components/base/WhatsAppPhoneLink.vue'
 import ClientForm from '@/components/domain/clients/ClientForm.vue'
 import { ApiClientError } from '@/services/apiService'
 import { getClient } from '@/services/clientsService'
@@ -21,7 +22,6 @@ import { deleteMasterFile, getMasterFileUrl, uploadMasterFile } from '@/services
 import { useClientsStore } from '@/stores/clients'
 import { useNotificationsStore } from '@/stores/notifications'
 import type { ClientInput, ClientRecord, ClientType } from '@/types/domain'
-import { formatPhone } from '@/helpers/clients'
 
 type Tab = 'active' | 'inactive'
 
@@ -197,7 +197,7 @@ function message(error: unknown, fallback: string): string {
   <div class="clients-page">
     <header class="clients-header">
       <div><h1>Clientes</h1><p>Negocios y casas atendidos por Soluciones Radicales.</p></div>
-      <BaseButton @click="openCreate">Nuevo cliente</BaseButton>
+      <BaseButton size="compact" @click="openCreate">Nuevo cliente</BaseButton>
     </header>
 
     <div class="tabs" role="tablist" aria-label="Estado de Clientes">
@@ -225,10 +225,10 @@ function message(error: unknown, fallback: string): string {
             <tr v-for="client in filteredClients" :key="client.id">
               <td><button class="client-link" @click="router.push(`/clientes/${client.id}`)">{{ client.nombre }}</button></td>
               <td><StatusBadge tone="info">{{ client.tipoCliente === 'NEGOCIO' ? 'Negocio' : 'Casa' }}</StatusBadge></td>
-              <td>{{ client.tipoCliente === 'NEGOCIO' ? client.nit : formatPhone(client.residenciaCelular) }}</td>
+              <td><span v-if="client.tipoCliente === 'NEGOCIO'">{{ client.nit }}</span><WhatsAppPhoneLink v-else-if="client.residenciaCelular" :phone="client.residenciaCelular" /><span v-else>—</span></td>
               <td>{{ client.tipoCliente === 'NEGOCIO' ? client.sedesCount : '—' }}</td>
               <td><StatusBadge :tone="client.activo ? 'success' : 'neutral'" :icon="client.activo ? 'check' : 'x'">{{ client.activo ? 'Activo' : 'Inactivo' }}</StatusBadge></td>
-              <td><span class="actions"><BaseIconButton :label="`Editar ${client.nombre}`" @click="openEdit(client)"><Pencil :size="18" /></BaseIconButton><BaseIconButton v-if="client.activo" :label="`Eliminar o desactivar ${client.nombre}`" @click="deleteTarget = client"><Trash2 :size="18" /></BaseIconButton><BaseIconButton v-else :label="`Reactivar ${client.nombre}`" @click="setActive(client, true)"><RotateCcw :size="18" /></BaseIconButton></span></td>
+              <td><span class="actions"><BaseIconButton size="small" :label="`Editar ${client.nombre}`" @click="openEdit(client)"><Pencil :size="17" /></BaseIconButton><BaseIconButton v-if="client.activo" size="small" :label="`Eliminar o desactivar ${client.nombre}`" @click="deleteTarget = client"><Trash2 :size="17" /></BaseIconButton><BaseIconButton v-else size="small" :label="`Reactivar ${client.nombre}`" @click="setActive(client, true)"><RotateCcw :size="17" /></BaseIconButton></span></td>
             </tr>
           </tbody>
         </table>
@@ -237,8 +237,8 @@ function message(error: unknown, fallback: string): string {
         <article v-for="client in filteredClients" :key="client.id" class="client-card">
           <button class="client-link" @click="router.push(`/clientes/${client.id}`)">{{ client.nombre }}</button>
           <span><StatusBadge tone="info">{{ client.tipoCliente === 'NEGOCIO' ? 'Negocio' : 'Casa' }}</StatusBadge><StatusBadge :tone="client.activo ? 'success' : 'neutral'">{{ client.activo ? 'Activo' : 'Inactivo' }}</StatusBadge></span>
-          <p>{{ client.tipoCliente === 'NEGOCIO' ? client.nit : formatPhone(client.residenciaCelular) }}</p>
-          <div class="card-actions"><BaseButton variant="secondary" @click="openEdit(client)">Editar</BaseButton><BaseButton v-if="client.activo" variant="danger" @click="deleteTarget = client">Eliminar / desactivar</BaseButton><BaseButton v-else variant="secondary" @click="setActive(client, true)">Reactivar</BaseButton></div>
+          <p v-if="client.tipoCliente === 'NEGOCIO'">{{ client.nit }}</p><WhatsAppPhoneLink v-else-if="client.residenciaCelular" :phone="client.residenciaCelular" />
+          <div class="card-actions"><BaseButton size="compact" variant="secondary" @click="openEdit(client)">Editar</BaseButton><BaseButton v-if="client.activo" size="compact" variant="danger" @click="deleteTarget = client">Eliminar / desactivar</BaseButton><BaseButton v-else size="compact" variant="secondary" @click="setActive(client, true)">Reactivar</BaseButton></div>
         </article>
       </template>
     </ResponsiveTable>
@@ -254,18 +254,25 @@ function message(error: unknown, fallback: string): string {
 </template>
 
 <style scoped>
-.clients-page { display: grid; gap: 1.25rem; }
-.clients-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; }
+.clients-page { display: grid; gap: 0.9rem; }
+.clients-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 0.75rem; }
 .clients-header h1, .clients-header p { margin: 0; }
 .clients-header p { color: var(--text-secondary); }
-.tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--border); }
-.tabs button { min-height: 44px; border: 0; border-bottom: 2px solid transparent; background: transparent; padding: 0.65rem 1rem; color: var(--text-secondary); }
+.tabs { display: flex; gap: 0.2rem; border-bottom: 1px solid var(--border); }
+.tabs button { min-height: 36px; border: 0; border-bottom: 2px solid transparent; background: transparent; padding: 0.4rem 0.75rem; color: var(--text-secondary); cursor: pointer; }
 .tabs button[aria-selected='true'] { border-color: var(--accent); color: var(--accent); }
-.filters { display: grid; grid-template-columns: minmax(0, 1fr) minmax(10rem, 14rem); gap: 1rem; }
+.filters { display: grid; grid-template-columns: minmax(0, 1fr) minmax(10rem, 14rem); gap: 0.75rem; }
 .clients-table { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); border-spacing: 0; border-collapse: separate; overflow: hidden; }
-.client-link { border: 0; background: transparent; padding: 0; color: var(--accent); font-weight: 600; text-align: left; cursor: pointer; }
-.actions, .client-card > span, .card-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-.client-card { display: grid; gap: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: 1rem; }
+.clients-table th, .clients-table td { padding: 0.58rem 0.75rem; vertical-align: middle; }
+.client-link { border: 0; background: transparent; padding: 0; color: var(--text); font-weight: 600; text-align: left; cursor: pointer; text-decoration: none; }
+.client-link:hover, .client-link:focus-visible { text-decoration: underline; text-underline-offset: 2px; }
+.actions, .client-card > span, .card-actions { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.client-card { display: grid; gap: 0.6rem; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: 0.8rem; }
 .client-card p { margin: 0; color: var(--text-secondary); }
-@media (max-width: 680px) { .clients-header { align-items: stretch; flex-direction: column; } .filters { grid-template-columns: 1fr; } }
+@media (max-width: 680px) {
+  .clients-header { align-items: stretch; flex-direction: column; }
+  .filters { grid-template-columns: 1fr; }
+  .tabs button { min-height: 44px; }
+  .clients-table th, .clients-table td { padding: 0.7rem; }
+}
 </style>
