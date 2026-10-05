@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { Pencil } from 'lucide-vue-next'
 
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDateTimePicker from '@/components/base/BaseDateTimePicker.vue'
 import BaseDialog from '@/components/base/BaseDialog.vue'
 import BaseFileUpload from '@/components/base/BaseFileUpload.vue'
+import BaseIconButton from '@/components/base/BaseIconButton.vue'
 import BaseInput from '@/components/base/BaseInput.vue'
 import BaseSelect from '@/components/base/BaseSelect.vue'
 import ConfirmDialog from '@/components/base/ConfirmDialog.vue'
@@ -13,7 +15,6 @@ import ErrorState from '@/components/base/ErrorState.vue'
 import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import ResponsiveTable from '@/components/base/ResponsiveTable.vue'
 import StatusBadge from '@/components/base/StatusBadge.vue'
-import { formatDateOnly } from '@/helpers/dateTime'
 import { certificateStatus, validateUserInput, type CertificateStatus, type UserFormErrors } from '@/helpers/users'
 import {
   createUser,
@@ -21,33 +22,28 @@ import {
   listUsers,
   setUserActive,
   updateUser,
-  updateUserCertificate,
-  UserServiceError,
 } from '@/services/usersService'
 import { useNotificationsStore } from '@/stores/notifications'
 import type { UserInput, UserRecord } from '@/types/domain'
 
 type ErrorKey = keyof UserFormErrors
+type FormMode = 'create' | 'edit'
 
 const notifications = useNotificationsStore()
 const users = ref<UserRecord[]>([])
 const loading = ref(true)
 const loadError = ref<string | null>(null)
-const selectedId = ref<string | null>(null)
-const profileLoading = ref(false)
-const savingProfile = ref(false)
-const savingCreate = ref(false)
-const savingCertificate = ref(false)
-const createOpen = ref(false)
-const certificateOpen = ref(false)
+const formMode = ref<FormMode>('create')
+const formOpen = ref(false)
+const formLoading = ref(false)
+const savingForm = ref(false)
+const editingUserId = ref<string | null>(null)
 const deactivateConfirmOpen = ref(false)
-const discardCreateConfirmOpen = ref(false)
-const createFile = ref<File | null>(null)
-const certificateFile = ref<File | null>(null)
-const createTouched = reactive<Partial<Record<ErrorKey, boolean>>>({})
-const certificateTouched = reactive<Partial<Record<ErrorKey, boolean>>>({})
-const createSubmitted = ref(false)
-const certificateSubmitted = ref(false)
+const discardConfirmOpen = ref(false)
+const formFile = ref<File | null>(null)
+const formTouched = reactive<Partial<Record<ErrorKey, boolean>>>({})
+const formSubmitted = ref(false)
+const formBaseline = ref('')
 
 const blankUser = (): UserInput => ({
   nombreCompleto: '',
@@ -61,59 +57,40 @@ const blankUser = (): UserInput => ({
   certificadoObservaciones: null,
 })
 
-const createForm = reactive<UserInput>(blankUser())
-const profileForm = reactive<UserInput>(blankUser())
-const profileBaseline = ref('')
-const certificateForm = reactive({
-  certificadoFechaEmision: null as string | null,
-  certificadoFechaVencimiento: null as string | null,
-  certificadoObservaciones: null as string | null,
-})
+const userForm = reactive<UserInput>(blankUser())
 
-const selectedUser = computed(() => users.value.find((user) => user.id === selectedId.value) ?? null)
-const createErrors = computed(() => validateUserInput(createForm, createFile.value))
-const createEmailWarning = computed(() => {
-  const email = createForm.correoGoogle.trim().toLowerCase()
+const editingUser = computed(() => users.value.find((user) => user.id === editingUserId.value) ?? null)
+const formErrors = computed(() => validateUserInput(userForm, formFile.value))
+const formDirty = computed(() => JSON.stringify(userForm) !== formBaseline.value || Boolean(formFile.value))
+const formTitle = computed(() => formMode.value === 'create' ? 'Agregar usuario' : 'Editar usuario')
+const formDescription = computed(() => {
+  if (formMode.value === 'create') return 'El correo debe corresponder a una cuenta Google.'
+  if (editingUser.value?.authUserId) return 'El correo está vinculado a Google y no puede modificarse.'
+  return 'Actualiza los datos, roles y estado del usuario.'
+})
+const formEmailWarning = computed(() => {
+  const email = userForm.correoGoogle.trim().toLowerCase()
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.endsWith('@gmail.com')) return null
   return 'Asegúrate de que este correo corresponda a una cuenta de Google.'
 })
-const createDirty = computed(() => JSON.stringify(createForm) !== JSON.stringify(blankUser()) || Boolean(createFile.value))
-const profileDirty = computed(() => Boolean(selectedUser.value) && JSON.stringify(profileForm) !== profileBaseline.value)
-const profileErrors = computed(() => validateUserInput(profileForm, null))
-const certificateErrors = computed<UserFormErrors>(() => {
-  const user = selectedUser.value
-  if (!user) return {}
-  const errors = validateUserInput({
-    ...user,
-    certificadoFechaEmision: certificateForm.certificadoFechaEmision,
-    certificadoFechaVencimiento: certificateForm.certificadoFechaVencimiento,
-    certificadoObservaciones: certificateForm.certificadoObservaciones,
-  }, certificateFile.value)
-  if (!user.certificadoStoragePath && !certificateFile.value) {
-    errors.certificateFile = 'Adjunta el certificado que deseas registrar'
-  }
-  return errors
-})
+const discardTitle = computed(() => formMode.value === 'create' ? 'Descartar usuario' : 'Descartar cambios')
+const discardMessage = computed(() => formMode.value === 'create'
+  ? 'Los datos ingresados todavía no se han guardado.'
+  : 'Los cambios realizados todavía no se han guardado.')
 
 onMounted(loadUsers)
 
-watch(selectedUser, (user) => {
-  if (!user) return
-  Object.assign(profileForm, user)
-  profileBaseline.value = JSON.stringify(profileForm)
-})
-
-watch(() => createForm.esTecnico, (isTechnician) => {
-  if (!isTechnician && !createFile.value) {
-    createForm.certificadoFechaEmision = null
-    createForm.certificadoFechaVencimiento = null
+watch(() => userForm.esTecnico, (isTechnician) => {
+  if (!isTechnician && !formFile.value && !userForm.certificadoStoragePath) {
+    userForm.certificadoFechaEmision = null
+    userForm.certificadoFechaVencimiento = null
   }
 })
 
-watch(createFile, (file) => {
-  if (!file) {
-    createForm.certificadoFechaEmision = null
-    createForm.certificadoFechaVencimiento = null
+watch(formFile, (file) => {
+  if (!file && !userForm.certificadoStoragePath) {
+    userForm.certificadoFechaEmision = null
+    userForm.certificadoFechaVencimiento = null
   }
 })
 
@@ -122,9 +99,6 @@ async function loadUsers(): Promise<void> {
   loadError.value = null
   try {
     users.value = (await listUsers()).map(normalizeUser)
-    if (!selectedId.value || !users.value.some((user) => user.id === selectedId.value)) {
-      selectedId.value = users.value[0]?.id ?? null
-    }
   } catch (error) {
     loadError.value = userMessage(error, 'No fue posible cargar los usuarios')
   } finally {
@@ -132,151 +106,163 @@ async function loadUsers(): Promise<void> {
   }
 }
 
-async function selectUser(user: UserRecord): Promise<void> {
-  if (profileDirty.value) {
-    notifications.show('Guarda o descarta los cambios del perfil antes de cambiar de usuario.', 'warning')
-    return
-  }
-  selectedId.value = user.id
-  profileLoading.value = true
+function openCreate(): void {
+  formMode.value = 'create'
+  editingUserId.value = null
+  resetForm()
+  formOpen.value = true
+}
+
+async function openEdit(user: UserRecord): Promise<void> {
+  formMode.value = 'edit'
+  editingUserId.value = user.id
+  resetForm()
+  formOpen.value = true
+  formLoading.value = true
   try {
     const fresh = normalizeUser(await getUser(user.id))
     replaceUser(fresh)
+    Object.assign(userForm, toUserInput(fresh))
+    formBaseline.value = JSON.stringify(userForm)
   } catch (error) {
-    notifications.show(userMessage(error, 'No fue posible cargar el perfil'), 'error')
+    formOpen.value = false
+    editingUserId.value = null
+    notifications.show(userMessage(error, 'No fue posible cargar el usuario'), 'error')
   } finally {
-    profileLoading.value = false
+    formLoading.value = false
   }
 }
 
-function openCreate(): void {
-  resetCreate()
-  createOpen.value = true
+function requestCloseForm(): void {
+  if (savingForm.value || formLoading.value) return
+  if (formDirty.value) discardConfirmOpen.value = true
+  else closeForm()
 }
 
-function requestCloseCreate(): void {
-  if (createDirty.value) discardCreateConfirmOpen.value = true
-  else createOpen.value = false
+function discardForm(): void {
+  discardConfirmOpen.value = false
+  closeForm()
 }
 
-function discardCreate(): void {
-  discardCreateConfirmOpen.value = false
-  createOpen.value = false
-  resetCreate()
+function closeForm(): void {
+  formOpen.value = false
+  deactivateConfirmOpen.value = false
+  editingUserId.value = null
+  resetForm()
 }
 
-async function submitCreate(): Promise<void> {
-  if (savingCreate.value) return
-  createSubmitted.value = true
-  if (Object.keys(createErrors.value).length) {
+async function submitForm(): Promise<void> {
+  if (savingForm.value || formLoading.value) return
+  formSubmitted.value = true
+  if (Object.keys(formErrors.value).length) {
     await focusFirstError()
-    notifications.show('Revisa los campos marcados antes de crear el usuario.', 'error')
+    notifications.show('Revisa los campos marcados antes de guardar.', 'error')
     return
   }
-  if (createFile.value) {
-    notifications.show('La carga del certificado estará disponible cuando se conecte el backend autorizado de R2.', 'warning')
+  if (formFile.value) {
+    notifications.show('La carga de certificados estará disponible cuando se conecte el backend autorizado de R2.', 'warning')
     return
   }
 
-  savingCreate.value = true
+  if (formMode.value === 'create') {
+    await persistCreate()
+    return
+  }
+
+  const user = editingUser.value
+  if (!user) return
+  if (user.activo && !userForm.activo) {
+    deactivateConfirmOpen.value = true
+    return
+  }
+  await persistEdit()
+}
+
+async function persistCreate(): Promise<void> {
+  savingForm.value = true
   try {
-    const created = normalizeUser(await createUser(createForm))
+    const created = normalizeUser(await createUser(userForm))
     users.value = [...users.value, created].sort((left, right) => left.nombreCompleto.localeCompare(right.nombreCompleto, 'es'))
-    selectedId.value = created.id
-    createOpen.value = false
-    resetCreate()
+    closeForm()
     notifications.show('Usuario creado correctamente.', 'success')
   } catch (error) {
     notifications.show(userMessage(error, 'No fue posible crear el usuario'), 'error')
   } finally {
-    savingCreate.value = false
+    savingForm.value = false
   }
 }
 
-function saveProfile(): void {
-  if (Object.keys(profileErrors.value).length) {
-    notifications.show('Revisa los roles y los datos del certificado.', 'error')
-    void focusFirstError()
-    return
-  }
-  if (selectedUser.value?.activo && !profileForm.activo) {
-    deactivateConfirmOpen.value = true
-    return
-  }
-  void persistProfile()
-}
-
-async function persistProfile(): Promise<void> {
-  const user = selectedUser.value
-  if (!user || savingProfile.value) return
-  savingProfile.value = true
+async function persistEdit(): Promise<void> {
+  const user = editingUser.value
+  if (!user || savingForm.value) return
+  savingForm.value = true
   deactivateConfirmOpen.value = false
   try {
-    const updated = profileForm.activo === user.activo
-      ? await updateUser(user.id, profileForm)
-      : await setUserActive({ ...user, ...profileForm }, profileForm.activo)
+    const updated = userForm.activo === user.activo
+      ? await updateUser(user.id, userForm)
+      : await setUserActive({ ...user, ...userForm }, userForm.activo)
     replaceUser(normalizeUser(updated))
-    notifications.show('Perfil actualizado correctamente.', 'success')
+    closeForm()
+    notifications.show('Usuario actualizado correctamente.', 'success')
   } catch (error) {
-    notifications.show(userMessage(error, 'No fue posible actualizar el perfil'), 'error')
+    notifications.show(userMessage(error, 'No fue posible actualizar el usuario'), 'error')
   } finally {
-    savingProfile.value = false
+    savingForm.value = false
   }
 }
 
-function discardProfile(): void {
-  const user = selectedUser.value
-  if (user) Object.assign(profileForm, user)
+function touchForm(field: ErrorKey): void {
+  formTouched[field] = true
 }
 
-function openCertificate(): void {
-  const user = selectedUser.value
-  if (!user) return
-  certificateFile.value = null
-  certificateSubmitted.value = false
-  Object.keys(certificateTouched).forEach((key) => delete certificateTouched[key as ErrorKey])
-  certificateForm.certificadoFechaEmision = user.certificadoFechaEmision
-  certificateForm.certificadoFechaVencimiento = user.certificadoFechaVencimiento
-  certificateForm.certificadoObservaciones = user.certificadoObservaciones
-  certificateOpen.value = true
+function formError(field: ErrorKey): string | undefined {
+  return formTouched[field] || formSubmitted.value ? formErrors.value[field] : undefined
 }
 
-async function submitCertificate(): Promise<void> {
-  const user = selectedUser.value
-  if (!user || savingCertificate.value) return
-  certificateSubmitted.value = true
-  if (Object.keys(certificateErrors.value).length) {
-    notifications.show('Revisa el archivo y las fechas del certificado.', 'error')
-    await focusFirstError()
-    return
+function resetForm(): void {
+  Object.assign(userForm, blankUser())
+  delete userForm.version
+  formFile.value = null
+  formSubmitted.value = false
+  Object.keys(formTouched).forEach((key) => delete formTouched[key as ErrorKey])
+  formBaseline.value = JSON.stringify(userForm)
+}
+
+function replaceUser(user: UserRecord): void {
+  users.value = users.value.map((current) => current.id === user.id ? user : current)
+}
+
+function normalizeUser(user: UserRecord): UserRecord {
+  return { ...user, version: Number(user.version) }
+}
+
+function toUserInput(user: UserRecord): UserInput {
+  return {
+    nombreCompleto: user.nombreCompleto,
+    correoGoogle: user.correoGoogle,
+    esAdmin: user.esAdmin,
+    esTecnico: user.esTecnico,
+    activo: user.activo,
+    certificadoStoragePath: user.certificadoStoragePath,
+    certificadoFechaEmision: user.certificadoFechaEmision,
+    certificadoFechaVencimiento: user.certificadoFechaVencimiento,
+    certificadoObservaciones: user.certificadoObservaciones,
+    version: user.version,
   }
-  savingCertificate.value = true
-  try {
-    const updated = await updateUserCertificate(user, { ...certificateForm, file: certificateFile.value })
-    replaceUser(normalizeUser(updated))
-    certificateOpen.value = false
-    notifications.show('Certificado actualizado correctamente.', 'success')
-  } catch (error) {
-    notifications.show(userMessage(error, 'No fue posible actualizar el certificado'), error instanceof UserServiceError && !error.retryable ? 'warning' : 'error')
-  } finally {
-    savingCertificate.value = false
-  }
 }
 
-function touchCreate(field: ErrorKey): void {
-  createTouched[field] = true
+function userMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback
 }
 
-function createError(field: ErrorKey): string | undefined {
-  return createTouched[field] || createSubmitted.value ? createErrors.value[field] : undefined
+async function focusFirstError(): Promise<void> {
+  await nextTick()
+  document.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
 }
 
-function touchCertificate(field: ErrorKey): void {
-  certificateTouched[field] = true
-}
-
-function certificateError(field: ErrorKey): string | undefined {
-  return certificateTouched[field] || certificateSubmitted.value ? certificateErrors.value[field] : undefined
+function fileName(path: string | null): string {
+  const segments = path?.split('/')
+  return segments?.[segments.length - 1] ?? 'Sin archivo'
 }
 
 function certificateLabel(user: UserRecord): string {
@@ -297,44 +283,6 @@ function certificateIcon(status: CertificateStatus): 'check' | 'warning' | 'erro
   return status === 'valid' ? 'check' : status === 'expiring' ? 'warning' : status === 'expired' ? 'error' : 'info'
 }
 
-function resetCreate(): void {
-  Object.assign(createForm, blankUser())
-  createFile.value = null
-  createSubmitted.value = false
-  Object.keys(createTouched).forEach((key) => delete createTouched[key as ErrorKey])
-}
-
-function replaceUser(user: UserRecord): void {
-  users.value = users.value.map((current) => current.id === user.id ? user : current)
-  if (selectedId.value === user.id) {
-    Object.assign(profileForm, user)
-    profileBaseline.value = JSON.stringify(profileForm)
-  }
-}
-
-function normalizeUser(user: UserRecord): UserRecord {
-  return { ...user, version: Number(user.version) }
-}
-
-function userMessage(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback
-}
-
-async function focusFirstError(): Promise<void> {
-  await nextTick()
-  document.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
-}
-
-function fileName(path: string | null): string {
-  const segments = path?.split('/')
-  return segments?.[segments.length - 1] ?? 'Sin archivo'
-}
-
-function certificateSummary(user: UserRecord): string {
-  if (!user.certificadoStoragePath) return 'Sin certificado'
-  const expiry = formatDateOnly(user.certificadoFechaVencimiento)
-  return expiry ? `Adjunto · vence ${expiry}` : 'Adjunto'
-}
 </script>
 
 <template>
@@ -351,129 +299,123 @@ function certificateSummary(user: UserRecord): string {
     <EmptyState v-else-if="users.length === 0" title="Aún no hay usuarios" message="Agrega el primer usuario autorizado.">
       <BaseButton @click="openCreate">Agregar usuario</BaseButton>
     </EmptyState>
-    <template v-else>
-      <ResponsiveTable>
-        <template #table>
-          <table class="users-table">
-            <thead><tr><th>Usuario</th><th>Correo Google</th><th>Roles</th><th>Credencial</th><th>Estado</th></tr></thead>
-            <tbody>
-              <tr
-                v-for="user in users"
-                :key="user.id"
-                :class="{ 'is-selected': selectedId === user.id }"
-                tabindex="0"
-                role="button"
-                :aria-label="`Ver perfil de ${user.nombreCompleto}`"
-                @click="selectUser(user)"
-                @keydown.enter.prevent="selectUser(user)"
-                @keydown.space.prevent="selectUser(user)"
-              >
-                <td><strong>{{ user.nombreCompleto }}</strong><small v-if="selectedId === user.id">Perfil seleccionado</small></td>
-                <td>{{ user.correoGoogle }}</td>
-                <td><div class="badge-row"><StatusBadge v-if="user.esAdmin" tone="info" icon="shield">Administrador</StatusBadge><StatusBadge v-if="user.esTecnico" tone="technician" icon="technician">Técnico</StatusBadge></div></td>
-                <td><StatusBadge :tone="certificateTone(certificateStatus(user))" :icon="certificateIcon(certificateStatus(user))">{{ certificateLabel(user) }}</StatusBadge></td>
-                <td><StatusBadge :tone="user.activo ? 'success' : 'neutral'" :icon="user.activo ? 'check' : 'x'">{{ user.activo ? 'Activo' : 'Inactivo' }}</StatusBadge></td>
-              </tr>
-            </tbody>
-          </table>
-        </template>
-        <template #cards>
-          <button v-for="user in users" :key="user.id" type="button" class="user-card" :class="{ 'is-selected': selectedId === user.id }" @click="selectUser(user)">
-            <span><strong>{{ user.nombreCompleto }}</strong><small>{{ user.correoGoogle }}</small></span>
-            <span class="badge-row"><StatusBadge v-if="user.esAdmin" tone="info" icon="shield">Administrador</StatusBadge><StatusBadge v-if="user.esTecnico" tone="technician" icon="technician">Técnico</StatusBadge></span>
-            <span class="badge-row"><StatusBadge :tone="certificateTone(certificateStatus(user))" :icon="certificateIcon(certificateStatus(user))">{{ certificateLabel(user) }}</StatusBadge><StatusBadge :tone="user.activo ? 'success' : 'neutral'" :icon="user.activo ? 'check' : 'x'">{{ user.activo ? 'Activo' : 'Inactivo' }}</StatusBadge></span>
-          </button>
-        </template>
-      </ResponsiveTable>
+    <ResponsiveTable v-else>
+      <template #table>
+        <table class="users-table">
+          <thead>
+            <tr><th>Usuario</th><th>Correo Google</th><th>Roles</th><th>Credencial</th><th>Estado</th><th class="actions-heading">Acciones</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="user in users" :key="user.id">
+              <td><strong>{{ user.nombreCompleto }}</strong></td>
+              <td>{{ user.correoGoogle }}</td>
+              <td><div class="badge-row"><StatusBadge v-if="user.esAdmin" tone="info" icon="shield">Administrador</StatusBadge><StatusBadge v-if="user.esTecnico" tone="technician" icon="technician">Técnico</StatusBadge></div></td>
+              <td><StatusBadge :tone="certificateTone(certificateStatus(user))" :icon="certificateIcon(certificateStatus(user))">{{ certificateLabel(user) }}</StatusBadge></td>
+              <td><StatusBadge :tone="user.activo ? 'success' : 'neutral'" :icon="user.activo ? 'check' : 'x'">{{ user.activo ? 'Activo' : 'Inactivo' }}</StatusBadge></td>
+              <td class="actions-cell">
+                <BaseIconButton :label="`Editar ${user.nombreCompleto}`" @click="openEdit(user)">
+                  <Pencil :size="18" />
+                </BaseIconButton>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </template>
+      <template #cards>
+        <article v-for="user in users" :key="user.id" class="user-card">
+          <span><strong>{{ user.nombreCompleto }}</strong><small>{{ user.correoGoogle }}</small></span>
+          <span class="badge-row"><StatusBadge v-if="user.esAdmin" tone="info" icon="shield">Administrador</StatusBadge><StatusBadge v-if="user.esTecnico" tone="technician" icon="technician">Técnico</StatusBadge></span>
+          <span class="badge-row"><StatusBadge :tone="certificateTone(certificateStatus(user))" :icon="certificateIcon(certificateStatus(user))">{{ certificateLabel(user) }}</StatusBadge><StatusBadge :tone="user.activo ? 'success' : 'neutral'" :icon="user.activo ? 'check' : 'x'">{{ user.activo ? 'Activo' : 'Inactivo' }}</StatusBadge></span>
+          <BaseButton variant="secondary" @click="openEdit(user)">Editar usuario</BaseButton>
+        </article>
+      </template>
+    </ResponsiveTable>
 
-      <div v-if="selectedUser" class="profile-grid">
-        <section class="profile-card" :aria-busy="profileLoading">
-          <h2>{{ selectedUser.nombreCompleto }}</h2>
-          <div class="badge-row">
-            <StatusBadge :tone="selectedUser.activo ? 'success' : 'neutral'" :icon="selectedUser.activo ? 'check' : 'x'">{{ selectedUser.activo ? 'Activo' : 'Inactivo' }}</StatusBadge>
-            <StatusBadge v-if="selectedUser.esAdmin" tone="info" icon="shield">Administrador</StatusBadge>
-            <StatusBadge v-if="selectedUser.esTecnico" tone="technician" icon="technician">Técnico</StatusBadge>
-            <StatusBadge v-if="selectedUser.esTecnico" :tone="certificateTone(certificateStatus(selectedUser))" :icon="certificateIcon(certificateStatus(selectedUser))">{{ certificateLabel(selectedUser) }}</StatusBadge>
-          </div>
-          <div class="profile-fields">
-            <BaseSelect :model-value="profileForm.esAdmin ? 'SI' : 'NO'" name="profile-admin" label="Rol administrador" :error="profileErrors.roles" @update:model-value="profileForm.esAdmin = $event === 'SI'">
-              <option value="NO">No</option><option value="SI">Sí</option>
-            </BaseSelect>
-            <BaseSelect :model-value="profileForm.esTecnico ? 'SI' : 'NO'" name="profile-technician" label="Rol técnico" :error="profileErrors.roles" @update:model-value="profileForm.esTecnico = $event === 'SI'">
-              <option value="NO">No</option><option value="SI">Sí</option>
-            </BaseSelect>
-            <BaseSelect :model-value="profileForm.activo ? 'ACTIVO' : 'INACTIVO'" name="profile-status" label="Estado" @update:model-value="profileForm.activo = $event === 'ACTIVO'">
-              <option value="ACTIVO">Activo</option><option value="INACTIVO">Inactivo</option>
-            </BaseSelect>
-            <div v-if="profileForm.esTecnico" class="certificate-summary">
-              <strong>Certificado técnico</strong>
-              <span class="certificate-summary__value">{{ certificateSummary(selectedUser) }}</span>
-              <small>Opcional. Si existe, debe tener fecha de emisión y vencimiento.</small>
-              <BaseButton variant="secondary" @click="openCertificate">{{ selectedUser.certificadoStoragePath ? 'Actualizar certificado' : 'Agregar certificado' }}</BaseButton>
-            </div>
-          </div>
-          <div class="profile-actions">
-            <BaseButton v-if="profileDirty" variant="ghost" :disabled="savingProfile" @click="discardProfile">Descartar</BaseButton>
-            <BaseButton :loading="savingProfile" :disabled="!profileDirty" @click="saveProfile">Guardar perfil</BaseButton>
-          </div>
-        </section>
-
-        <aside class="rules-card">
-          <h2>Un rol activo a la vez</h2>
-          <p>Una persona con ambos roles elige con cuál trabajar antes de cargar datos. En modo Técnico solo ve servicios en los que está asignada.</p>
-          <div v-if="certificateStatus(selectedUser) === 'expiring' || certificateStatus(selectedUser) === 'expired'" class="certificate-alert">
-            <strong>{{ certificateStatus(selectedUser) === 'expired' ? 'Certificado vencido' : 'Certificado próximo a vencer' }}</strong>
-            <p>El certificado es opcional. Si existe y vence, debe actualizarse antes de asignar al técnico como responsable.</p>
-          </div>
-          <p>Desactivar un usuario bloquea el ingreso, pero no borra su participación en servicios anteriores.</p>
-        </aside>
-      </div>
-    </template>
-
-    <BaseDialog :model-value="createOpen" title="Agregar usuario" description="El correo debe corresponder a una cuenta Google." @update:model-value="!$event && requestCloseCreate()">
-      <form id="create-user-form" class="dialog-form" novalidate @submit.prevent="submitCreate">
-        <BaseInput v-model="createForm.nombreCompleto" name="create-name" label="Nombre completo" required autocomplete="name" :error="createError('nombreCompleto')" @blur="touchCreate('nombreCompleto')" />
+    <BaseDialog
+      :model-value="formOpen"
+      :title="formTitle"
+      :description="formDescription"
+      @update:model-value="!$event && requestCloseForm()"
+    >
+      <LoadingSkeleton v-if="formLoading" label="Cargando usuario" :lines="5" />
+      <form v-else id="user-form" class="dialog-form" novalidate @submit.prevent="submitForm">
+        <BaseInput v-model="userForm.nombreCompleto" name="user-name" label="Nombre completo" required autocomplete="name" :error="formError('nombreCompleto')" @blur="touchForm('nombreCompleto')" />
         <div class="email-field">
-          <BaseInput v-model="createForm.correoGoogle" name="create-email" label="Correo Google" type="email" required autocomplete="email" :error="createError('correoGoogle')" @blur="touchCreate('correoGoogle')" />
-          <p v-if="createEmailWarning && !createError('correoGoogle')" class="field-warning" role="status">{{ createEmailWarning }}</p>
+          <BaseInput
+            v-model="userForm.correoGoogle"
+            name="user-email"
+            label="Correo Google"
+            type="email"
+            required
+            autocomplete="email"
+            :disabled="formMode === 'edit' && Boolean(editingUser?.authUserId)"
+            :hint="formMode === 'edit' && editingUser?.authUserId ? 'Vinculado a la identidad Google del usuario.' : undefined"
+            :error="formError('correoGoogle')"
+            @blur="touchForm('correoGoogle')"
+          />
+          <p v-if="formEmailWarning && !formError('correoGoogle')" class="field-warning" role="status">{{ formEmailWarning }}</p>
         </div>
-        <BaseSelect :model-value="createForm.esAdmin ? 'SI' : 'NO'" name="create-admin" label="Rol administrador" :error="createError('roles')" @update:model-value="createForm.esAdmin = $event === 'SI'" @blur="touchCreate('roles')">
+        <BaseSelect :model-value="userForm.esAdmin ? 'SI' : 'NO'" name="user-admin" label="Rol administrador" :error="formError('roles')" @update:model-value="userForm.esAdmin = $event === 'SI'" @blur="touchForm('roles')">
           <option value="NO">No</option><option value="SI">Sí</option>
         </BaseSelect>
-        <BaseSelect :model-value="createForm.esTecnico ? 'SI' : 'NO'" name="create-technician" label="Rol técnico" :error="createError('roles')" @update:model-value="createForm.esTecnico = $event === 'SI'" @blur="touchCreate('roles')">
+        <BaseSelect :model-value="userForm.esTecnico ? 'SI' : 'NO'" name="user-technician" label="Rol técnico" :error="formError('roles')" @update:model-value="userForm.esTecnico = $event === 'SI'" @blur="touchForm('roles')">
           <option value="NO">No</option><option value="SI">Sí</option>
         </BaseSelect>
-        <section v-if="createForm.esTecnico" class="certificate-section">
+        <BaseSelect v-if="formMode === 'edit'" :model-value="userForm.activo ? 'ACTIVO' : 'INACTIVO'" name="user-status" label="Estado" @update:model-value="userForm.activo = $event === 'ACTIVO'">
+          <option value="ACTIVO">Activo</option><option value="INACTIVO">Inactivo</option>
+        </BaseSelect>
+
+        <p class="role-help">Una persona con ambos roles elige con cuál trabajar al iniciar su sesión. Desactivar un usuario bloquea el ingreso sin borrar su historial.</p>
+
+        <section v-if="userForm.esTecnico" class="certificate-section">
           <div class="certificate-section__title"><h3>Certificado técnico</h3><span>Opcional</span></div>
-          <BaseFileUpload v-model="createFile" name="create-certificate" label="Adjuntar certificado" :error="createError('certificateFile')" @blur="touchCreate('certificateFile')" />
-          <div v-if="createFile" class="certificate-dates">
-            <BaseDateTimePicker v-model="createForm.certificadoFechaEmision" mode="date" name="create-issued" label="Fecha de emisión" required :error="createError('certificadoFechaEmision')" @blur="touchCreate('certificadoFechaEmision')" />
-            <BaseDateTimePicker v-model="createForm.certificadoFechaVencimiento" mode="date" name="create-expiry" label="Fecha de vencimiento" required :min="createForm.certificadoFechaEmision ?? undefined" :error="createError('certificadoFechaVencimiento')" @blur="touchCreate('certificadoFechaVencimiento')" />
+          <div v-if="formMode === 'edit' && userForm.certificadoStoragePath" class="current-certificate">
+            <strong>Certificado actual</strong>
+            <span>{{ fileName(userForm.certificadoStoragePath) }} · Archivo adjunto</span>
+          </div>
+          <BaseFileUpload
+            v-model="formFile"
+            name="user-certificate"
+            :label="formMode === 'edit' && userForm.certificadoStoragePath ? 'Reemplazar certificado · opcional' : 'Adjuntar certificado'"
+            :hint="formMode === 'edit' && userForm.certificadoStoragePath ? 'Déjalo vacío para conservar el archivo actual.' : undefined"
+            :error="formError('certificateFile')"
+            @blur="touchForm('certificateFile')"
+          />
+          <div v-if="formFile || userForm.certificadoStoragePath" class="certificate-dates">
+            <BaseDateTimePicker v-model="userForm.certificadoFechaEmision" mode="date" name="user-issued" label="Fecha de emisión" required :error="formError('certificadoFechaEmision')" @blur="touchForm('certificadoFechaEmision')" />
+            <BaseDateTimePicker v-model="userForm.certificadoFechaVencimiento" mode="date" name="user-expiry" label="Fecha de vencimiento" required :min="userForm.certificadoFechaEmision ?? undefined" :error="formError('certificadoFechaVencimiento')" @blur="touchForm('certificadoFechaVencimiento')" />
+          </div>
+          <div v-if="editingUser && (certificateStatus(editingUser) === 'expiring' || certificateStatus(editingUser) === 'expired')" class="certificate-alert">
+            <strong>{{ certificateStatus(editingUser) === 'expired' ? 'Certificado vencido' : 'Certificado próximo a vencer' }}</strong>
+            <span>Si existe un certificado, debe mantenerse vigente antes de asignar al técnico como responsable.</span>
           </div>
         </section>
       </form>
       <template #footer>
-        <BaseButton variant="secondary" :disabled="savingCreate" @click="requestCloseCreate">Cancelar</BaseButton>
-        <BaseButton type="submit" form="create-user-form" :loading="savingCreate">Crear usuario</BaseButton>
+        <BaseButton variant="secondary" :disabled="savingForm || formLoading" @click="requestCloseForm">Cancelar</BaseButton>
+        <BaseButton type="submit" form="user-form" :loading="savingForm" :disabled="formLoading">{{ formMode === 'create' ? 'Crear usuario' : 'Guardar cambios' }}</BaseButton>
       </template>
     </BaseDialog>
 
-    <BaseDialog v-if="selectedUser" v-model="certificateOpen" title="Actualizar certificado" description="Este técnico tiene un certificado adjunto. Mientras exista el archivo, fecha de emisión y fecha de vencimiento son obligatorias.">
-      <form id="certificate-form" class="dialog-form" novalidate @submit.prevent="submitCertificate">
-        <p class="required-legend"><span>*</span> Campos obligatorios</p>
-        <div v-if="selectedUser.certificadoStoragePath" class="current-certificate"><strong>Certificado actual</strong><span>{{ fileName(selectedUser.certificadoStoragePath) }} · Archivo adjunto</span></div>
-        <BaseDateTimePicker v-model="certificateForm.certificadoFechaEmision" mode="date" name="certificate-issued" label="Fecha de emisión" :required="Boolean(selectedUser.certificadoStoragePath || certificateFile)" hint="Obligatoria porque existe un certificado adjunto." :error="certificateError('certificadoFechaEmision')" @blur="touchCertificate('certificadoFechaEmision')" />
-        <BaseDateTimePicker v-model="certificateForm.certificadoFechaVencimiento" mode="date" name="certificate-expiry" label="Fecha de vencimiento" :required="Boolean(selectedUser.certificadoStoragePath || certificateFile)" :min="certificateForm.certificadoFechaEmision ?? undefined" hint="Obligatoria porque existe un certificado adjunto." :error="certificateError('certificadoFechaVencimiento')" @blur="touchCertificate('certificadoFechaVencimiento')" />
-        <BaseFileUpload v-model="certificateFile" class="certificate-replacement" name="replace-certificate" label="Reemplazar certificado · opcional" hint="Déjalo vacío para conservar el archivo actual." :error="certificateError('certificateFile')" @blur="touchCertificate('certificateFile')" />
-      </form>
-      <template #footer>
-        <BaseButton variant="secondary" :disabled="savingCertificate" @click="certificateOpen = false">Cancelar</BaseButton>
-        <BaseButton type="submit" form="certificate-form" :loading="savingCertificate">Guardar certificado</BaseButton>
-      </template>
-    </BaseDialog>
-
-    <ConfirmDialog :open="deactivateConfirmOpen" title="Desactivar usuario" :message="`Desactivar a ${selectedUser?.nombreCompleto ?? 'este usuario'} bloqueará su ingreso sin borrar el historial.`" confirm-label="Desactivar" danger :loading="savingProfile" @cancel="deactivateConfirmOpen = false" @confirm="persistProfile" />
-    <ConfirmDialog :open="discardCreateConfirmOpen" title="Descartar usuario" message="Los datos ingresados todavía no se han guardado." confirm-label="Descartar" danger @cancel="discardCreateConfirmOpen = false" @confirm="discardCreate" />
+    <ConfirmDialog
+      :open="deactivateConfirmOpen"
+      title="Desactivar usuario"
+      :message="`Desactivar a ${editingUser?.nombreCompleto ?? 'este usuario'} bloqueará su ingreso sin borrar el historial.`"
+      confirm-label="Desactivar"
+      danger
+      :loading="savingForm"
+      @cancel="deactivateConfirmOpen = false"
+      @confirm="persistEdit"
+    />
+    <ConfirmDialog
+      :open="discardConfirmOpen"
+      :title="discardTitle"
+      :message="discardMessage"
+      confirm-label="Descartar"
+      danger
+      @cancel="discardConfirmOpen = false"
+      @confirm="discardForm"
+    />
   </div>
 </template>
 
@@ -485,35 +427,19 @@ function certificateSummary(user: UserRecord): string {
 .users-table { overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); border-spacing: 0; border-collapse: separate; }
 .users-table th { height: 44px; border: 0; background: var(--sidebar); padding: 0.75rem; color: var(--text-secondary); font-size: 0.75rem; font-weight: 500; text-transform: none; letter-spacing: 0; }
 .users-table td { height: 64px; border: 0; border-top: 1px solid var(--border); padding: 0.75rem; vertical-align: middle; color: var(--text-secondary); }
-.users-table tbody tr { cursor: pointer; outline: 0; }
 .users-table tbody tr:hover { background: var(--hover); }
-.users-table tbody tr.is-selected { background: var(--accent-subtle); }
-.users-table tbody tr:focus-visible { box-shadow: inset var(--focus-ring); }
-.users-table td:first-child strong, .users-table td:first-child small { display: block; color: var(--text); }
-.users-table td:first-child small { color: var(--accent); }
+.users-table td:first-child strong { display: block; color: var(--text); }
+.actions-heading, .actions-cell { width: 5.5rem; text-align: center; }
+.actions-cell :deep(.icon-button) { margin-inline: auto; }
 .badge-row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-.user-card { display: grid; gap: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); padding: 1rem; color: var(--text); text-align: left; }
-.user-card.is-selected { border-color: var(--accent); background: var(--accent-subtle); }
+.user-card { display: grid; gap: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); padding: 1rem; color: var(--text); }
 .user-card > span:first-child { display: grid; gap: 0.125rem; }
 .user-card small { color: var(--text-secondary); overflow-wrap: anywhere; }
-.profile-grid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(18rem, 2fr); gap: 1.5rem; }
-.profile-card, .rules-card { border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); padding: 1.5rem; }
-.profile-card { display: grid; gap: 1rem; }
-.profile-card h2, .rules-card h2 { margin: 0; font-size: 1.25rem; font-weight: 500; }
-.profile-fields { display: grid; gap: 1rem; }
-.certificate-summary { display: grid; gap: 0.5rem; }
-.certificate-summary span, .certificate-summary small { color: var(--text-secondary); }
-.certificate-summary__value { min-height: 44px; display: flex; align-items: center; border: 1px solid var(--control-border); border-radius: var(--radius-input); padding: 0.65rem 0.75rem; }
-.certificate-summary .base-button { justify-self: start; }
-.profile-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; }
-.rules-card { display: grid; align-content: start; gap: 1rem; }
-.rules-card p { margin: 0; color: var(--text-secondary); }
-.certificate-alert { display: grid; gap: 0.25rem; border-radius: 8px; background: var(--warning-subtle); padding: 1rem; color: var(--warning); }
+.user-card :deep(.base-button) { justify-self: start; }
 .dialog-form { display: grid; gap: 1.25rem; }
-.required-legend { margin: 0; color: var(--text-secondary); font-size: 0.8125rem; }
-.required-legend span { color: var(--danger); }
 .email-field { display: grid; gap: 0.375rem; }
 .field-warning { margin: 0; color: var(--warning); font-size: 0.8125rem; line-height: 1.125rem; }
+.role-help { margin: 0; color: var(--text-secondary); font-size: 0.875rem; line-height: 1.35rem; }
 .certificate-section { display: grid; gap: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--bg); padding: 1rem; }
 .certificate-section__title { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .certificate-section__title h3 { margin: 0; font-size: 1rem; font-weight: 500; }
@@ -524,11 +450,9 @@ function certificateSummary(user: UserRecord): string {
 .certificate-dates :deep(.icon-button) { align-self: center; }
 .current-certificate { display: grid; gap: 0.25rem; border-radius: 8px; background: var(--info-subtle); padding: 0.75rem; color: var(--info); }
 .current-certificate span { color: var(--text-secondary); }
-.certificate-replacement { width: min(100%, 22rem); }
+.certificate-alert { display: grid; gap: 0.25rem; border-radius: 8px; background: var(--warning-subtle); padding: 0.75rem; color: var(--warning); }
+.certificate-alert span { color: var(--text-secondary); }
 
-@media (max-width: 900px) {
-  .profile-grid { grid-template-columns: 1fr; }
-}
 @media (max-width: 600px) {
   .users-header { align-items: stretch; }
   .users-header :deep(.base-button) { align-self: flex-end; }

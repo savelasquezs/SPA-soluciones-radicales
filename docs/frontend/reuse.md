@@ -120,12 +120,26 @@ Una consulta usada por más de un módulo tiene una sola implementación. Los no
 ## Formularios
 
 - Los esquemas, normalizadores y mensajes reutilizables tienen una única implementación.
+- Cuando alta y edición comparten campos y reglas, reutilizar un único formulario con modo `create | edit` en lugar de mantener dos árboles de controles que puedan divergir.
+- En modo edición, cargar el registro definitivo antes de habilitar cambios y conservar bloqueados los campos inmutables por reglas de identidad o negocio.
 - Los errores de campo permanecen junto al campo.
 - Los errores globales pasan por el sistema común de feedback.
 - El submit se bloquea mientras está en curso.
 - Un fallo conserva los valores ingresados.
 - La navegación con cambios sin guardar exige confirmación.
 - El servidor repite todas las validaciones de integridad y autorización.
+
+### Caso aplicado: Usuarios
+
+El módulo `/usuarios` usa la tabla únicamente como superficie de consulta y acciones. Cada fila expone **Editar** y abre el mismo diálogo utilizado para el alta, precargado con el registro definitivo obtenido por `GET /api/users/:id`.
+
+- Crear y editar comparten campos, validaciones y feedback.
+- El formulario de edición no se renderiza debajo de la tabla.
+- El correo queda bloqueado cuando `auth_user_id` ya está vinculado a Google.
+- Roles, estado y datos del certificado se editan dentro del mismo flujo.
+- La desactivación conserva confirmación destructiva y el historial del usuario.
+- En móvil, las cards conservan una acción explícita **Editar usuario**.
+- La carga o reemplazo del archivo del certificado continúa bloqueada hasta disponer del backend autorizado de R2.
 
 ## Errores y feedback
 

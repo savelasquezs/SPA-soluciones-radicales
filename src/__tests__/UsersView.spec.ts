@@ -2,21 +2,17 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { createUser, getUser, listUsers } from '@/services/usersService'
+import { createUser, getUser, listUsers, updateUser } from '@/services/usersService'
 import { useNotificationsStore } from '@/stores/notifications'
-import type { UserRecord } from '@/types/domain'
+import type { UserInput, UserRecord } from '@/types/domain'
 import UsersView from '@/views/UsersView.vue'
 
 vi.mock('@/services/usersService', () => ({
-  UserServiceError: class UserServiceError extends Error {
-    retryable = true
-  },
   listUsers: vi.fn<() => Promise<UserRecord[]>>(),
   getUser: vi.fn<(id: string) => Promise<UserRecord>>(),
-  createUser: vi.fn<() => Promise<UserRecord>>(),
-  updateUser: vi.fn<() => Promise<UserRecord>>(),
-  setUserActive: vi.fn<() => Promise<UserRecord>>(),
-  updateUserCertificate: vi.fn<() => Promise<UserRecord>>(),
+  createUser: vi.fn<(input: UserInput) => Promise<UserRecord>>(),
+  updateUser: vi.fn<(id: string, input: UserInput) => Promise<UserRecord>>(),
+  setUserActive: vi.fn<(user: UserRecord, active: boolean) => Promise<UserRecord>>(),
 }))
 
 const user = (overrides: Partial<UserRecord> = {}): UserRecord => ({
@@ -48,6 +44,7 @@ beforeEach(() => {
     user({ id: 'user-2', nombreCompleto: 'Luis Mora', correoGoogle: 'luis@example.com', esAdmin: false, esTecnico: true, activo: false }),
   ])
   vi.mocked(getUser).mockImplementation(async (id) => user({ id }))
+  vi.mocked(updateUser).mockImplementation(async (_id, input) => user({ ...input, id: _id, version: 2 }))
 })
 
 describe('Usuarios', () => {
@@ -60,37 +57,76 @@ describe('Usuarios', () => {
     expect(wrapper.text()).toContain('Activo')
     expect(wrapper.text()).toContain('Inactivo')
     expect(wrapper.text()).toContain('Sin certificado')
+    expect(wrapper.text()).toContain('Acciones')
   })
 
-  it('oculta y muestra el certificado según Rol técnico', async () => {
+  it('usa el mismo diálogo para crear y editar sin renderizar un perfil inline', async () => {
+    vi.mocked(getUser).mockResolvedValue(user({
+      authUserId: 'google-user-1',
+      nombreCompleto: 'Ana Pérez Actualizada',
+      correoGoogle: 'ana@gmail.com',
+    }))
+
+    const wrapper = mount(UsersView, { attachTo: document.body })
+    await flushPromises()
+
+    expect(wrapper.find('.profile-grid').exists()).toBe(false)
+    await wrapper.get('button[aria-label="Editar Ana Pérez"]').trigger('click')
+    await flushPromises()
+
+    expect(getUser).toHaveBeenCalledWith('user-1')
+    expect(wrapper.text()).toContain('Editar usuario')
+    expect(wrapper.get<HTMLInputElement>('#user-name').element.value).toBe('Ana Pérez Actualizada')
+    expect(wrapper.get<HTMLInputElement>('#user-email').element.disabled).toBe(true)
+    expect(wrapper.find('#user-status').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('oculta y muestra el certificado según Rol técnico al crear', async () => {
     const wrapper = mount(UsersView, { attachTo: document.body })
     await flushPromises()
     await wrapper.findAll('button').find((button) => button.text() === 'Agregar usuario')!.trigger('click')
     await wrapper.vm.$nextTick()
 
     expect(wrapper.text()).toContain('Certificado técnico')
-    await wrapper.get('#create-technician').setValue('NO')
-    expect(wrapper.find('#create-certificate').exists()).toBe(false)
-    await wrapper.get('#create-technician').setValue('SI')
-    expect(wrapper.find('#create-certificate').exists()).toBe(true)
+    await wrapper.get('#user-technician').setValue('NO')
+    expect(wrapper.find('#user-certificate').exists()).toBe(false)
+    await wrapper.get('#user-technician').setValue('SI')
+    expect(wrapper.find('#user-certificate').exists()).toBe(true)
     wrapper.unmount()
   })
 
-  it('conserva los datos del formulario cuando falla el servicio remoto', async () => {
+  it('conserva los datos del formulario cuando falla el servicio remoto al crear', async () => {
     vi.mocked(createUser).mockRejectedValue(new Error('Error remoto controlado'))
     const wrapper = mount(UsersView, { attachTo: document.body })
     await flushPromises()
     await wrapper.findAll('button').find((button) => button.text() === 'Agregar usuario')!.trigger('click')
-    await wrapper.get('#create-name').setValue('María López')
-    await wrapper.get('#create-email').setValue('maria@example.com')
-    await wrapper.get('#create-user-form').trigger('submit')
+    await wrapper.get('#user-name').setValue('María López')
+    await wrapper.get('#user-email').setValue('maria@example.com')
+    await wrapper.get('#user-form').trigger('submit')
     await flushPromises()
 
     expect(createUser).toHaveBeenCalledOnce()
-    expect(wrapper.get<HTMLInputElement>('#create-name').element.value).toBe('María López')
-    expect(wrapper.get<HTMLInputElement>('#create-email').element.value).toBe('maria@example.com')
+    expect(wrapper.get<HTMLInputElement>('#user-name').element.value).toBe('María López')
+    expect(wrapper.get<HTMLInputElement>('#user-email').element.value).toBe('maria@example.com')
     const notifications = useNotificationsStore().items
     expect(notifications[notifications.length - 1]?.message).toBe('Error remoto controlado')
+    wrapper.unmount()
+  })
+
+  it('guarda la edición y actualiza la fila con la respuesta definitiva', async () => {
+    const wrapper = mount(UsersView, { attachTo: document.body })
+    await flushPromises()
+    await wrapper.get('button[aria-label="Editar Ana Pérez"]').trigger('click')
+    await flushPromises()
+
+    await wrapper.get('#user-name').setValue('Ana Pérez Editada')
+    await wrapper.get('#user-form').trigger('submit')
+    await flushPromises()
+
+    expect(updateUser).toHaveBeenCalledOnce()
+    expect(wrapper.text()).toContain('Ana Pérez Editada')
+    expect(wrapper.find('dialog[open]').exists()).toBe(false)
     wrapper.unmount()
   })
 })
