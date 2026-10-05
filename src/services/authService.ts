@@ -13,6 +13,13 @@ export async function getAuthSession() {
   if (error) {
     throw new Error(error.message)
   }
+  if (data?.session.token) {
+    const url = new URL(window.location.href)
+    if (url.searchParams.has('neon_auth_session_verifier')) {
+      url.searchParams.delete('neon_auth_session_verifier')
+      window.history.replaceState(window.history.state, '', url)
+    }
+  }
   return data
 }
 

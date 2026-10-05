@@ -18,6 +18,7 @@ import { getAccessToken, signInWithGoogle } from '@/services/authService'
 describe('authService', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    window.history.replaceState({}, '', '/')
   })
 
   it('uses the JWT injected into the active Neon Auth session', async () => {
@@ -31,6 +32,22 @@ describe('authService', () => {
 
     await expect(getAccessToken()).resolves.toBe('header.payload.signature')
     expect(token).not.toHaveBeenCalled()
+  })
+
+  it('removes the one-time OAuth verifier after restoring the session', async () => {
+    window.history.replaceState({}, '', '/usuarios?neon_auth_session_verifier=one-time&filter=active')
+    getSession.mockResolvedValue({
+      data: {
+        session: { token: 'header.payload.signature' },
+        user: { id: 'auth-user' },
+      },
+      error: null,
+    })
+
+    await getAccessToken()
+
+    expect(window.location.pathname).toBe('/usuarios')
+    expect(window.location.search).toBe('?filter=active')
   })
 
   it('rejects a session without a JWT', async () => {

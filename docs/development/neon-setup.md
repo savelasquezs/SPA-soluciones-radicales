@@ -172,6 +172,35 @@ npx -y neon@6.2.4 deploy
 
 `ALLOWED_ORIGINS` debe incluir solo los orígenes locales, productivos y de preview realmente autorizados.
 
+La Function requiere estos nombres de configuración de servidor:
+
+```text
+ALLOWED_ORIGINS
+GOOGLE_CLIENT_ID
+GOOGLE_CLIENT_SECRET
+GOOGLE_OAUTH_REDIRECT_URI
+```
+
+Neon inyecta además las variables administradas de conexión, Auth y Data API. Sus valores no se copian al repositorio ni a variables públicas de Vite.
+
+### Integración empresarial Google
+
+- El OAuth empresarial es independiente del Google OAuth de los usuarios.
+- Los únicos permisos solicitados son `openid`, `email`, `gmail.send` y `calendar.events`.
+- El flujo usa `access_type=offline` y exige que la cuenta autorizada sea `solucionesradicales1@gmail.com`.
+- El refresh token se cifra con AES-256-GCM antes de persistirse en `private.google_integrations`; nunca llega a la SPA ni se registra en logs.
+- Gmail registra cada intento en `private.integration_jobs` y audita el resultado sin guardar el cuerpo del mensaje.
+- Un Servicio se confirma en PostgreSQL antes de intentar Calendar. Si Google falla, queda en `ERROR`, conserva el último error y puede reintentarse de forma idempotente con el mismo identificador de evento.
+
+### Evidencia de desarrollo del 2026-10-04
+
+- La cuenta administrativa autorizada inició sesión mediante Neon Managed Better Auth.
+- La cuenta inactiva llegó a `/sin-acceso` y un Técnico recibió 403 al abrir `/usuarios`.
+- Bajo RLS, Administrador vio el directorio; Técnico vio solo su propio registro; una identidad inactiva o no autorizada obtuvo cero filas.
+- Gmail aceptó un correo real y el job quedó `COMPLETED` con auditoría de éxito.
+- Calendar creó el evento real del Servicio `SR-00000001`; la base guardó `calendar_event_id`, estado `SINCRONIZADO`, job completado y auditoría.
+- Las rutas de fallo y reintento de Calendar quedan cubiertas por pruebas del endpoint: el fallo no revierte el Servicio y el reintento persiste el identificador del evento.
+
 ## 12. Configurar Cloudflare R2 por separado
 
 Neon Object Storage no será el almacenamiento de archivos de este proyecto.

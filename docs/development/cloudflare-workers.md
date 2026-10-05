@@ -19,7 +19,7 @@ La raíz del repositorio contiene `wrangler.jsonc`:
 
 ```jsonc
 {
-  "name": "spa-soluciones-radicales",
+  "name": "soluciones-radicales",
   "compatibility_date": "2026-10-04",
   "assets": {
     "directory": "./dist",
@@ -33,7 +33,7 @@ No agregar `main` hasta que exista una necesidad real de ejecutar código Worker
 
 El bloque `previews` habilita `wrangler preview` para los despliegues aislados de ramas y PR.
 
-El nombre coincide con el Worker existente conectado a este repositorio; cambiarlo crearía un despliegue separado.
+El nombre coincide con el Worker existente conectado a este repositorio; cambiarlo crearía un despliegue separado. El prefijo `spa-` permanece en el nombre del repositorio, no en el recurso Worker vigente.
 
 ## Configuración en Cloudflare Builds
 
@@ -103,6 +103,24 @@ npm run cloudflare:deploy
 ```
 
 Normalmente producción se despliega mediante la integración Git de Cloudflare al actualizar `main`.
+
+## Preview del MVP
+
+La rama Git `codex/mvp-e2e` se publica mediante Cloudflare Builds en:
+
+```text
+https://codex-mvp-e2e-soluciones-radicales.solucionesradicales1.workers.dev
+```
+
+La validación del 2026-10-04 confirmó:
+
+- build y despliegue automático de commits de la rama;
+- carga directa y recarga de `/usuarios` sin 404 del servidor;
+- fallback a la vista 404 de Vue para rutas desconocidas;
+- Auth, Data API y Functions de la rama Neon `desarrollo`;
+- navegación autenticada desktop y mobile sin desbordamiento horizontal inesperado.
+
+Este preview no cambia el Worker productivo ni la rama Neon `production`. La promoción de `main` y la configuración de endpoints productivos requieren autorización separada.
 
 ## SPA routing
 
