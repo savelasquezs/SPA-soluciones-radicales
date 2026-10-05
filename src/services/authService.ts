@@ -25,10 +25,18 @@ export async function getAccessToken(): Promise<string> {
   return token
 }
 
-export async function signInWithGoogle(selectAccount = false): Promise<void> {
+export async function signInWithGoogle(
+  selectAccount = false,
+  callbackURL = window.location.origin,
+): Promise<void> {
+  const callback = new URL(callbackURL, window.location.origin)
+  if (callback.origin !== window.location.origin) {
+    throw new Error('La ruta de regreso no pertenece a esta aplicación')
+  }
+
   const { data, error } = await authClient.signIn.social({
     provider: 'google',
-    callbackURL: window.location.origin,
+    callbackURL: callback.toString(),
     disableRedirect: true,
   })
   if (error) {

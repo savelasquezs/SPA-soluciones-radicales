@@ -58,9 +58,9 @@ export const useSessionStore = defineStore('session', () => {
     }
   }
 
-  async function login(selectAccount = false): Promise<void> {
+  async function login(selectAccount = false, callbackURL = window.location.origin): Promise<void> {
     error.value = null
-    await signInWithGoogle(selectAccount)
+    await signInWithGoogle(selectAccount, callbackURL)
   }
 
   async function selectRole(role: ActiveRole): Promise<void> {

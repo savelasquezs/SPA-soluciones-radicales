@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useRoute } from 'vue-router'
 
 import BaseButton from '@/components/base/BaseButton.vue'
 import { useSessionStore } from '@/stores/session'
 
 const session = useSessionStore()
+const route = useRoute()
 const loading = ref(false)
 const error = ref<string | null>(null)
 
@@ -12,7 +14,11 @@ async function login(): Promise<void> {
   loading.value = true
   error.value = null
   try {
-    await session.login()
+    const requestedRedirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
+    const redirect = requestedRedirect.startsWith('/') && !requestedRedirect.startsWith('//')
+      ? requestedRedirect
+      : '/'
+    await session.login(false, new URL(redirect, window.location.origin).toString())
   } catch (loginError) {
     error.value = loginError instanceof Error ? loginError.message : 'No fue posible iniciar sesión'
   } finally {

@@ -1,18 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { getSession, token } = vi.hoisted(() => ({
+const { getSession, signIn, token } = vi.hoisted(() => ({
   getSession: vi.fn<() => Promise<{
     data: { session: { token: string }, user: { id: string } }
     error: null
   }>>(),
+  signIn: vi.fn<() => Promise<never>>(),
   token: vi.fn<() => Promise<unknown>>(),
 }))
 
 vi.mock('@neondatabase/auth', () => ({
-  createAuthClient: () => ({ getSession, token }),
+  createAuthClient: () => ({ getSession, signIn: { social: signIn }, token }),
 }))
 
-import { getAccessToken } from '@/services/authService'
+import { getAccessToken, signInWithGoogle } from '@/services/authService'
 
 describe('authService', () => {
   beforeEach(() => {
@@ -42,5 +43,23 @@ describe('authService', () => {
     })
 
     await expect(getAccessToken()).rejects.toThrow('No fue posible obtener un token de sesión')
+  })
+
+  it('preserves a protected same-origin destination through Google OAuth', async () => {
+    signIn.mockRejectedValue(new Error('stop before navigation'))
+
+    await expect(signInWithGoogle(false, '/usuarios')).rejects.toThrow('stop before navigation')
+    expect(signIn).toHaveBeenCalledWith({
+      provider: 'google',
+      callbackURL: new URL('/usuarios', window.location.origin).toString(),
+      disableRedirect: true,
+    })
+  })
+
+  it('rejects an external OAuth return URL', async () => {
+    await expect(signInWithGoogle(false, 'https://example.com/usuarios')).rejects.toThrow(
+      'La ruta de regreso no pertenece a esta aplicación',
+    )
+    expect(signIn).not.toHaveBeenCalled()
   })
 })
