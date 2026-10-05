@@ -77,11 +77,25 @@ function number(dict: PDFDict, key: string): number | undefined {
 
 function mustPreservePdf(document: PDFDocument): boolean {
   if (document.catalog.has(PDFName.of('Perms'))) return true
-  return document.context.enumerateIndirectObjects().some(([, object]) => {
+  // Signatures/XFA can also live in direct, nested dictionaries or arrays.
+  // Visit those iteratively; indirect objects are already in the initial queue.
+  const pending = document.context.enumerateIndirectObjects().map(([, object]) => object)
+  const seen = new Set<object>()
+  while (pending.length) {
+    const object = pending.pop()!
+    if (seen.has(object)) continue
+    seen.add(object)
+    if (object instanceof PDFArray) {
+      pending.push(...object.asArray())
+      continue
+    }
     const dict = object instanceof PDFDict ? object : object instanceof PDFRawStream ? object.dict : undefined
-    return Boolean(dict && (name(dict, 'Type') === '/Sig' || name(dict, 'FT') === '/Sig'
-      || dict.has(PDFName.of('ByteRange')) || dict.has(PDFName.of('XFA'))))
-  })
+    if (!dict) continue
+    if (name(dict, 'Type') === '/Sig' || name(dict, 'FT') === '/Sig'
+      || dict.has(PDFName.of('ByteRange')) || dict.has(PDFName.of('XFA'))) return true
+    for (const [, value] of dict.entries()) pending.push(value)
+  }
+  return false
 }
 
 async function optimizePdf(file: File, profile: Profile): Promise<File> {
