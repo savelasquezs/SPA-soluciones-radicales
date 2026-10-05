@@ -257,7 +257,8 @@ function validStep(value: number): number {
 </script>
 
 <template>
-  <BaseField
+  <div class="date-time-picker-root">
+    <BaseField
     v-slot="{ describedBy }"
     :name="name"
     :label="label"
@@ -290,9 +291,9 @@ function validStep(value: number): number {
         <X :size="17" />
       </BaseIconButton>
     </div>
-  </BaseField>
+    </BaseField>
 
-  <BaseDialog v-model="open" :title="title">
+    <BaseDialog v-model="open" :title="title">
     <div class="picker">
       <section v-if="hasDate" class="calendar" aria-label="Calendario">
         <div class="calendar__toolbar">
@@ -356,15 +357,18 @@ function validStep(value: number): number {
       <BaseButton variant="secondary" @click="open = false">Cancelar</BaseButton>
       <BaseButton @click="apply">Aplicar</BaseButton>
     </template>
-  </BaseDialog>
+    </BaseDialog>
+  </div>
 </template>
 
 <style scoped>
-.date-time-control { display: flex; min-height: 44px; align-items: center; border: 1px solid var(--control-border); border-radius: var(--radius-input); background: var(--surface); }
+.date-time-picker-root { width: 100%; min-width: 0; }
+.date-time-control { display: flex; width: 100%; min-width: 0; min-height: 44px; box-sizing: border-box; align-items: center; overflow: hidden; border: 1px solid var(--control-border); border-radius: var(--radius-input); background: var(--surface); }
 .date-time-control:focus-within { box-shadow: var(--focus-ring); }
 .date-time-control--invalid { border-color: var(--danger); }
 .date-time-control--disabled { background: var(--bg); }
-.date-time-control input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; padding: 0.65rem 0.75rem; color: var(--text); font-size: max(1rem, 16px); }
+.date-time-control input { width: 0; min-width: 0; flex: 1 1 0%; box-sizing: border-box; border: 0; outline: 0; background: transparent; padding: 0.65rem 0.75rem; color: var(--text); font-size: max(1rem, 16px); }
+.date-time-control :deep(.icon-button) { flex: 0 0 auto; }
 .picker { display: grid; gap: 1.5rem; }
 .calendar { display: grid; gap: 0.75rem; }
 .calendar__toolbar { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 0.5rem; }
