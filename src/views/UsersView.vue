@@ -72,6 +72,11 @@ const certificateForm = reactive({
 
 const selectedUser = computed(() => users.value.find((user) => user.id === selectedId.value) ?? null)
 const createErrors = computed(() => validateUserInput(createForm, createFile.value))
+const createEmailWarning = computed(() => {
+  const email = createForm.correoGoogle.trim().toLowerCase()
+  if (!email || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || email.endsWith('@gmail.com')) return null
+  return 'Asegúrate de que este correo corresponda a una cuenta de Google.'
+})
 const createDirty = computed(() => JSON.stringify(createForm) !== JSON.stringify(blankUser()) || Boolean(createFile.value))
 const profileDirty = computed(() => Boolean(selectedUser.value) && JSON.stringify(profileForm) !== profileBaseline.value)
 const profileErrors = computed(() => validateUserInput(profileForm, null))
@@ -100,6 +105,13 @@ watch(selectedUser, (user) => {
 
 watch(() => createForm.esTecnico, (isTechnician) => {
   if (!isTechnician && !createFile.value) {
+    createForm.certificadoFechaEmision = null
+    createForm.certificadoFechaVencimiento = null
+  }
+})
+
+watch(createFile, (file) => {
+  if (!file) {
     createForm.certificadoFechaEmision = null
     createForm.certificadoFechaVencimiento = null
   }
@@ -418,25 +430,25 @@ function certificateSummary(user: UserRecord): string {
       </div>
     </template>
 
-    <BaseDialog :model-value="createOpen" title="Agregar usuario" description="El correo debe corresponder a una cuenta Google. Los roles son independientes. El certificado solo se muestra para usuarios con rol Técnico." @update:model-value="!$event && requestCloseCreate()">
+    <BaseDialog :model-value="createOpen" title="Agregar usuario" description="El correo debe corresponder a una cuenta Google." @update:model-value="!$event && requestCloseCreate()">
       <form id="create-user-form" class="dialog-form" novalidate @submit.prevent="submitCreate">
-        <p class="required-legend"><span>*</span> Campos obligatorios</p>
         <BaseInput v-model="createForm.nombreCompleto" name="create-name" label="Nombre completo" required autocomplete="name" :error="createError('nombreCompleto')" @blur="touchCreate('nombreCompleto')" />
-        <BaseInput v-model="createForm.correoGoogle" name="create-email" label="Correo Google" type="email" required autocomplete="email" :error="createError('correoGoogle')" @blur="touchCreate('correoGoogle')" />
+        <div class="email-field">
+          <BaseInput v-model="createForm.correoGoogle" name="create-email" label="Correo Google" type="email" required autocomplete="email" :error="createError('correoGoogle')" @blur="touchCreate('correoGoogle')" />
+          <p v-if="createEmailWarning && !createError('correoGoogle')" class="field-warning" role="status">{{ createEmailWarning }}</p>
+        </div>
         <BaseSelect :model-value="createForm.esAdmin ? 'SI' : 'NO'" name="create-admin" label="Rol administrador" :error="createError('roles')" @update:model-value="createForm.esAdmin = $event === 'SI'" @blur="touchCreate('roles')">
           <option value="NO">No</option><option value="SI">Sí</option>
         </BaseSelect>
-        <BaseSelect :model-value="createForm.esTecnico ? 'SI' : 'NO'" name="create-technician" label="Rol técnico" hint="Al seleccionar Sí se muestra la sección de certificado técnico." :error="createError('roles')" @update:model-value="createForm.esTecnico = $event === 'SI'" @blur="touchCreate('roles')">
+        <BaseSelect :model-value="createForm.esTecnico ? 'SI' : 'NO'" name="create-technician" label="Rol técnico" :error="createError('roles')" @update:model-value="createForm.esTecnico = $event === 'SI'" @blur="touchCreate('roles')">
           <option value="NO">No</option><option value="SI">Sí</option>
         </BaseSelect>
         <section v-if="createForm.esTecnico" class="certificate-section">
           <div class="certificate-section__title"><h3>Certificado técnico</h3><span>Opcional</span></div>
-          <p>Esta sección solo aparece cuando Rol técnico = Sí. Puedes crear al técnico sin certificado.</p>
-          <BaseFileUpload v-model="createFile" name="create-certificate" label="Adjuntar certificado" hint="Opcional · puedes dejarlo vacío" :error="createError('certificateFile')" @blur="touchCreate('certificateFile')" />
-          <p>Si adjuntas un certificado, fecha de emisión y fecha de vencimiento pasan a ser obligatorias.</p>
-          <div class="certificate-dates">
-            <BaseDateTimePicker v-model="createForm.certificadoFechaEmision" mode="date" name="create-issued" label="Fecha de emisión" :required="Boolean(createFile)" :disabled="!createFile" :hint="createFile ? undefined : 'Se habilita al adjuntar un certificado.'" :error="createError('certificadoFechaEmision')" @blur="touchCreate('certificadoFechaEmision')" />
-            <BaseDateTimePicker v-model="createForm.certificadoFechaVencimiento" mode="date" name="create-expiry" label="Fecha de vencimiento" :required="Boolean(createFile)" :disabled="!createFile" :min="createForm.certificadoFechaEmision ?? undefined" :hint="createFile ? undefined : 'Se habilita al adjuntar un certificado.'" :error="createError('certificadoFechaVencimiento')" @blur="touchCreate('certificadoFechaVencimiento')" />
+          <BaseFileUpload v-model="createFile" name="create-certificate" label="Adjuntar certificado" :error="createError('certificateFile')" @blur="touchCreate('certificateFile')" />
+          <div v-if="createFile" class="certificate-dates">
+            <BaseDateTimePicker v-model="createForm.certificadoFechaEmision" mode="date" name="create-issued" label="Fecha de emisión" required :error="createError('certificadoFechaEmision')" @blur="touchCreate('certificadoFechaEmision')" />
+            <BaseDateTimePicker v-model="createForm.certificadoFechaVencimiento" mode="date" name="create-expiry" label="Fecha de vencimiento" required :min="createForm.certificadoFechaEmision ?? undefined" :error="createError('certificadoFechaVencimiento')" @blur="touchCreate('certificadoFechaVencimiento')" />
           </div>
         </section>
       </form>
@@ -497,14 +509,17 @@ function certificateSummary(user: UserRecord): string {
 .rules-card { display: grid; align-content: start; gap: 1rem; }
 .rules-card p { margin: 0; color: var(--text-secondary); }
 .certificate-alert { display: grid; gap: 0.25rem; border-radius: 8px; background: var(--warning-subtle); padding: 1rem; color: var(--warning); }
-.dialog-form { display: grid; gap: 1.5rem; }
-.required-legend { margin: 0; color: var(--text-secondary); font-size: 0.8125rem; }
-.required-legend span { color: var(--danger); }
+.dialog-form { display: grid; gap: 1.25rem; }
+.email-field { display: grid; gap: 0.375rem; }
+.field-warning { margin: 0; color: var(--warning); font-size: 0.8125rem; line-height: 1.125rem; }
 .certificate-section { display: grid; gap: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--bg); padding: 1rem; }
 .certificate-section__title { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .certificate-section__title h3 { margin: 0; font-size: 1rem; font-weight: 500; }
 .certificate-section__title span, .certificate-section p { margin: 0; color: var(--text-secondary); font-size: 0.8125rem; }
-.certificate-dates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+.certificate-dates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 0.75rem; }
+.certificate-dates :deep(.date-time-control) { min-height: 44px; height: 44px; }
+.certificate-dates :deep(.date-time-control input) { height: 42px; padding-block: 0.5rem; }
+.certificate-dates :deep(.icon-button) { align-self: center; }
 .current-certificate { display: grid; gap: 0.25rem; border-radius: 8px; background: var(--info-subtle); padding: 0.75rem; color: var(--info); }
 .current-certificate span { color: var(--text-secondary); }
 .certificate-replacement { width: min(100%, 22rem); }
