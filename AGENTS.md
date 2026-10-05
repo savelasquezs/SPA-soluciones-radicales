@@ -122,6 +122,9 @@ No inventar requisitos. Ante una contradicción, detener únicamente la parte af
 
 - Diseñar mobile-first para el Técnico.
 - Mantener contexto Negocio → Sede → Área → Servicio.
+- En desktop administrativo priorizar densidad y área útil: metadatos secundarios no deben desplazar listas, tablas o historiales innecesariamente bajo el fold.
+- Todo celular visible y accionable usa el componente compartido de WhatsApp con icono inline y número; no duplicar un botón de WhatsApp separado.
+- Los nombres de entidades navegables usan color normal de texto y comunican interacción mediante cursor, hover/focus y subrayado, no mediante color de acento permanente.
 - Usar loading, toast, confirmación y errores globales.
 - Prevenir doble envío y preservar datos ante fallos.
 - Toda pantalla contempla carga, contenido, vacío, error y reintento.

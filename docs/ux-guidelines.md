@@ -14,6 +14,23 @@ La interfaz sigue las tareas reales de Administradores y Técnicos. Una tabla o 
 - Usar patrones compartidos antes que soluciones visuales locales.
 - Reducir llamadas y trabajo real antes de ocultarlos con loading.
 
+## Densidad administrativa
+
+En desktop administrativo se prioriza la información operativa por encima de metadatos y decoración.
+
+- Encabezados, resúmenes y acciones secundarias deben consumir solo el espacio necesario para identificar el contexto.
+- Listas, Sedes, Áreas, Dispositivos e historiales deben dominar el viewport cuando sean la tarea principal.
+- Evitar varias cards grandes para datos breves que pueden convivir en una franja compacta.
+- En desktop se permiten controles visualmente compactos cuando preservan foco, legibilidad y semántica; en mobile las zonas táctiles continúan siendo de al menos 44 px.
+- La densidad no elimina estados, labels necesarios ni feedback; elimina espacio y superficies redundantes.
+
+## Enlaces de entidades y celulares
+
+- Los nombres de entidades navegables usan el color normal de texto. La interacción se comunica mediante cursor, foco visible y subrayado en hover/focus, no mediante color de acento permanente.
+- Todo celular accionable se muestra con el componente compartido de WhatsApp: icono de WhatsApp inline + número en formato humano.
+- No renderizar un celular como texto plano junto a un botón de WhatsApp separado.
+- El enlace abre `wa.me` con el número normalizado y conserva un nombre accesible explícito.
+
 ## Navegación
 
 La navegación principal representa áreas de trabajo globales y frecuentes, no cada CRUD.

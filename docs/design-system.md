@@ -93,7 +93,9 @@ Las variantes se expresan con props tipadas. No duplicar clases completas en com
 
 ## Controles
 
-- Altura táctil mínima: 44 px.
+- Altura táctil mínima: 44 px en mobile y superficies de campo.
+- `BaseButton` ofrece `size="compact"` para acciones administrativas de desktop; visualmente puede bajar a 36 px, pero recupera 44 px en viewport móvil.
+- `BaseIconButton size="small"` es la variante compacta para acciones por fila en desktop.
 - Foco visible en todos los controles interactivos.
 - Disabled y loading son estados diferentes y perceptibles.
 - Botones con solo icono requieren nombre accesible y tooltip cuando aporte contexto.
@@ -113,6 +115,14 @@ Las variantes se expresan con props tipadas. No duplicar clases completas en com
 - Agrupar por significado, no por columnas de base de datos.
 
 Estas reglas siguen patrones consolidados de formularios de GitHub Primer y Atlassian: labels permanentes y concisos, captions para contexto, validación junto al campo y agrupación visual que reduce carga cognitiva.
+
+## Enlaces de entidad y WhatsApp
+
+- Un nombre de Cliente, Sede, Área o Servicio navegable usa `--text` por defecto, no `--accent`.
+- Hover/focus puede subrayar el texto y cambiar el cursor; el foco visible sigue siendo obligatorio.
+- El acento de marca se reserva para CTA, foco, selección y navegación activa.
+- `WhatsAppPhoneLink` es la única representación interactiva aprobada para celulares visibles: icono de WhatsApp inline, número legible y destino `wa.me`.
+- El icono de WhatsApp no convierte toda la fila en un bloque verde; permanece discreto y puede enfatizarse solo en interacción.
 
 ## Responsive
 
