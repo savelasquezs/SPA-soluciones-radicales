@@ -14,7 +14,7 @@ Las primitivas transversales conocidas se crean como fundación antes de desarro
 
 | Capa | Responsabilidad | No debe hacer |
 |---|---|---|
-| `components/base` | Primitivas visuales y accesibles | Consultar Supabase o conocer entidades |
+| `components/base` | Primitivas visuales y accesibles | Consultar proveedores o conocer entidades |
 | `components/layout` | Shell, navegación y distribución | Contener reglas de negocio |
 | `components/domain` | Bloques visuales reutilizables de negocio | Ser dueño de datos globales o consultar directamente |
 | `views` | Componer una ruta y coordinar su caso de uso | Duplicar services, helpers o componentes |
@@ -31,8 +31,8 @@ Las primitivas transversales conocidas se crean como fundación antes de desarro
 - Los componentes base solo usan otros componentes base, helpers y tipos neutrales.
 - Los stores pueden usar services, helpers y tipos.
 - Los composables pueden usar stores, services, helpers y tipos cuando su contrato lo necesite.
-- Los services pueden usar el cliente Supabase, helpers y tipos.
-- Los helpers y tipos no dependen de Vue, Pinia, router o Supabase.
+- Los services pueden usar los clientes compartidos de Neon Auth/Data API/Functions, helpers y tipos.
+- Los helpers y tipos no dependen de Vue, Pinia, router o proveedores remotos.
 
 No se permiten ciclos entre stores y composables. Si dos stores se necesitan mutuamente, extraer la coordinación a un service o composable de nivel superior.
 
@@ -90,21 +90,21 @@ Antes de crear estado responder:
 4. ¿Debe sobrevivir recarga o pérdida de conexión? IndexedDB mediante una capa compartida.
 5. ¿Es la fuente de verdad del negocio? PostgreSQL.
 
-No persistir automáticamente todo Pinia en `localStorage`. Identidad, roles, tokens y permisos provienen de Supabase y se revalidan.
+No persistir automáticamente todo Pinia en `localStorage`. Identidad, roles, tokens y permisos provienen de Neon Auth y del registro de aplicación, y se revalidan.
 
 ## Datos remotos
 
 Los services encapsulan:
 
-- consultas y RPC;
+- consultas permitidas por RLS mediante Neon Data API;
 - serialización entre `snake_case` remoto y contratos frontend cuando se decida mapearlos;
 - errores técnicos convertidos en errores de aplicación seguros;
 - cancelación o descarte de respuestas obsoletas;
 - paginación y límites;
-- invocación de Edge Functions;
-- URLs firmadas y cargas a Storage autorizadas.
+- invocación de Neon Functions para operaciones privilegiadas o con secretos;
+- URLs firmadas y cargas autorizadas a Cloudflare R2 mediante backend.
 
-Una consulta usada por más de un módulo tiene una sola implementación. Los nombres de tablas, RPC, buckets y Edge Functions no se dispersan en componentes.
+Una consulta usada por más de un módulo tiene una sola implementación. Los nombres de tablas, endpoints, buckets y Functions no se dispersan en componentes.
 
 ## Caché e invalidación
 
@@ -159,7 +159,7 @@ Debe recibir datos tipados y emitir intenciones. La vista o composable ejecuta l
 
 - Cargar cada módulo bajo demanda por ruta.
 - Dividir dependencias pesadas solo cuando exista beneficio medible.
-- No usar polling si Realtime, invalidación o una actualización explícita resuelven el caso.
+- No usar polling si invalidación, eventos del backend o una actualización explícita resuelven el caso.
 - Cancelar o ignorar respuestas de navegación anterior.
 - Debounce únicamente entradas que disparan trabajo real, como búsquedas remotas.
 - Optimizar imágenes antes de subirlas.
@@ -177,7 +177,7 @@ Debe recibir datos tipados y emitir intenciones. La vista o composable ejecuta l
 ## Lista de revisión
 
 - [ ] Se buscó una solución compartida existente.
-- [ ] La vista no consulta Supabase directamente.
+- [ ] La vista no consulta Neon ni otros proveedores directamente.
 - [ ] El estado está en la capa correcta.
 - [ ] No existe una segunda implementación del mismo patrón.
 - [ ] Los contratos están tipados y no usan `any`.

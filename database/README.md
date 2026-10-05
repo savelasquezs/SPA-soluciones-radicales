@@ -25,16 +25,18 @@ database/
 YYYYMMDD_NNN_descripcion.sql
 ```
 
-Ejemplos previstos para el nuevo baseline:
+Baseline activo y extensiones del MVP:
 
 ```text
 20261004_001_initial_schema.sql
 20261004_002_integrity_and_rls.sql
+20261004_003_fix_correlated_rls_policies.sql
+20261004_004_mvp_backend_support.sql
 ```
 
 `NNN` es secuencial dentro del día. La descripción usa minúsculas y guion bajo.
 
-No se crean migraciones vacías. El baseline Neon se escribirá después de enlazar el proyecto, habilitar Managed Better Auth/Data API y verificar el contexto real de `auth.user_id()` y `auth.session()`.
+No se crean migraciones vacías. El baseline se creó después de enlazar el proyecto, habilitar Managed Better Auth/Data API y verificar en la rama `desarrollo` el contexto real de `auth.user_id()` y `auth.session()`.
 
 ## Inmutabilidad
 
@@ -78,4 +80,4 @@ npm run db:diff
 npm run db:migrate
 ```
 
-El repo debe estar enlazado a Neon mediante `neon link`. Confirmar siempre la rama Neon antes de migrar.
+El repo debe estar enlazado a Neon mediante `neon link`. Confirmar siempre la rama Neon antes de migrar. Los runners de migración y bootstrap bloquean `production` salvo autorización explícita mediante `ALLOW_NEON_PRODUCTION=true`.

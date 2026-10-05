@@ -19,16 +19,21 @@ La raíz del repositorio contiene `wrangler.jsonc`:
 
 ```jsonc
 {
-  "name": "soluciones-radicales-mip",
+  "name": "soluciones-radicales",
   "compatibility_date": "2026-10-04",
   "assets": {
     "directory": "./dist",
     "not_found_handling": "single-page-application"
-  }
+  },
+  "previews": {}
 }
 ```
 
 No agregar `main` hasta que exista una necesidad real de ejecutar código Worker.
+
+El bloque `previews` habilita `wrangler preview` para los despliegues aislados de ramas y PR.
+
+El nombre coincide con el Worker existente conectado a este repositorio; cambiarlo crearía un despliegue separado. El prefijo `spa-` permanece en el nombre del repositorio, no en el recurso Worker vigente.
 
 ## Configuración en Cloudflare Builds
 
@@ -51,6 +56,7 @@ Las variables públicas necesarias por Vite se configuran en el entorno de build
 ```text
 VITE_NEON_AUTH_URL
 VITE_NEON_DATA_API_URL
+VITE_NEON_FUNCTION_URL
 ```
 
 Todo valor `VITE_*` termina disponible para el navegador y, por tanto, nunca puede contener secretos.
@@ -62,6 +68,17 @@ No exponer:
 - credenciales de R2;
 - tokens de Google;
 - claves administrativas de Neon.
+
+Los tres valores públicos deben existir tanto en Production como en Preview. La URL exacta de cada preview autorizado se registra además en los dominios confiables de Neon Auth y en `ALLOWED_ORIGINS` de la Function.
+
+La configuración actual de Cloudflare Builds no entrega variables de build a los previews. Para que las ramas distintas de `main` sigan siendo verificables, `vite.config.ts` define únicamente durante `WORKERS_CI=1` los endpoints públicos de la rama Neon `desarrollo`. Este fallback:
+
+- solo aplica si `WORKERS_CI_BRANCH` no es `main`;
+- no contiene secretos;
+- no reemplaza una variable `VITE_*` que Cloudflare sí haya definido;
+- nunca configura endpoints productivos.
+
+El build de `main` no tiene fallback y debe recibir explícitamente los tres endpoints públicos de la rama Neon productiva antes de cualquier despliegue de producción.
 
 ## Desarrollo
 
@@ -86,6 +103,24 @@ npm run cloudflare:deploy
 ```
 
 Normalmente producción se despliega mediante la integración Git de Cloudflare al actualizar `main`.
+
+## Preview del MVP
+
+La rama Git `codex/mvp-e2e` se publica mediante Cloudflare Builds en:
+
+```text
+https://codex-mvp-e2e-soluciones-radicales.solucionesradicales1.workers.dev
+```
+
+La validación del 2026-10-04 confirmó:
+
+- build y despliegue automático de commits de la rama;
+- carga directa y recarga de `/usuarios` sin 404 del servidor;
+- fallback a la vista 404 de Vue para rutas desconocidas;
+- Auth, Data API y Functions de la rama Neon `desarrollo`;
+- navegación autenticada desktop y mobile sin desbordamiento horizontal inesperado.
+
+Este preview no cambia el Worker productivo ni la rama Neon `production`. La promoción de `main` y la configuración de endpoints productivos requieren autorización separada.
 
 ## SPA routing
 
