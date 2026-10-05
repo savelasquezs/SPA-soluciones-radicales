@@ -127,7 +127,7 @@ async function sendTest(): Promise<void> {
           </BaseButton>
         </section>
 
-        <form class="card" @submit.prevent="sendTest">
+        <form class="card" novalidate @submit.prevent="sendTest">
           <h2>Prueba real de Gmail</h2>
           <p class="muted">El mensaje se enviará desde solucionesradicales1@gmail.com.</p>
           <div class="form-grid email-form">

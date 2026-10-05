@@ -1,4 +1,4 @@
-import { computed, reactive, ref } from 'vue'
+import { computed, nextTick, reactive, ref } from 'vue'
 
 type FieldKey<T> = Extract<keyof T, string>
 type Validator<T> = (value: T[FieldKey<T>], form: T) => string | null
@@ -28,7 +28,13 @@ export function useFormValidation<T extends object>(
 
   function validate(): boolean {
     submitted.value = true
-    return !Object.values(errors.value).some(Boolean)
+    const valid = !Object.values(errors.value).some(Boolean)
+    if (!valid) {
+      void nextTick(() => {
+        document.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
+      })
+    }
+    return valid
   }
 
   function resetValidation(): void {

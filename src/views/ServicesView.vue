@@ -318,7 +318,7 @@ function formatDate(value?: string): string {
       </header>
 
       <template v-if="session.isAdmin">
-        <form class="card" @submit.prevent="createService">
+        <form class="card" novalidate @submit.prevent="createService">
           <div class="section-heading">
             <div>
               <h2>Programar Servicio</h2>
@@ -386,7 +386,7 @@ function formatDate(value?: string): string {
           </div>
         </form>
 
-        <form v-if="showClientForm" class="card" @submit.prevent="createClient">
+        <form v-if="showClientForm" class="card" novalidate @submit.prevent="createClient">
           <h2>Nuevo Negocio o Sede</h2>
           <div class="form-grid service-form">
             <BaseSelect v-model="clientForm.negocioId" label="Negocio" name="negocioId" help="Selecciona uno existente o crea uno nuevo.">

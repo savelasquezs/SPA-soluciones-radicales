@@ -762,7 +762,10 @@ function optionalString(value: unknown): string | null {
 }
 
 function requiredInteger(body: Record<string, unknown>, key: string): number {
-  const value = body[key]
+  const rawValue = body[key]
+  const value = typeof rawValue === 'string' && /^\d+$/u.test(rawValue)
+    ? Number(rawValue)
+    : rawValue
   if (!Number.isSafeInteger(value) || Number(value) < 0) {
     throw new ApiError(422, `${key} debe ser un entero válido`)
   }

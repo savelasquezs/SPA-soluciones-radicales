@@ -83,7 +83,7 @@ async function loadUsers(): Promise<void> {
   loading.value = true
   loadError.value = null
   try {
-    users.value = await dataApiSelect<UserRecord[]>(
+    const records = await dataApiSelect<UserRecord[]>(
       'usuarios',
       new URLSearchParams({
         select:
@@ -91,6 +91,7 @@ async function loadUsers(): Promise<void> {
         order: 'activo.desc,nombre_completo.asc',
       }),
     )
+    users.value = records.map(normalizeUserRecord)
   } catch (error) {
     loadError.value = error instanceof Error ? error.message : 'No fue posible cargar los usuarios'
   } finally {
@@ -130,17 +131,17 @@ async function save(): Promise<void> {
   saving.value = true
   try {
     if (editingId.value) {
-      const updated = await apiRequest<UserRecord>(`api/users/${editingId.value}`, {
+      const updated = normalizeUserRecord(await apiRequest<UserRecord>(`api/users/${editingId.value}`, {
         method: 'PATCH',
         body: JSON.stringify(form),
-      })
+      }))
       users.value = users.value.map((user) => (user.id === updated.id ? updated : user))
       notifications.show('Usuario actualizado', 'success')
     } else {
-      const created = await apiRequest<UserRecord>('api/users', {
+      const created = normalizeUserRecord(await apiRequest<UserRecord>('api/users', {
         method: 'POST',
         body: JSON.stringify(form),
-      })
+      }))
       users.value = [...users.value, created].sort((a, b) => a.nombreCompleto.localeCompare(b.nombreCompleto))
       notifications.show('Usuario creado', 'success')
     }
@@ -162,10 +163,10 @@ async function confirmToggle(): Promise<void> {
   const action = user.activo ? 'desactivar' : 'reactivar'
   togglingId.value = user.id
   try {
-    const updated = await apiRequest<UserRecord>(`api/users/${user.id}`, {
+    const updated = normalizeUserRecord(await apiRequest<UserRecord>(`api/users/${user.id}`, {
       method: 'PATCH',
       body: JSON.stringify({ ...user, activo: !user.activo }),
-    })
+    }))
     users.value = users.value.map((record) => (record.id === user.id ? updated : record))
     notifications.show(`Usuario ${updated.activo ? 'reactivado' : 'desactivado'}`, 'success')
   } catch (error) {
@@ -178,6 +179,10 @@ async function confirmToggle(): Promise<void> {
 
 function dateOnly(value: string | null): string | null {
   return value ? value.slice(0, 10) : null
+}
+
+function normalizeUserRecord(user: UserRecord): UserRecord {
+  return { ...user, version: Number(user.version) }
 }
 
 function formatCertificateDate(value: string | null): string {
@@ -196,7 +201,7 @@ function formatCertificateDate(value: string | null): string {
         </div>
       </header>
 
-      <form class="card" @submit.prevent="save">
+      <form class="card" novalidate @submit.prevent="save">
         <h2>{{ editingId ? 'Editar usuario' : 'Autorizar usuario' }}</h2>
         <div class="form-grid user-form">
           <BaseInput
