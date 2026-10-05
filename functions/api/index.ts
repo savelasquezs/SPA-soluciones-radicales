@@ -20,6 +20,13 @@ import {
   sendGmailMessage,
   upsertCalendarEvent,
 } from './google'
+import {
+  MASTER_FILE_KINDS,
+  assertMasterStoragePath,
+  createMasterReadUrl,
+  createMasterUploadUrl,
+  deleteMasterObject,
+} from './r2'
 
 type AppEnvironment = {
   Variables: {
@@ -145,6 +152,34 @@ app.get('/health', (context) =>
 app.get('/api/session', async (context) => {
   const profile = await transaction((client) => bootstrapProfile(client, context.get('identity')))
   return context.json(profile)
+})
+
+app.post('/api/files/master/upload-url', async (context) => {
+  const body = await jsonBody(context.req.raw)
+  const kind = enumValue(body.kind, MASTER_FILE_KINDS, 'kind')
+  const fileName = requiredString(body, 'fileName')
+  const contentType = typeof body.contentType === 'string' ? body.contentType : ''
+  const size = requiredPositiveInteger(body, 'size')
+
+  await transaction((client) => requireAdmin(client, context.get('identity')))
+  return context.json(createMasterUploadUrl({ kind, fileName, contentType, size }))
+})
+
+app.post('/api/files/master/read-url', async (context) => {
+  const body = await jsonBody(context.req.raw)
+  const storagePath = requiredString(body, 'storagePath')
+  assertMasterStoragePath(storagePath)
+  await transaction((client) => requireAdmin(client, context.get('identity')))
+  return context.json({ url: createMasterReadUrl(storagePath) })
+})
+
+app.post('/api/files/master/delete', async (context) => {
+  const body = await jsonBody(context.req.raw)
+  const storagePath = requiredString(body, 'storagePath')
+  assertMasterStoragePath(storagePath)
+  await transaction((client) => requireAdmin(client, context.get('identity')))
+  await deleteMasterObject(storagePath)
+  return context.body(null, 204)
 })
 
 app.post('/api/session/role', async (context) => {
