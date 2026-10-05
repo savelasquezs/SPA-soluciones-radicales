@@ -129,6 +129,18 @@ Una consulta usada por más de un módulo tiene una sola implementación. Los no
 - La navegación con cambios sin guardar exige confirmación.
 - El servidor repite todas las validaciones de integridad y autorización.
 
+### Caso aplicado: Usuarios
+
+El módulo `/usuarios` usa la tabla únicamente como superficie de consulta y acciones. Cada fila expone **Editar** y abre el mismo diálogo utilizado para el alta, precargado con el registro definitivo obtenido por `GET /api/users/:id`.
+
+- Crear y editar comparten campos, validaciones y feedback.
+- El formulario de edición no se renderiza debajo de la tabla.
+- El correo queda bloqueado cuando `auth_user_id` ya está vinculado a Google.
+- Roles, estado y datos del certificado se editan dentro del mismo flujo.
+- La desactivación conserva confirmación destructiva y el historial del usuario.
+- En móvil, las cards conservan una acción explícita **Editar usuario**.
+- La carga o reemplazo del archivo del certificado continúa bloqueada hasta disponer del backend autorizado de R2.
+
 ## Errores y feedback
 
 Los services no muestran toasts. Devuelven datos o errores normalizados. La vista o composable decide el feedback según el contexto.
