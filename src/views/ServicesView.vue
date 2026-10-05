@@ -1,34 +1,30 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 
 import BaseButton from '@/components/base/BaseButton.vue'
-import BaseCheckbox from '@/components/base/BaseCheckbox.vue'
 import BaseDateTimePicker from '@/components/base/BaseDateTimePicker.vue'
 import BaseInput from '@/components/base/BaseInput.vue'
 import BaseSelect from '@/components/base/BaseSelect.vue'
 import BaseTextarea from '@/components/base/BaseTextarea.vue'
-import ConfirmDialog from '@/components/base/ConfirmDialog.vue'
 import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import StatusPanel from '@/components/base/StatusPanel.vue'
 import { useFormValidation } from '@/composables/useFormValidation'
-import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
 import { clearServiceDraft, loadServiceDraft, saveServiceDraft } from '@/services/draftService'
-import { createClientSite, createScheduledService, getServiceWorkspace, retryServiceCalendar } from '@/services/servicesService'
+import { createScheduledService, getServiceWorkspace, retryServiceCalendar } from '@/services/servicesService'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useAuthStore } from '@/stores/auth'
 import type { ClientSite, ServiceDraft, ServiceRecord, Technician } from '@/types/domain'
 
 const session = useAuthStore()
 const notifications = useNotificationsStore()
+const router = useRouter()
 const clients = ref<ClientSite[]>([])
 const technicians = ref<Technician[]>([])
 const services = ref<ServiceRecord[]>([])
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const saving = ref(false)
-const savingClient = ref(false)
-const showClientForm = ref(false)
-const closeClientConfirmOpen = ref(false)
 const retryingId = ref<string | null>(null)
 const online = ref(navigator.onLine)
 let draftReady = false
@@ -50,37 +46,7 @@ const form = reactive<ServiceDraft>({
   observaciones: '',
 })
 
-const emptyClientForm = () => ({
-  negocioId: '',
-  nit: '',
-  negocioNombre: '',
-  sedeNombre: '',
-  direccion: '',
-  contactoNombre: '',
-  contactoCorreo: '',
-  valorServicio: '',
-  periodicidadMeses: '1',
-  manejaRefuerzo: false,
-  tipoSede: 'NEGOCIO',
-  duracionServicioMinutos: '120',
-  correos: [] as string[],
-})
-const clientForm = reactive(emptyClientForm())
-const clientFormDirty = computed(() => JSON.stringify(clientForm) !== JSON.stringify(emptyClientForm()))
-const {
-  confirmOpen: discardConfirmOpen,
-  cancelDiscard,
-  confirmDiscard,
-} = useUnsavedChanges(computed(() => showClientForm.value && clientFormDirty.value))
-
 const selectedSite = computed(() => clients.value.find((client) => client.sedeId === form.sedeId))
-const businesses = computed(() => Array.from(
-  new Map(clients.value.map((client) => [client.negocioId, {
-    id: client.negocioId,
-    nombre: client.negocioNombre,
-    nit: client.nit,
-  }])).values(),
-).sort((a, b) => a.nombre.localeCompare(b.nombre)))
 const serviceValidation = useFormValidation(form, {
   sedeId: (value) => String(value).trim() ? null : 'Selecciona una Sede',
   tecnicoResponsableId: (value) => String(value).trim() ? null : 'Selecciona el Técnico responsable',
@@ -88,27 +54,6 @@ const serviceValidation = useFormValidation(form, {
   duracionMinutos: (value) => Number.isSafeInteger(Number(value)) && Number(value) > 0
     ? null
     : 'La duración debe ser un entero mayor que cero',
-})
-const clientValidation = useFormValidation(clientForm, {
-  nit: (value, current) => current.negocioId || String(value).trim() ? null : 'El NIT es obligatorio',
-  negocioNombre: (value, current) => current.negocioId || String(value).trim()
-    ? null
-    : 'El nombre del Negocio es obligatorio',
-  sedeNombre: (value) => String(value).trim() ? null : 'El nombre de la Sede es obligatorio',
-  direccion: (value) => String(value).trim() ? null : 'La dirección es obligatoria',
-  contactoNombre: (value) => String(value).trim() ? null : 'El contacto principal es obligatorio',
-  contactoCorreo: (value) => !String(value).trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value))
-    ? null
-    : 'Ingresa un correo válido',
-  valorServicio: (value) => Number.isSafeInteger(Number(value)) && Number(value) >= 0
-    ? null
-    : 'El valor debe ser un entero en COP',
-  periodicidadMeses: (value) => Number.isSafeInteger(Number(value)) && Number(value) > 0
-    ? null
-    : 'La periodicidad debe ser mayor que cero',
-  duracionServicioMinutos: (value) => Number.isSafeInteger(Number(value)) && Number(value) > 0
-    ? null
-    : 'La duración debe ser mayor que cero',
 })
 
 watch(
@@ -158,28 +103,6 @@ async function loadData(): Promise<void> {
     loadError.value = error instanceof Error ? error.message : 'No fue posible cargar los Servicios'
   } finally {
     loading.value = false
-  }
-}
-
-async function createClient(): Promise<void> {
-  if (!clientValidation.validate()) return
-  savingClient.value = true
-  try {
-    const addedToExistingBusiness = Boolean(clientForm.negocioId)
-    const result = await createClientSite(clientForm)
-    clients.value = [...clients.value, result].sort((a, b) =>
-      `${a.negocioNombre}\u0000${a.sedeNombre}`.localeCompare(`${b.negocioNombre}\u0000${b.sedeNombre}`),
-    )
-    form.sedeId = result.sedeId
-    form.duracionMinutos = clientForm.duracionServicioMinutos
-    showClientForm.value = false
-    Object.assign(clientForm, emptyClientForm())
-    clientValidation.resetValidation()
-    notifications.show(addedToExistingBusiness ? 'Sede creada y seleccionada' : 'Negocio y Sede creados', 'success')
-  } catch (error) {
-    notifications.show(error instanceof Error ? error.message : 'No fue posible crear el cliente', 'error')
-  } finally {
-    savingClient.value = false
   }
 }
 
@@ -240,21 +163,6 @@ function updateConnectivity(): void {
   online.value = navigator.onLine
 }
 
-function toggleClientForm(): void {
-  if (showClientForm.value && clientFormDirty.value) {
-    closeClientConfirmOpen.value = true
-    return
-  }
-  showClientForm.value = !showClientForm.value
-}
-
-function discardClientForm(): void {
-  Object.assign(clientForm, emptyClientForm())
-  clientValidation.resetValidation()
-  showClientForm.value = false
-  closeClientConfirmOpen.value = false
-}
-
 function selectSite(sedeId: string): void {
   form.sedeId = sedeId
   const site = clients.value.find((client) => client.sedeId === sedeId)
@@ -291,7 +199,7 @@ function formatDate(value?: string): string {
               <h2>Programar Servicio</h2>
               <p class="muted">El valor se deriva de la Sede y la duración puede ajustarse para esta visita.</p>
             </div>
-            <BaseButton variant="secondary" @click="toggleClientForm">{{ showClientForm ? 'Cerrar cliente' : 'Nuevo cliente' }}</BaseButton>
+            <BaseButton variant="secondary" @click="router.push('/clientes')">Administrar clientes</BaseButton>
           </div>
           <div class="form-grid service-form">
             <BaseSelect
@@ -353,40 +261,6 @@ function formatDate(value?: string): string {
           </div>
         </form>
 
-        <form v-if="showClientForm" class="card" novalidate @submit.prevent="createClient">
-          <h2>Nuevo Negocio o Sede</h2>
-          <div class="form-grid service-form">
-            <BaseSelect v-model="clientForm.negocioId" label="Negocio" name="negocioId" hint="Selecciona uno existente o crea uno nuevo.">
-              <option value="">Crear nuevo Negocio</option>
-              <option v-for="business in businesses" :key="business.id" :value="business.id">
-                {{ business.nombre }} · {{ business.nit }}
-              </option>
-            </BaseSelect>
-            <template v-if="!clientForm.negocioId">
-              <BaseInput v-model="clientForm.nit" label="NIT" name="nit" required :error="clientValidation.error('nit')" @blur="clientValidation.touch('nit')" />
-              <BaseInput v-model="clientForm.negocioNombre" label="Nombre del Negocio" name="negocioNombre" required :error="clientValidation.error('negocioNombre')" @blur="clientValidation.touch('negocioNombre')" />
-            </template>
-            <BaseInput v-model="clientForm.sedeNombre" label="Nombre de la Sede" name="sedeNombre" required :error="clientValidation.error('sedeNombre')" @blur="clientValidation.touch('sedeNombre')" />
-            <BaseInput v-model="clientForm.direccion" label="Dirección" name="direccion" autocomplete="street-address" required :error="clientValidation.error('direccion')" @blur="clientValidation.touch('direccion')" />
-            <BaseInput v-model="clientForm.contactoNombre" label="Contacto principal" name="contactoNombre" autocomplete="name" required :error="clientValidation.error('contactoNombre')" @blur="clientValidation.touch('contactoNombre')" />
-            <BaseInput v-model="clientForm.contactoCorreo" label="Correo del contacto" name="contactoCorreo" type="email" autocomplete="email" :error="clientValidation.error('contactoCorreo')" @blur="clientValidation.touch('contactoCorreo')" />
-            <BaseInput v-model="clientForm.valorServicio" label="Valor en COP" name="valorServicio" type="number" min="0" step="1" required :error="clientValidation.error('valorServicio')" @blur="clientValidation.touch('valorServicio')" />
-            <BaseInput v-model="clientForm.periodicidadMeses" label="Periodicidad en meses" name="periodicidadMeses" type="number" min="1" step="1" required :error="clientValidation.error('periodicidadMeses')" @blur="clientValidation.touch('periodicidadMeses')" />
-            <BaseInput v-model="clientForm.duracionServicioMinutos" label="Duración en minutos" name="duracionServicioMinutos" type="number" min="1" step="1" required :error="clientValidation.error('duracionServicioMinutos')" @blur="clientValidation.touch('duracionServicioMinutos')" />
-            <BaseSelect v-model="clientForm.tipoSede" label="Tipo de Sede" name="tipoSede" required>
-              <option value="NEGOCIO">Negocio</option>
-              <option value="RESIDENCIAL">Residencial</option>
-            </BaseSelect>
-            <BaseCheckbox
-              v-model="clientForm.manejaRefuerzo"
-              label="La Sede maneja visita de refuerzo"
-              name="manejaRefuerzo"
-            />
-          </div>
-          <div class="form-actions">
-            <BaseButton type="submit" :loading="savingClient">Crear y seleccionar</BaseButton>
-          </div>
-        </form>
       </template>
 
       <LoadingSkeleton v-if="loading" label="Cargando Servicios" :lines="5" />
@@ -433,24 +307,6 @@ function formatDate(value?: string): string {
         </table>
       </section>
 
-      <ConfirmDialog
-        :open="closeClientConfirmOpen"
-        title="Descartar cliente"
-        message="Hay datos del Negocio o la Sede que todavía no se han guardado."
-        confirm-label="Descartar"
-        danger
-        @cancel="closeClientConfirmOpen = false"
-        @confirm="discardClientForm"
-      />
-      <ConfirmDialog
-        :open="discardConfirmOpen"
-        title="Descartar cambios"
-        message="Hay datos del Negocio o la Sede que todavía no se han guardado."
-        confirm-label="Descartar y salir"
-        danger
-        @cancel="cancelDiscard"
-        @confirm="confirmDiscard"
-      />
   </div>
 </template>
 

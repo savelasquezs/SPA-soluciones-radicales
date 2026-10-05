@@ -29,6 +29,8 @@ vi.mock('./auth', () => ({
     constructor(
       public readonly status: number,
       message: string,
+      public readonly code?: string,
+      public readonly details?: Record<string, unknown>,
     ) {
       super(message)
     }
@@ -221,5 +223,109 @@ describe('User certificate integrity', () => {
 
     expect(response.status).toBe(409)
     expect(body).toEqual({ error: 'Este correo ya está registrado.' })
+  })
+})
+
+describe('Clients, Sites and Areas API', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    verifyAuthorization.mockResolvedValue({ authUserId: 'auth-user', session: { sub: 'auth-user' } })
+    requireAdmin.mockResolvedValue({ id: 'admin-id' })
+    transaction.mockImplementation(async (callback) => callback({ query: clientQuery }))
+  })
+
+  it('creates a minimal residential Client with one internal residential Site', async () => {
+    clientQuery.mockImplementation(async (sql) => {
+      if (sql.includes('insert into public.negocios')) return { rows: [{ id: 'client-id' }], rowCount: 1 }
+      if (sql.includes('insert into public.sedes')) return { rows: [], rowCount: 1 }
+      if (sql.includes('from public.negocios n')) {
+        return { rows: [{ id: 'client-id', tipoCliente: 'RESIDENCIAL', nombre: 'María Gómez', nit: null, correos: [], activo: true, version: 1, residenciaDireccion: 'Calle 1', residenciaCelular: '+573001234567', sedesCount: 0 }], rowCount: 1 }
+      }
+      return { rows: [], rowCount: 1 }
+    })
+
+    const response = await app.request('/api/clients', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tipoCliente: 'RESIDENCIAL', nombre: 'María Gómez', nit: null, correos: [], activo: true, vigenciaCertificadoMeses: null, plantillaCertificadoStoragePath: null, residenciaDireccion: 'Calle 1', residenciaCelular: '300 123 4567' }),
+    })
+
+    expect(response.status).toBe(201)
+    expect(clientQuery).toHaveBeenCalledWith(expect.stringContaining('insert into public.sedes'), ['client-id', 'María Gómez', 'Calle 1', '+573001234567', true])
+  })
+
+  it('keeps the Services catalog separate and filters residential locations', async () => {
+    clientQuery.mockResolvedValue({ rows: [], rowCount: 0 })
+    const response = await app.request('/api/catalogs/client-sites', { headers: { Authorization: 'Bearer token' } })
+    expect(response.status).toBe(200)
+    expect(clientQuery).toHaveBeenCalledWith(expect.stringContaining("n.tipo_cliente = 'NEGOCIO'"))
+    expect(clientQuery).toHaveBeenCalledWith(expect.stringContaining("s.tipo_sede = 'NEGOCIO'"))
+  })
+
+  it('rejects a commercial Client without NIT', async () => {
+    const response = await app.request('/api/clients', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tipoCliente: 'NEGOCIO', nombre: 'Acme', nit: '', correos: [], activo: true, vigenciaCertificadoMeses: 12, plantillaCertificadoStoragePath: 'templates/acme.docx' }),
+    })
+    expect(response.status).toBe(422)
+    expect(transaction).not.toHaveBeenCalled()
+  })
+
+  it('applies active, type and search filters to the administrative Client list', async () => {
+    clientQuery.mockResolvedValue({ rows: [], rowCount: 0 })
+    const response = await app.request('/api/clients?active=false&type=RESIDENCIAL&search=300', {
+      headers: { Authorization: 'Bearer token' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(clientQuery).toHaveBeenCalledWith(expect.stringContaining('n.nombre ilike'), [false, 'RESIDENCIAL', '300'])
+    expect(clientQuery).toHaveBeenCalledWith(expect.stringContaining('contacto_principal_celular'), [false, 'RESIDENCIAL', '300'])
+  })
+
+  it('rejects an invalid residential phone before opening a transaction', async () => {
+    const response = await app.request('/api/clients', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tipoCliente: 'RESIDENCIAL', nombre: 'Casa', correos: [], activo: true, residenciaDireccion: 'Calle 1', residenciaCelular: '123' }),
+    })
+
+    expect(response.status).toBe(422)
+    expect(transaction).not.toHaveBeenCalled()
+  })
+
+  it('rejects a Site without a valid required phone', async () => {
+    const response = await app.request('/api/clients/client-id/sites', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nombre: 'Principal', direccion: 'Calle 1', correos: [], heredaCorreosCliente: true,
+        contactoPrincipalNombre: 'Ana', contactoPrincipalCorreo: null, contactoPrincipalCelular: '12',
+        valorServicio: 100000, periodicidadMeses: 1, manejaRefuerzo: false, formulariosAplicablesIds: [],
+        planoStoragePath: null, manejaVehiculos: false, generaCertificadoVehiculo: false,
+        vigenciaCertificadoVehiculoMeses: null, plantillaCertificadoVehiculoStoragePath: null,
+        duracionServicioMinutos: 120, activo: true,
+      }),
+    })
+
+    expect(response.status).toBe(422)
+    expect(transaction).not.toHaveBeenCalled()
+  })
+
+  it('returns a typed conflict when an Area version is stale', async () => {
+    clientQuery.mockImplementation(async (sql) => {
+      if (sql.includes('select activo from public.areas')) return { rows: [{ activo: true }], rowCount: 1 }
+      if (sql.includes('update public.areas')) return { rows: [], rowCount: 0 }
+      return { rows: [], rowCount: 1 }
+    })
+    const response = await app.request('/api/areas/area-id', {
+      method: 'PATCH',
+      headers: { Authorization: 'Bearer token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nombre: 'Cocina', esExterna: false, activo: true, version: 1 }),
+    })
+    const body = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(body).toMatchObject({ code: 'VERSION_CONFLICT', details: { entity: 'Área' } })
   })
 })

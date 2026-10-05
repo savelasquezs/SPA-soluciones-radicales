@@ -18,6 +18,11 @@
 ## Archivos privados
 
 - [ ] Implementar el backend autorizado para cargar y reemplazar certificados de usuarios en Cloudflare R2 sin exponer credenciales a la SPA.
+- [ ] Implementar carga, reemplazo, eliminación y URL firmada para planos de Sede y plantillas de certificados en Cloudflare R2.
+
+## Servicios residenciales
+
+- [ ] Definir valor, duración, programación e informe aplicables a Clientes Casa antes de incluir sus ubicaciones internas en el catálogo de programación.
 
 ## Formularios oficiales
 

@@ -33,7 +33,7 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 | Entidad | Responsabilidad |
 |---|---|
 | `usuarios` | Identidad autorizada, roles y certificado del Técnico |
-| `negocios` | Cliente atendido y correos generales |
+| `negocios` | Cliente tipo Negocio o Casa; conserva identidad, estado y configuración compartida |
 | `sedes` | Lugar de servicio, contacto, precio y configuración operativa |
 | `areas` | Espacios de una Sede utilizados en formularios y monitoreo |
 | `plantillas_areas` | Conjuntos reutilizables de Áreas globales o privadas |
@@ -70,7 +70,9 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 
 ### Clientes y contexto
 
-- Un Negocio puede tener varias Sedes.
+- El concepto visible es Cliente. Un Cliente puede ser Negocio o Casa.
+- Un Cliente Negocio puede tener varias Sedes y su configuración de certificado de establecimiento aplica a todas ellas.
+- Un Cliente Casa conserva una única Sede residencial interna, invisible en la interfaz, sin Áreas, formularios MIP, certificados ni vehículos.
 - Áreas, Dispositivos y Vehículos pertenecen a una Sede.
 - El nombre de Área es único dentro de su Sede.
 - El número de Dispositivo y la placa de Vehículo son únicos de forma normalizada dentro de su Sede.
@@ -134,7 +136,8 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 
 - Pueden ser de establecimiento o vehículo.
 - Un certificado de vehículo exige un Vehículo de la Sede atendida.
-- La vigencia y plantilla se derivan de la configuración de la Sede.
+- La vigencia y plantilla del certificado de establecimiento se derivan del Cliente Negocio.
+- La vigencia y plantilla de certificados vehiculares se derivan de la Sede.
 - La fecha de vencimiento se calcula desde expedición y vigencia.
 - Generación y envío son efectos reintentables.
 

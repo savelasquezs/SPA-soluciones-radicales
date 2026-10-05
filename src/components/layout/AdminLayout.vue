@@ -45,7 +45,7 @@ const groups: NavigationGroup[] = [
     { to: '/servicios', label: 'Servicios', icon: FileText },
   ] },
   { label: 'GESTIÓN', items: [
-    { to: '/negocios', label: 'Negocios', icon: Building2, admin: true },
+    { to: '/clientes', label: 'Clientes', icon: Building2, admin: true },
     { to: '/catalogos', label: 'Catálogos', icon: Boxes, admin: true },
     { to: '/documentos', label: 'Documentos', icon: FileText, admin: true },
     { to: '/pagos', label: 'Pagos y caja', icon: WalletCards, admin: true },
@@ -102,7 +102,7 @@ function setTheme(event: Event): void {
       <label class="global-search">
         <Search :size="16" aria-hidden="true" />
         <span class="sr-only">Búsqueda global</span>
-        <input type="search" readonly placeholder="Buscar negocio, servicio o documento" />
+        <input type="search" readonly placeholder="Buscar cliente, servicio o documento" />
       </label>
 
       <div class="topbar__activity">

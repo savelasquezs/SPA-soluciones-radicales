@@ -49,6 +49,8 @@ No inventar requisitos. Ante una contradicción, detener únicamente la parte af
 - Centralizar Neon Auth/Data API y otros I/O en `services`; componentes y vistas no consultan proveedores directamente.
 - Centralizar tipos de dominio y contratos.
 - Extraer una segunda implementación equivalente antes de aceptar duplicación.
+- Crear y Editar comparten formulario y validación cuando sus campos son equivalentes.
+- Editar usa el snapshot ya cargado cuando contiene los campos necesarios; create/update actualizan con la respuesta definitiva sin recargar toda la colección.
 
 ## Autoridad y seguridad
 

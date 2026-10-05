@@ -38,6 +38,123 @@ export type Technician = {
   correoGoogle: string
 }
 
+export type ClientType = 'NEGOCIO' | 'RESIDENCIAL'
+
+export type ClientRecord = {
+  id: string
+  tipoCliente: ClientType
+  nombre: string
+  nit: string | null
+  correos: string[]
+  activo: boolean
+  version: number
+  vigenciaCertificadoMeses: number | null
+  plantillaCertificadoStoragePath: string | null
+  residenciaDireccion: string | null
+  residenciaCelular: string | null
+  sedesCount: number
+}
+
+export type ClientInput = Pick<
+  ClientRecord,
+  | 'tipoCliente'
+  | 'nombre'
+  | 'nit'
+  | 'correos'
+  | 'activo'
+  | 'vigenciaCertificadoMeses'
+  | 'plantillaCertificadoStoragePath'
+  | 'residenciaDireccion'
+  | 'residenciaCelular'
+> & { version?: number }
+
+export type SiteRecord = {
+  id: string
+  clientId: string
+  nombre: string
+  direccion: string
+  correos: string[]
+  heredaCorreosCliente: boolean
+  contactoPrincipalNombre: string
+  contactoPrincipalCorreo: string | null
+  contactoPrincipalCelular: string
+  valorServicio: number
+  periodicidadMeses: number
+  manejaRefuerzo: boolean
+  tipoSede: 'NEGOCIO' | 'RESIDENCIAL'
+  formulariosAplicablesIds: string[]
+  planoStoragePath: string | null
+  manejaVehiculos: boolean
+  generaCertificadoVehiculo: boolean
+  vigenciaCertificadoVehiculoMeses: number | null
+  plantillaCertificadoVehiculoStoragePath: string | null
+  duracionServicioMinutos: number
+  activo: boolean
+  version: number
+  areasCount: number
+  formulariosCount: number
+  proximoServicio: string | null
+}
+
+export type SiteInput = Pick<
+  SiteRecord,
+  | 'nombre'
+  | 'direccion'
+  | 'correos'
+  | 'heredaCorreosCliente'
+  | 'contactoPrincipalNombre'
+  | 'contactoPrincipalCorreo'
+  | 'contactoPrincipalCelular'
+  | 'valorServicio'
+  | 'periodicidadMeses'
+  | 'manejaRefuerzo'
+  | 'formulariosAplicablesIds'
+  | 'planoStoragePath'
+  | 'manejaVehiculos'
+  | 'generaCertificadoVehiculo'
+  | 'vigenciaCertificadoVehiculoMeses'
+  | 'plantillaCertificadoVehiculoStoragePath'
+  | 'duracionServicioMinutos'
+  | 'activo'
+> & { version?: number }
+
+export type AreaRecord = {
+  id: string
+  siteId: string
+  nombre: string
+  esExterna: boolean
+  activo: boolean
+  version: number
+  dispositivosCount: number
+  ultimoServicio: string | null
+}
+
+export type AreaInput = Pick<AreaRecord, 'nombre' | 'esExterna' | 'activo'> & { version?: number }
+
+export type FormOption = {
+  id: string
+  codigo: string
+  nombre: string
+  version: string
+}
+
+export type ServiceHistoryItem = {
+  id: string
+  solicitud: string
+  fecha: string
+  tipo: string
+  tecnico: string
+  estado: string
+  valor: number
+}
+
+export type PaginatedResult<T> = {
+  items: T[]
+  page: number
+  pageSize: number
+  total: number
+}
+
 export type ClientSite = {
   negocioId: string
   nit: string

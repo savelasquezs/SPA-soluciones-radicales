@@ -53,13 +53,76 @@ const USER_SELECT = `select id,
                             certificado_observaciones as "certificadoObservaciones",
                             version
                      from public.usuarios`
+const CLIENT_SELECT = `select n.id,
+                              n.tipo_cliente as "tipoCliente",
+                              n.nombre,
+                              n.nit,
+                              coalesce(n.correos_json, '[]'::jsonb) as correos,
+                              n.activo,
+                              n.version,
+                              n.vigencia_cert_establecimiento_meses as "vigenciaCertificadoMeses",
+                              n.plantilla_cert_establecimiento_storage_path as "plantillaCertificadoStoragePath",
+                              residence.direccion as "residenciaDireccion",
+                              residence.contacto_principal_celular as "residenciaCelular",
+                              count(s.id) filter (where s.tipo_sede = 'NEGOCIO')::integer as "sedesCount"
+                       from public.negocios n
+                       left join public.sedes s on s.negocio_id = n.id
+                       left join lateral (
+                         select direccion, contacto_principal_celular
+                         from public.sedes
+                         where negocio_id = n.id and tipo_sede = 'RESIDENCIAL'
+                         limit 1
+                       ) residence on true`
+const CLIENT_GROUP = `group by n.id, residence.direccion, residence.contacto_principal_celular`
+const SITE_SELECT = `select s.id,
+                            s.negocio_id as "clientId",
+                            s.nombre,
+                            s.direccion,
+                            coalesce(s.correos_json, '[]'::jsonb) as correos,
+                            s.hereda_correos_negocio as "heredaCorreosCliente",
+                            s.contacto_principal_nombre as "contactoPrincipalNombre",
+                            s.contacto_principal_correo as "contactoPrincipalCorreo",
+                            s.contacto_principal_celular as "contactoPrincipalCelular",
+                            s.valor_servicio as "valorServicio",
+                            s.periodicidad_meses as "periodicidadMeses",
+                            s.maneja_refuerzo as "manejaRefuerzo",
+                            s.tipo_sede as "tipoSede",
+                            coalesce(s.formularios_aplicables_json, '[]'::jsonb) as "formulariosAplicablesIds",
+                            s.plano_storage_path as "planoStoragePath",
+                            s.maneja_vehiculos as "manejaVehiculos",
+                            s.genera_certificado_vehiculo as "generaCertificadoVehiculo",
+                            s.vigencia_cert_vehiculo_meses as "vigenciaCertificadoVehiculoMeses",
+                            s.plantilla_cert_vehiculo_storage_path as "plantillaCertificadoVehiculoStoragePath",
+                            s.duracion_servicio_minutos as "duracionServicioMinutos",
+                            s.activo,
+                            s.version,
+                            (select count(*)::integer from public.areas a where a.sede_id = s.id and a.activo) as "areasCount",
+                            jsonb_array_length(coalesce(s.formularios_aplicables_json, '[]'::jsonb)) as "formulariosCount",
+                            (select min(sv.inicio_programado)
+                             from public.servicios sv
+                             where sv.sede_id = s.id
+                               and sv.estado = 'PROGRAMADO'
+                               and sv.inicio_programado >= now()) as "proximoServicio"
+                     from public.sedes s`
+const AREA_SELECT = `select a.id,
+                            a.sede_id as "siteId",
+                            a.nombre,
+                            a.es_externa as "esExterna",
+                            a.activo,
+                            a.version,
+                            (select count(*)::integer from public.dispositivos d where d.area_id = a.id and d.activo) as "dispositivosCount",
+                            (select max(sv.inicio_programado)
+                             from public.respuestas_formulario rf
+                             join public.servicios sv on sv.id = rf.servicio_id
+                             where rf.area_id = a.id and sv.estado = 'FINALIZADO') as "ultimoServicio"
+                     from public.areas a`
 
 app.use(
   '/api/*',
   cors({
     origin: (origin) => (allowedOrigins.has(origin) ? origin : ''),
     allowHeaders: ['Authorization', 'Content-Type'],
-    allowMethods: ['GET', 'POST', 'PATCH', 'OPTIONS'],
+    allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     maxAge: 600,
   }),
 )
@@ -269,123 +332,383 @@ app.get('/api/catalogs/technicians', async (context) => {
 })
 
 app.get('/api/clients', async (context) => {
-  const identity = context.get('identity')
+  const active = optionalBooleanQuery(context.req.query('active'), 'active')
+  const type = optionalEnum(context.req.query('type'), ['NEGOCIO', 'RESIDENCIAL'], 'type')
+  const search = optionalString(context.req.query('search'))
   const clients = await transaction(async (client) => {
-    await requireAdmin(client, identity)
+    await requireAdmin(client, context.get('identity'))
     const { rows } = await client.query(
-      `select n.id as "negocioId",
-              n.nit,
-              n.nombre as "negocioNombre",
-              s.id as "sedeId",
-              s.nombre as "sedeNombre",
-              s.direccion,
-              s.valor_servicio as "valorServicio",
-              s.duracion_servicio_minutos as "duracionServicioMinutos"
-       from public.negocios n
-       join public.sedes s on s.negocio_id = n.id
-       order by n.nombre, s.nombre`,
+      `${CLIENT_SELECT}
+       where ($1::boolean is null or n.activo = $1)
+         and ($2::text is null or n.tipo_cliente = $2)
+         and (
+           $3::text is null
+           or n.nombre ilike '%' || $3 || '%'
+           or n.nit ilike '%' || $3 || '%'
+           or exists (
+             select 1 from public.sedes phone_site
+             where phone_site.negocio_id = n.id
+               and phone_site.contacto_principal_celular like '%' || regexp_replace($3, '[^0-9+]', '', 'g') || '%'
+           )
+         )
+       ${CLIENT_GROUP}
+       order by n.nombre`,
+      [active, type, search],
     )
     return rows
   })
   return context.json(clients)
 })
 
+app.get('/api/clients/:id', async (context) => {
+  const record = await transaction(async (client) => {
+    await requireAdmin(client, context.get('identity'))
+    return findClient(client, context.req.param('id'))
+  })
+  return context.json(record)
+})
+
 app.post('/api/clients', async (context) => {
-  const body = await jsonBody(context.req.raw)
-  const identity = context.get('identity')
-  const clientRecord = await transaction(async (client) => {
-    const admin = await requireAdmin(client, identity)
-    const selectedBusinessId = optionalString(body.negocioId)
-    let businessId = selectedBusinessId
-
-    if (businessId) {
-      const existingBusiness = await client.query<{ id: string }>(
-        'select id from public.negocios where id = $1',
-        [businessId],
-      )
-      if (!existingBusiness.rows[0]) {
-        throw new ApiError(422, 'El Negocio seleccionado no existe')
-      }
-    } else {
-      const business = await client.query<{ id: string }>(
-        `insert into public.negocios (nit, nombre, correos_json)
-         values ($1, $2, $3::jsonb)
-         returning id`,
-        [
-          requiredString(body, 'nit'),
-          requiredString(body, 'negocioNombre'),
-          JSON.stringify(stringArray(body.correos)),
-        ],
-      )
-      businessId = business.rows[0]?.id ?? null
-    }
-
-    if (!businessId) {
-      throw new ApiError(500, 'No fue posible crear el Negocio')
-    }
-
-    const site = await client.query<{ id: string }>(
-      `insert into public.sedes (
-         negocio_id, nombre, direccion, correos_json, hereda_correos_negocio,
-         contacto_principal_nombre, contacto_principal_correo, valor_servicio,
-         periodicidad_meses, maneja_refuerzo, tipo_sede, duracion_servicio_minutos
-       ) values ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10, $11, $12)
+  const input = clientInput(await jsonBody(context.req.raw))
+  const record = await transaction(async (client) => {
+    const admin = await requireAdmin(client, context.get('identity'))
+    const inserted = await client.query<{ id: string }>(
+      `insert into public.negocios (
+         tipo_cliente, nombre, nit, correos_json, activo,
+         vigencia_cert_establecimiento_meses, plantilla_cert_establecimiento_storage_path
+       ) values ($1, $2, $3, $4::jsonb, $5, $6, $7)
        returning id`,
-      [
-        businessId,
-        requiredString(body, 'sedeNombre'),
-        requiredString(body, 'direccion'),
-        JSON.stringify(stringArray(body.correos)),
-        true,
-        requiredString(body, 'contactoNombre'),
-        optionalEmail(body.contactoCorreo),
-        requiredInteger(body, 'valorServicio'),
-        requiredInteger(body, 'periodicidadMeses'),
-        requiredBoolean(body, 'manejaRefuerzo'),
-        enumValue(body.tipoSede, ['NEGOCIO', 'RESIDENCIAL'], 'tipoSede'),
-        requiredInteger(body, 'duracionServicioMinutos'),
-      ],
+      [input.tipoCliente, input.nombre, input.nit, JSON.stringify(input.correos), input.activo,
+        input.vigenciaCertificadoMeses, input.plantillaCertificadoStoragePath],
     )
-    const siteId = site.rows[0]?.id
+    const id = inserted.rows[0]?.id
+    if (!id) throw new ApiError(500, 'No fue posible crear el Cliente')
 
-    if (!siteId) {
-      throw new ApiError(500, 'No fue posible crear la Sede')
+    if (input.tipoCliente === 'RESIDENCIAL') {
+      await client.query(
+        `insert into public.sedes (
+           negocio_id, nombre, direccion, correos_json, hereda_correos_negocio,
+           contacto_principal_nombre, contacto_principal_correo, contacto_principal_celular,
+           valor_servicio, periodicidad_meses, maneja_refuerzo, tipo_sede,
+           formularios_aplicables_json, maneja_vehiculos, genera_certificado_vehiculo,
+           duracion_servicio_minutos, activo
+         ) values ($1, $2, $3, '[]'::jsonb, false, $2, null, $4, null, null,
+                   false, 'RESIDENCIAL', null, false, false, null, $5)`,
+        [id, input.nombre, input.residenciaDireccion, input.residenciaCelular, input.activo],
+      )
     }
+    await audit(client, admin.id, 'CLIENTE_CREADO', 'Clientes', id, { tipoCliente: input.tipoCliente })
+    return findClient(client, id)
+  })
+  return context.json(record, 201)
+})
 
-    await audit(client, admin.id, selectedBusinessId ? 'SEDE_CREADA' : 'NEGOCIO_Y_SEDE_CREADOS', 'Negocios', businessId, {
-      sedeId: siteId,
+app.patch('/api/clients/:id', async (context) => {
+  const input = clientInput(await jsonBody(context.req.raw), true)
+  const id = context.req.param('id')
+  const record = await transaction(async (client) => {
+    const admin = await requireAdmin(client, context.get('identity'))
+    const current = await client.query<{ tipoCliente: string; activo: boolean }>(
+      'select tipo_cliente as "tipoCliente", activo from public.negocios where id = $1',
+      [id],
+    )
+    if (!current.rows[0]) throw new ApiError(404, 'El Cliente no existe')
+    if (current.rows[0].tipoCliente !== input.tipoCliente) {
+      throw new ApiError(409, 'El tipo de Cliente no puede modificarse')
+    }
+    const updated = await client.query(
+      `update public.negocios
+       set nombre = $1, nit = $2, correos_json = $3::jsonb, activo = $4,
+           vigencia_cert_establecimiento_meses = $5,
+           plantilla_cert_establecimiento_storage_path = $6
+       where id = $7 and version = $8
+       returning id`,
+      [input.nombre, input.nit, JSON.stringify(input.correos), input.activo,
+        input.vigenciaCertificadoMeses, input.plantillaCertificadoStoragePath, id, input.version],
+    )
+    if (!updated.rowCount) throw conflictError('Cliente')
+
+    if (input.tipoCliente === 'RESIDENCIAL') {
+      await client.query(
+        `update public.sedes
+         set nombre = $1, direccion = $2, contacto_principal_nombre = $1,
+             contacto_principal_celular = $3, activo = $4
+         where negocio_id = $5 and tipo_sede = 'RESIDENCIAL'`,
+        [input.nombre, input.residenciaDireccion, input.residenciaCelular, input.activo, id],
+      )
+    }
+    const auditEvent = current.rows[0].activo === input.activo
+      ? 'CLIENTE_ACTUALIZADO'
+      : input.activo ? 'CLIENTE_REACTIVADO' : 'CLIENTE_DESACTIVADO'
+    await audit(client, admin.id, auditEvent, 'Clientes', id, {
+      tipoCliente: input.tipoCliente,
     })
-    const created = await client.query<{
-      negocioId: string
-      nit: string
-      negocioNombre: string
-      sedeId: string
-      sedeNombre: string
-      direccion: string
-      valorServicio: string
-      duracionServicioMinutos: number
-    }>(
-      `select n.id as "negocioId",
-              n.nit,
-              n.nombre as "negocioNombre",
-              s.id as "sedeId",
-              s.nombre as "sedeNombre",
-              s.direccion,
+    return findClient(client, id)
+  })
+  return context.json(record)
+})
+
+app.delete('/api/clients/:id', async (context) => {
+  const id = context.req.param('id')
+  const version = integerValue(context.req.query('version'), 'version')
+  await transaction(async (client) => {
+    const admin = await requireAdmin(client, context.get('identity'))
+    const dependencies = await client.query<{ hasDependencies: boolean }>(
+      `select exists (
+         select 1 from public.sedes s
+         where s.negocio_id = $1 and (
+           exists (select 1 from public.servicios sv where sv.sede_id = s.id)
+           or exists (select 1 from public.areas a where a.sede_id = s.id)
+           or exists (select 1 from public.dispositivos d where d.sede_id = s.id)
+           or exists (select 1 from public.vehiculos v where v.sede_id = s.id)
+         )
+       ) as "hasDependencies"`,
+      [id],
+    )
+    if (dependencies.rows[0]?.hasDependencies) throw dependencyError('Cliente')
+    await client.query('delete from public.sedes where negocio_id = $1', [id])
+    const deleted = await client.query('delete from public.negocios where id = $1 and version = $2', [id, version])
+    if (!deleted.rowCount) throw conflictError('Cliente')
+    await audit(client, admin.id, 'CLIENTE_ELIMINADO', 'Clientes', id, null)
+  })
+  return context.body(null, 204)
+})
+
+app.get('/api/catalogs/client-sites', async (context) => {
+  const rows = await transaction(async (client) => {
+    await requireAdmin(client, context.get('identity'))
+    const result = await client.query(
+      `select n.id as "negocioId", n.nit, n.nombre as "negocioNombre",
+              s.id as "sedeId", s.nombre as "sedeNombre", s.direccion,
               s.valor_servicio as "valorServicio",
               s.duracion_servicio_minutos as "duracionServicioMinutos"
        from public.negocios n
        join public.sedes s on s.negocio_id = n.id
-       where s.id = $1`,
-      [siteId],
+       where n.activo and n.tipo_cliente = 'NEGOCIO'
+         and s.activo and s.tipo_sede = 'NEGOCIO'
+       order by n.nombre, s.nombre`,
     )
-    const clientSite = created.rows[0]
-    if (!clientSite) {
-      throw new ApiError(500, 'No fue posible recuperar la Sede creada')
-    }
-    return clientSite
+    return result.rows
   })
+  return context.json(rows)
+})
 
-  return context.json(clientRecord, 201)
+app.get('/api/catalogs/forms', async (context) => {
+  const rows = await transaction(async (client) => {
+    await requireAdmin(client, context.get('identity'))
+    const result = await client.query(
+      `select formulario_id as id,
+              min(codigo_formulario) as codigo,
+              min(nombre_formulario) as nombre,
+              version
+       from public.formularios
+       where estado_version = 'ACTIVA'
+       group by formulario_id, version
+       order by min(codigo_formulario), version`,
+    )
+    return result.rows
+  })
+  return context.json(rows)
+})
+
+app.get('/api/clients/:id/sites', async (context) => {
+  const rows = await transaction(async (client) => {
+    await requireAdmin(client, context.get('identity'))
+    const result = await client.query(
+      `${SITE_SELECT} where s.negocio_id = $1 and s.tipo_sede = 'NEGOCIO' order by s.activo desc, s.nombre`,
+      [context.req.param('id')],
+    )
+    return result.rows
+  })
+  return context.json(rows)
+})
+
+app.post('/api/clients/:id/sites', async (context) => {
+  const input = siteInput(await jsonBody(context.req.raw))
+  const clientId = context.req.param('id')
+  const record = await transaction(async (client) => {
+    const admin = await requireAdmin(client, context.get('identity'))
+    const owner = await client.query('select id from public.negocios where id = $1 and tipo_cliente = $2', [clientId, 'NEGOCIO'])
+    if (!owner.rowCount) throw new ApiError(422, 'El Cliente Negocio no existe')
+    await validateFormIds(client, input.formulariosAplicablesIds)
+    const inserted = await client.query<{ id: string }>(
+      `insert into public.sedes (
+         negocio_id, nombre, direccion, correos_json, hereda_correos_negocio,
+         contacto_principal_nombre, contacto_principal_correo, contacto_principal_celular,
+         valor_servicio, periodicidad_meses, maneja_refuerzo, tipo_sede,
+         formularios_aplicables_json, plano_storage_path, maneja_vehiculos,
+         genera_certificado_vehiculo, vigencia_cert_vehiculo_meses,
+         plantilla_cert_vehiculo_storage_path, duracion_servicio_minutos, activo
+       ) values ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10, $11,
+                 'NEGOCIO', $12::jsonb, $13, $14, $15, $16, $17, $18, $19)
+       returning id`,
+      [clientId, input.nombre, input.direccion, JSON.stringify(input.correos), input.heredaCorreosCliente,
+        input.contactoPrincipalNombre, input.contactoPrincipalCorreo, input.contactoPrincipalCelular,
+        input.valorServicio, input.periodicidadMeses, input.manejaRefuerzo,
+        JSON.stringify(input.formulariosAplicablesIds), input.planoStoragePath, input.manejaVehiculos,
+        input.generaCertificadoVehiculo, input.vigenciaCertificadoVehiculoMeses,
+        input.plantillaCertificadoVehiculoStoragePath, input.duracionServicioMinutos, input.activo],
+    )
+    const id = inserted.rows[0]?.id
+    if (!id) throw new ApiError(500, 'No fue posible crear la Sede')
+    await audit(client, admin.id, 'SEDE_CREADA', 'Sedes', id, { clientId })
+    return findSite(client, id)
+  })
+  return context.json(record, 201)
+})
+
+app.get('/api/sites/:id', async (context) => {
+  const record = await transaction(async (client) => {
+    await requireAdmin(client, context.get('identity'))
+    return findSite(client, context.req.param('id'))
+  })
+  return context.json(record)
+})
+
+app.patch('/api/sites/:id', async (context) => {
+  const input = siteInput(await jsonBody(context.req.raw), true)
+  const id = context.req.param('id')
+  const record = await transaction(async (client) => {
+    const admin = await requireAdmin(client, context.get('identity'))
+    const current = await client.query<{ activo: boolean }>('select activo from public.sedes where id = $1 and tipo_sede = $2', [id, 'NEGOCIO'])
+    if (!current.rows[0]) throw new ApiError(404, 'La Sede no existe')
+    await validateFormIds(client, input.formulariosAplicablesIds)
+    const updated = await client.query(
+      `update public.sedes
+       set nombre = $1, direccion = $2, correos_json = $3::jsonb,
+           hereda_correos_negocio = $4, contacto_principal_nombre = $5,
+           contacto_principal_correo = $6, contacto_principal_celular = $7,
+           valor_servicio = $8, periodicidad_meses = $9, maneja_refuerzo = $10,
+           formularios_aplicables_json = $11::jsonb, plano_storage_path = $12,
+           maneja_vehiculos = $13, genera_certificado_vehiculo = $14,
+           vigencia_cert_vehiculo_meses = $15,
+           plantilla_cert_vehiculo_storage_path = $16,
+           duracion_servicio_minutos = $17, activo = $18
+       where id = $19 and tipo_sede = 'NEGOCIO' and version = $20
+       returning id`,
+      [input.nombre, input.direccion, JSON.stringify(input.correos), input.heredaCorreosCliente,
+        input.contactoPrincipalNombre, input.contactoPrincipalCorreo, input.contactoPrincipalCelular,
+        input.valorServicio, input.periodicidadMeses, input.manejaRefuerzo,
+        JSON.stringify(input.formulariosAplicablesIds), input.planoStoragePath, input.manejaVehiculos,
+        input.generaCertificadoVehiculo, input.vigenciaCertificadoVehiculoMeses,
+        input.plantillaCertificadoVehiculoStoragePath, input.duracionServicioMinutos, input.activo, id, input.version],
+    )
+    if (!updated.rowCount) throw conflictError('Sede')
+    const auditEvent = current.rows[0].activo === input.activo
+      ? 'SEDE_ACTUALIZADA'
+      : input.activo ? 'SEDE_REACTIVADA' : 'SEDE_DESACTIVADA'
+    await audit(client, admin.id, auditEvent, 'Sedes', id, null)
+    return findSite(client, id)
+  })
+  return context.json(record)
+})
+
+app.delete('/api/sites/:id', async (context) => {
+  const id = context.req.param('id')
+  const version = integerValue(context.req.query('version'), 'version')
+  await transaction(async (client) => {
+    const admin = await requireAdmin(client, context.get('identity'))
+    const dependency = await client.query<{ hasDependencies: boolean }>(
+      `select exists (select 1 from public.servicios where sede_id = $1)
+          or exists (select 1 from public.areas where sede_id = $1)
+          or exists (select 1 from public.dispositivos where sede_id = $1)
+          or exists (select 1 from public.vehiculos where sede_id = $1) as "hasDependencies"`,
+      [id],
+    )
+    if (dependency.rows[0]?.hasDependencies) throw dependencyError('Sede')
+    const deleted = await client.query('delete from public.sedes where id = $1 and version = $2', [id, version])
+    if (!deleted.rowCount) throw conflictError('Sede')
+    await audit(client, admin.id, 'SEDE_ELIMINADA', 'Sedes', id, null)
+  })
+  return context.body(null, 204)
+})
+
+app.get('/api/sites/:id/areas', async (context) => {
+  const rows = await transaction(async (client) => {
+    await requireAdmin(client, context.get('identity'))
+    const result = await client.query(`${AREA_SELECT} where a.sede_id = $1 order by a.activo desc, a.nombre`, [context.req.param('id')])
+    return result.rows
+  })
+  return context.json(rows)
+})
+
+app.post('/api/sites/:id/areas', async (context) => {
+  const input = areaInput(await jsonBody(context.req.raw))
+  const siteId = context.req.param('id')
+  const record = await transaction(async (client) => {
+    const admin = await requireAdmin(client, context.get('identity'))
+    const inserted = await client.query<{ id: string }>(
+      `insert into public.areas (sede_id, nombre, es_externa, activo)
+       select $1, $2, $3, $4
+       where exists (select 1 from public.sedes where id = $1 and tipo_sede = 'NEGOCIO')
+       returning id`,
+      [siteId, input.nombre, input.esExterna, input.activo],
+    )
+    const id = inserted.rows[0]?.id
+    if (!id) throw new ApiError(422, 'La Sede no permite crear Áreas')
+    await audit(client, admin.id, 'AREA_CREADA', 'Areas', id, { siteId })
+    return findArea(client, id)
+  })
+  return context.json(record, 201)
+})
+
+app.patch('/api/areas/:id', async (context) => {
+  const input = areaInput(await jsonBody(context.req.raw), true)
+  const id = context.req.param('id')
+  const record = await transaction(async (client) => {
+    const admin = await requireAdmin(client, context.get('identity'))
+    const current = await client.query<{ activo: boolean }>('select activo from public.areas where id = $1', [id])
+    if (!current.rows[0]) throw new ApiError(404, 'El Área no existe')
+    const updated = await client.query(
+      `update public.areas set nombre = $1, es_externa = $2, activo = $3
+       where id = $4 and version = $5 returning id`,
+      [input.nombre, input.esExterna, input.activo, id, input.version],
+    )
+    if (!updated.rowCount) throw conflictError('Área')
+    const auditEvent = current.rows[0].activo === input.activo
+      ? 'AREA_ACTUALIZADA'
+      : input.activo ? 'AREA_REACTIVADA' : 'AREA_DESACTIVADA'
+    await audit(client, admin.id, auditEvent, 'Areas', id, null)
+    return findArea(client, id)
+  })
+  return context.json(record)
+})
+
+app.delete('/api/areas/:id', async (context) => {
+  const id = context.req.param('id')
+  const version = integerValue(context.req.query('version'), 'version')
+  await transaction(async (client) => {
+    const admin = await requireAdmin(client, context.get('identity'))
+    const dependency = await client.query<{ hasDependencies: boolean }>(
+      `select exists (select 1 from public.dispositivos where area_id = $1)
+          or exists (select 1 from public.respuestas_formulario where area_id = $1)
+          or exists (select 1 from public.hallazgos where area_id = $1) as "hasDependencies"`,
+      [id],
+    )
+    if (dependency.rows[0]?.hasDependencies) throw dependencyError('Área')
+    const deleted = await client.query('delete from public.areas where id = $1 and version = $2', [id, version])
+    if (!deleted.rowCount) throw conflictError('Área')
+    await audit(client, admin.id, 'AREA_ELIMINADA', 'Areas', id, null)
+  })
+  return context.body(null, 204)
+})
+
+app.get('/api/clients/:id/services', async (context) => {
+  const page = positiveQueryInteger(context.req.query('page'), 1)
+  const result = await transaction(async (client) => {
+    await requireAdmin(client, context.get('identity'))
+    return serviceHistory(client, 'client', context.req.param('id'), page)
+  })
+  return context.json(result)
+})
+
+app.get('/api/sites/:id/services', async (context) => {
+  const page = positiveQueryInteger(context.req.query('page'), 1)
+  const result = await transaction(async (client) => {
+    await requireAdmin(client, context.get('identity'))
+    return serviceHistory(client, 'site', context.req.param('id'), page)
+  })
+  return context.json(result)
 })
 
 app.get('/api/services', async (context) => {
@@ -424,10 +747,12 @@ app.post('/api/services', async (context) => {
   const service = await transaction(async (client) => {
     const admin = await requireAdmin(client, identity)
     const site = await client.query<{ duracion: number; valor: number }>(
-      `select duracion_servicio_minutos as duracion,
-              valor_servicio as valor
-       from public.sedes
-       where id = $1`,
+      `select s.duracion_servicio_minutos as duracion,
+              s.valor_servicio as valor
+       from public.sedes s
+       join public.negocios n on n.id = s.negocio_id
+       where s.id = $1 and s.activo and s.tipo_sede = 'NEGOCIO'
+         and n.activo and n.tipo_cliente = 'NEGOCIO'`,
       [requiredString(body, 'sedeId')],
     )
     const siteConfig = site.rows[0]
@@ -617,16 +942,25 @@ app.notFound((context) => context.json({ error: 'Ruta no encontrada' }, 404))
 
 app.onError((error, context) => {
   if (error instanceof ApiError) {
-    return context.json({ error: error.message }, error.status as ContentfulStatusCode)
+    return context.json(
+      { error: error.message, ...(error.code ? { code: error.code } : {}), ...(error.details ? { details: error.details } : {}) },
+      error.status as ContentfulStatusCode,
+    )
   }
 
   const databaseError = error as DatabaseError
 
   if (databaseError.code === '23505') {
-    const message = databaseError.constraint === 'usuarios_correo_google_uidx'
-      ? 'Este correo ya está registrado.'
-      : 'Ya existe un registro con esos datos'
+    const message = {
+      usuarios_correo_google_uidx: 'Este correo ya está registrado.',
+      negocios_nit_uidx: 'Este NIT ya está registrado.',
+      areas_sede_nombre_uidx: 'Ya existe un Área con ese nombre en la Sede.',
+      sedes_residencial_cliente_uidx: 'El Cliente Casa ya tiene una ubicación residencial.',
+    }[databaseError.constraint ?? ''] ?? 'Ya existe un registro con esos datos'
     return context.json({ error: message }, 409)
+  }
+  if (databaseError.code === '23503') {
+    return context.json({ error: 'El registro tiene dependencias y no puede eliminarse', code: 'DEPENDENCIES' }, 409)
   }
   if (databaseError.code === '23514' || databaseError.code === 'P0001') {
     return context.json({ error: databaseError.message }, 422)
@@ -749,6 +1083,150 @@ async function audit(
   )
 }
 
+async function findClient(client: PoolClient, id: string): Promise<unknown> {
+  const { rows } = await client.query(`${CLIENT_SELECT} where n.id = $1 ${CLIENT_GROUP}`, [id])
+  if (!rows[0]) throw new ApiError(404, 'El Cliente no existe')
+  return rows[0]
+}
+
+async function findSite(client: PoolClient, id: string): Promise<unknown> {
+  const { rows } = await client.query(`${SITE_SELECT} where s.id = $1`, [id])
+  if (!rows[0]) throw new ApiError(404, 'La Sede no existe')
+  return rows[0]
+}
+
+async function findArea(client: PoolClient, id: string): Promise<unknown> {
+  const { rows } = await client.query(`${AREA_SELECT} where a.id = $1`, [id])
+  if (!rows[0]) throw new ApiError(404, 'El Área no existe')
+  return rows[0]
+}
+
+async function validateFormIds(client: PoolClient, ids: string[]): Promise<void> {
+  if (!ids.length) return
+  const { rows } = await client.query<{ count: string }>(
+    `select count(distinct formulario_id)::text as count
+     from public.formularios
+     where estado_version = 'ACTIVA' and formulario_id = any($1::uuid[])`,
+    [ids],
+  )
+  if (Number(rows[0]?.count) !== ids.length) {
+    throw new ApiError(422, 'La selección contiene un Formulario inactivo o inexistente')
+  }
+}
+
+async function serviceHistory(
+  client: PoolClient,
+  scope: 'client' | 'site',
+  id: string,
+  page: number,
+): Promise<{ items: unknown[]; page: number; pageSize: number; total: number }> {
+  const pageSize = 20
+  const condition = scope === 'client' ? 'se.negocio_id = $1' : 's.sede_id = $1'
+  const count = await client.query<{ total: string }>(
+    `select count(*)::text as total
+     from public.servicios s
+     join public.sedes se on se.id = s.sede_id
+     where ${condition}`,
+    [id],
+  )
+  const { rows } = await client.query(
+    `select s.id, s.solicitud, s.inicio_programado as fecha,
+            s.tipo_servicio as tipo, u.nombre_completo as tecnico,
+            s.estado, s.valor_servicio as valor
+     from public.servicios s
+     join public.sedes se on se.id = s.sede_id
+     join public.usuarios u on u.id = s.tecnico_responsable_id
+     where ${condition}
+     order by s.inicio_programado desc
+     limit $2 offset $3`,
+    [id, pageSize, (page - 1) * pageSize],
+  )
+  return { items: rows, page, pageSize, total: Number(count.rows[0]?.total ?? 0) }
+}
+
+function clientInput(body: Record<string, unknown>, editing = false) {
+  const tipoCliente = enumValue(body.tipoCliente, ['NEGOCIO', 'RESIDENCIAL'], 'tipoCliente')
+  const correos = emailArray(body.correos)
+  const active = requiredBoolean(body, 'activo')
+  const version = editing ? requiredPositiveInteger(body, 'version') : undefined
+
+  if (tipoCliente === 'NEGOCIO') {
+    return {
+      tipoCliente,
+      nombre: requiredString(body, 'nombre'),
+      nit: requiredString(body, 'nit'),
+      correos,
+      activo: active,
+      vigenciaCertificadoMeses: requiredPositiveInteger(body, 'vigenciaCertificadoMeses'),
+      plantillaCertificadoStoragePath: requiredString(body, 'plantillaCertificadoStoragePath'),
+      residenciaDireccion: null,
+      residenciaCelular: null,
+      version,
+    }
+  }
+
+  return {
+    tipoCliente,
+    nombre: requiredString(body, 'nombre'),
+    nit: null,
+    correos: [],
+    activo: active,
+    vigenciaCertificadoMeses: null,
+    plantillaCertificadoStoragePath: null,
+    residenciaDireccion: requiredString(body, 'residenciaDireccion'),
+    residenciaCelular: requiredPhone(body, 'residenciaCelular'),
+    version,
+  }
+}
+
+function siteInput(body: Record<string, unknown>, editing = false) {
+  const manejaVehiculos = requiredBoolean(body, 'manejaVehiculos')
+  const generaCertificadoVehiculo = manejaVehiculos && requiredBoolean(body, 'generaCertificadoVehiculo')
+  const formulariosAplicablesIds = uniqueStrings(body.formulariosAplicablesIds)
+  return {
+    nombre: requiredString(body, 'nombre'),
+    direccion: requiredString(body, 'direccion'),
+    correos: emailArray(body.correos),
+    heredaCorreosCliente: requiredBoolean(body, 'heredaCorreosCliente'),
+    contactoPrincipalNombre: requiredString(body, 'contactoPrincipalNombre'),
+    contactoPrincipalCorreo: optionalEmail(body.contactoPrincipalCorreo),
+    contactoPrincipalCelular: requiredPhone(body, 'contactoPrincipalCelular'),
+    valorServicio: requiredInteger(body, 'valorServicio'),
+    periodicidadMeses: requiredPositiveInteger(body, 'periodicidadMeses'),
+    manejaRefuerzo: requiredBoolean(body, 'manejaRefuerzo'),
+    formulariosAplicablesIds,
+    planoStoragePath: optionalString(body.planoStoragePath),
+    manejaVehiculos,
+    generaCertificadoVehiculo,
+    vigenciaCertificadoVehiculoMeses: generaCertificadoVehiculo
+      ? requiredPositiveInteger(body, 'vigenciaCertificadoVehiculoMeses')
+      : null,
+    plantillaCertificadoVehiculoStoragePath: generaCertificadoVehiculo
+      ? requiredString(body, 'plantillaCertificadoVehiculoStoragePath')
+      : null,
+    duracionServicioMinutos: requiredPositiveInteger(body, 'duracionServicioMinutos'),
+    activo: requiredBoolean(body, 'activo'),
+    version: editing ? requiredPositiveInteger(body, 'version') : undefined,
+  }
+}
+
+function areaInput(body: Record<string, unknown>, editing = false) {
+  return {
+    nombre: requiredString(body, 'nombre'),
+    esExterna: requiredBoolean(body, 'esExterna'),
+    activo: requiredBoolean(body, 'activo'),
+    version: editing ? requiredPositiveInteger(body, 'version') : undefined,
+  }
+}
+
+function conflictError(entity: string): ApiError {
+  return new ApiError(409, 'El registro cambió en otra sesión. Actualiza los datos e intenta nuevamente.', 'VERSION_CONFLICT', { entity })
+}
+
+function dependencyError(entity: string): ApiError {
+  return new ApiError(409, `${entity} tiene dependencias o historial y no puede eliminarse. Puedes desactivarlo.`, 'DEPENDENCIES', { entity })
+}
+
 async function jsonBody(request: Request): Promise<Record<string, unknown>> {
   try {
     const body = (await request.json()) as unknown
@@ -824,6 +1302,53 @@ function stringArray(value: unknown): string[] {
     throw new ApiError(422, 'La lista enviada no es válida')
   }
   return value.map((entry) => entry.trim()).filter(Boolean)
+}
+
+function uniqueStrings(value: unknown): string[] {
+  return [...new Set(stringArray(value))]
+}
+
+function emailArray(value: unknown): string[] {
+  const emails = [...new Set(stringArray(value).map((email) => email.toLowerCase()))]
+  if (emails.some((email) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
+    throw new ApiError(422, 'La lista contiene un correo no válido')
+  }
+  return emails
+}
+
+function requiredPhone(body: Record<string, unknown>, key: string): string {
+  const raw = requiredString(body, key).replace(/[\s().-]/g, '')
+  const international = raw.startsWith('00') ? `+${raw.slice(2)}` : raw
+  const normalized = /^3\d{9}$/.test(international) ? `+57${international}` : international
+  if (!/^\+[1-9]\d{7,14}$/.test(normalized)) {
+    throw new ApiError(422, `${key} no es un celular válido`)
+  }
+  return normalized
+}
+
+function integerValue(value: unknown, key: string): number {
+  return requiredInteger({ [key]: value }, key)
+}
+
+function positiveQueryInteger(value: string | undefined, fallback: number): number {
+  if (value === undefined) return fallback
+  return requiredPositiveInteger({ value }, 'value')
+}
+
+function optionalBooleanQuery(value: string | undefined, key: string): boolean | null {
+  if (value === undefined) return null
+  if (value === 'true') return true
+  if (value === 'false') return false
+  throw new ApiError(422, `${key} debe ser true o false`)
+}
+
+function optionalEnum<T extends string>(
+  value: unknown,
+  values: readonly T[],
+  key: string,
+): T | null {
+  if (value === undefined || value === null || value === '') return null
+  return enumValue(value, values, key)
 }
 
 function dateValue(value: unknown, key: string): Date {
