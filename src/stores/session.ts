@@ -21,6 +21,9 @@ export const useSessionStore = defineStore('session', () => {
     if (initialization && !force) {
       return initialization
     }
+    if (!force && status.value !== 'idle') {
+      return
+    }
 
     initialization = restore()
     try {
