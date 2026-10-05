@@ -1,11 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { describe, expect, it, vi } from 'vitest'
-
-vi.mock('@/stores/session', () => ({
-  useSessionStore: () => ({ status: 'authenticated' }),
-}))
+import { describe, expect, it } from 'vitest'
 
 import App from '../App.vue'
 

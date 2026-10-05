@@ -3,24 +3,22 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseCheckbox from '@/components/base/BaseCheckbox.vue'
+import BaseDateTimePicker from '@/components/base/BaseDateTimePicker.vue'
 import BaseInput from '@/components/base/BaseInput.vue'
 import BaseSelect from '@/components/base/BaseSelect.vue'
 import BaseTextarea from '@/components/base/BaseTextarea.vue'
 import ConfirmDialog from '@/components/base/ConfirmDialog.vue'
 import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import StatusPanel from '@/components/base/StatusPanel.vue'
-import AppShell from '@/components/layout/AppShell.vue'
 import { useFormValidation } from '@/composables/useFormValidation'
 import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
-import { apiRequest } from '@/services/apiService'
 import { clearServiceDraft, loadServiceDraft, saveServiceDraft } from '@/services/draftService'
+import { createClientSite, createScheduledService, getServiceWorkspace, retryServiceCalendar } from '@/services/servicesService'
 import { useNotificationsStore } from '@/stores/notifications'
-import { useSessionStore } from '@/stores/session'
+import { useAuthStore } from '@/stores/auth'
 import type { ClientSite, ServiceDraft, ServiceRecord, Technician } from '@/types/domain'
 
-type ClientSiteWire = Omit<ClientSite, 'valorServicio'> & { valorServicio: number | string }
-
-const session = useSessionStore()
+const session = useAuthStore()
 const notifications = useNotificationsStore()
 const clients = ref<ClientSite[]>([])
 const technicians = ref<Technician[]>([])
@@ -152,18 +150,10 @@ async function loadData(): Promise<void> {
   loading.value = true
   loadError.value = null
   try {
-    if (session.isAdmin) {
-      const [clientRows, technicianRows, serviceRows] = await Promise.all([
-        apiRequest<ClientSiteWire[]>('api/clients'),
-        apiRequest<Technician[]>('api/catalogs/technicians'),
-        apiRequest<ServiceRecord[]>('api/services'),
-      ])
-      clients.value = clientRows.map(normalizeClientSite)
-      technicians.value = technicianRows
-      services.value = serviceRows
-    } else {
-      services.value = await apiRequest<ServiceRecord[]>('api/services')
-    }
+    const workspace = await getServiceWorkspace(session.isAdmin)
+    clients.value = workspace.clients
+    technicians.value = workspace.technicians
+    services.value = workspace.services
   } catch (error) {
     loadError.value = error instanceof Error ? error.message : 'No fue posible cargar los Servicios'
   } finally {
@@ -176,16 +166,7 @@ async function createClient(): Promise<void> {
   savingClient.value = true
   try {
     const addedToExistingBusiness = Boolean(clientForm.negocioId)
-    const result = normalizeClientSite(await apiRequest<ClientSiteWire>('api/clients', {
-      method: 'POST',
-      body: JSON.stringify({
-        ...clientForm,
-        valorServicio: Number(clientForm.valorServicio),
-        periodicidadMeses: Number(clientForm.periodicidadMeses),
-        duracionServicioMinutos: Number(clientForm.duracionServicioMinutos),
-        correos: clientForm.contactoCorreo ? [clientForm.contactoCorreo] : [],
-      }),
-    }))
+    const result = await createClientSite(clientForm)
     clients.value = [...clients.value, result].sort((a, b) =>
       `${a.negocioNombre}\u0000${a.sedeNombre}`.localeCompare(`${b.negocioNombre}\u0000${b.sedeNombre}`),
     )
@@ -196,7 +177,7 @@ async function createClient(): Promise<void> {
     clientValidation.resetValidation()
     notifications.show(addedToExistingBusiness ? 'Sede creada y seleccionada' : 'Negocio y Sede creados', 'success')
   } catch (error) {
-    notifications.show(error instanceof Error ? error.message : 'No fue posible crear el cliente', 'danger')
+    notifications.show(error instanceof Error ? error.message : 'No fue posible crear el cliente', 'error')
   } finally {
     savingClient.value = false
   }
@@ -211,14 +192,7 @@ async function createService(): Promise<void> {
 
   saving.value = true
   try {
-    const created = await apiRequest<ServiceRecord>('api/services', {
-      method: 'POST',
-      body: JSON.stringify({
-        ...form,
-        inicioProgramado: new Date(form.inicioProgramado).toISOString(),
-        duracionMinutos: Number(form.duracionMinutos),
-      }),
-    })
+    const created = await createScheduledService(form)
     draftReady = false
     services.value = [created, ...services.value]
     form.sedeId = ''
@@ -243,7 +217,7 @@ async function createService(): Promise<void> {
     )
     await loadData()
   } catch (error) {
-    notifications.show(error instanceof Error ? error.message : 'No fue posible programar el Servicio', 'danger')
+    notifications.show(error instanceof Error ? error.message : 'No fue posible programar el Servicio', 'error')
   } finally {
     saving.value = false
   }
@@ -252,13 +226,11 @@ async function createService(): Promise<void> {
 async function retryCalendar(service: ServiceRecord): Promise<void> {
   retryingId.value = service.id
   try {
-    const updated = await apiRequest<ServiceRecord>(`api/services/${service.id}/calendar/retry`, {
-      method: 'POST',
-    })
+    const updated = await retryServiceCalendar(service.id)
     services.value = services.value.map((record) => (record.id === service.id ? { ...record, ...updated } : record))
     notifications.show('Evento sincronizado con Calendar', 'success')
   } catch (error) {
-    notifications.show(error instanceof Error ? error.message : 'Calendar volvió a fallar', 'danger')
+    notifications.show(error instanceof Error ? error.message : 'Calendar volvió a fallar', 'error')
   } finally {
     retryingId.value = null
   }
@@ -283,10 +255,6 @@ function discardClientForm(): void {
   closeClientConfirmOpen.value = false
 }
 
-function normalizeClientSite(client: ClientSiteWire): ClientSite {
-  return { ...client, valorServicio: Number(client.valorServicio) }
-}
-
 function selectSite(sedeId: string): void {
   form.sedeId = sedeId
   const site = clients.value.find((client) => client.sedeId === sedeId)
@@ -307,8 +275,7 @@ function formatDate(value?: string): string {
 </script>
 
 <template>
-  <AppShell>
-    <div class="page">
+  <div class="page">
       <header class="page-header">
         <div>
           <h1>Servicios</h1>
@@ -354,11 +321,11 @@ function formatDate(value?: string): string {
                 {{ technician.nombreCompleto }}
               </option>
             </BaseSelect>
-            <BaseInput
+            <BaseDateTimePicker
               v-model="form.inicioProgramado"
+              mode="datetime"
               label="Inicio programado"
               name="inicioProgramado"
-              type="datetime-local"
               required
               :error="serviceValidation.error('inicioProgramado')"
               @blur="serviceValidation.touch('inicioProgramado')"
@@ -389,7 +356,7 @@ function formatDate(value?: string): string {
         <form v-if="showClientForm" class="card" novalidate @submit.prevent="createClient">
           <h2>Nuevo Negocio o Sede</h2>
           <div class="form-grid service-form">
-            <BaseSelect v-model="clientForm.negocioId" label="Negocio" name="negocioId" help="Selecciona uno existente o crea uno nuevo.">
+            <BaseSelect v-model="clientForm.negocioId" label="Negocio" name="negocioId" hint="Selecciona uno existente o crea uno nuevo.">
               <option value="">Crear nuevo Negocio</option>
               <option v-for="business in businesses" :key="business.id" :value="business.id">
                 {{ business.nombre }} · {{ business.nit }}
@@ -484,8 +451,7 @@ function formatDate(value?: string): string {
         @cancel="cancelDiscard"
         @confirm="confirmDiscard"
       />
-    </div>
-  </AppShell>
+  </div>
 </template>
 
 <style scoped>

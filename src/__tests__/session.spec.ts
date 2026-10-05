@@ -27,9 +27,9 @@ vi.mock('@/services/apiService', () => ({
   apiRequest,
 }))
 
-import { useSessionStore } from '@/stores/session'
+import { useAuthStore } from '@/stores/auth'
 
-describe('session store', () => {
+describe('auth store', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     setActivePinia(createPinia())
@@ -49,7 +49,7 @@ describe('session store', () => {
   })
 
   it('restores the remote session only once during normal navigation', async () => {
-    const session = useSessionStore()
+    const session = useAuthStore()
 
     await session.initialize()
     await session.initialize()

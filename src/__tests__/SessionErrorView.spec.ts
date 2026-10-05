@@ -12,8 +12,8 @@ const { login, logout, replace, session } = vi.hoisted(() => ({
   },
 }))
 
-vi.mock('@/stores/session', () => ({
-  useSessionStore: () => ({ ...session, login, logout }),
+vi.mock('@/stores/auth', () => ({
+  useAuthStore: () => ({ ...session, login, logout }),
 }))
 
 vi.mock('vue-router', () => ({

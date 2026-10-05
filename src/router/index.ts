@@ -1,76 +1,38 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
-import { useSessionStore } from '@/stores/session'
+import { authGuard } from '@/router/guards'
+import type { ActiveRole } from '@/types/domain'
+
+const adminOnly: ActiveRole[] = ['ADMINISTRADOR']
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
-    { path: '/', name: 'dashboard', component: () => import('@/views/DashboardView.vue') },
     { path: '/acceso', name: 'login', component: () => import('@/views/LoginView.vue'), meta: { public: true } },
+    { path: '/sin-acceso', name: 'access-denied', component: () => import('@/views/AccessDeniedView.vue'), meta: { public: true } },
+    { path: '/error-sesion', name: 'session-error', component: () => import('@/views/SessionErrorView.vue'), meta: { public: true } },
+    { path: '/seleccionar-rol', name: 'role-selection', component: () => import('@/views/RoleSelectionView.vue') },
     {
-      path: '/sin-acceso',
-      name: 'access-denied',
-      component: () => import('@/views/AccessDeniedView.vue'),
-      meta: { public: true },
+      path: '/',
+      component: () => import('@/components/layout/AdminLayout.vue'),
+      children: [
+        { path: 'prohibido', name: 'forbidden', component: () => import('@/views/ForbiddenView.vue') },
+        { path: '', name: 'dashboard', component: () => import('@/views/DashboardView.vue'), meta: { breadcrumb: 'Resumen' } },
+        { path: 'agenda', name: 'agenda', component: () => import('@/views/PlaceholderView.vue'), meta: { breadcrumb: 'Agenda', placeholderTitle: 'Agenda', placeholderDescription: 'La agenda se implementará en su issue funcional.' } },
+        { path: 'servicios', name: 'services', component: () => import('@/views/ServicesView.vue'), meta: { breadcrumb: 'Servicios' } },
+        { path: 'negocios', name: 'businesses', component: () => import('@/views/PlaceholderView.vue'), meta: { roles: adminOnly, breadcrumb: 'Negocios', placeholderTitle: 'Negocios', placeholderDescription: 'La gestión de negocios se implementará en su issue funcional.' } },
+        { path: 'catalogos', name: 'catalogs', component: () => import('@/views/PlaceholderView.vue'), meta: { roles: adminOnly, breadcrumb: 'Catálogos', placeholderTitle: 'Catálogos', placeholderDescription: 'Los catálogos se implementarán en sus issues funcionales.' } },
+        { path: 'documentos', name: 'documents', component: () => import('@/views/PlaceholderView.vue'), meta: { roles: adminOnly, breadcrumb: 'Documentos', placeholderTitle: 'Documentos', placeholderDescription: 'Los documentos se implementarán en su issue funcional.' } },
+        { path: 'pagos', name: 'payments', component: () => import('@/views/PlaceholderView.vue'), meta: { roles: adminOnly, breadcrumb: 'Pagos y caja', placeholderTitle: 'Pagos y caja', placeholderDescription: 'Pagos y caja se implementará en su issue funcional.' } },
+        { path: 'usuarios', name: 'users', component: () => import('@/views/UsersView.vue'), meta: { roles: adminOnly, breadcrumb: 'Administración / Usuarios' } },
+        { path: 'configuracion', name: 'settings', component: () => import('@/views/PlaceholderView.vue'), meta: { roles: adminOnly, breadcrumb: 'Configuración', placeholderTitle: 'Configuración', placeholderDescription: 'La configuración se implementará en su issue funcional.' } },
+        { path: 'integraciones', name: 'integrations', component: () => import('@/views/IntegrationsView.vue'), meta: { roles: adminOnly, breadcrumb: 'Integraciones' } },
+      ],
     },
-    {
-      path: '/error-sesion',
-      name: 'session-error',
-      component: () => import('@/views/SessionErrorView.vue'),
-      meta: { public: true },
-    },
-    {
-      path: '/seleccionar-rol',
-      name: 'role-selection',
-      component: () => import('@/views/RoleSelectionView.vue'),
-    },
-    {
-      path: '/usuarios',
-      name: 'users',
-      component: () => import('@/views/UsersView.vue'),
-      meta: { admin: true },
-    },
-    {
-      path: '/integraciones',
-      name: 'integrations',
-      component: () => import('@/views/IntegrationsView.vue'),
-      meta: { admin: true },
-    },
-    { path: '/servicios', name: 'services', component: () => import('@/views/ServicesView.vue') },
-    { path: '/prohibido', name: 'forbidden', component: () => import('@/views/ForbiddenView.vue') },
     { path: '/:pathMatch(.*)*', name: 'not-found', component: () => import('@/views/NotFoundView.vue'), meta: { public: true } },
   ],
 })
 
-router.beforeEach(async (to) => {
-  const session = useSessionStore()
-  await session.initialize()
-
-  if (session.status === 'denied') {
-    return to.name === 'access-denied' ? true : { name: 'access-denied' }
-  }
-  if (session.status === 'error') {
-    return to.name === 'session-error' ? true : { name: 'session-error' }
-  }
-  if (session.status === 'unauthenticated') {
-    return to.meta.public ? true : { name: 'login', query: { redirect: to.fullPath } }
-  }
-  if (session.status === 'authenticated') {
-    if (session.profile?.requiereSeleccionRol && to.name !== 'role-selection') {
-      return { name: 'role-selection', query: { redirect: to.fullPath } }
-    }
-    if (!session.profile?.requiereSeleccionRol && to.name === 'role-selection') {
-      return { name: 'dashboard' }
-    }
-    if (to.meta.admin && !session.isAdmin) {
-      return { name: 'forbidden' }
-    }
-    if (to.name === 'login' || to.name === 'access-denied' || to.name === 'session-error') {
-      return { name: 'dashboard' }
-    }
-  }
-
-  return true
-})
+router.beforeEach(authGuard)
 
 export default router

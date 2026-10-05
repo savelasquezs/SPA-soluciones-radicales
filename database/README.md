@@ -32,6 +32,7 @@ Baseline activo y extensiones del MVP:
 20261004_002_integrity_and_rls.sql
 20261004_003_fix_correlated_rls_policies.sql
 20261004_004_mvp_backend_support.sql
+20261004_005_usuario_certificado_fechas_obligatorias.sql
 ```
 
 `NNN` es secuencial dentro del día. La descripción usa minúsculas y guion bajo.

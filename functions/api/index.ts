@@ -40,6 +40,19 @@ const allowedOrigins = new Set(
 )
 
 const app = new Hono<AppEnvironment>()
+const USER_SELECT = `select id,
+                            auth_user_id as "authUserId",
+                            nombre_completo as "nombreCompleto",
+                            correo_google as "correoGoogle",
+                            es_admin as "esAdmin",
+                            es_tecnico as "esTecnico",
+                            activo,
+                            certificado_storage_path as "certificadoStoragePath",
+                            certificado_fecha_emision as "certificadoFechaEmision",
+                            certificado_fecha_vencimiento as "certificadoFechaVencimiento",
+                            certificado_observaciones as "certificadoObservaciones",
+                            version
+                     from public.usuarios`
 
 app.use(
   '/api/*',
@@ -97,26 +110,22 @@ app.get('/api/users', async (context) => {
   const identity = context.get('identity')
   const users = await transaction(async (client) => {
     await requireAdmin(client, identity)
-    const { rows } = await client.query(
-      `select id,
-              auth_user_id as "authUserId",
-              nombre_completo as "nombreCompleto",
-              correo_google as "correoGoogle",
-              es_admin as "esAdmin",
-              es_tecnico as "esTecnico",
-              activo,
-              certificado_storage_path as "certificadoStoragePath",
-              certificado_fecha_emision as "certificadoFechaEmision",
-              certificado_fecha_vencimiento as "certificadoFechaVencimiento",
-              certificado_observaciones as "certificadoObservaciones",
-              version
-       from public.usuarios
-       order by activo desc, nombre_completo`,
-    )
+    const { rows } = await client.query(`${USER_SELECT} order by activo desc, nombre_completo`)
     return rows
   })
 
   return context.json(users)
+})
+
+app.get('/api/users/:id', async (context) => {
+  const identity = context.get('identity')
+  const user = await transaction(async (client) => {
+    await requireAdmin(client, identity)
+    const { rows } = await client.query(`${USER_SELECT} where id = $1`, [context.req.param('id')])
+    if (!rows[0]) throw new ApiError(404, 'El usuario no existe')
+    return rows[0]
+  })
+  return context.json(user)
 })
 
 app.post('/api/users', async (context) => {
@@ -614,7 +623,10 @@ app.onError((error, context) => {
   const databaseError = error as DatabaseError
 
   if (databaseError.code === '23505') {
-    return context.json({ error: 'Ya existe un registro con esos datos' }, 409)
+    const message = databaseError.constraint === 'usuarios_correo_google_uidx'
+      ? 'Este correo ya está registrado.'
+      : 'Ya existe un registro con esos datos'
+    return context.json({ error: message }, 409)
   }
   if (databaseError.code === '23514' || databaseError.code === 'P0001') {
     return context.json({ error: databaseError.message }, 422)
@@ -840,17 +852,41 @@ function userInput(body: Record<string, unknown>) {
     throw new ApiError(422, 'Selecciona al menos un rol')
   }
 
+  const certificadoStoragePath = optionalString(body.certificadoStoragePath)
+  let certificadoFechaEmision = optionalString(body.certificadoFechaEmision)
+  let certificadoFechaVencimiento = optionalString(body.certificadoFechaVencimiento)
+
+  if (!certificadoStoragePath) {
+    certificadoFechaEmision = null
+    certificadoFechaVencimiento = null
+  } else {
+    if (!certificadoFechaEmision) throw new ApiError(422, 'La fecha de emisión es obligatoria cuando existe un certificado')
+    if (!certificadoFechaVencimiento) throw new ApiError(422, 'La fecha de vencimiento es obligatoria cuando existe un certificado')
+    if (!isDateOnly(certificadoFechaEmision) || !isDateOnly(certificadoFechaVencimiento)) {
+      throw new ApiError(422, 'Las fechas del certificado no son válidas')
+    }
+    if (certificadoFechaVencimiento < certificadoFechaEmision) {
+      throw new ApiError(422, 'El vencimiento no puede ser anterior a la emisión')
+    }
+  }
+
   return {
     nombreCompleto: requiredString(body, 'nombreCompleto'),
     correoGoogle: requiredEmail(body, 'correoGoogle'),
     esAdmin,
     esTecnico,
     activo: requiredBoolean(body, 'activo'),
-    certificadoStoragePath: optionalString(body.certificadoStoragePath),
-    certificadoFechaEmision: optionalString(body.certificadoFechaEmision),
-    certificadoFechaVencimiento: optionalString(body.certificadoFechaVencimiento),
+    certificadoStoragePath,
+    certificadoFechaEmision,
+    certificadoFechaVencimiento,
     certificadoObservaciones: optionalString(body.certificadoObservaciones),
   }
+}
+
+function isDateOnly(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const date = new Date(`${value}T00:00:00Z`)
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
 }
 
 function rolesOf(isAdmin: boolean, isTechnician: boolean): string[] {

@@ -6,8 +6,8 @@ const { replace, selectRole } = vi.hoisted(() => ({
   selectRole: vi.fn<(role: 'ADMINISTRADOR' | 'TECNICO') => Promise<void>>(),
 }))
 
-vi.mock('@/stores/session', () => ({
-  useSessionStore: () => ({ selectRole }),
+vi.mock('@/stores/auth', () => ({
+  useAuthStore: () => ({ selectRole }),
 }))
 
 vi.mock('@/stores/notifications', () => ({

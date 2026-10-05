@@ -154,3 +154,72 @@ describe('Calendar service synchronization', () => {
     expect(upsertCalendarEvent).toHaveBeenCalledOnce()
   })
 })
+
+describe('User certificate integrity', () => {
+  const validUser = {
+    nombreCompleto: 'Técnico de prueba',
+    correoGoogle: 'tecnico@example.com',
+    esAdmin: false,
+    esTecnico: true,
+    activo: true,
+    certificadoStoragePath: null,
+    certificadoFechaEmision: null,
+    certificadoFechaVencimiento: null,
+    certificadoObservaciones: null,
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    verifyAuthorization.mockResolvedValue({ authUserId: 'auth-user', session: { sub: 'auth-user' } })
+    requireAdmin.mockResolvedValue({ id: 'admin-id' })
+    transaction.mockImplementation(async (callback) => callback({ query: clientQuery }))
+  })
+
+  it('allows a technician without a certificate and persists null dates', async () => {
+    clientQuery.mockImplementation(async (sql) => sql.includes('insert into public.usuarios')
+      ? { rows: [{ id: 'user-id', ...validUser, version: 1 }], rowCount: 1 }
+      : { rows: [], rowCount: 1 })
+
+    const response = await app.request('/api/users', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer token', 'Content-Type': 'application/json' },
+      body: JSON.stringify(validUser),
+    })
+
+    expect(response.status).toBe(201)
+    expect(clientQuery).toHaveBeenCalledWith(
+      expect.stringContaining('insert into public.usuarios'),
+      expect.arrayContaining([null, null, null]),
+    )
+  })
+
+  it('requires both dates when a certificate path exists', async () => {
+    const response = await app.request('/api/users', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...validUser, certificadoStoragePath: 'certificados/tecnico.pdf' }),
+    })
+    const body = await response.json()
+
+    expect(response.status).toBe(422)
+    expect(body).toEqual({ error: 'La fecha de emisión es obligatoria cuando existe un certificado' })
+    expect(transaction).not.toHaveBeenCalled()
+  })
+
+  it('returns a safe conflict for a duplicated email', async () => {
+    clientQuery.mockRejectedValue(Object.assign(new Error('duplicate key'), {
+      code: '23505',
+      constraint: 'usuarios_correo_google_uidx',
+    }))
+
+    const response = await app.request('/api/users', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer token', 'Content-Type': 'application/json' },
+      body: JSON.stringify(validUser),
+    })
+    const body = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(body).toEqual({ error: 'Este correo ya está registrado.' })
+  })
+})

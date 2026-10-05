@@ -61,6 +61,13 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 - El servidor valida autorización en cada operación protegida.
 - Los clientes y contactos no son usuarios del sistema.
 
+### Certificado del Técnico
+
+- Un Técnico puede no tener certificado.
+- Si se registra un certificado, fecha de emisión y fecha de vencimiento son obligatorias.
+- Si el certificado registrado está vencido, el Técnico no puede ser asignado como responsable.
+- El certificado es una credencial opcional del usuario; no existe una bandera de certificación obligatoria.
+
 ### Clientes y contexto
 
 - Un Negocio puede tener varias Sedes.
