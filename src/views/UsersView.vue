@@ -74,7 +74,7 @@ const selectedUser = computed(() => users.value.find((user) => user.id === selec
 const createErrors = computed(() => validateUserInput(createForm, createFile.value))
 const createEmailWarning = computed(() => {
   const email = createForm.correoGoogle.trim().toLowerCase()
-  if (!email || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || email.endsWith('@gmail.com')) return null
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.endsWith('@gmail.com')) return null
   return 'Asegúrate de que este correo corresponda a una cuenta de Google.'
 })
 const createDirty = computed(() => JSON.stringify(createForm) !== JSON.stringify(blankUser()) || Boolean(createFile.value))
@@ -510,6 +510,8 @@ function certificateSummary(user: UserRecord): string {
 .rules-card p { margin: 0; color: var(--text-secondary); }
 .certificate-alert { display: grid; gap: 0.25rem; border-radius: 8px; background: var(--warning-subtle); padding: 1rem; color: var(--warning); }
 .dialog-form { display: grid; gap: 1.25rem; }
+.required-legend { margin: 0; color: var(--text-secondary); font-size: 0.8125rem; }
+.required-legend span { color: var(--danger); }
 .email-field { display: grid; gap: 0.375rem; }
 .field-warning { margin: 0; color: var(--warning); font-size: 0.8125rem; line-height: 1.125rem; }
 .certificate-section { display: grid; gap: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--bg); padding: 1rem; }
