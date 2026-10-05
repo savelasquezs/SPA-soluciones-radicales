@@ -259,104 +259,104 @@ function validStep(value: number): number {
 <template>
   <div class="date-time-picker-root">
     <BaseField
-    v-slot="{ describedBy }"
-    :name="name"
-    :label="label"
-    :required="required"
-    :hint="hint"
-    :error="effectiveError"
-    :disabled="disabled"
-  >
-    <div class="date-time-control" :class="{ 'date-time-control--invalid': effectiveError, 'date-time-control--disabled': disabled }">
-      <input
-        :id="name"
-        v-model="inputText"
-        type="text"
-        :name="name"
-        :placeholder="mode === 'time' ? 'HH:mm' : mode === 'date' ? 'DD / MM / AAAA' : 'DD / MM / AAAA · HH:mm'"
-        :required="required"
-        :disabled="disabled"
-        :readonly="readonly"
-        :aria-invalid="Boolean(effectiveError)"
-        :aria-describedby="describedBy"
-        @blur="commitInput"
-        @keydown.down.prevent="showPicker"
-        @keydown.esc="open = false"
-      />
-      <BaseIconButton :label="title" size="small" :disabled="disabled || readonly" @click="showPicker">
-        <Clock3 v-if="mode === 'time'" :size="18" />
-        <CalendarDays v-else :size="18" />
-      </BaseIconButton>
-      <BaseIconButton v-if="clearable && modelValue && !readonly" label="Limpiar" size="small" :disabled="disabled" @click="clear">
-        <X :size="17" />
-      </BaseIconButton>
-    </div>
+      v-slot="{ describedBy }"
+      :name="name"
+      :label="label"
+      :required="required"
+      :hint="hint"
+      :error="effectiveError"
+      :disabled="disabled"
+    >
+      <div class="date-time-control" :class="{ 'date-time-control--invalid': effectiveError, 'date-time-control--disabled': disabled }">
+        <input
+          :id="name"
+          v-model="inputText"
+          type="text"
+          :name="name"
+          :placeholder="mode === 'time' ? 'HH:mm' : mode === 'date' ? 'DD / MM / AAAA' : 'DD / MM / AAAA · HH:mm'"
+          :required="required"
+          :disabled="disabled"
+          :readonly="readonly"
+          :aria-invalid="Boolean(effectiveError)"
+          :aria-describedby="describedBy"
+          @blur="commitInput"
+          @keydown.down.prevent="showPicker"
+          @keydown.esc="open = false"
+        />
+        <BaseIconButton :label="title" size="small" :disabled="disabled || readonly" @click="showPicker">
+          <Clock3 v-if="mode === 'time'" :size="18" />
+          <CalendarDays v-else :size="18" />
+        </BaseIconButton>
+        <BaseIconButton v-if="clearable && modelValue && !readonly" label="Limpiar" size="small" :disabled="disabled" @click="clear">
+          <X :size="17" />
+        </BaseIconButton>
+      </div>
     </BaseField>
 
     <BaseDialog v-model="open" :title="title">
-    <div class="picker">
-      <section v-if="hasDate" class="calendar" aria-label="Calendario">
-        <div class="calendar__toolbar">
-          <BaseIconButton label="Mes anterior" size="small" @click="changeMonth(-1)"><ChevronLeft :size="18" /></BaseIconButton>
-          <div class="calendar__selectors">
-            <label>
-              <span class="sr-only">Mes</span>
-              <select v-model.number="viewMonth">
-                <option v-for="month in 12" :key="month" :value="month">{{ monthName(month) }}</option>
-              </select>
-            </label>
-            <label>
-              <span class="sr-only">Año</span>
-              <select v-model.number="viewYear">
-                <option v-for="year in yearOptions" :key="year" :value="year">{{ year }}</option>
-              </select>
-            </label>
+      <div class="picker">
+        <section v-if="hasDate" class="calendar" aria-label="Calendario">
+          <div class="calendar__toolbar">
+            <BaseIconButton label="Mes anterior" size="small" @click="changeMonth(-1)"><ChevronLeft :size="18" /></BaseIconButton>
+            <div class="calendar__selectors">
+              <label>
+                <span class="sr-only">Mes</span>
+                <select v-model.number="viewMonth">
+                  <option v-for="month in 12" :key="month" :value="month">{{ monthName(month) }}</option>
+                </select>
+              </label>
+              <label>
+                <span class="sr-only">Año</span>
+                <select v-model.number="viewYear">
+                  <option v-for="year in yearOptions" :key="year" :value="year">{{ year }}</option>
+                </select>
+              </label>
+            </div>
+            <BaseIconButton label="Mes siguiente" size="small" @click="changeMonth(1)"><ChevronRight :size="18" /></BaseIconButton>
           </div>
-          <BaseIconButton label="Mes siguiente" size="small" @click="changeMonth(1)"><ChevronRight :size="18" /></BaseIconButton>
-        </div>
-        <div class="calendar__weekdays" aria-hidden="true"><span v-for="day in weekdays" :key="day">{{ day }}</span></div>
-        <div class="calendar__grid">
-          <template v-for="cell in calendarCells" :key="cell.key">
-            <span v-if="!cell.date" aria-hidden="true"></span>
-            <button
-              v-else
-              :ref="(element) => { calendarButtons[cell.date!] = element as HTMLButtonElement | null }"
-              type="button"
-              :disabled="dateDisabled(cell.date)"
-              :class="{ 'is-selected': selectedDate === cell.date, 'is-today': today === cell.date }"
-              :aria-label="formatDateOnly(cell.date, true)"
-              :aria-current="today === cell.date ? 'date' : undefined"
-              :aria-pressed="selectedDate === cell.date"
-              @click="selectDate(cell.date)"
-              @keydown="handleDateKeydown($event, cell.date)"
-            >{{ cell.day }}</button>
-          </template>
-        </div>
-        <BaseButton variant="ghost" @click="chooseToday">Hoy</BaseButton>
-      </section>
+          <div class="calendar__weekdays" aria-hidden="true"><span v-for="day in weekdays" :key="day">{{ day }}</span></div>
+          <div class="calendar__grid">
+            <template v-for="cell in calendarCells" :key="cell.key">
+              <span v-if="!cell.date" aria-hidden="true"></span>
+              <button
+                v-else
+                :ref="(element) => { calendarButtons[cell.date!] = element as HTMLButtonElement | null }"
+                type="button"
+                :disabled="dateDisabled(cell.date)"
+                :class="{ 'is-selected': selectedDate === cell.date, 'is-today': today === cell.date }"
+                :aria-label="formatDateOnly(cell.date, true)"
+                :aria-current="today === cell.date ? 'date' : undefined"
+                :aria-pressed="selectedDate === cell.date"
+                @click="selectDate(cell.date)"
+                @keydown="handleDateKeydown($event, cell.date)"
+              >{{ cell.day }}</button>
+            </template>
+          </div>
+          <BaseButton variant="ghost" @click="chooseToday">Hoy</BaseButton>
+        </section>
 
-      <section v-if="hasTime" class="time-picker" aria-label="Hora">
-        <label>
-          <span>Hora</span>
-          <select :value="timeHours" @change="setTimePart('hour', ($event.target as HTMLSelectElement).value)">
-            <option v-for="hour in 24" :key="hour - 1" :value="String(hour - 1).padStart(2, '0')">{{ String(hour - 1).padStart(2, '0') }}</option>
-          </select>
-        </label>
-        <span aria-hidden="true">:</span>
-        <label>
-          <span>Minutos</span>
-          <select :value="timeMinutes" @change="setTimePart('minute', ($event.target as HTMLSelectElement).value)">
-            <option v-for="minute in minuteOptions" :key="minute" :value="String(minute).padStart(2, '0')">{{ String(minute).padStart(2, '0') }}</option>
-          </select>
-        </label>
-      </section>
-      <p v-if="localError" class="picker__error" role="alert">{{ localError }}</p>
-    </div>
-    <template #footer>
-      <BaseButton v-if="clearable" variant="ghost" @click="clear">Limpiar</BaseButton>
-      <BaseButton variant="secondary" @click="open = false">Cancelar</BaseButton>
-      <BaseButton @click="apply">Aplicar</BaseButton>
-    </template>
+        <section v-if="hasTime" class="time-picker" aria-label="Hora">
+          <label>
+            <span>Hora</span>
+            <select :value="timeHours" @change="setTimePart('hour', ($event.target as HTMLSelectElement).value)">
+              <option v-for="hour in 24" :key="hour - 1" :value="String(hour - 1).padStart(2, '0')">{{ String(hour - 1).padStart(2, '0') }}</option>
+            </select>
+          </label>
+          <span aria-hidden="true">:</span>
+          <label>
+            <span>Minutos</span>
+            <select :value="timeMinutes" @change="setTimePart('minute', ($event.target as HTMLSelectElement).value)">
+              <option v-for="minute in minuteOptions" :key="minute" :value="String(minute).padStart(2, '0')">{{ String(minute).padStart(2, '0') }}</option>
+            </select>
+          </label>
+        </section>
+        <p v-if="localError" class="picker__error" role="alert">{{ localError }}</p>
+      </div>
+      <template #footer>
+        <BaseButton v-if="clearable" variant="ghost" @click="clear">Limpiar</BaseButton>
+        <BaseButton variant="secondary" @click="open = false">Cancelar</BaseButton>
+        <BaseButton @click="apply">Aplicar</BaseButton>
+      </template>
     </BaseDialog>
   </div>
 </template>
