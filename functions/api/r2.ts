@@ -63,7 +63,7 @@ export function createMasterUploadUrl(input: UploadInput): UploadAuthorization {
     throw new ApiError(422, 'El certificado no puede superar 10 MB')
   }
 
-  const expectedContentType = MIME_BY_EXTENSION[extension]
+  const expectedContentType = MIME_BY_EXTENSION[extension]!
   const suppliedContentType = input.contentType.trim().toLowerCase()
   const contentType = !suppliedContentType || suppliedContentType === 'application/octet-stream'
     ? expectedContentType

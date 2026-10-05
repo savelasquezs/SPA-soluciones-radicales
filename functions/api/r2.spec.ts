@@ -1,6 +1,13 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { ApiError } from './auth'
+vi.mock('./auth', () => ({
+  ApiError: class ApiError extends Error {
+    constructor(public readonly status: number, message: string) {
+      super(message)
+    }
+  },
+}))
+
 import { createMasterReadUrl, createMasterUploadUrl } from './r2'
 
 const original = {
@@ -56,7 +63,7 @@ describe('Cloudflare R2 presigned URLs', () => {
       fileName: 'malware.exe',
       contentType: 'application/octet-stream',
       size: 10,
-    })).toThrow(ApiError)
-    expect(() => createMasterReadUrl('otra-carpeta/archivo.pdf')).toThrow(ApiError)
+    })).toThrow('El tipo de archivo no está permitido')
+    expect(() => createMasterReadUrl('otra-carpeta/archivo.pdf')).toThrow('La ruta del archivo privado no es válida')
   })
 })
