@@ -3,9 +3,9 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import BaseButton from '@/components/base/BaseButton.vue'
-import { useSessionStore } from '@/stores/session'
+import { useAuthStore } from '@/stores/auth'
 
-const session = useSessionStore()
+const session = useAuthStore()
 const router = useRouter()
 const loading = ref(false)
 const restarting = ref(false)

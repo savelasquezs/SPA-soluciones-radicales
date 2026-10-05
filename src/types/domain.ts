@@ -1,5 +1,10 @@
 export type ActiveRole = 'ADMINISTRADOR' | 'TECNICO'
 
+export type ThemePreference = 'light' | 'dark' | 'system'
+export type DateOnly = string
+export type TimeOnly = string
+export type LocalDateTime = string
+
 export type SessionProfile = {
   id: string
   nombreCompleto: string
@@ -19,8 +24,8 @@ export type UserRecord = {
   esTecnico: boolean
   activo: boolean
   certificadoStoragePath: string | null
-  certificadoFechaEmision: string | null
-  certificadoFechaVencimiento: string | null
+  certificadoFechaEmision: DateOnly | null
+  certificadoFechaVencimiento: DateOnly | null
   certificadoObservaciones: string | null
   version: number
 }
@@ -68,7 +73,7 @@ export type ServiceDraft = {
   observaciones: string
 }
 
-export type NotificationTone = 'success' | 'warning' | 'danger' | 'info'
+export type NotificationTone = 'success' | 'error' | 'warning' | 'info'
 
 export type AppNotification = {
   id: string

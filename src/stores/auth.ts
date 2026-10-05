@@ -5,26 +5,29 @@ import { apiRequest, ApiClientError } from '@/services/apiService'
 import { getAuthSession, signInWithGoogle, signOut as endAuthSession } from '@/services/authService'
 import type { ActiveRole, SessionProfile } from '@/types/domain'
 
-type SessionStatus = 'idle' | 'loading' | 'unauthenticated' | 'authenticated' | 'denied' | 'error'
+type AuthStatus = 'idle' | 'loading' | 'unauthenticated' | 'authenticated' | 'denied' | 'error'
+type AuthSession = Awaited<ReturnType<typeof getAuthSession>>
 
-export const useSessionStore = defineStore('session', () => {
-  const status = ref<SessionStatus>('idle')
-  const profile = ref<SessionProfile | null>(null)
-  const authEmail = ref<string | null>(null)
+export const useAuthStore = defineStore('auth', () => {
+  const status = ref<AuthStatus>('idle')
+  const session = ref<AuthSession>(null)
+  const user = ref<SessionProfile | null>(null)
   const error = ref<string | null>(null)
   let initialization: Promise<void> | null = null
 
+  const profile = computed(() => user.value)
+  const authEmail = computed(() => session.value?.user?.email ?? null)
   const isAuthenticated = computed(() => status.value === 'authenticated')
-  const isAdmin = computed(() => profile.value?.rolActivo === 'ADMINISTRADOR')
+  const activeRole = computed(() => user.value?.rolActivo ?? null)
+  const rolesAvailable = computed<ActiveRole[]>(() => [
+    user.value?.esAdmin ? 'ADMINISTRADOR' : null,
+    user.value?.esTecnico ? 'TECNICO' : null,
+  ].filter((role): role is ActiveRole => Boolean(role)))
+  const isAdmin = computed(() => activeRole.value === 'ADMINISTRADOR')
 
   async function initialize(force = false): Promise<void> {
-    if (initialization && !force) {
-      return initialization
-    }
-    if (!force && status.value !== 'idle') {
-      return
-    }
-
+    if (initialization && !force) return initialization
+    if (!force && status.value !== 'idle') return
     initialization = restore()
     try {
       await initialization
@@ -36,23 +39,18 @@ export const useSessionStore = defineStore('session', () => {
   async function restore(): Promise<void> {
     status.value = 'loading'
     error.value = null
-
     try {
-      const session = await getAuthSession()
-      const user = session?.user
-
-      if (!user) {
+      session.value = await getAuthSession()
+      if (!session.value?.user) {
         status.value = 'unauthenticated'
-        profile.value = null
-        authEmail.value = null
+        user.value = null
         return
       }
-
-      authEmail.value = user.email
-      profile.value = await apiRequest<SessionProfile>('api/session')
+      user.value = await apiRequest<SessionProfile>('api/session')
       status.value = 'authenticated'
     } catch (restoreError) {
-      profile.value = null
+      session.value = null
+      user.value = null
       error.value = restoreError instanceof Error ? restoreError.message : 'No fue posible validar la sesión'
       status.value = restoreError instanceof ApiClientError && restoreError.status === 403 ? 'denied' : 'error'
     }
@@ -64,7 +62,8 @@ export const useSessionStore = defineStore('session', () => {
   }
 
   async function selectRole(role: ActiveRole): Promise<void> {
-    profile.value = await apiRequest<SessionProfile>('api/session/role', {
+    if (!rolesAvailable.value.includes(role)) throw new Error('El rol seleccionado no está disponible')
+    user.value = await apiRequest<SessionProfile>('api/session/role', {
       method: 'POST',
       body: JSON.stringify({ role }),
     })
@@ -72,8 +71,8 @@ export const useSessionStore = defineStore('session', () => {
 
   async function logout(): Promise<void> {
     await endAuthSession()
-    profile.value = null
-    authEmail.value = null
+    session.value = null
+    user.value = null
     status.value = 'unauthenticated'
   }
 
@@ -84,10 +83,14 @@ export const useSessionStore = defineStore('session', () => {
 
   return {
     status,
+    session,
+    user,
     profile,
     authEmail,
     error,
     isAuthenticated,
+    activeRole,
+    rolesAvailable,
     isAdmin,
     initialize,
     login,

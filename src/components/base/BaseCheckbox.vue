@@ -5,10 +5,12 @@ withDefaults(
     label: string
     name: string
     disabled?: boolean
+    readonly?: boolean
+    required?: boolean
     error?: string
-    help?: string
+    hint?: string
   }>(),
-  { disabled: false, error: undefined, help: undefined },
+  { disabled: false, readonly: false, required: false, error: undefined, hint: undefined },
 )
 
 const emit = defineEmits<{ 'update:modelValue': [value: boolean]; blur: [] }>()
@@ -22,15 +24,16 @@ const emit = defineEmits<{ 'update:modelValue': [value: boolean]; blur: [] }>()
         :name="name"
         type="checkbox"
         :checked="modelValue"
-        :disabled="disabled"
+        :disabled="disabled || readonly"
+        :required="required"
         :aria-invalid="Boolean(error)"
-        :aria-describedby="error ? `${name}-error` : help ? `${name}-help` : undefined"
+        :aria-describedby="[hint ? `${name}-hint` : '', error ? `${name}-error` : ''].filter(Boolean).join(' ') || undefined"
         @change="emit('update:modelValue', ($event.target as HTMLInputElement).checked)"
         @blur="emit('blur')"
       />
-      <span>{{ label }}</span>
+      <span>{{ label }} <span v-if="required" class="required" aria-hidden="true">*</span></span>
     </label>
-    <small v-if="help" :id="`${name}-help`" class="help">{{ help }}</small>
+    <small v-if="hint" :id="`${name}-hint`" class="help">{{ hint }}</small>
     <small v-if="error" :id="`${name}-error`" class="error" role="alert">{{ error }}</small>
   </div>
 </template>
@@ -73,6 +76,10 @@ input:disabled + span {
 }
 
 .error {
+  color: var(--danger);
+}
+
+.required {
   color: var(--danger);
 }
 </style>

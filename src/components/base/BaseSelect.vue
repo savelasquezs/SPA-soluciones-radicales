@@ -1,51 +1,51 @@
 <script setup lang="ts">
-defineProps<{
+import BaseField from '@/components/base/BaseField.vue'
+
+withDefaults(defineProps<{
   modelValue: string
   label: string
   name: string
   required?: boolean
   disabled?: boolean
+  readonly?: boolean
   error?: string
-  help?: string
-}>()
+  hint?: string
+}>(), { required: false, disabled: false, readonly: false, error: undefined, hint: undefined })
 
 const emit = defineEmits<{ 'update:modelValue': [value: string]; blur: [] }>()
 </script>
 
 <template>
-  <label class="field" :for="name">
-    <span>{{ label }} <span v-if="required" class="required" aria-hidden="true">*</span></span>
-    <small v-if="help" :id="`${name}-help`" class="help">{{ help }}</small>
+  <BaseField
+    v-slot="{ describedBy }"
+    :name="name"
+    :label="label"
+    :required="required"
+    :hint="hint"
+    :error="error"
+    :disabled="disabled"
+  >
     <select
       :id="name"
       :name="name"
       :value="modelValue"
       :required="required"
-      :disabled="disabled"
+      :disabled="disabled || readonly"
       :aria-invalid="Boolean(error)"
-      :aria-describedby="error ? `${name}-error` : help ? `${name}-help` : undefined"
+      :aria-describedby="describedBy"
       @change="emit('update:modelValue', ($event.target as HTMLSelectElement).value)"
       @blur="emit('blur')"
     >
       <slot />
     </select>
-    <small v-if="error" :id="`${name}-error`" class="error" role="alert">{{ error }}</small>
-  </label>
+  </BaseField>
 </template>
 
 <style scoped>
-.field {
-  display: grid;
-  gap: 0.45rem;
-  color: var(--text-secondary);
-  font-size: 0.9rem;
-  font-weight: 650;
-}
-
 select {
   min-height: 44px;
   width: 100%;
-  border: 1px solid var(--border);
+  border: 1px solid var(--control-border);
   border-radius: var(--radius);
   background: var(--surface);
   padding: 0.65rem 0.75rem;
@@ -56,13 +56,4 @@ select[aria-invalid='true'] {
   border-color: var(--danger);
 }
 
-.required,
-.error {
-  color: var(--danger);
-}
-
-.help {
-  color: var(--text-muted);
-  font-weight: 500;
-}
 </style>

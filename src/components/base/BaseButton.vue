@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import BaseSpinner from '@/components/base/BaseSpinner.vue'
+
 withDefaults(
   defineProps<{
     type?: 'button' | 'submit'
@@ -18,7 +20,7 @@ withDefaults(
     :disabled="disabled || loading"
     :aria-busy="loading"
   >
-    <span v-if="loading" class="base-button__spinner" aria-hidden="true"></span>
+    <BaseSpinner v-if="loading" size="small" label="Procesando" />
     <slot />
   </button>
 </template>
@@ -73,18 +75,4 @@ withDefaults(
   color: var(--text-secondary);
 }
 
-.base-button__spinner {
-  width: 1rem;
-  height: 1rem;
-  border: 2px solid currentcolor;
-  border-right-color: transparent;
-  border-radius: 50%;
-  animation: spin 700ms linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
 </style>

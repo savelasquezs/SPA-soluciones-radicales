@@ -1,13 +1,11 @@
 <script setup lang="ts">
-import AppShell from '@/components/layout/AppShell.vue'
-import { useSessionStore } from '@/stores/session'
+import { useAuthStore } from '@/stores/auth'
 
-const session = useSessionStore()
+const session = useAuthStore()
 </script>
 
 <template>
-  <AppShell>
-    <div class="page">
+  <div class="page">
       <header class="page-header">
         <div>
           <h1>Hola, {{ session.profile?.nombreCompleto.split(' ')[0] }}</h1>
@@ -33,8 +31,7 @@ const session = useSessionStore()
           <p>Verifica Gmail y Calendar de la cuenta empresarial.</p>
         </RouterLink>
       </section>
-    </div>
-  </AppShell>
+  </div>
 </template>
 
 <style scoped>
