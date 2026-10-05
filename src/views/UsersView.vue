@@ -18,7 +18,6 @@ import StatusBadge from '@/components/base/StatusBadge.vue'
 import { certificateStatus, validateUserInput, type CertificateStatus, type UserFormErrors } from '@/helpers/users'
 import {
   createUser,
-  getUser,
   listUsers,
   setUserActive,
   updateUser,
@@ -35,7 +34,6 @@ const loading = ref(true)
 const loadError = ref<string | null>(null)
 const formMode = ref<FormMode>('create')
 const formOpen = ref(false)
-const formLoading = ref(false)
 const savingForm = ref(false)
 const editingUserId = ref<string | null>(null)
 const deactivateConfirmOpen = ref(false)
@@ -113,28 +111,17 @@ function openCreate(): void {
   formOpen.value = true
 }
 
-async function openEdit(user: UserRecord): Promise<void> {
+function openEdit(user: UserRecord): void {
   formMode.value = 'edit'
   editingUserId.value = user.id
   resetForm()
+  Object.assign(userForm, toUserInput(user))
+  formBaseline.value = JSON.stringify(userForm)
   formOpen.value = true
-  formLoading.value = true
-  try {
-    const fresh = normalizeUser(await getUser(user.id))
-    replaceUser(fresh)
-    Object.assign(userForm, toUserInput(fresh))
-    formBaseline.value = JSON.stringify(userForm)
-  } catch (error) {
-    formOpen.value = false
-    editingUserId.value = null
-    notifications.show(userMessage(error, 'No fue posible cargar el usuario'), 'error')
-  } finally {
-    formLoading.value = false
-  }
 }
 
 function requestCloseForm(): void {
-  if (savingForm.value || formLoading.value) return
+  if (savingForm.value) return
   if (formDirty.value) discardConfirmOpen.value = true
   else closeForm()
 }
@@ -152,7 +139,7 @@ function closeForm(): void {
 }
 
 async function submitForm(): Promise<void> {
-  if (savingForm.value || formLoading.value) return
+  if (savingForm.value) return
   formSubmitted.value = true
   if (Object.keys(formErrors.value).length) {
     await focusFirstError()
@@ -337,8 +324,7 @@ function certificateIcon(status: CertificateStatus): 'check' | 'warning' | 'erro
       :description="formDescription"
       @update:model-value="!$event && requestCloseForm()"
     >
-      <LoadingSkeleton v-if="formLoading" label="Cargando usuario" :lines="5" />
-      <form v-else id="user-form" class="dialog-form" novalidate @submit.prevent="submitForm">
+      <form id="user-form" class="dialog-form" novalidate @submit.prevent="submitForm">
         <section class="form-section" aria-labelledby="user-data-heading">
           <header class="form-section__header">
             <div>
@@ -423,8 +409,8 @@ function certificateIcon(status: CertificateStatus): 'check' | 'warning' | 'erro
         </section>
       </form>
       <template #footer>
-        <BaseButton variant="secondary" :disabled="savingForm || formLoading" @click="requestCloseForm">Cancelar</BaseButton>
-        <BaseButton type="submit" form="user-form" :loading="savingForm" :disabled="formLoading">{{ formMode === 'create' ? 'Crear usuario' : 'Guardar cambios' }}</BaseButton>
+        <BaseButton variant="secondary" :disabled="savingForm" @click="requestCloseForm">Cancelar</BaseButton>
+        <BaseButton type="submit" form="user-form" :loading="savingForm">{{ formMode === 'create' ? 'Crear usuario' : 'Guardar cambios' }}</BaseButton>
       </template>
     </BaseDialog>
 
