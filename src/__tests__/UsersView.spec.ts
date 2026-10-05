@@ -2,14 +2,13 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { createUser, getUser, listUsers, updateUser } from '@/services/usersService'
+import { createUser, listUsers, updateUser } from '@/services/usersService'
 import { useNotificationsStore } from '@/stores/notifications'
 import type { UserInput, UserRecord } from '@/types/domain'
 import UsersView from '@/views/UsersView.vue'
 
 vi.mock('@/services/usersService', () => ({
   listUsers: vi.fn<() => Promise<UserRecord[]>>(),
-  getUser: vi.fn<(id: string) => Promise<UserRecord>>(),
   createUser: vi.fn<(input: UserInput) => Promise<UserRecord>>(),
   updateUser: vi.fn<(id: string, input: UserInput) => Promise<UserRecord>>(),
   setUserActive: vi.fn<(user: UserRecord, active: boolean) => Promise<UserRecord>>(),
@@ -43,7 +42,6 @@ beforeEach(() => {
     user(),
     user({ id: 'user-2', nombreCompleto: 'Luis Mora', correoGoogle: 'luis@example.com', esAdmin: false, esTecnico: true, activo: false }),
   ])
-  vi.mocked(getUser).mockImplementation(async (id) => user({ id }))
   vi.mocked(updateUser).mockImplementation(async (_id, input) => user({ ...input, id: _id, version: 2 }))
 })
 
@@ -61,20 +59,21 @@ describe('Usuarios', () => {
   })
 
   it('usa el mismo diálogo para crear y editar sin renderizar un perfil inline', async () => {
-    vi.mocked(getUser).mockResolvedValue(user({
-      authUserId: 'google-user-1',
-      nombreCompleto: 'Ana Pérez Actualizada',
-      correoGoogle: 'ana@gmail.com',
-    }))
+    vi.mocked(listUsers).mockResolvedValue([
+      user({
+        authUserId: 'google-user-1',
+        nombreCompleto: 'Ana Pérez Actualizada',
+        correoGoogle: 'ana@gmail.com',
+      }),
+      user({ id: 'user-2', nombreCompleto: 'Luis Mora', correoGoogle: 'luis@example.com', esAdmin: false, esTecnico: true, activo: false }),
+    ])
 
     const wrapper = mount(UsersView, { attachTo: document.body })
     await flushPromises()
 
     expect(wrapper.find('.profile-grid').exists()).toBe(false)
-    await wrapper.get('button[aria-label="Editar Ana Pérez"]').trigger('click')
-    await flushPromises()
+    await wrapper.get('button[aria-label="Editar Ana Pérez Actualizada"]').trigger('click')
 
-    expect(getUser).toHaveBeenCalledWith('user-1')
     expect(wrapper.text()).toContain('Editar usuario')
     expect(wrapper.get<HTMLInputElement>('#user-name').element.value).toBe('Ana Pérez Actualizada')
     expect(wrapper.get<HTMLInputElement>('#user-email').element.disabled).toBe(true)
