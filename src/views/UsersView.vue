@@ -15,7 +15,6 @@ import ErrorState from '@/components/base/ErrorState.vue'
 import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import ResponsiveTable from '@/components/base/ResponsiveTable.vue'
 import StatusBadge from '@/components/base/StatusBadge.vue'
-import { formatDateOnly } from '@/helpers/dateTime'
 import { certificateStatus, validateUserInput, type CertificateStatus, type UserFormErrors } from '@/helpers/users'
 import {
   createUser,
@@ -282,11 +281,6 @@ function certificateIcon(status: CertificateStatus): 'check' | 'warning' | 'erro
   return status === 'valid' ? 'check' : status === 'expiring' ? 'warning' : status === 'expired' ? 'error' : 'info'
 }
 
-function certificateSummary(user: UserRecord): string {
-  if (!user.certificadoStoragePath) return 'Sin certificado'
-  const expiry = formatDateOnly(user.certificadoFechaVencimiento)
-  return expiry ? `Adjunto · vence ${expiry}` : 'Adjunto'
-}
 </script>
 
 <template>
@@ -375,7 +369,7 @@ function certificateSummary(user: UserRecord): string {
           <div class="certificate-section__title"><h3>Certificado técnico</h3><span>Opcional</span></div>
           <div v-if="formMode === 'edit' && userForm.certificadoStoragePath" class="current-certificate">
             <strong>Certificado actual</strong>
-            <span>{{ fileName(userForm.certificadoStoragePath) }} · {{ editingUser ? certificateSummary(editingUser) : 'Archivo adjunto' }}</span>
+            <span>{{ fileName(userForm.certificadoStoragePath) }} · Archivo adjunto</span>
           </div>
           <BaseFileUpload
             v-model="formFile"
