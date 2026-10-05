@@ -96,6 +96,7 @@ async function switchRole(): Promise<void> {
 <style scoped>
 .shell {
   min-height: 100vh;
+  overflow-x: clip;
 }
 
 .sidebar {
