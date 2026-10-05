@@ -57,7 +57,7 @@ router.beforeEach(async (to) => {
   }
   if (session.status === 'authenticated') {
     if (session.profile?.requiereSeleccionRol && to.name !== 'role-selection') {
-      return { name: 'role-selection' }
+      return { name: 'role-selection', query: { redirect: to.fullPath } }
     }
     if (!session.profile?.requiereSeleccionRol && to.name === 'role-selection') {
       return { name: 'dashboard' }

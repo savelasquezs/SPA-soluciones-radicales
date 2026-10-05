@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import BaseButton from '@/components/base/BaseButton.vue'
 import { useNotificationsStore } from '@/stores/notifications'
@@ -9,6 +9,7 @@ import type { ActiveRole } from '@/types/domain'
 
 const session = useSessionStore()
 const notifications = useNotificationsStore()
+const route = useRoute()
 const router = useRouter()
 const loadingRole = ref<ActiveRole | null>(null)
 
@@ -16,7 +17,12 @@ async function choose(role: ActiveRole): Promise<void> {
   loadingRole.value = role
   try {
     await session.selectRole(role)
-    await router.replace('/')
+    const redirect = typeof route.query.redirect === 'string'
+      && route.query.redirect.startsWith('/')
+      && !route.query.redirect.startsWith('//')
+      ? route.query.redirect
+      : '/'
+    await router.replace(redirect)
   } catch (error) {
     notifications.show(error instanceof Error ? error.message : 'No fue posible seleccionar el rol', 'danger')
   } finally {
