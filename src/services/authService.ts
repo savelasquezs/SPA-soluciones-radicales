@@ -17,11 +17,12 @@ export async function getAuthSession() {
 }
 
 export async function getAccessToken(): Promise<string> {
-  const { data, error } = await authClient.token()
-  if (error || !data?.token) {
-    throw new Error(error?.message ?? 'No fue posible obtener un token de sesión')
+  const session = await getAuthSession()
+  const token = session?.session.token
+  if (!token) {
+    throw new Error('No fue posible obtener un token de sesión')
   }
-  return data.token
+  return token
 }
 
 export async function signInWithGoogle(selectAccount = false): Promise<void> {
