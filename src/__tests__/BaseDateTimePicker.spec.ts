@@ -26,7 +26,7 @@ describe('BaseDateTimePicker', () => {
 
     expect(wrapper.element.classList.contains('date-time-picker-root')).toBe(true)
     expect(wrapper.findAll('.date-time-control')).toHaveLength(1)
-    expect(wrapper.get('.date-time-control input').exists()).toBe(true)
+    expect(wrapper.find('.date-time-control input').exists()).toBe(true)
   })
 
   it('edita una fecha, cambia mes y año y respeta min/max', async () => {
