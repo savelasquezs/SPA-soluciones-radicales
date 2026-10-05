@@ -103,10 +103,16 @@ Las variantes se expresan con props tipadas. No duplicar clases completas en com
 ## Formularios
 
 - Label visible sobre el control salvo patrón accesible equivalente.
+- Usar labels breves y descriptivos; el contexto adicional pertenece al texto de ayuda, no al label.
+- Evitar repetir el mismo concepto en título de sección, label y control. Si una sección ya identifica claramente una carga de archivo, el label puede quedar visualmente oculto manteniendo su asociación accesible.
 - Ayuda antes del error; error inmediatamente después del control.
+- Dividir formularios medianos en secciones por intención, con título y descripción breve, en lugar de una lista continua de campos.
+- Usar dos columnas solo para controles relacionados cuando ambos puedan encogerse sin overflow; volver a una columna en mobile.
 - Ancho limitado para campos cortos y fechas.
 - Formularios a una columna en mobile.
 - Agrupar por significado, no por columnas de base de datos.
+
+Estas reglas siguen patrones consolidados de formularios de GitHub Primer y Atlassian: labels permanentes y concisos, captions para contexto, validación junto al campo y agrupación visual que reduce carga cognitiva.
 
 ## Responsive
 

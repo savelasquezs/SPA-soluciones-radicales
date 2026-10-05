@@ -18,7 +18,6 @@ import StatusBadge from '@/components/base/StatusBadge.vue'
 import { certificateStatus, validateUserInput, type CertificateStatus, type UserFormErrors } from '@/helpers/users'
 import {
   createUser,
-  getUser,
   listUsers,
   setUserActive,
   updateUser,
@@ -35,7 +34,6 @@ const loading = ref(true)
 const loadError = ref<string | null>(null)
 const formMode = ref<FormMode>('create')
 const formOpen = ref(false)
-const formLoading = ref(false)
 const savingForm = ref(false)
 const editingUserId = ref<string | null>(null)
 const deactivateConfirmOpen = ref(false)
@@ -113,28 +111,17 @@ function openCreate(): void {
   formOpen.value = true
 }
 
-async function openEdit(user: UserRecord): Promise<void> {
+function openEdit(user: UserRecord): void {
   formMode.value = 'edit'
   editingUserId.value = user.id
   resetForm()
+  Object.assign(userForm, toUserInput(user))
+  formBaseline.value = JSON.stringify(userForm)
   formOpen.value = true
-  formLoading.value = true
-  try {
-    const fresh = normalizeUser(await getUser(user.id))
-    replaceUser(fresh)
-    Object.assign(userForm, toUserInput(fresh))
-    formBaseline.value = JSON.stringify(userForm)
-  } catch (error) {
-    formOpen.value = false
-    editingUserId.value = null
-    notifications.show(userMessage(error, 'No fue posible cargar el usuario'), 'error')
-  } finally {
-    formLoading.value = false
-  }
 }
 
 function requestCloseForm(): void {
-  if (savingForm.value || formLoading.value) return
+  if (savingForm.value) return
   if (formDirty.value) discardConfirmOpen.value = true
   else closeForm()
 }
@@ -152,7 +139,7 @@ function closeForm(): void {
 }
 
 async function submitForm(): Promise<void> {
-  if (savingForm.value || formLoading.value) return
+  if (savingForm.value) return
   formSubmitted.value = true
   if (Object.keys(formErrors.value).length) {
     await focusFirstError()
@@ -337,63 +324,93 @@ function certificateIcon(status: CertificateStatus): 'check' | 'warning' | 'erro
       :description="formDescription"
       @update:model-value="!$event && requestCloseForm()"
     >
-      <LoadingSkeleton v-if="formLoading" label="Cargando usuario" :lines="5" />
-      <form v-else id="user-form" class="dialog-form" novalidate @submit.prevent="submitForm">
-        <BaseInput v-model="userForm.nombreCompleto" name="user-name" label="Nombre completo" required autocomplete="name" :error="formError('nombreCompleto')" @blur="touchForm('nombreCompleto')" />
-        <div class="email-field">
-          <BaseInput
-            v-model="userForm.correoGoogle"
-            name="user-email"
-            label="Correo Google"
-            type="email"
-            required
-            autocomplete="email"
-            :disabled="formMode === 'edit' && Boolean(editingUser?.authUserId)"
-            :hint="formMode === 'edit' && editingUser?.authUserId ? 'Vinculado a la identidad Google del usuario.' : undefined"
-            :error="formError('correoGoogle')"
-            @blur="touchForm('correoGoogle')"
-          />
-          <p v-if="formEmailWarning && !formError('correoGoogle')" class="field-warning" role="status">{{ formEmailWarning }}</p>
-        </div>
-        <BaseSelect :model-value="userForm.esAdmin ? 'SI' : 'NO'" name="user-admin" label="Rol administrador" :error="formError('roles')" @update:model-value="userForm.esAdmin = $event === 'SI'" @blur="touchForm('roles')">
-          <option value="NO">No</option><option value="SI">Sí</option>
-        </BaseSelect>
-        <BaseSelect :model-value="userForm.esTecnico ? 'SI' : 'NO'" name="user-technician" label="Rol técnico" :error="formError('roles')" @update:model-value="userForm.esTecnico = $event === 'SI'" @blur="touchForm('roles')">
-          <option value="NO">No</option><option value="SI">Sí</option>
-        </BaseSelect>
-        <BaseSelect v-if="formMode === 'edit'" :model-value="userForm.activo ? 'ACTIVO' : 'INACTIVO'" name="user-status" label="Estado" @update:model-value="userForm.activo = $event === 'ACTIVO'">
-          <option value="ACTIVO">Activo</option><option value="INACTIVO">Inactivo</option>
-        </BaseSelect>
+      <form id="user-form" class="dialog-form" novalidate @submit.prevent="submitForm">
+        <section class="form-section" aria-labelledby="user-data-heading">
+          <header class="form-section__header">
+            <div>
+              <h3 id="user-data-heading">Datos del usuario</h3>
+              <p>Información utilizada para identificar a la persona dentro del sistema.</p>
+            </div>
+          </header>
+          <div class="form-stack">
+            <BaseInput v-model="userForm.nombreCompleto" name="user-name" label="Nombre completo" required autocomplete="name" :error="formError('nombreCompleto')" @blur="touchForm('nombreCompleto')" />
+            <div class="email-field">
+              <BaseInput
+                v-model="userForm.correoGoogle"
+                name="user-email"
+                label="Correo Google"
+                type="email"
+                required
+                autocomplete="email"
+                :disabled="formMode === 'edit' && Boolean(editingUser?.authUserId)"
+                :hint="formMode === 'edit' && editingUser?.authUserId ? 'Vinculado a la identidad Google del usuario.' : undefined"
+                :error="formError('correoGoogle')"
+                @blur="touchForm('correoGoogle')"
+              />
+              <p v-if="formEmailWarning && !formError('correoGoogle')" class="field-warning" role="status">{{ formEmailWarning }}</p>
+            </div>
+          </div>
+        </section>
 
-        <p class="role-help">Una persona con ambos roles elige con cuál trabajar al iniciar su sesión. Desactivar un usuario bloquea el ingreso sin borrar su historial.</p>
+        <section class="form-section" aria-labelledby="access-heading">
+          <header class="form-section__header">
+            <div>
+              <h3 id="access-heading">Acceso y roles</h3>
+              <p>Define qué puede hacer el usuario cuando ingrese.</p>
+            </div>
+          </header>
+          <div class="form-grid form-grid--roles">
+            <BaseSelect :model-value="userForm.esAdmin ? 'SI' : 'NO'" name="user-admin" label="Administrador" :error="formError('roles')" @update:model-value="userForm.esAdmin = $event === 'SI'" @blur="touchForm('roles')">
+              <option value="NO">No</option><option value="SI">Sí</option>
+            </BaseSelect>
+            <BaseSelect :model-value="userForm.esTecnico ? 'SI' : 'NO'" name="user-technician" label="Técnico" :error="formError('roles')" @update:model-value="userForm.esTecnico = $event === 'SI'" @blur="touchForm('roles')">
+              <option value="NO">No</option><option value="SI">Sí</option>
+            </BaseSelect>
+            <BaseSelect v-if="formMode === 'edit'" class="form-field--full" :model-value="userForm.activo ? 'ACTIVO' : 'INACTIVO'" name="user-status" label="Estado" @update:model-value="userForm.activo = $event === 'ACTIVO'">
+              <option value="ACTIVO">Activo</option><option value="INACTIVO">Inactivo</option>
+            </BaseSelect>
+          </div>
+          <p class="form-note">Si una persona tiene ambos roles, elige con cuál trabajar al iniciar su sesión. Desactivarla bloquea el ingreso sin borrar su historial.</p>
+        </section>
 
-        <section v-if="userForm.esTecnico" class="certificate-section">
-          <div class="certificate-section__title"><h3>Certificado técnico</h3><span>Opcional</span></div>
+        <section v-if="userForm.esTecnico" class="form-section certificate-section" aria-labelledby="certificate-heading">
+          <header class="form-section__header">
+            <div>
+              <h3 id="certificate-heading">Certificado técnico</h3>
+              <p>PDF, JPG o PNG. Si adjuntas un archivo, emisión y vencimiento son obligatorios.</p>
+            </div>
+            <span class="optional-chip">Opcional</span>
+          </header>
+
           <div v-if="formMode === 'edit' && userForm.certificadoStoragePath" class="current-certificate">
             <strong>Certificado actual</strong>
-            <span>{{ fileName(userForm.certificadoStoragePath) }} · Archivo adjunto</span>
+            <span>{{ fileName(userForm.certificadoStoragePath) }}</span>
           </div>
+
           <BaseFileUpload
             v-model="formFile"
+            class="certificate-upload"
             name="user-certificate"
-            :label="formMode === 'edit' && userForm.certificadoStoragePath ? 'Reemplazar certificado · opcional' : 'Adjuntar certificado'"
+            label="Seleccionar archivo"
             :hint="formMode === 'edit' && userForm.certificadoStoragePath ? 'Déjalo vacío para conservar el archivo actual.' : undefined"
             :error="formError('certificateFile')"
             @blur="touchForm('certificateFile')"
           />
+
           <div v-if="formFile || userForm.certificadoStoragePath" class="certificate-dates">
             <BaseDateTimePicker v-model="userForm.certificadoFechaEmision" mode="date" name="user-issued" label="Fecha de emisión" required :error="formError('certificadoFechaEmision')" @blur="touchForm('certificadoFechaEmision')" />
             <BaseDateTimePicker v-model="userForm.certificadoFechaVencimiento" mode="date" name="user-expiry" label="Fecha de vencimiento" required :min="userForm.certificadoFechaEmision ?? undefined" :error="formError('certificadoFechaVencimiento')" @blur="touchForm('certificadoFechaVencimiento')" />
           </div>
+
           <div v-if="editingUser && (certificateStatus(editingUser) === 'expiring' || certificateStatus(editingUser) === 'expired')" class="certificate-alert">
             <strong>{{ certificateStatus(editingUser) === 'expired' ? 'Certificado vencido' : 'Certificado próximo a vencer' }}</strong>
-            <span>Si existe un certificado, debe mantenerse vigente antes de asignar al técnico como responsable.</span>
+            <span>Actualízalo antes de asignar nuevamente a este técnico como responsable.</span>
           </div>
         </section>
       </form>
       <template #footer>
-        <BaseButton variant="secondary" :disabled="savingForm || formLoading" @click="requestCloseForm">Cancelar</BaseButton>
-        <BaseButton type="submit" form="user-form" :loading="savingForm" :disabled="formLoading">{{ formMode === 'create' ? 'Crear usuario' : 'Guardar cambios' }}</BaseButton>
+        <BaseButton variant="secondary" :disabled="savingForm" @click="requestCloseForm">Cancelar</BaseButton>
+        <BaseButton type="submit" form="user-form" :loading="savingForm">{{ formMode === 'create' ? 'Crear usuario' : 'Guardar cambios' }}</BaseButton>
       </template>
     </BaseDialog>
 
@@ -436,26 +453,39 @@ function certificateIcon(status: CertificateStatus): 'check' | 'warning' | 'erro
 .user-card > span:first-child { display: grid; gap: 0.125rem; }
 .user-card small { color: var(--text-secondary); overflow-wrap: anywhere; }
 .user-card :deep(.base-button) { justify-self: start; }
-.dialog-form { display: grid; gap: 1.25rem; }
+
+.dialog-form { display: grid; gap: 1.5rem; }
+.form-section { display: grid; min-width: 0; gap: 1rem; }
+.form-section + .form-section { border-top: 1px solid var(--border); padding-top: 1.5rem; }
+.form-section__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.form-section__header h3 { margin: 0; color: var(--text); font-size: 0.9375rem; font-weight: 600; line-height: 1.25rem; }
+.form-section__header p { margin: 0.25rem 0 0; color: var(--text-secondary); font-size: 0.8125rem; line-height: 1.2rem; }
+.form-stack { display: grid; gap: 1rem; }
+.form-grid { display: grid; min-width: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.form-field--full { grid-column: 1 / -1; }
+.form-note { margin: 0; border-radius: var(--radius); background: var(--accent-subtle); padding: 0.75rem 0.875rem; color: var(--text-secondary); font-size: 0.8125rem; line-height: 1.25rem; }
 .email-field { display: grid; gap: 0.375rem; }
 .field-warning { margin: 0; color: var(--warning); font-size: 0.8125rem; line-height: 1.125rem; }
-.role-help { margin: 0; color: var(--text-secondary); font-size: 0.875rem; line-height: 1.35rem; }
-.certificate-section { display: grid; gap: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--bg); padding: 1rem; }
-.certificate-section__title { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-.certificate-section__title h3 { margin: 0; font-size: 1rem; font-weight: 500; }
-.certificate-section__title span, .certificate-section p { margin: 0; color: var(--text-secondary); font-size: 0.8125rem; }
-.certificate-dates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 0.75rem; }
-.certificate-dates :deep(.date-time-control) { min-height: 44px; height: 44px; }
-.certificate-dates :deep(.date-time-control input) { height: 42px; padding-block: 0.5rem; }
-.certificate-dates :deep(.icon-button) { align-self: center; }
-.current-certificate { display: grid; gap: 0.25rem; border-radius: 8px; background: var(--info-subtle); padding: 0.75rem; color: var(--info); }
-.current-certificate span { color: var(--text-secondary); }
-.certificate-alert { display: grid; gap: 0.25rem; border-radius: 8px; background: var(--warning-subtle); padding: 0.75rem; color: var(--warning); }
-.certificate-alert span { color: var(--text-secondary); }
+
+.optional-chip { flex: 0 0 auto; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-raised); padding: 0.2rem 0.55rem; color: var(--text-secondary); font-size: 0.75rem; font-weight: 500; line-height: 1rem; }
+.certificate-section { min-width: 0; }
+.certificate-upload { min-width: 0; }
+.certificate-upload :deep(.base-field__label) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+.certificate-upload :deep(.file-upload) { min-height: 5.5rem; border-radius: var(--radius); background: var(--surface-raised); padding: 1rem; }
+.certificate-dates { display: grid; min-width: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 1rem; }
+.certificate-dates > * { min-width: 0; }
+.current-certificate { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 1rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-raised); padding: 0.75rem 0.875rem; }
+.current-certificate strong { color: var(--text); font-size: 0.8125rem; }
+.current-certificate span { min-width: 0; overflow: hidden; color: var(--text-secondary); font-size: 0.8125rem; text-overflow: ellipsis; white-space: nowrap; }
+.certificate-alert { display: grid; gap: 0.25rem; border-radius: var(--radius); background: var(--warning-subtle); padding: 0.75rem 0.875rem; color: var(--warning); }
+.certificate-alert span { color: var(--text-secondary); font-size: 0.8125rem; line-height: 1.2rem; }
 
 @media (max-width: 600px) {
   .users-header { align-items: stretch; }
   .users-header :deep(.base-button) { align-self: flex-end; }
-  .certificate-dates { grid-template-columns: 1fr; }
+  .form-grid, .certificate-dates { grid-template-columns: 1fr; }
+  .form-field--full { grid-column: auto; }
+  .form-section__header { gap: 0.75rem; }
+  .current-certificate { align-items: flex-start; flex-direction: column; gap: 0.25rem; }
 }
 </style>
