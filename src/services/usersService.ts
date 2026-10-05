@@ -1,5 +1,6 @@
 import { apiRequest, ApiClientError } from '@/services/apiService'
 import { normalizeUserInput } from '@/helpers/users'
+import { deleteMasterFile, uploadMasterFile } from '@/services/filesService'
 import type { UserInput, UserRecord } from '@/types/domain'
 
 export class UserServiceError extends Error {
@@ -37,19 +38,28 @@ export async function setUserActive(user: UserRecord, active: boolean): Promise<
 }
 
 export async function updateUserCertificate(user: UserRecord, update: CertificateUpdate): Promise<UserRecord> {
-  if (update.file) {
-    throw new UserServiceError('La carga de certificados requiere el backend autorizado de Cloudflare R2.', false)
+  let uploadedPath: string | null = null
+  try {
+    if (update.file) uploadedPath = await uploadUserCertificate(user.id, update.file)
+    const updated = await updateUser(user.id, {
+      ...user,
+      certificadoStoragePath: uploadedPath ?? user.certificadoStoragePath,
+      certificadoFechaEmision: update.certificadoFechaEmision,
+      certificadoFechaVencimiento: update.certificadoFechaVencimiento,
+      certificadoObservaciones: update.certificadoObservaciones,
+    })
+    if (uploadedPath && user.certificadoStoragePath && user.certificadoStoragePath !== uploadedPath) {
+      void deleteMasterFile(user.certificadoStoragePath).catch(() => undefined)
+    }
+    return updated
+  } catch (error) {
+    if (uploadedPath) await deleteMasterFile(uploadedPath).catch(() => undefined)
+    throw error
   }
-  return updateUser(user.id, {
-    ...user,
-    certificadoFechaEmision: update.certificadoFechaEmision,
-    certificadoFechaVencimiento: update.certificadoFechaVencimiento,
-    certificadoObservaciones: update.certificadoObservaciones,
-  })
 }
 
-export async function uploadUserCertificate(_userId: string, _file: File): Promise<never> {
-  throw new UserServiceError('La carga de certificados requiere el backend autorizado de Cloudflare R2.', false)
+export function uploadUserCertificate(_userId: string, file: File): Promise<string> {
+  return uploadMasterFile('USER_CERTIFICATE', file)
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {

@@ -179,6 +179,10 @@ ALLOWED_ORIGINS
 GOOGLE_CLIENT_ID
 GOOGLE_CLIENT_SECRET
 GOOGLE_OAUTH_REDIRECT_URI
+R2_ACCOUNT_ID
+R2_ACCESS_KEY_ID
+R2_SECRET_ACCESS_KEY
+R2_BUCKET_MASTER_FILES
 ```
 
 Neon inyecta además las variables administradas de conexión, Auth y Data API. Sus valores no se copian al repositorio ni a variables públicas de Vite.
@@ -213,7 +217,16 @@ sr-service-media
 sr-generated-documents
 ```
 
-Las credenciales R2 se guardan solo en el runtime backend correspondiente.
+Las credenciales R2 se guardan solo en Neon Functions. La SPA solicita al backend una URL PUT/GET firmada de corta duración y transfiere el archivo directamente contra el endpoint S3 de R2; PostgreSQL conserva únicamente la ruta.
+
+Para `sr-master-files`, la política CORS versionada vive en `cloudflare/r2-master-cors.json`. Aplicarla una vez con una sesión Wrangler autorizada:
+
+```bash
+npm run r2:cors:apply
+npm run r2:cors:check
+```
+
+La política permite PUT con `Content-Type` desde `http://localhost:5173` y desde los Workers de la cuenta `solucionesradicales1.workers.dev`. Si se incorpora un dominio personalizado, añadir explícitamente ese origen antes de usar cargas desde navegador.
 
 ## 13. Producción
 
