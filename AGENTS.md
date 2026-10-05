@@ -30,7 +30,7 @@ No inventar requisitos. Ante una contradicción, detener únicamente la parte af
 
 ## Antes de implementar
 
-- Partir de `main` actualizado salvo instrucción contraria.
+- Partir de `origin/develop` actualizado salvo autorización explícita para trabajar sobre otra base.
 - Leer la issue completa y comprobar el comportamiento solicitado.
 - Revisar reglas, entidades y criterios de aceptación afectados.
 - Inspeccionar el flujo existente cuando ya sea ejecutable.
@@ -152,8 +152,14 @@ Antes de terminar una tarea:
 
 ## Git y entrega
 
+- `develop` es la rama permanente de integración y la base normal de todo trabajo nuevo.
+- Crear cada rama de feature/fix desde `origin/develop` actualizado, nunca desde `main`, salvo autorización explícita.
+- Todo PR de desarrollo debe apuntar a `develop` por defecto.
+- `main` queda reservada para producción y solo recibe cambios mediante un PR de promoción `develop` → `main` autorizado explícitamente por Santiago.
+- Antes de iniciar una nueva tarea, ejecutar el equivalente a `git fetch origin` y basar la rama nueva en el último `origin/develop` para no reimplementar trabajo ya integrado.
+- Si una tarea ya comenzó desde una base anterior, actualizarla con `develop` antes de duplicar funcionalidad existente y resolver cualquier conflicto de forma explícita.
 - Cambios pequeños y trazables.
-- No hacer merge ni desplegar a producción sin autorización explícita.
+- No hacer merge a `main` ni desplegar a producción sin autorización explícita.
 - No mezclar issues independientes.
 - Actualizar documentación y pruebas junto con el comportamiento.
 - Informar: rama/PR, commit, pruebas, validación real, estado de merge/producción y bloqueos.
