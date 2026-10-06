@@ -40,14 +40,15 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.png': 'image/png',
+  '.webp': 'image/webp',
   '.doc': 'application/msword',
   '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 }
 
 const EXTENSIONS_BY_KIND: Record<MasterFileKind, ReadonlySet<string>> = {
-  USER_CERTIFICATE: new Set(['.pdf', '.jpg', '.jpeg', '.png']),
+  USER_CERTIFICATE: new Set(['.pdf', '.jpg', '.jpeg', '.png', '.webp']),
   CLIENT_ESTABLISHMENT_TEMPLATE: new Set(['.pdf', '.doc', '.docx']),
-  SITE_PLAN: new Set(['.pdf', '.jpg', '.jpeg', '.png']),
+  SITE_PLAN: new Set(['.pdf', '.jpg', '.jpeg', '.png', '.webp']),
   SITE_VEHICLE_TEMPLATE: new Set(['.pdf', '.doc', '.docx']),
 }
 

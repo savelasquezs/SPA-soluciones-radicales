@@ -15,6 +15,7 @@ import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import ResponsiveTable from '@/components/base/ResponsiveTable.vue'
 import StatusBadge from '@/components/base/StatusBadge.vue'
 import WhatsAppPhoneLink from '@/components/base/WhatsAppPhoneLink.vue'
+import { useFileSaveProgress } from '@/composables/useFileSaveProgress'
 import ClientForm from '@/components/domain/clients/ClientForm.vue'
 import { ApiClientError } from '@/services/apiService'
 import { getClient } from '@/services/clientsService'
@@ -37,6 +38,12 @@ const formOpen = ref(false)
 const formMode = ref<'create' | 'edit'>('create')
 const editingId = ref<string | null>(null)
 const saving = ref(false)
+const {
+  phaseLabel: savePhaseLabel,
+  onUploadPhase,
+  markSaving,
+  reset: resetSaveProgress,
+} = useFileSaveProgress()
 const deleteTarget = ref<ClientRecord | null>(null)
 const dependencyTarget = ref<ClientRecord | null>(null)
 
@@ -99,6 +106,7 @@ function openEdit(client: ClientRecord): void {
 async function save(): Promise<void> {
   if (saving.value) return
   saving.value = true
+  resetSaveProgress()
   let uploadedPath: string | null = null
   const previousPath = editingId.value
     ? store.clientsById[editingId.value]?.plantillaCertificadoStoragePath ?? null
@@ -106,9 +114,10 @@ async function save(): Promise<void> {
   try {
     let input = { ...form.value }
     if (input.tipoCliente === 'NEGOCIO' && clientTemplateFile.value) {
-      uploadedPath = await uploadMasterFile('CLIENT_ESTABLISHMENT_TEMPLATE', clientTemplateFile.value)
+      uploadedPath = await uploadMasterFile('CLIENT_ESTABLISHMENT_TEMPLATE', clientTemplateFile.value, onUploadPhase)
       input = { ...input, plantillaCertificadoStoragePath: uploadedPath }
     }
+    markSaving()
     const saved = formMode.value === 'create'
       ? await store.createClient(input)
       : await store.updateClient(editingId.value!, input)
@@ -128,6 +137,7 @@ async function save(): Promise<void> {
     notifications.show(message(error, 'No fue posible guardar el Cliente'), 'error')
   } finally {
     saving.value = false
+    resetSaveProgress()
   }
 }
 
@@ -243,9 +253,9 @@ function message(error: unknown, fallback: string): string {
       </template>
     </ResponsiveTable>
 
-    <BaseDialog :model-value="formOpen" :title="formMode === 'create' ? 'Nuevo cliente' : 'Editar cliente'" @update:model-value="formOpen = $event">
+    <BaseDialog :model-value="formOpen" :title="formMode === 'create' ? 'Nuevo cliente' : 'Editar cliente'" @update:model-value="!saving && (formOpen = $event)">
       <ClientForm v-model="form" :mode="formMode" :saving="saving" @submit="save" @invalid="notifications.show('Revisa los campos marcados antes de guardar.', 'error')" @file-selected="clientTemplateFile = $event" @view-template="form.plantillaCertificadoStoragePath && openPrivateFile(form.plantillaCertificadoStoragePath)" />
-      <template #footer><BaseButton variant="secondary" :disabled="saving" @click="formOpen = false">Cancelar</BaseButton><BaseButton type="submit" form="client-form" :loading="saving">{{ formMode === 'create' ? 'Crear cliente' : 'Guardar cambios' }}</BaseButton></template>
+      <template #footer><BaseButton variant="secondary" :disabled="saving" @click="formOpen = false">Cancelar</BaseButton><BaseButton type="submit" form="client-form" :loading="saving">{{ savePhaseLabel ?? (formMode === 'create' ? 'Crear cliente' : 'Guardar cambios') }}</BaseButton></template>
     </BaseDialog>
 
     <ConfirmDialog :open="Boolean(deleteTarget)" title="Eliminar cliente" :message="`Se eliminará ${deleteTarget?.nombre ?? 'el Cliente'} si no tiene historial ni dependencias.`" confirm-label="Eliminar" danger :loading="saving" @cancel="deleteTarget = null" @confirm="removeClient" />

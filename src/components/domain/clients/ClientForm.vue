@@ -9,7 +9,7 @@ import BaseTextarea from '@/components/base/BaseTextarea.vue'
 import { parseEmails, validateClientInput, type ClientFormErrors } from '@/helpers/clients'
 import type { ClientInput } from '@/types/domain'
 
-defineProps<{ mode: 'create' | 'edit'; saving?: boolean }>()
+const props = defineProps<{ mode: 'create' | 'edit'; saving?: boolean }>()
 const model = defineModel<ClientInput>({ required: true })
 const emit = defineEmits<{ submit: []; invalid: []; 'file-selected': [file: File | null]; 'view-template': [] }>()
 const touched = reactive<Partial<Record<keyof ClientFormErrors, boolean>>>({})
@@ -49,7 +49,7 @@ function selectTemplate(file: File | null): void {
 </script>
 
 <template>
-  <form id="client-form" class="client-form" novalidate @submit.prevent="submit">
+  <form id="client-form" class="client-form" novalidate :inert="props.saving || undefined" :aria-busy="Boolean(props.saving)" @submit.prevent="submit">
     <BaseSelect
       :model-value="modelValue.tipoCliente"
       name="client-type"

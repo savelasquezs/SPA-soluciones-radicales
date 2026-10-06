@@ -73,6 +73,15 @@ Una actualización no debe borrar innecesariamente el contenido visible. Mostrar
 - No usar loading artificial ni retrasos decorativos.
 - Operaciones largas deben explicar qué ocurre y permitir continuar cuando sea seguro.
 
+### Guardado de formularios con archivos
+
+- Cuando el archivo forma parte de un formulario, el progreso vive en la acción primaria del formulario; no usar un overlay o pantalla completa para una operación local.
+- La secuencia visible estándar es `Comprimiendo…` → `Subiendo…` → `Guardando…`. Si no existe archivo nuevo, comenzar directamente en `Guardando…`.
+- Mostrar solo fases reales. No inventar porcentajes ni barras determinadas si la capa técnica no puede medir ese progreso.
+- Mientras una fase está activa, bloquear doble envío y las interacciones que puedan invalidar el formulario, incluido cerrar el diálogo. Mantener los datos visibles y conservarlos si falla la operación.
+- Si un formulario procesa varios archivos, reutilizar las mismas fases sin añadir contadores o detalle por archivo salvo que el volumen haga esa información necesaria.
+- Para futuras evidencias, fotografías o firmas operativas que se carguen durante un Servicio, el progreso debe pertenecer a cada evidencia y permitir continuar trabajando cuando sea seguro; no acumular todas las cargas detrás de `Finalizar servicio`.
+
 ## Toasts y errores
 
 Existe un único sistema global de toasts.
