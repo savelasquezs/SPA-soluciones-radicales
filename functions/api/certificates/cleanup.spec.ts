@@ -12,7 +12,9 @@ const r2 = vi.hoisted(() => ({
 }))
 
 vi.mock('../db', () => ({
-  transaction: vi.fn(async (callback: (value: typeof client) => Promise<unknown>) => callback(client)),
+  transaction: vi.fn<(callback: (value: typeof client) => Promise<unknown>) => Promise<unknown>>(
+    async (callback) => callback(client),
+  ),
 }))
 vi.mock('../google', () => ({ deleteGoogleDriveTemporaryFile: drive.remove }))
 vi.mock('../r2', () => ({ deleteCertificateObject: r2.remove }))
