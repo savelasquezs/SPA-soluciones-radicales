@@ -62,12 +62,12 @@ function setTheme(event: Event): void { app.setTheme((event.target as HTMLSelect
           <div class="account-menu__panel"><p>{{ auth.authEmail }}</p><div v-if="auth.rolesAvailable.length > 1" class="role-options"><BaseButton v-for="role in auth.rolesAvailable" :key="role" variant="ghost" :disabled="switchingRole || auth.activeRole === role" @click="switchRole(role)"><Wrench v-if="role === 'TECNICO'" :size="17" /><Users v-else :size="17" />{{ role === 'ADMINISTRADOR' ? 'Administrador' : 'Técnico' }}</BaseButton></div><BaseButton variant="secondary" @click="logout"><LogOut :size="17" />Cerrar sesión</BaseButton></div>
         </details>
       </div>
-      <BaseIconButton class="menu-button" :label="navigationOpen ? 'Cerrar navegación' : 'Abrir navegación'" @click="navigationOpen = !navigationOpen"><X v-if="navigationOpen" :size="22" /><Menu v-else :size="22" /></BaseIconButton>
+      <BaseIconButton class="menu-button" :label="navigationOpen ? 'Cerrar navegación' : 'Abrir navegación'" aria-controls="admin-navigation" :aria-expanded="navigationOpen" @click="navigationOpen = !navigationOpen"><X v-if="navigationOpen" :size="22" /><Menu v-else :size="22" /></BaseIconButton>
     </header>
     <div class="shell-body">
       <button v-if="navigationOpen" type="button" class="drawer-backdrop" aria-label="Cerrar navegación" @click="navigationOpen = false"></button>
-      <aside class="sidebar" :class="{ 'sidebar--open': navigationOpen }">
-        <nav aria-label="Navegación principal"><section v-for="group in visibleGroups" :key="group.label"><h2>{{ group.label }}</h2><RouterLink v-for="item in group.items" :key="item.to" :to="item.to" :class="{ 'nav-active': isActive(item.to) }"><component :is="item.icon" :size="17" aria-hidden="true" />{{ item.label }}</RouterLink></section></nav>
+      <aside id="admin-navigation" class="sidebar" :class="{ 'sidebar--open': navigationOpen }">
+        <nav aria-label="Navegación principal"><section v-for="group in visibleGroups" :key="group.label"><h2>{{ group.label }}</h2><RouterLink v-for="item in group.items" :key="item.to" :to="item.to" :class="{ 'nav-active': isActive(item.to) }" @click="navigationOpen = false"><component :is="item.icon" :size="17" aria-hidden="true" />{{ item.label }}</RouterLink></section></nav>
         <div class="sidebar__footer"><div><span>Tu espacio de trabajo</span><strong>Soluciones Radicales</strong></div><a href="https://github.com/savelasquezs/SPA-soluciones-radicales/tree/main/docs" target="_blank" rel="noreferrer"><CircleHelp :size="17" aria-hidden="true" />Ayuda y documentación</a></div>
       </aside>
       <main class="content"><p v-if="breadcrumb" class="breadcrumb"><template v-if="route.path.startsWith('/configuracion/')"><RouterLink to="/configuracion">Configuración</RouterLink> / {{ String(breadcrumb).split(' / ').slice(1).join(' / ') }}</template><template v-else>{{ breadcrumb }}</template></p><RouterView /></main>
@@ -120,8 +120,8 @@ function setTheme(event: Event): void { app.setTheme((event.target as HTMLSelect
   .global-search, .topbar__activity { display: none; }
   .menu-button { display: inline-grid; }
   .shell-body { grid-template-columns: 1fr; }
-  .sidebar { position: fixed; z-index: 35; top: 64px; bottom: 0; left: 0; width: min(19rem, calc(100vw - 3rem)); height: auto; transform: translateX(-105%); transition: transform 180ms ease; box-shadow: var(--shadow-lg); }
-  .sidebar--open { transform: translateX(0); }
+  .sidebar { position: fixed; z-index: 35; top: 64px; bottom: 0; left: 0; width: min(19rem, calc(100vw - 3rem)); height: auto; visibility: hidden; transform: translateX(-105%); transition: transform 180ms ease; box-shadow: var(--shadow-lg); }
+  .sidebar--open { visibility: visible; transform: translateX(0); }
   .drawer-backdrop { position: fixed; z-index: 30; inset: 64px 0 0; display: block; border: 0; background: var(--backdrop); }
   .content { padding: 1.5rem; }
 }
