@@ -52,7 +52,7 @@ function removeFile(): void { update('fichaTecnicaStoragePath', null); emit('upd
         <BaseButton type="button" variant="ghost" size="compact" @click="emit('view-file')">Ver</BaseButton>
         <BaseButton type="button" variant="ghost" size="compact" @click="removeFile">Quitar</BaseButton>
       </div>
-      <BaseFileUpload name="product-file" :label="model.fichaTecnicaStoragePath ? 'Reemplazar ficha técnica' : 'Ficha técnica'" :model-value="file" :error="error('fichaTecnicaStoragePath')" @update:model-value="emit('update:file', $event); emit('change')" />
+      <BaseFileUpload name="product-file" :label="model.fichaTecnicaStoragePath ? 'Reemplazar ficha técnica' : 'Ficha técnica'" size="compact" icon="file" button-label="Adjuntar archivo" accept=".pdf,.jpg,.jpeg,.png,.webp" :model-value="file" :disabled="saving" :error="error('fichaTecnicaStoragePath')" @update:model-value="emit('update:file', $event); emit('change')" />
     </div>
   </form>
 </template>
