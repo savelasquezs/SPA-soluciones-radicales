@@ -8,9 +8,11 @@
 - `functions/api/mailMessage.ts` y `google.ts`: MIME con adjuntos mediante la integración Gmail existente.
 - `useCertificateTemplates`, `useCertificateGeneration`, `certificatesService`: I/O/estado separados de la vista.
 - Se reutilizan `configuracion`, `certificados`, `auditoria` y `private.integration_jobs`.
-- Migración `20261006_007_certificate_template_defaults.sql`: permite heredar plantilla general;
-  no crea tablas, roles, datos ni amplía permisos. Mantiene la restricción antigua de Negocios
-  como NOT VALID para no invalidar las filas legacy toleradas por la migración 006.
+- Migración `20261006_007_certificate_template_defaults.sql`: habilitó temporalmente el fallback
+  a plantillas generales sin invalidar filas legacy.
+- Migración `20261006_008_global_certificate_templates.sql`: elimina las columnas de plantilla
+  por Negocio/Sede y conserva únicamente las vigencias por entidad. Las plantillas efectivas se
+  resuelven siempre desde `configuracion / SISTEMA` por tipo; no crea tablas, roles ni permisos.
 
 ## Conversión DOCX a PDF
 
@@ -58,7 +60,7 @@ este PR **no instala un scheduler**. Si se pierde la conexión antes de encolar,
 objeto temporal huérfano que requiera conciliación operativa; se prioriza no borrar resultados válidos.
 
 La eliminación compartida de maestros rechaza referencias vigentes o históricas con FILE_IN_USE;
-los rollback de formularios tratan ese código como conservación deliberada. No se intenta hacer
+las plantillas globales vigentes y las usadas históricamente siguen protegidas por esa verificación. No se intenta hacer
 irreversible una URL PUT previamente firmada: la cuenta Administrador tiene autoridad sobre los
 maestros. Los prefijos no son un sustituto de la autorización.
 

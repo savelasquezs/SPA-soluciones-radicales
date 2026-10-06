@@ -85,7 +85,7 @@ onMounted(() => templates.load())
             <BaseMultiSelect v-if="generation.type === 'VEHICULO'" v-model="generation.vehicleIds" name="cert-vehicles" label="Vehículos atendidos" item-label="vehículo" items-label="vehículos" placeholder="Selecciona vehículos" empty-text="No se registraron vehículos atendidos." :options="generation.context.vehicles.map(vehicle => ({ id: vehicle.id, label: vehicle.placa }))" :disabled="busy" hint="Hasta 10 certificados por operación." />
             <p v-if="generation.availability?.reason" class="notice generation-explanation">{{ generation.availability.reason }}</p>
             <div class="generation-actions">
-              <small v-if="generation.availability?.available">Plantilla {{ generation.availability.templateSource === 'GLOBAL' ? 'general' : 'personalizada' }}. Regenerar conserva las fechas originales.</small>
+              <small v-if="generation.availability?.available">Plantilla general. Regenerar conserva las fechas originales.</small>
               <BaseButton size="compact" :disabled="busy || !generation.canGenerate || generation.vehicleIds.length > 10" :loading="generation.busy && generation.phase.startsWith('Generando')" @click="generation.requestGeneration"><FileCheck2 :size="16" aria-hidden="true" />{{ generation.phase.startsWith('Generando') ? generation.phase : generation.selection?.replacing ? 'Regenerar PDF' : 'Generar PDF' }}</BaseButton>
             </div>
           </div>

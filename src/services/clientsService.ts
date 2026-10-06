@@ -132,9 +132,6 @@ function clientPayload(input: ClientInput): ClientInput {
     residenciaCelular: residentialPhone,
     residenciaDireccion: input.tipoCliente === 'RESIDENCIAL' ? input.residenciaDireccion?.trim() || null : null,
     vigenciaCertificadoMeses: input.tipoCliente === 'NEGOCIO' ? input.vigenciaCertificadoMeses : null,
-    plantillaCertificadoStoragePath: input.tipoCliente === 'NEGOCIO'
-      ? input.plantillaCertificadoStoragePath?.trim() || null
-      : null,
   }
 }
 

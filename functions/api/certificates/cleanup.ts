@@ -9,8 +9,7 @@ export async function assertMasterUnreferenced(client: PoolClient, path: string)
   const { rows } = await client.query<{ used: boolean }>(
     `select exists (
       select 1 from public.usuarios where certificado_storage_path = $1
-      union all select 1 from public.negocios where plantilla_cert_establecimiento_storage_path = $1
-      union all select 1 from public.sedes where plano_storage_path = $1 or plantilla_cert_vehiculo_storage_path = $1
+      union all select 1 from public.sedes where plano_storage_path = $1
       union all select 1 from public.configuracion where categoria = 'SISTEMA' and valor->>'storagePath' = $1
       union all select 1 from public.certificados where plantilla_storage_path_usada = $1
       union all select 1 from public.auditoria where accion = 'CERTIFICADO_GENERADO' and detalle_json->>'templatePath' = $1

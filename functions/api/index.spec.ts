@@ -247,7 +247,7 @@ describe('Clients, Sites and Areas API', () => {
     const response = await app.request('/api/clients', {
       method: 'POST',
       headers: { Authorization: 'Bearer token', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tipoCliente: 'RESIDENCIAL', nombre: 'María Gómez', nit: null, correos: [], activo: true, vigenciaCertificadoMeses: null, plantillaCertificadoStoragePath: null, residenciaDireccion: 'Calle 1', residenciaCelular: '300 123 4567' }),
+      body: JSON.stringify({ tipoCliente: 'RESIDENCIAL', nombre: 'María Gómez', nit: null, correos: [], activo: true, vigenciaCertificadoMeses: null, residenciaDireccion: 'Calle 1', residenciaCelular: '300 123 4567' }),
     })
 
     expect(response.status).toBe(201)
@@ -266,7 +266,7 @@ describe('Clients, Sites and Areas API', () => {
     const response = await app.request('/api/clients', {
       method: 'POST',
       headers: { Authorization: 'Bearer token', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tipoCliente: 'NEGOCIO', nombre: 'Acme', nit: '', correos: [], activo: true, vigenciaCertificadoMeses: 12, plantillaCertificadoStoragePath: 'templates/acme.docx' }),
+      body: JSON.stringify({ tipoCliente: 'NEGOCIO', nombre: 'Acme', nit: '', correos: [], activo: true, vigenciaCertificadoMeses: 12 }),
     })
     expect(response.status).toBe(422)
     expect(transaction).not.toHaveBeenCalled()
@@ -303,7 +303,7 @@ describe('Clients, Sites and Areas API', () => {
         contactoPrincipalNombre: 'Ana', contactoPrincipalCorreo: null, contactoPrincipalCelular: '12',
         valorServicio: 100000, periodicidadMeses: 1, manejaRefuerzo: false, formulariosAplicablesIds: [],
         planoStoragePath: null, manejaVehiculos: false, generaCertificadoVehiculo: false,
-        vigenciaCertificadoVehiculoMeses: null, plantillaCertificadoVehiculoStoragePath: null,
+        vigenciaCertificadoVehiculoMeses: null,
         duracionServicioMinutos: 120, activo: true,
       }),
     })

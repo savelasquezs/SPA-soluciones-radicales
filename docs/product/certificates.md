@@ -14,10 +14,10 @@ Se guarda una plantilla general por tipo, `ESTABLECIMIENTO` y `VEHICULO`, en las
 `storagePath`, `fileName` y una revisión opaca para evitar sobrescribir cambios concurrentes.
 Los bytes permanecen en `sr-master-files`, con los prefijos existentes por tipo.
 
-Una plantilla personalizada del Negocio tiene prioridad para establecimientos; una de la Sede,
-para vehículos. Un path personalizado nulo significa **usar la plantilla general**. La vigencia
-sigue perteneciendo al Negocio o a la Sede; no se inventa una vigencia global. El botón
-**Usar plantilla general** quita la personalización, no borra archivos históricos.
+Las plantillas son exclusivamente globales: todos los Negocios usan la plantilla general de
+establecimiento y todas las Sedes con certificado vehicular usan la plantilla general de vehículo.
+Solo la vigencia varía por entidad: establecimiento en el Cliente Negocio y vehículo en la Sede.
+No existe carga, reemplazo ni selección de plantillas por Cliente o Sede.
 
 Crear/reemplazar usa Word `.docx`, máximo 10 MiB. No se convierten PDF ni `.doc` en plantillas.
 Los archivos antiguos de esos tipos no se borran ni se migran automáticamente: hay que reemplazarlos
@@ -90,7 +90,7 @@ y además pertenezcan a su Sede. Lotes de hasta 10 vehículos; servicios paginad
 La primera fecha de expedición procede de la finalización real, convertida a `America/Bogota`.
 El vencimiento suma la vigencia en meses calendario, ajustando al último día del mes cuando
 corresponda. Regenerar exige confirmación, conserva ID y fechas originales, y usa la plantilla
-actual aplicable. No amplía la vigencia ni envía correos automáticamente.
+global vigente del tipo. No amplía la vigencia ni envía correos automáticamente.
 
 Cada primera generación conserva los valores renderizados en el snapshot del trabajo `DOCUMENT`.
 Las siguientes reutilizan ese snapshot histórico (incluidos productos y nombres). Un certificado

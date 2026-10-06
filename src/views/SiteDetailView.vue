@@ -57,7 +57,6 @@ const historyPage = ref(1)
 const historyTotal = ref(0)
 const historyLoading = ref(false)
 const sitePlanFile = ref<File | null>(null)
-const siteVehicleTemplateFile = ref<File | null>(null)
 
 onMounted(load)
 
@@ -104,7 +103,6 @@ function openSiteEdit(): void {
   if (!site.value) return
   siteForm.value = toSiteInput(site.value)
   sitePlanFile.value = null
-  siteVehicleTemplateFile.value = null
   siteFormOpen.value = true
 }
 
@@ -121,21 +119,13 @@ async function saveSite(): Promise<void> {
       uploadedPaths.push(path)
       input = { ...input, planoStoragePath: path }
     }
-    if (input.generaCertificadoVehiculo && siteVehicleTemplateFile.value) {
-      const path = await uploadMasterFile('SITE_VEHICLE_TEMPLATE', siteVehicleTemplateFile.value, onUploadPhase)
-      uploadedPaths.push(path)
-      input = { ...input, plantillaCertificadoVehiculoStoragePath: path }
-    }
     markSaving()
     const saved = await store.updateSite(current.id, input)
     siteFormOpen.value = false
     sitePlanFile.value = null
-    siteVehicleTemplateFile.value = null
-    for (const oldPath of [current.planoStoragePath, current.plantillaCertificadoVehiculoStoragePath]) {
-      if (oldPath && oldPath !== saved.planoStoragePath && oldPath !== saved.plantillaCertificadoVehiculoStoragePath) {
-        void deleteMasterFile(oldPath).catch(() =>
-          notifications.show('La Sede se guardó, pero no fue posible limpiar un archivo anterior.', 'warning'))
-      }
+    if (current.planoStoragePath && current.planoStoragePath !== saved.planoStoragePath) {
+      void deleteMasterFile(current.planoStoragePath).catch(() =>
+        notifications.show('La Sede se guardó, pero no fue posible limpiar el plano anterior.', 'warning'))
     }
     notifications.show('Configuración de la Sede actualizada.', 'success')
   } catch (error) {
@@ -207,11 +197,11 @@ async function setAreaActive(area: AreaRecord, active: boolean): Promise<void> {
   finally { saving.value = false }
 }
 
-function selectSiteFile(kind: 'plan' | 'vehicle-template', file: File | null): void { if (kind === 'plan') sitePlanFile.value = file; else siteVehicleTemplateFile.value = file }
+function selectSiteFile(kind: 'plan', file: File | null): void { if (kind === 'plan') sitePlanFile.value = file }
 async function openPrivateFile(storagePath: string): Promise<void> { const popup = window.open('', '_blank'); try { const url = await getMasterFileUrl(storagePath); if (popup) popup.location.href = url; else window.location.href = url } catch (error) { popup?.close(); notifications.show(message(error, 'No fue posible abrir el archivo privado'), 'error') } }
 function blankArea(): AreaInput { return { nombre: '', esExterna: false, activo: true } }
-function blankSite(): SiteInput { return { nombre: '', direccion: '', correos: [], heredaCorreosCliente: true, contactoPrincipalNombre: '', contactoPrincipalCorreo: null, contactoPrincipalCelular: '', valorServicio: 0, periodicidadMeses: 1, manejaRefuerzo: false, formulariosAplicablesIds: [], planoStoragePath: null, manejaVehiculos: false, generaCertificadoVehiculo: false, vigenciaCertificadoVehiculoMeses: null, plantillaCertificadoVehiculoStoragePath: null, duracionServicioMinutos: 120, activo: true } }
-function toSiteInput(record: SiteRecord): SiteInput { return { nombre: record.nombre, direccion: record.direccion, correos: [...record.correos], heredaCorreosCliente: record.heredaCorreosCliente, contactoPrincipalNombre: record.contactoPrincipalNombre, contactoPrincipalCorreo: record.contactoPrincipalCorreo, contactoPrincipalCelular: record.contactoPrincipalCelular, valorServicio: record.valorServicio, periodicidadMeses: record.periodicidadMeses, manejaRefuerzo: record.manejaRefuerzo, formulariosAplicablesIds: [...record.formulariosAplicablesIds], planoStoragePath: record.planoStoragePath, manejaVehiculos: record.manejaVehiculos, generaCertificadoVehiculo: record.generaCertificadoVehiculo, vigenciaCertificadoVehiculoMeses: record.vigenciaCertificadoVehiculoMeses, plantillaCertificadoVehiculoStoragePath: record.plantillaCertificadoVehiculoStoragePath, duracionServicioMinutos: record.duracionServicioMinutos, activo: record.activo, version: record.version } }
+function blankSite(): SiteInput { return { nombre: '', direccion: '', correos: [], heredaCorreosCliente: true, contactoPrincipalNombre: '', contactoPrincipalCorreo: null, contactoPrincipalCelular: '', valorServicio: 0, periodicidadMeses: 1, manejaRefuerzo: false, formulariosAplicablesIds: [], planoStoragePath: null, manejaVehiculos: false, generaCertificadoVehiculo: false, vigenciaCertificadoVehiculoMeses: null, duracionServicioMinutos: 120, activo: true } }
+function toSiteInput(record: SiteRecord): SiteInput { return { nombre: record.nombre, direccion: record.direccion, correos: [...record.correos], heredaCorreosCliente: record.heredaCorreosCliente, contactoPrincipalNombre: record.contactoPrincipalNombre, contactoPrincipalCorreo: record.contactoPrincipalCorreo, contactoPrincipalCelular: record.contactoPrincipalCelular, valorServicio: record.valorServicio, periodicidadMeses: record.periodicidadMeses, manejaRefuerzo: record.manejaRefuerzo, formulariosAplicablesIds: [...record.formulariosAplicablesIds], planoStoragePath: record.planoStoragePath, manejaVehiculos: record.manejaVehiculos, generaCertificadoVehiculo: record.generaCertificadoVehiculo, vigenciaCertificadoVehiculoMeses: record.vigenciaCertificadoVehiculoMeses, duracionServicioMinutos: record.duracionServicioMinutos, activo: record.activo, version: record.version } }
 function message(error: unknown, fallback: string): string { return error instanceof Error ? error.message : fallback }
 function formatMoney(value: number): string { return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(value) }
 function formatDate(value: string): string { return new Intl.DateTimeFormat('es-CO', { dateStyle: 'medium' }).format(new Date(value)) }
@@ -236,7 +226,7 @@ function formatDate(value: string): string { return new Intl.DateTimeFormat('es-
     <section v-else-if="tab === 'settings'" class="settings-card"><h2>Configuración de la Sede</h2><p>Modifica contacto, operación, formularios, vehículos y plano desde el formulario compartido.</p><BaseButton size="compact" @click="openSiteEdit">Editar configuración</BaseButton></section>
     <StatusPanel v-else :title="tab === 'devices' ? 'Dispositivos' : 'Hallazgos'" message="La navegación queda reservada para su issue funcional; este goal no adelanta su implementación." />
 
-    <BaseDialog :model-value="siteFormOpen" title="Editar Sede" @update:model-value="!saving && (siteFormOpen = $event)"><SiteForm v-model="siteForm" mode="edit" :saving="saving" :form-options="forms" :client-name="client.nombre" @submit="saveSite" @invalid="notifications.show('Revisa los campos marcados.', 'error')" @file-selected="selectSiteFile" @view-plan="siteForm.planoStoragePath && openPrivateFile(siteForm.planoStoragePath)" @view-vehicle-template="siteForm.plantillaCertificadoVehiculoStoragePath && openPrivateFile(siteForm.plantillaCertificadoVehiculoStoragePath)" /><template #footer><BaseButton variant="secondary" :disabled="saving" @click="siteFormOpen = false">Cancelar</BaseButton><BaseButton type="submit" form="site-form" :loading="saving">{{ savePhaseLabel ?? 'Guardar cambios' }}</BaseButton></template></BaseDialog>
+    <BaseDialog :model-value="siteFormOpen" title="Editar Sede" @update:model-value="!saving && (siteFormOpen = $event)"><SiteForm v-model="siteForm" mode="edit" :saving="saving" :form-options="forms" :client-name="client.nombre" @submit="saveSite" @invalid="notifications.show('Revisa los campos marcados.', 'error')" @file-selected="selectSiteFile" @view-plan="siteForm.planoStoragePath && openPrivateFile(siteForm.planoStoragePath)" /><template #footer><BaseButton variant="secondary" :disabled="saving" @click="siteFormOpen = false">Cancelar</BaseButton><BaseButton type="submit" form="site-form" :loading="saving">{{ savePhaseLabel ?? 'Guardar cambios' }}</BaseButton></template></BaseDialog>
     <BaseDialog :model-value="Boolean(editingArea)" title="Editar Área" @update:model-value="!$event && (editingArea = null)"><AreaForm v-model="editAreaForm" mode="edit" form-id="area-edit-form" id-prefix="edit-area" @submit="updateArea" @invalid="notifications.show('Ingresa el nombre del Área.', 'error')" /><template #footer><BaseButton variant="secondary" @click="editingArea = null">Cancelar</BaseButton><BaseButton type="submit" form="area-edit-form" :loading="saving">Guardar cambios</BaseButton></template></BaseDialog>
     <ConfirmDialog :open="Boolean(deleteAreaTarget)" title="Eliminar Área" :message="`Se eliminará ${deleteAreaTarget?.nombre ?? 'el Área'} si no tiene historial ni dependencias.`" confirm-label="Eliminar" danger :loading="saving" @cancel="deleteAreaTarget = null" @confirm="removeArea" />
     <ConfirmDialog :open="Boolean(dependencyAreaTarget)" title="Desactivar Área" message="El Área tiene historial o dependencias. Se conservará y quedará inactiva." confirm-label="Desactivar" danger :loading="saving" @cancel="dependencyAreaTarget = null" @confirm="dependencyAreaTarget && setAreaActive(dependencyAreaTarget, false)" />

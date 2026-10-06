@@ -153,7 +153,6 @@ test('opera Clientes sin fetch redundante en claro, oscuro y responsive', async 
     activo: true,
     version: 1,
     vigenciaCertificadoMeses: 12,
-    plantillaCertificadoStoragePath: 'templates/acme.docx',
     residenciaDireccion: null,
     residenciaCelular: null,
     sedesCount: 2,
@@ -228,7 +227,7 @@ test('opera Clientes sin fetch redundante en claro, oscuro y responsive', async 
 test('navega Cliente, Sede y Área reutilizando snapshots cargados', async ({ page }, testInfo) => {
   const client = {
     id: 'client-1', tipoCliente: 'NEGOCIO', nombre: 'Acme SAS', nit: '900123456', correos: ['admin@acme.co'], activo: true,
-    version: 1, vigenciaCertificadoMeses: 12, plantillaCertificadoStoragePath: 'templates/acme.docx', residenciaDireccion: null,
+    version: 1, vigenciaCertificadoMeses: 12, residenciaDireccion: null,
     residenciaCelular: null, sedesCount: 1,
   }
   const site = {
@@ -236,7 +235,7 @@ test('navega Cliente, Sede y Área reutilizando snapshots cargados', async ({ pa
     contactoPrincipalNombre: 'Ana', contactoPrincipalCorreo: 'ana@acme.co', contactoPrincipalCelular: '+573001234567',
     valorServicio: 100000, periodicidadMeses: 1, manejaRefuerzo: false, tipoSede: 'NEGOCIO', formulariosAplicablesIds: ['form-1'],
     planoStoragePath: 'plans/principal.pdf', manejaVehiculos: false, generaCertificadoVehiculo: false,
-    vigenciaCertificadoVehiculoMeses: null, plantillaCertificadoVehiculoStoragePath: null, duracionServicioMinutos: 120,
+    vigenciaCertificadoVehiculoMeses: null, duracionServicioMinutos: 120,
     activo: true, version: 1, areasCount: 1, formulariosCount: 1, proximoServicio: '2026-10-20T15:00:00.000Z',
   }
   let area = { id: 'area-1', siteId: 'site-1', nombre: 'Cocina', esExterna: false, activo: true, version: 1, dispositivosCount: 2, ultimoServicio: '2026-09-30T15:00:00.000Z' }

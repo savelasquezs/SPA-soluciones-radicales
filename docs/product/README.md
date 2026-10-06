@@ -71,12 +71,12 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 ### Clientes y contexto
 
 - El concepto visible es Cliente. Un Cliente puede ser Negocio o Casa.
-- Un Cliente Negocio puede tener varias Sedes y su configuración de certificado de establecimiento aplica a todas ellas.
+- Un Cliente Negocio puede tener varias Sedes y su vigencia de certificado de establecimiento aplica a todas ellas.
 - Un Cliente Casa conserva una única Sede residencial interna, invisible en la interfaz, sin Áreas, formularios MIP, certificados ni vehículos.
 - Áreas, Dispositivos y Vehículos pertenecen a una Sede.
 - El nombre de Área es único dentro de su Sede.
 - El número de Dispositivo y la placa de Vehículo son únicos de forma normalizada dentro de su Sede.
-- Una plantilla privada pertenece a un Negocio; una global no pertenece a ninguno.
+- Las plantillas de certificados son globales por tipo y se administran únicamente desde Configuración → Certificados.
 
 ### Servicios
 
@@ -136,8 +136,8 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 
 - Pueden ser de establecimiento o vehículo.
 - Un certificado de vehículo exige un Vehículo de la Sede atendida.
-- La vigencia y plantilla del certificado de establecimiento se derivan del Cliente Negocio.
-- La vigencia y plantilla de certificados vehiculares se derivan de la Sede.
+- La vigencia del certificado de establecimiento se deriva del Cliente Negocio; su plantilla es la global de establecimiento.
+- La vigencia de certificados vehiculares se deriva de la Sede; su plantilla es la global de vehículo.
 - La fecha de vencimiento se calcula desde expedición y vigencia.
 - Generación y envío son efectos reintentables.
 
@@ -186,4 +186,4 @@ Una issue que cambie estas reglas debe actualizar este documento o agregar un do
 
 ### Operación manual de certificados
 
-El flujo vigente de plantillas, pruebas, generación manual y correo está definido en [certificates.md](certificates.md). La plantilla particular es opcional: hereda la general del tipo. La generación automática al finalizar sigue fuera de alcance.
+El flujo vigente de plantillas, pruebas, generación manual y correo está definido en [certificates.md](certificates.md). Existe una única plantilla global por tipo; Clientes y Sedes solo definen la vigencia correspondiente. La generación automática al finalizar sigue fuera de alcance.

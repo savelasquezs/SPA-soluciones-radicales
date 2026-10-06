@@ -12,12 +12,11 @@ import type { FormOption, SiteInput } from '@/types/domain'
 
 const props = defineProps<{ mode: 'create' | 'edit'; formOptions: FormOption[]; clientName?: string; saving?: boolean }>()
 const model = defineModel<SiteInput>({ required: true })
-const emit = defineEmits<{ submit: []; invalid: []; 'file-selected': [kind: 'plan' | 'vehicle-template', file: File | null]; 'view-plan': []; 'view-vehicle-template': [] }>()
+const emit = defineEmits<{ submit: []; invalid: []; 'file-selected': [kind: 'plan', file: File | null]; 'view-plan': [] }>()
 const touched = reactive<Partial<Record<keyof SiteFormErrors, boolean>>>({})
 const submitted = ref(false)
 const planFile = ref<File | null>(null)
-const vehicleTemplateFile = ref<File | null>(null)
-const errors = computed(() => validateSiteInput(model.value, vehicleTemplateFile.value))
+const errors = computed(() => validateSiteInput(model.value))
 const emailsText = computed({
   get: () => model.value.correos.join('\n'),
   set: (value: string) => update('correos', parseEmails(value)),
@@ -37,9 +36,8 @@ function submit(): void {
   else emit('submit')
 }
 
-function selected(kind: 'plan' | 'vehicle-template', file: File | null): void {
-  if (kind === 'plan') planFile.value = file
-  else vehicleTemplateFile.value = file
+function selected(kind: 'plan', file: File | null): void {
+  planFile.value = file
   emit('file-selected', kind, file)
 }
 
@@ -99,9 +97,6 @@ function removePlan(): void {
         <BaseCheckbox :model-value="modelValue.generaCertificadoVehiculo" name="site-vehicle-certificate" label="Genera certificado para vehículos" @update:model-value="update('generaCertificadoVehiculo', $event)" />
         <template v-if="modelValue.generaCertificadoVehiculo">
           <BaseInput :model-value="modelValue.vigenciaCertificadoVehiculoMeses?.toString() ?? ''" name="site-vehicle-months" label="Vigencia en meses" type="number" min="1" step="1" required :error="error('vigenciaCertificadoVehiculoMeses')" @update:model-value="update('vigenciaCertificadoVehiculoMeses', $event ? Number($event) : null)" @blur="touched.vigenciaCertificadoVehiculoMeses = true" />
-          <div v-if="modelValue.plantillaCertificadoVehiculoStoragePath" class="current-plan"><p class="current-file">Plantilla actual: {{ modelValue.plantillaCertificadoVehiculoStoragePath.split('/').slice(-1)[0] }}</p><BaseButton type="button" variant="ghost" @click="emit('view-vehicle-template')">Ver plantilla</BaseButton></div>
-          <BaseButton v-if="modelValue.plantillaCertificadoVehiculoStoragePath" variant="ghost" size="compact" @click="update('plantillaCertificadoVehiculoStoragePath', null); selected('vehicle-template', null)">Usar plantilla general</BaseButton>
-          <BaseFileUpload :model-value="vehicleTemplateFile" name="site-vehicle-template" label="Plantilla vehicular" accept=".docx"  :hint="modelValue.plantillaCertificadoVehiculoStoragePath ? 'Déjalo vacío para conservar la plantilla actual.' : 'Sin archivo propio se usa la plantilla general de Configuración → Certificados.'" :error="error('plantillaCertificadoVehiculoStoragePath')" @update:model-value="selected('vehicle-template', $event)" />
         </template>
       </div>
     </section>

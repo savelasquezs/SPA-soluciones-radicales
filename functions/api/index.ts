@@ -70,7 +70,6 @@ const CLIENT_SELECT = `select n.id,
                               n.activo,
                               n.version,
                               n.vigencia_cert_establecimiento_meses as "vigenciaCertificadoMeses",
-                              n.plantilla_cert_establecimiento_storage_path as "plantillaCertificadoStoragePath",
                               residence.direccion as "residenciaDireccion",
                               residence.contacto_principal_celular as "residenciaCelular",
                               count(s.id) filter (where s.tipo_sede = 'NEGOCIO')::integer as "sedesCount"
@@ -101,7 +100,6 @@ const SITE_SELECT = `select s.id,
                             s.maneja_vehiculos as "manejaVehiculos",
                             s.genera_certificado_vehiculo as "generaCertificadoVehiculo",
                             s.vigencia_cert_vehiculo_meses as "vigenciaCertificadoVehiculoMeses",
-                            s.plantilla_cert_vehiculo_storage_path as "plantillaCertificadoVehiculoStoragePath",
                             s.duracion_servicio_minutos as "duracionServicioMinutos",
                             s.activo,
                             s.version,
@@ -414,12 +412,11 @@ app.post('/api/clients', async (context) => {
     const admin = await requireAdmin(client, context.get('identity'))
     const inserted = await client.query<{ id: string }>(
       `insert into public.negocios (
-         tipo_cliente, nombre, nit, correos_json, activo,
-         vigencia_cert_establecimiento_meses, plantilla_cert_establecimiento_storage_path
-       ) values ($1, $2, $3, $4::jsonb, $5, $6, $7)
+         tipo_cliente, nombre, nit, correos_json, activo, vigencia_cert_establecimiento_meses
+       ) values ($1, $2, $3, $4::jsonb, $5, $6)
        returning id`,
       [input.tipoCliente, input.nombre, input.nit, JSON.stringify(input.correos), input.activo,
-        input.vigenciaCertificadoMeses, input.plantillaCertificadoStoragePath],
+        input.vigenciaCertificadoMeses],
     )
     const id = inserted.rows[0]?.id
     if (!id) throw new ApiError(500, 'No fue posible crear el Cliente')
@@ -459,12 +456,11 @@ app.patch('/api/clients/:id', async (context) => {
     const updated = await client.query(
       `update public.negocios
        set nombre = $1, nit = $2, correos_json = $3::jsonb, activo = $4,
-           vigencia_cert_establecimiento_meses = $5,
-           plantilla_cert_establecimiento_storage_path = $6
-       where id = $7 and version = $8
+           vigencia_cert_establecimiento_meses = $5
+       where id = $6 and version = $7
        returning id`,
       [input.nombre, input.nit, JSON.stringify(input.correos), input.activo,
-        input.vigenciaCertificadoMeses, input.plantillaCertificadoStoragePath, id, input.version],
+        input.vigenciaCertificadoMeses, id, input.version],
     )
     if (!updated.rowCount) throw conflictError('Cliente')
 
@@ -578,16 +574,16 @@ app.post('/api/clients/:id/sites', async (context) => {
          valor_servicio, periodicidad_meses, maneja_refuerzo, tipo_sede,
          formularios_aplicables_json, plano_storage_path, maneja_vehiculos,
          genera_certificado_vehiculo, vigencia_cert_vehiculo_meses,
-         plantilla_cert_vehiculo_storage_path, duracion_servicio_minutos, activo
+         duracion_servicio_minutos, activo
        ) values ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10, $11,
-                 'NEGOCIO', $12::jsonb, $13, $14, $15, $16, $17, $18, $19)
+                 'NEGOCIO', $12::jsonb, $13, $14, $15, $16, $17, $18)
        returning id`,
       [clientId, input.nombre, input.direccion, JSON.stringify(input.correos), input.heredaCorreosCliente,
         input.contactoPrincipalNombre, input.contactoPrincipalCorreo, input.contactoPrincipalCelular,
         input.valorServicio, input.periodicidadMeses, input.manejaRefuerzo,
         JSON.stringify(input.formulariosAplicablesIds), input.planoStoragePath, input.manejaVehiculos,
         input.generaCertificadoVehiculo, input.vigenciaCertificadoVehiculoMeses,
-        input.plantillaCertificadoVehiculoStoragePath, input.duracionServicioMinutos, input.activo],
+        input.duracionServicioMinutos, input.activo],
     )
     const id = inserted.rows[0]?.id
     if (!id) throw new ApiError(500, 'No fue posible crear la Sede')
@@ -622,16 +618,15 @@ app.patch('/api/sites/:id', async (context) => {
            formularios_aplicables_json = $11::jsonb, plano_storage_path = $12,
            maneja_vehiculos = $13, genera_certificado_vehiculo = $14,
            vigencia_cert_vehiculo_meses = $15,
-           plantilla_cert_vehiculo_storage_path = $16,
-           duracion_servicio_minutos = $17, activo = $18
-       where id = $19 and tipo_sede = 'NEGOCIO' and version = $20
+           duracion_servicio_minutos = $16, activo = $17
+       where id = $18 and tipo_sede = 'NEGOCIO' and version = $19
        returning id`,
       [input.nombre, input.direccion, JSON.stringify(input.correos), input.heredaCorreosCliente,
         input.contactoPrincipalNombre, input.contactoPrincipalCorreo, input.contactoPrincipalCelular,
         input.valorServicio, input.periodicidadMeses, input.manejaRefuerzo,
         JSON.stringify(input.formulariosAplicablesIds), input.planoStoragePath, input.manejaVehiculos,
         input.generaCertificadoVehiculo, input.vigenciaCertificadoVehiculoMeses,
-        input.plantillaCertificadoVehiculoStoragePath, input.duracionServicioMinutos, input.activo, id, input.version],
+        input.duracionServicioMinutos, input.activo, id, input.version],
     )
     if (!updated.rowCount) throw conflictError('Sede')
     const auditEvent = current.rows[0].activo === input.activo
@@ -1200,7 +1195,6 @@ function clientInput(body: Record<string, unknown>, editing = false) {
       correos,
       activo: active,
       vigenciaCertificadoMeses: requiredPositiveInteger(body, 'vigenciaCertificadoMeses'),
-      plantillaCertificadoStoragePath: optionalString(body.plantillaCertificadoStoragePath),
       residenciaDireccion: null,
       residenciaCelular: null,
       version,
@@ -1214,7 +1208,6 @@ function clientInput(body: Record<string, unknown>, editing = false) {
     correos: [],
     activo: active,
     vigenciaCertificadoMeses: null,
-    plantillaCertificadoStoragePath: null,
     residenciaDireccion: requiredString(body, 'residenciaDireccion'),
     residenciaCelular: requiredPhone(body, 'residenciaCelular'),
     version,
@@ -1242,9 +1235,6 @@ function siteInput(body: Record<string, unknown>, editing = false) {
     generaCertificadoVehiculo,
     vigenciaCertificadoVehiculoMeses: generaCertificadoVehiculo
       ? requiredPositiveInteger(body, 'vigenciaCertificadoVehiculoMeses')
-      : null,
-    plantillaCertificadoVehiculoStoragePath: generaCertificadoVehiculo
-      ? optionalString(body.plantillaCertificadoVehiculoStoragePath)
       : null,
     duracionServicioMinutos: requiredPositiveInteger(body, 'duracionServicioMinutos'),
     activo: requiredBoolean(body, 'activo'),

@@ -19,7 +19,6 @@ import { useFileSaveProgress } from '@/composables/useFileSaveProgress'
 import ClientForm from '@/components/domain/clients/ClientForm.vue'
 import { ApiClientError } from '@/services/apiService'
 import { getClient } from '@/services/clientsService'
-import { deleteMasterFile, getMasterFileUrl, uploadMasterFile } from '@/services/filesService'
 import { useClientsStore } from '@/stores/clients'
 import { useNotificationsStore } from '@/stores/notifications'
 import type { ClientInput, ClientRecord, ClientType } from '@/types/domain'
@@ -40,7 +39,6 @@ const editingId = ref<string | null>(null)
 const saving = ref(false)
 const {
   phaseLabel: savePhaseLabel,
-  onUploadPhase,
   markSaving,
   reset: resetSaveProgress,
 } = useFileSaveProgress()
@@ -54,12 +52,10 @@ const blankClient = (): ClientInput => ({
   correos: [],
   activo: true,
   vigenciaCertificadoMeses: 12,
-  plantillaCertificadoStoragePath: null,
   residenciaDireccion: null,
   residenciaCelular: null,
 })
 const form = ref<ClientInput>(blankClient())
-const clientTemplateFile = ref<File | null>(null)
 const currentClients = computed(() => tab.value === 'active' ? store.activeClients : store.inactiveClients)
 const filteredClients = computed(() => {
   const term = search.value.trim().toLocaleLowerCase('es-CO')
@@ -91,7 +87,6 @@ function openCreate(): void {
   formMode.value = 'create'
   editingId.value = null
   form.value = blankClient()
-  clientTemplateFile.value = null
   formOpen.value = true
 }
 
@@ -99,7 +94,6 @@ function openEdit(client: ClientRecord): void {
   formMode.value = 'edit'
   editingId.value = client.id
   form.value = toInput(client)
-  clientTemplateFile.value = null
   formOpen.value = true
 }
 
@@ -107,30 +101,15 @@ async function save(): Promise<void> {
   if (saving.value) return
   saving.value = true
   resetSaveProgress()
-  let uploadedPath: string | null = null
-  const previousPath = editingId.value
-    ? store.clientsById[editingId.value]?.plantillaCertificadoStoragePath ?? null
-    : null
   try {
-    let input = { ...form.value }
-    if (input.tipoCliente === 'NEGOCIO' && clientTemplateFile.value) {
-      uploadedPath = await uploadMasterFile('CLIENT_ESTABLISHMENT_TEMPLATE', clientTemplateFile.value, onUploadPhase)
-      input = { ...input, plantillaCertificadoStoragePath: uploadedPath }
-    }
     markSaving()
     const saved = formMode.value === 'create'
-      ? await store.createClient(input)
-      : await store.updateClient(editingId.value!, input)
+      ? await store.createClient({ ...form.value })
+      : await store.updateClient(editingId.value!, { ...form.value })
     formOpen.value = false
-    clientTemplateFile.value = null
-    if (previousPath && previousPath !== saved.plantillaCertificadoStoragePath) {
-      void deleteMasterFile(previousPath).catch(() =>
-        notifications.show('El Cliente se guardó, pero no fue posible limpiar la plantilla anterior.', 'warning'))
-    }
     notifications.show(formMode.value === 'create' ? 'Cliente creado correctamente.' : 'Cliente actualizado correctamente.', 'success')
     if (formMode.value === 'create' && saved.tipoCliente === 'RESIDENCIAL') tab.value = 'active'
   } catch (error) {
-    if (uploadedPath) await deleteMasterFile(uploadedPath).catch(() => undefined)
     if (error instanceof ApiClientError && error.code === 'VERSION_CONFLICT' && editingId.value) {
       store.upsertClient(await getClient(editingId.value))
     }
@@ -140,7 +119,6 @@ async function save(): Promise<void> {
     resetSaveProgress()
   }
 }
-
 async function removeClient(): Promise<void> {
   const client = deleteTarget.value
   if (!client || saving.value) return
@@ -179,22 +157,9 @@ function toInput(client: ClientRecord): ClientInput {
     correos: [...client.correos],
     activo: client.activo,
     vigenciaCertificadoMeses: client.vigenciaCertificadoMeses,
-    plantillaCertificadoStoragePath: client.plantillaCertificadoStoragePath,
     residenciaDireccion: client.residenciaDireccion,
     residenciaCelular: client.residenciaCelular,
     version: client.version,
-  }
-}
-
-async function openPrivateFile(storagePath: string): Promise<void> {
-  const popup = window.open('', '_blank')
-  try {
-    const url = await getMasterFileUrl(storagePath)
-    if (popup) popup.location.href = url
-    else window.location.href = url
-  } catch (error) {
-    popup?.close()
-    notifications.show(message(error, 'No fue posible abrir el archivo privado'), 'error')
   }
 }
 
@@ -254,7 +219,7 @@ function message(error: unknown, fallback: string): string {
     </ResponsiveTable>
 
     <BaseDialog :model-value="formOpen" :title="formMode === 'create' ? 'Nuevo cliente' : 'Editar cliente'" @update:model-value="!saving && (formOpen = $event)">
-      <ClientForm v-model="form" :mode="formMode" :saving="saving" @submit="save" @invalid="notifications.show('Revisa los campos marcados antes de guardar.', 'error')" @file-selected="clientTemplateFile = $event" @view-template="form.plantillaCertificadoStoragePath && openPrivateFile(form.plantillaCertificadoStoragePath)" />
+      <ClientForm v-model="form" :mode="formMode" :saving="saving" @submit="save" @invalid="notifications.show('Revisa los campos marcados antes de guardar.', 'error')" />
       <template #footer><BaseButton variant="secondary" :disabled="saving" @click="formOpen = false">Cancelar</BaseButton><BaseButton type="submit" form="client-form" :loading="saving">{{ savePhaseLabel ?? (formMode === 'create' ? 'Crear cliente' : 'Guardar cambios') }}</BaseButton></template>
     </BaseDialog>
 
