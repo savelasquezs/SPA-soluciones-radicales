@@ -216,3 +216,7 @@ Debe recibir datos tipados y emitir intenciones. La vista o composable ejecuta l
 - [ ] La mutación invalida o actualiza la caché correcta.
 - [ ] Los estados loading, vacío, error y éxito usan primitivas comunes.
 - [ ] La autorización sigue siendo responsabilidad del servidor.
+
+## Certificados
+
+`CertificatesView` ensambla `CertificateTemplateCard`, `CertificateVariableGuide` y las primitivas existentes. `useCertificateTemplates` conserva archivos y revisiones; `useCertificateGeneration` administra selección contextual, respuestas obsoletas, idempotencia y correo editable. `certificatesService` usa los clientes JSON/Blob autorizados compartidos. El catálogo de variables vive en `types/certificates.ts`, compartido con el backend. `BaseMultiSelect` permite labels de dominio sin duplicar el control; `useUnsavedChanges` acepta opcionalmente estado busy para impedir navegación/advertir recarga durante mutaciones.

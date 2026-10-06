@@ -52,3 +52,8 @@ docs/
 - Un token o componente visual cambia en `docs/design-system.md`.
 - Una mejora aprobada fuera de alcance se registra en `tasks.md`.
 - No duplicar la misma regla en varios documentos; enlazar su fuente principal.
+
+### Certificados
+
+- [Comportamiento manual y variables](product/certificates.md).
+- [Motor, configuración privada y comprobación de despliegue](architecture/certificates.md).

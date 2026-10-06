@@ -30,3 +30,10 @@
 - [ ] Cargar las secciones y campos oficiales de FO-PS-02 v03.
 - [ ] Cargar las secciones y campos oficiales de FO-PS-10 v01.
 - [ ] Cargar las secciones y campos oficiales de FO-PS-09 v01.
+
+## Certificados
+
+- [x] Configuración por tipo, catálogo de variables, prueba PDF sintética y operación manual con correo editable.
+- [ ] Aplicar migración de herencia de plantillas en la rama Neon autorizada y validar permisos reales.
+- [ ] Configurar conversor privado, R2 y mantenimiento/retención; validar ambos diseños Word y un envío expresamente autorizado.
+- [ ] Conectar generación automática al finalizar Servicios, únicamente al implementar y aprobar ese flujo. No llamar el motor desde finalización en esta fase.

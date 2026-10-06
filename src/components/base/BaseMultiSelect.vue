@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Check, ChevronDown } from 'lucide-vue-next'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import BaseField from '@/components/base/BaseField.vue'
 
@@ -15,7 +15,11 @@ const props = withDefaults(defineProps<{
   disabled?: boolean
   error?: string
   hint?: string
-}>(), { required: false, disabled: false, error: undefined, hint: undefined })
+  itemLabel?: string
+  itemsLabel?: string
+  placeholder?: string
+  emptyText?: string
+}>(), { required: false, disabled: false, error: undefined, hint: undefined, itemLabel: 'formulario', itemsLabel: 'formularios', placeholder: 'Selecciona formularios', emptyText: 'No hay formularios activos.' })
 
 const emit = defineEmits<{ 'update:modelValue': [value: string[]]; blur: [] }>()
 const root = ref<HTMLElement | null>(null)
@@ -23,8 +27,8 @@ const list = ref<HTMLElement | null>(null)
 const open = ref(false)
 const activeIndex = ref(0)
 const summary = computed(() => props.modelValue.length
-  ? `${props.modelValue.length} formulario${props.modelValue.length === 1 ? '' : 's'} seleccionado${props.modelValue.length === 1 ? '' : 's'}`
-  : 'Selecciona formularios')
+  ? `${props.modelValue.length} ${props.modelValue.length === 1 ? props.itemLabel : props.itemsLabel} seleccionado${props.modelValue.length === 1 ? '' : 's'}`
+  : props.placeholder)
 
 onMounted(() => document.addEventListener('pointerdown', onOutside))
 onBeforeUnmount(() => document.removeEventListener('pointerdown', onOutside))
@@ -39,7 +43,10 @@ async function toggleOpen(): Promise<void> {
   }
 }
 
+watch(() => props.disabled, (disabled) => { if (disabled) open.value = false })
+
 function toggle(id: string): void {
+  if (props.disabled) return
   const values = props.modelValue.includes(id)
     ? props.modelValue.filter((value) => value !== id)
     : [...props.modelValue, id]
@@ -106,7 +113,7 @@ function onOutside(event: PointerEvent): void {
       >
         <span>{{ summary }}</span><ChevronDown :size="18" aria-hidden="true" />
       </button>
-      <div v-if="open" ref="list" class="multi-select__list" role="listbox" aria-multiselectable="true" @keydown="onListKeydown">
+      <div v-if="open" ref="list" class="multi-select__list" role="listbox" :aria-label="label" aria-multiselectable="true" @keydown="onListKeydown">
         <button
           v-for="(option, index) in options"
           :key="option.id"
@@ -121,7 +128,7 @@ function onOutside(event: PointerEvent): void {
           <span class="multi-select__check"><Check v-if="modelValue.includes(option.id)" :size="16" /></span>
           <span><strong>{{ option.label }}</strong><small v-if="option.description">{{ option.description }}</small></span>
         </button>
-        <p v-if="options.length === 0">No hay formularios activos.</p>
+        <p v-if="options.length === 0">{{ emptyText }}</p>
       </div>
     </div>
   </BaseField>

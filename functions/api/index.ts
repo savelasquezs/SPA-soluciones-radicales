@@ -1,3 +1,4 @@
+import { assertMasterUnreferenced } from './certificates/cleanup'
 import { randomUUID } from 'node:crypto'
 
 import { cors } from 'hono/cors'
@@ -13,6 +14,7 @@ import {
   type Identity,
 } from './auth'
 import { pool, transaction } from './db'
+import { certificateRoutes } from './certificates/routes'
 import {
   completeGoogleAuthorization,
   createGoogleAuthorization,
@@ -129,7 +131,7 @@ app.use(
   cors({
     origin: (origin) => (allowedOrigins.has(origin) ? origin : ''),
     allowHeaders: ['Authorization', 'Content-Type'],
-    allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     maxAge: 600,
   }),
 )
@@ -178,7 +180,10 @@ app.post('/api/files/master/delete', async (context) => {
   const storagePath = requiredString(body, 'storagePath')
   assertMasterStoragePath(storagePath)
   await transaction((client) => requireAdmin(client, context.get('identity')))
-  await deleteMasterObject(storagePath)
+  await transaction(async (client) => {
+    await assertMasterUnreferenced(client, storagePath)
+    await deleteMasterObject(storagePath)
+  })
   return context.body(null, 204)
 })
 
@@ -975,6 +980,8 @@ app.post('/api/email/test', async (context) => {
 
 app.notFound((context) => context.json({ error: 'Ruta no encontrada' }, 404))
 
+app.route('/api/certificates', certificateRoutes)
+
 app.onError((error, context) => {
   if (error instanceof ApiError) {
     return context.json(
@@ -1193,7 +1200,7 @@ function clientInput(body: Record<string, unknown>, editing = false) {
       correos,
       activo: active,
       vigenciaCertificadoMeses: requiredPositiveInteger(body, 'vigenciaCertificadoMeses'),
-      plantillaCertificadoStoragePath: requiredString(body, 'plantillaCertificadoStoragePath'),
+      plantillaCertificadoStoragePath: optionalString(body.plantillaCertificadoStoragePath),
       residenciaDireccion: null,
       residenciaCelular: null,
       version,
@@ -1237,7 +1244,7 @@ function siteInput(body: Record<string, unknown>, editing = false) {
       ? requiredPositiveInteger(body, 'vigenciaCertificadoVehiculoMeses')
       : null,
     plantillaCertificadoVehiculoStoragePath: generaCertificadoVehiculo
-      ? requiredString(body, 'plantillaCertificadoVehiculoStoragePath')
+      ? optionalString(body.plantillaCertificadoVehiculoStoragePath)
       : null,
     duracionServicioMinutos: requiredPositiveInteger(body, 'duracionServicioMinutos'),
     activo: requiredBoolean(body, 'activo'),

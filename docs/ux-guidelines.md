@@ -172,3 +172,7 @@ Las pantallas del Técnico se diseñan primero para teléfono.
 - Editar usa el snapshot ya cargado si contiene todos los campos ligeros necesarios.
 - Después de una mutación se actualiza el registro con la respuesta definitiva, sin recargar la colección.
 - Solo se vuelve a consultar la entidad por deep link, recarga sin caché, datos pesados, historial, archivos, información omitida o conflicto de versión.
+
+## Certificados y efectos externos
+
+La configuración de plantillas, la prueba sintética, la generación oficial y el envío son acciones distintas. Un PDF de prueba siempre se identifica como no válido. Regenerar o enviar requiere confirmación contextual; nunca se envía un correo por probar/guardar/generar. Una entrega incierta no habilita reintentos automáticos: primero se revisa Gmail. La vista conserva selección, Word y mensaje ante fallos, y aplica feedback local sin overlays globales.

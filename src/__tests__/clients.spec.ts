@@ -8,8 +8,8 @@ const residence = (): ClientInput => ({ tipoCliente: 'RESIDENCIAL', nombre: 'Mar
 const site = (): SiteInput => ({ nombre: 'Principal', direccion: 'Calle 10', correos: [], heredaCorreosCliente: true, contactoPrincipalNombre: 'Ana', contactoPrincipalCorreo: null, contactoPrincipalCelular: '3001234567', valorServicio: 150000, periodicidadMeses: 1, manejaRefuerzo: false, formulariosAplicablesIds: [], planoStoragePath: null, manejaVehiculos: false, generaCertificadoVehiculo: false, vigenciaCertificadoVehiculoMeses: null, plantillaCertificadoVehiculoStoragePath: null, duracionServicioMinutos: 120, activo: true })
 
 describe('clientes helpers', () => {
-  it('exige nombre, NIT y certificado para Negocio', () => {
-    expect(validateClientInput({ ...business(), nombre: '', nit: '', plantillaCertificadoStoragePath: null })).toMatchObject({ nombre: expect.any(String), nit: expect.any(String), plantillaCertificadoStoragePath: expect.any(String) })
+  it('exige nombre y NIT y permite heredar la plantilla general', () => {
+    expect(validateClientInput({ ...business(), nombre: '', nit: '', plantillaCertificadoStoragePath: null })).toMatchObject({ nombre: expect.any(String), nit: expect.any(String) })
   })
 
   it('exige únicamente nombre, celular y dirección para Casa', () => {

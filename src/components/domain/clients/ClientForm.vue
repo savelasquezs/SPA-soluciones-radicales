@@ -90,15 +90,15 @@ function selectTemplate(file: File | null): void {
           @update:model-value="update('vigenciaCertificadoMeses', $event ? Number($event) : null)"
           @blur="touch('vigenciaCertificadoMeses')"
         />
-        <div v-if="modelValue.plantillaCertificadoStoragePath" class="current-file-row"><p class="current-file">Plantilla actual: {{ modelValue.plantillaCertificadoStoragePath.split('/').slice(-1)[0] }}</p><BaseButton type="button" variant="ghost" @click="emit('view-template')">Ver plantilla</BaseButton></div>
+        <div v-if="modelValue.plantillaCertificadoStoragePath" class="current-file-row"><p class="current-file">Plantilla actual: {{ modelValue.plantillaCertificadoStoragePath.split('/').slice(-1)[0] }}</p><BaseButton type="button" variant="ghost" @click="emit('view-template')">Ver plantilla</BaseButton><BaseButton variant="ghost" @click="update('plantillaCertificadoStoragePath', null); selectTemplate(null)">Usar plantilla general</BaseButton></div>
         <BaseFileUpload
           :model-value="templateFile"
           name="client-certificate-template"
           label="Seleccionar plantilla"
-          accept=".doc,.docx,.pdf"
-          :required="!modelValue.plantillaCertificadoStoragePath"
+          accept=".docx"
+          
           :error="error('plantillaCertificadoStoragePath')"
-          :hint="modelValue.plantillaCertificadoStoragePath ? 'Déjalo vacío para conservar la plantilla actual.' : undefined"
+          :hint="modelValue.plantillaCertificadoStoragePath ? 'Déjalo vacío para conservar la plantilla actual.' : 'Sin archivo propio se usa la plantilla general de Configuración → Certificados.'"
           @update:model-value="selectTemplate"
           @blur="touch('plantillaCertificadoStoragePath')"
         />
