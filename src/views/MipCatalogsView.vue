@@ -196,7 +196,7 @@ onBeforeUnmount(() => { alive = false; cleanupPending() })
     <div class="mip-toolbar">
       <nav class="mip-tabs mip-tabs--state" aria-label="Estado de los registros"><button type="button" :aria-current="active ? 'page' : undefined" @click="switchState(true)">{{ feminine(current) ? 'Activas' : 'Activos' }}</button><button type="button" :aria-current="!active ? 'page' : undefined" @click="switchState(false)">{{ feminine(current) ? 'Inactivas' : 'Inactivos' }}</button></nav>
       <label class="mip-search"><Search :size="16" aria-hidden="true" /><span class="sr-only">Buscar {{ LABELS[current].toLowerCase() }}</span><input v-model="filter[current].query" type="search" :placeholder="`Buscar ${LABELS[current].toLowerCase()}…`" /></label>
-      <label v-if="current !== 'products'" class="mip-filter"><span class="sr-only">Clasificación</span><select v-model="filter[current].group"><option value="">Todas</option><option value="RASTREROS">Rastreros</option><option value="VOLADORES">Voladores</option></select></label>
+      <label v-if="current !== 'products'" class="mip-filter"><span class="sr-only">Monitoreo</span><select v-model="filter[current].group"><option value="">Todas</option><option value="RASTREROS">Rastreros</option><option value="VOLADORES">Voladores</option></select></label>
     </div>
     <LoadingSkeleton v-if="store.loading[key] && !visible.length" />
     <ErrorState v-else-if="store.errors[key]" title="No se pudo cargar el catálogo" :message="store.errors[key]!"><BaseButton variant="secondary" size="compact" @click="store.load(current, active, true)">Reintentar</BaseButton></ErrorState>
