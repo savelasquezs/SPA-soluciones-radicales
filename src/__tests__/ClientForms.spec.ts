@@ -6,14 +6,15 @@ import ClientForm from '@/components/domain/clients/ClientForm.vue'
 import SiteForm from '@/components/domain/clients/SiteForm.vue'
 import type { AreaInput, ClientInput, SiteInput } from '@/types/domain'
 
-const client = (type: ClientInput['tipoCliente']): ClientInput => ({ tipoCliente: type, nombre: type === 'NEGOCIO' ? 'Acme SAS' : 'María Gómez', nit: type === 'NEGOCIO' ? '900123' : null, correos: [], activo: true, vigenciaCertificadoMeses: type === 'NEGOCIO' ? 12 : null, plantillaCertificadoStoragePath: type === 'NEGOCIO' ? 'templates/acme.docx' : null, residenciaDireccion: type === 'RESIDENCIAL' ? 'Calle 1' : null, residenciaCelular: type === 'RESIDENCIAL' ? '+573001234567' : null })
-const site = (): SiteInput => ({ nombre: 'Principal', direccion: 'Calle 1', correos: [], heredaCorreosCliente: true, contactoPrincipalNombre: 'Ana', contactoPrincipalCorreo: null, contactoPrincipalCelular: '+573001234567', valorServicio: 100000, periodicidadMeses: 1, manejaRefuerzo: false, formulariosAplicablesIds: [], planoStoragePath: null, manejaVehiculos: false, generaCertificadoVehiculo: false, vigenciaCertificadoVehiculoMeses: null, plantillaCertificadoVehiculoStoragePath: null, duracionServicioMinutos: 120, activo: true })
+const client = (type: ClientInput['tipoCliente']): ClientInput => ({ tipoCliente: type, nombre: type === 'NEGOCIO' ? 'Acme SAS' : 'María Gómez', nit: type === 'NEGOCIO' ? '900123' : null, correos: [], activo: true, vigenciaCertificadoMeses: type === 'NEGOCIO' ? 12 : null, residenciaDireccion: type === 'RESIDENCIAL' ? 'Calle 1' : null, residenciaCelular: type === 'RESIDENCIAL' ? '+573001234567' : null })
+const site = (): SiteInput => ({ nombre: 'Principal', direccion: 'Calle 1', correos: [], heredaCorreosCliente: true, contactoPrincipalNombre: 'Ana', contactoPrincipalCorreo: null, contactoPrincipalCelular: '+573001234567', valorServicio: 100000, periodicidadMeses: 1, manejaRefuerzo: false, formulariosAplicablesIds: [], planoStoragePath: null, manejaVehiculos: false, generaCertificadoVehiculo: false, vigenciaCertificadoVehiculoMeses: null, duracionServicioMinutos: 120, activo: true })
 
 describe('formularios compartidos de Clientes', () => {
   it('ClientForm muestra reglas de Negocio y oculta esos campos para Casa', async () => {
     const wrapper = mount(ClientForm, { props: { modelValue: client('NEGOCIO'), mode: 'create' } })
     expect(wrapper.find('#client-nit').exists()).toBe(true)
     expect(wrapper.text()).toContain('Certificado de establecimiento')
+    expect(wrapper.find('[name="client-certificate-template"]').exists()).toBe(false)
     await wrapper.setProps({ modelValue: client('RESIDENCIAL') })
     expect(wrapper.find('#client-nit').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('Certificado de establecimiento')
@@ -33,6 +34,9 @@ describe('formularios compartidos de Clientes', () => {
     expect(wrapper.find('#site-phone').exists()).toBe(true)
     expect(wrapper.text()).toContain('Certificado de establecimiento: configuración de Cliente.')
     expect(wrapper.find('[name="site-establishment-certificate"]').exists()).toBe(false)
+    await wrapper.setProps({ modelValue: { ...site(), manejaVehiculos: true, generaCertificadoVehiculo: true, vigenciaCertificadoVehiculoMeses: 12 } })
+    expect(wrapper.find('[name="site-vehicle-months"]').exists()).toBe(true)
+    expect(wrapper.find('[name="site-vehicle-template"]').exists()).toBe(false)
   })
 
   it('AreaForm sirve para crear y editar con el mismo árbol', () => {
