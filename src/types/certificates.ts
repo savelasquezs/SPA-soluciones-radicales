@@ -52,7 +52,7 @@ export type CertificateContext = {
   recipients: string[]
   vehicles: { id: string; placa: string }[]
   documents: CertificateDocument[]
-  availability: Record<CertificateType, { available: boolean; reason: string | null; templateSource: 'PERSONALIZADA' | 'GLOBAL' | null }>
+  availability: Record<CertificateType, { available: boolean; reason: string | null; templateSource: 'GLOBAL' | null }>
 }
 export type GenerateCertificateInput = {
   requestId: string
