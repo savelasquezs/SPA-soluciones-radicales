@@ -158,6 +158,29 @@ Si tiene Trampa + Producto:
 
 Esto es independiente de la sección global de Productos aplicados al Servicio. Un Producto aplicado por aspersión/punteo y un Producto instalado en un Puesto son hechos operativos diferentes aunque referencien el mismo maestro.
 
+### 6.1 Productos principales preparados por Administración
+
+Aclaración aprobada durante la revisión del prototipo:
+
+- Al agendar el Servicio, el Administrador selecciona los productos principales y registra el lote y la fecha de vencimiento de cada uno.
+- Lote y vencimiento pertenecen al registro del producto en ese Servicio, no al catálogo maestro, porque varían entre aplicaciones y lotes.
+- La ejecución técnica muestra esos productos con lote y vencimiento ya preparados; el Técnico no vuelve a seleccionar los principales ni a diligenciar esos dos datos.
+- En la vista del Técnico, producto principal, lote y vencimiento se presentan como información de consulta. Una corrección de la preparación corresponde a Administración.
+- Esto no convierte automáticamente un producto previsto en aplicado. Se conserva el registro de la aplicación real y los demás datos operativos que correspondan, sin deducir consumo ni cantidades desde el catálogo.
+- El futuro desarrollo de Agenda/Programación debe incluir estos datos por producto; no basta con incluir un selector de nombres de producto.
+
+### 6.2 Productos adicionales elegidos en Puestos
+
+El Técnico sí puede seleccionar productos adicionales del catálogo activo dentro de un Puesto de monitoreo, aunque no estén entre los productos principales preparados por Administración.
+
+La restricción de preselección de los productos principales NO se aplica al selector de productos de los Puestos. Este permiso es contextual al Servicio y Puesto asignados; no concede administración del catálogo.
+
+Los productos adicionales se conservan relacionados con Servicio, Área, Puesto, revisión o instalación/cambio, según corresponda, y se incluyen en el informe del cliente. El resumen técnico distingue “Principales · Administración” de “Adicionales de puestos”.
+
+El informe no se puede construir consultando únicamente la lista de productos principales. Debe recoger ambos orígenes y conservar su trazabilidad sin duplicar artificialmente aplicaciones ni confundir producto encontrado, consumo observado y producto dejado después de la intervención.
+
+Pendiente puntual: confirmar quién captura lote y vencimiento de un producto adicional instalado por el Técnico, y cuándo serán obligatorios. No copiar esos valores de un producto principal ni del catálogo suponiendo que se trata del mismo lote.
+
 ## 7. Crear un Puesto durante una visita
 
 El Técnico puede crear un Puesto nuevo mientras ejecuta un Servicio.
@@ -268,6 +291,23 @@ Debe registrarse:
 El informe debe indicar expresamente que el Área no se evaluó y mostrar la razón y evidencia.
 
 La regla de cálculo de cumplimiento deberá definir al implementar cómo excluir un Área no evaluada sin convertirla en incumplimiento. No se debe asumir silenciosamente que equivale a NC.
+
+### 11.1 Marcado rápido “Marcar todo C”
+
+La inspección de un Área incluye un botón compacto “Marcar todo C” que marca como Cumple todos los criterios aplicables de esa Área. La estructura proviene de la versión de formulario del Servicio, no de una lista fija de cuatro criterios.
+
+Comportamiento diseñado:
+
+- Si solo hay respuestas vacías o C, se aplica directamente.
+- Si existen respuestas CP, NC o N/A, se pide confirmación antes de reemplazarlas. Cancelar conserva exactamente las respuestas anteriores.
+- Después del marcado se ofrece Deshacer para restaurar el estado inmediatamente anterior. La edición individual posterior sigue disponible y termina esa oportunidad de deshacer en bloque, para no eliminar una modificación posterior.
+- Se actualizan progreso de criterios y cálculo de cumplimiento mediante las mismas reglas que una respuesta individual; se conserva autosave online/offline y validación del servidor.
+- No se modifican Puestos, capturas, consumo, comentarios, fotografías ni Hallazgos; tampoco se cierran Hallazgos abiertos.
+- No se marca automáticamente el Área como completa si aún tiene Puestos o evidencias pendientes.
+- Un Área declarada No evaluada no dispone de este atajo hasta volver explícitamente a su evaluación. Nunca sustituye la justificación de falta de acceso.
+- Los criterios excluidos por configuración, incluidos los exclusivos de exterior en un Área interior, no se muestran ni se modifican.
+
+La confirmación y Deshacer son salvaguardas del diseño para evitar sobrescribir respuestas accidentalmente; no alteran la escala C/CP/NC/N/A.
 
 ## 12. Comentarios y fotografías por Área
 
@@ -419,4 +459,7 @@ El diseño debe contemplar al menos:
 - movimiento de Puesto;
 - “Otros” con comentario obligatorio;
 - estados de guardado/offline;
-- resumen de pendientes antes de finalizar.
+- resumen de pendientes antes de finalizar;
+- productos principales con lote/vencimiento preparados por Administración y de consulta para el Técnico;
+- productos adicionales del catálogo seleccionables dentro del Puesto e incluidos en el informe;
+- Marcar todo C por Área, confirmación de reemplazo y Deshacer.
