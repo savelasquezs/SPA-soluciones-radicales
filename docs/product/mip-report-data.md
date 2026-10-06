@@ -15,9 +15,21 @@ Debe poder incluir:
 - Solicitud/consecutivo.
 - Técnico responsable.
 - Técnicos colaboradores cuando corresponda.
-- Productos aplicados globalmente.
+- Productos principales aplicados globalmente y productos adicionales de Puestos de monitoreo, diferenciando su origen.
 - Firmas.
 - Plano cuando aplique.
+
+### 1.1 Productos principales y adicionales
+
+Aclaración aprobada durante la revisión del prototipo del 6 de octubre de 2026:
+
+**Productos principales.** El Administrador los selecciona al agendar el Servicio y registra para cada uno el lote y la fecha de vencimiento. Esos datos se conservan en el contexto histórico del Servicio, no en el catálogo maestro. La vista técnica los muestra preparados y distingue producto previsto de aplicación efectivamente registrada.
+
+**Productos adicionales de Puestos.** El Técnico puede elegir productos del catálogo activo al instalar o cambiar un producto de un Puesto, aunque no estén en la selección principal. El informe debe incluirlos con Área, número de Puesto, producto, observaciones, evidencias, consumo observado y operaciones realizadas cuando correspondan.
+
+La fuente del informe debe contemplar ambos orígenes: no consultar únicamente la selección administrativa. Si un mismo producto participa como principal y en uno o varios Puestos, se puede agrupar visualmente, pero deben conservarse los usos y las referencias de cada origen, sin duplicar aplicaciones ni perder el detalle por Puesto.
+
+No convertir el consumo observado de un cebo anterior en una aplicación nueva de hoy. Diferenciar producto encontrado, producto revisado y producto dejado después de una instalación/cambio. Lote y vencimiento de productos adicionales: captura y obligatoriedad pendientes de confirmación; nunca inventarlos ni heredarlos de otra aplicación por compartir el mismo producto maestro.
 
 ## 2. Resultado por Área
 
@@ -30,6 +42,8 @@ Por cada Área del Servicio debe quedar disponible:
 - hasta 5 fotografías generales;
 - Hallazgos relacionados;
 - Puestos de monitoreo revisados o justificados.
+
+La acción técnica “Marcar todo C” genera respuestas normales por criterio. El informe usa los valores finales, incluidas correcciones o Deshacer posteriores; no deduce que el Área está completamente revisada ni cierra Hallazgos a partir del uso del atajo.
 
 ### Área no evaluada
 
@@ -118,7 +132,7 @@ Ejemplo:
 
 > PM-12 · Brodifacoum — consumo observado 50%.
 
-El consumo del Puesto no debe confundirse con la aplicación global de Producto realizada durante el Servicio.
+El consumo del Puesto no debe confundirse con la aplicación global de Producto realizada durante el Servicio. Los productos añadidos por el Técnico también deben figurar en el informe, aunque no fueran seleccionados al agendar.
 
 ## 8. Puesto no revisado
 
