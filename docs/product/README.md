@@ -187,3 +187,10 @@ Una issue que cambie estas reglas debe actualizar este documento o agregar un do
 ### Operación manual de certificados
 
 El flujo vigente de plantillas, pruebas, generación manual y correo está definido en [certificates.md](certificates.md). Existe una única plantilla global por tipo; Clientes y Sedes solo definen la vigencia correspondiente. La generación automática al finalizar sigue fuera de alcance.
+
+
+### Ejecución técnica MIP y datos del informe
+
+El flujo móvil del Técnico por Áreas, Puestos de monitoreo, capturas, consumo, evidencias y excepciones de acceso está definido en [technician-mip-execution.md](technician-mip-execution.md).
+
+Los datos estructurados que la ejecución debe producir para construir el informe del cliente están definidos en [mip-report-data.md](mip-report-data.md).
