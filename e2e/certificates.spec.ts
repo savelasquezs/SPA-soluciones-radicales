@@ -150,8 +150,8 @@ test('fallos: conserva selección, reutiliza idempotencia y bloquea reenvío amb
   expect(calls.mails).toHaveLength(1)
 })
 
-test('sin conversor permite configurar Word pero no muestra una prueba ficticia como PDF real', async ({ page }) => {
+test('sin autorización de Drive permite configurar Word pero no muestra una prueba ficticia como PDF real', async ({ page }) => {
   await setup(page, { unavailable: true })
-  await expect(page.getByText(/El conversor privado de Word a PDF aún no está configurado/)).toBeVisible()
+  await expect(page.getByText(/La integración empresarial de Google debe volver a autorizarse/)).toBeVisible()
   await expect(page.getByRole('button', { name: 'Probar PDF' }).first()).toBeDisabled()
 })

@@ -60,7 +60,7 @@ onMounted(() => templates.load())
       <LoadingSkeleton v-if="templates.loading && !templates.loaded" />
       <ErrorState v-if="templates.loadError" title="No se pudo cargar la configuración" :message="templates.loadError"><BaseButton variant="secondary" :loading="templates.loading" @click="templates.load">Reintentar</BaseButton></ErrorState>
       <template v-if="templates.loaded">
-        <p v-if="!templates.converterReady" class="notice" role="status">El conversor privado de Word a PDF aún no está configurado. Puedes guardar y validar las plantillas; la prueba PDF y la generación requieren habilitarlo en el backend.</p>
+        <p v-if="!templates.converterReady" class="notice" role="status">La integración empresarial de Google debe volver a autorizarse con acceso a los archivos creados por la aplicación para habilitar la prueba PDF y la generación.</p>
         <div class="template-grid">
           <CertificateTemplateCard v-for="type in CERTIFICATE_TYPES" :key="type" :type="type" :template="templates.drafts[type].template" :file="templates.drafts[type].file" :error="templates.drafts[type].error" :phase="templates.drafts[type].phase" :busy="busy" :active="templates.busyType === type" :converter-ready="templates.converterReady" @select="templates.select(type, $event)" @save="templates.operate(type, false)" @preview="templates.operate(type, true)" @download="templates.downloadTemplate(type)" />
         </div>
