@@ -10,7 +10,7 @@ const pool = new Pool({ connectionString: url.href })
 try {
   const existing = await pool.query("select to_regclass('public.usuarios') as table_name")
   assert.equal(existing.rows[0].table_name, null, 'Refuse an existing application database')
-  await pool.query(`create role anonymous; create role authenticated;
+  await pool.query(`create role anonymous; create role authenticated; create role neondb_owner;
     create schema auth; create schema neon_auth;
     create function auth.user_id() returns text language sql stable as $$ select current_setting('test.user_id', true) $$;
     create function auth.session() returns jsonb language sql stable as $$ select '{}'::jsonb $$;
