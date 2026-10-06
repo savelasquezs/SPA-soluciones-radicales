@@ -106,19 +106,25 @@ Las tablas funcionales conservan el modelo de negocio. Las tablas privadas sopor
 - Auditoría es append-only.
 - Las entidades del dominio usan UUID estables e idempotencia cuando aplica.
 
-## Respuestas MIP
+## Ejecución MIP
 
-`formularios` conserva la definición versionada de secciones y campos.
-
-Las respuestas históricas no se almacenan como una fila por campo. Se agrupan por:
+La operación técnica no utiliza un motor genérico de formularios. La SPA compone la pantalla del Servicio directamente desde las entidades del dominio.
 
 ```text
-Servicio + Formulario + Versión + Área
+Servicio
+  ├─ Productos previstos/aplicados
+  └─ Áreas de la Sede
+      ├─ Criterios MIP aplicables
+      ├─ Dispositivos y revisiones
+      └─ Hallazgos y evidencias
+  └─ Firmas y cierre
 ```
 
-Cada fila contiene un objeto JSONB con las respuestas de sus campos. Cada campo puede conservar valor, evaluación, observación y referencias a evidencias.
+Los Criterios MIP son catálogo administrable. Las Áreas externas reciben además los criterios exclusivos de exterior. Los valores `C/CP/NC/NA` y sus reglas de cálculo son constantes del dominio.
 
-Esto reduce filas e índices repetidos sin perder la capacidad de interpretar el histórico contra la versión exacta del formulario.
+Al iniciar un Servicio se conservan snapshots suficientes de criterios, dispositivos y opciones de monitoreo para que un cambio posterior de catálogo no altere el histórico. La persistencia histórica no depende de reconstruir una versión de formulario.
+
+El baseline todavía contiene tablas/columnas del modelo anterior de formularios. ADR-019 las declara transitorias; se refactorizarán con una migración nueva al implementar el primer Servicio.
 
 ## Archivos
 
