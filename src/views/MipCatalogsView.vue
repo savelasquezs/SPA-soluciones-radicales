@@ -13,7 +13,7 @@ import CatalogStatus from '@/components/domain/catalogs/CatalogStatus.vue'
 import MipProductForm from '@/components/domain/catalogs/MipProductForm.vue'
 import MipCatalogItemForm from '@/components/domain/catalogs/MipCatalogItemForm.vue'
 import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
-import { coverageSummary, emptyProductInput, normalizeCatalogSearch, PEST_GROUP_LABELS, productToInput } from '@/helpers/mipCatalogs'
+import { coverageSummary, emptyProductInput, normalizeCatalogSearch, PEST_GROUP_LABELS, PRODUCT_PEST_CATEGORY_LABELS, productToInput } from '@/helpers/mipCatalogs'
 import { ApiClientError } from '@/services/apiService'
 import { deleteMasterFile, getMasterFileUrl, uploadMasterFile } from '@/services/filesService'
 import { deleteMipRecord, saveMipRecord, setMipRecordActive } from '@/services/mipCatalogsService'
@@ -37,7 +37,7 @@ const saving = ref(false), actionBusy = ref(false), fileReading = ref(false)
 const phase = ref('Guardando…')
 const editorOpen = ref(false), detail = ref<{ kind: MipCatalogKind; record: MipRecord } | null>(null)
 const editorKind = ref<MipCatalogKind>('products'), editing = ref<MipRecord | null>(null)
-const productDraft = ref(emptyProductInput()), itemDraft = ref<MipItemInput>({ nombre: '', clasificacion: null })
+const productDraft = ref(emptyProductInput()), itemDraft = ref<MipItemInput>({ nombre: '', clasificacion: null, categoriaProducto: null })
 const file = ref<File | null>(null), original = ref(''), editorKey = ref(0)
 const serverErrors = ref<CatalogErrors>({}), saveError = ref(''), conflict = ref(false)
 const discard = ref<'close' | 'refresh' | null>(null)
@@ -70,7 +70,7 @@ function feminine(kind: MipCatalogKind): boolean { return kind === 'pests' || ki
 function fillDraft(kind: MipCatalogKind, record: MipRecord | null): void {
   editorKind.value = kind; editing.value = record; editorKey.value++
   productDraft.value = kind === 'products' && record ? productToInput(record as MipProduct) : emptyProductInput()
-  itemDraft.value = record && kind !== 'products' ? { nombre: record.nombre, clasificacion: (record as MipCatalogItem).clasificacion } : { nombre: '', clasificacion: null }
+  itemDraft.value = record && kind !== 'products' ? { nombre: record.nombre, clasificacion: (record as MipCatalogItem).clasificacion, categoriaProducto: (record as MipCatalogItem).categoriaProducto } : { nombre: '', clasificacion: null, categoriaProducto: null }
   original.value = JSON.stringify(kind === 'products' ? productDraft.value : itemDraft.value)
   file.value = null; serverErrors.value = {}; saveError.value = ''; conflict.value = false
 }
@@ -231,7 +231,10 @@ onBeforeUnmount(() => { alive = false; cleanupPending() })
           <div><dt>Métodos</dt><dd>{{ (detail.record as MipProduct).metodos.map(m => m.nombre).join(' · ') || 'Sin definir' }}</dd></div><div><dt>Controla</dt><dd>{{ coverageSummary((detail.record as MipProduct).categorias, (detail.record as MipProduct).plagas) }}</dd></div>
           <div><dt>Registro sanitario</dt><dd>{{ (detail.record as MipProduct).registroSanitario || 'No registrado' }}</dd></div><div><dt>Grado toxicológico</dt><dd>{{ (detail.record as MipProduct).gradoToxicologico || 'No registrado' }}</dd></div><div><dt>Laboratorio</dt><dd>{{ (detail.record as MipProduct).fabricante || 'No registrado' }}</dd></div><div><dt>Antídoto</dt><dd>{{ (detail.record as MipProduct).antidoto || 'No registrado' }}</dd></div>
         </dl>
-        <p v-else-if="(detail.record as MipCatalogItem).clasificacion">{{ PEST_GROUP_LABELS[(detail.record as MipCatalogItem).clasificacion!] }}</p>
+        <dl v-else-if="(detail.record as MipCatalogItem).clasificacion" class="mip-detail">
+          <div><dt>Monitoreo</dt><dd>{{ PEST_GROUP_LABELS[(detail.record as MipCatalogItem).clasificacion!] }}</dd></div>
+          <div v-if="detail.kind === 'pests'"><dt>Categoría para productos</dt><dd>{{ (detail.record as MipCatalogItem).categoriaProducto ? PRODUCT_PEST_CATEGORY_LABELS[(detail.record as MipCatalogItem).categoriaProducto!] : 'Sin definir' }}</dd></div>
+        </dl>
         <BaseButton v-if="detail.kind === 'products' && (detail.record as MipProduct).fichaTecnicaStoragePath" variant="secondary" size="compact" :loading="fileReading" @click="viewFile((detail!.record as MipProduct).fichaTecnicaStoragePath)">Ver ficha técnica</BaseButton>
       </template>
       <template #footer><BaseButton v-if="detail" size="compact" @click="openEditor(detail.kind, detail.record)">Editar</BaseButton></template>
