@@ -1,6 +1,6 @@
 # Bootstrap
 
-Contiene datos mínimos requeridos para que un entorno sea funcional: configuración global, catálogos aprobados, formularios oficiales y el alta autorizada inicial cuando corresponda.
+Contiene datos mínimos requeridos para que un entorno sea funcional: configuración global, catálogos aprobados y el alta autorizada inicial cuando corresponda. La ejecución MIP no carga plantillas de formularios.
 
 Los scripts deben ser idempotentes y no contener secretos.
 
