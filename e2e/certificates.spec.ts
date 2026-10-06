@@ -68,6 +68,12 @@ async function chooseService(page: Page) {
   await expect(page.getByRole('button', { name: 'Generar PDF', exact: true })).toBeEnabled()
 }
 
+async function capture(page: Page, path: string) {
+  for (const close of await page.getByRole('button', { name: 'Cerrar notificación', exact: true }).all()) await close.click()
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await page.screenshot({ path, fullPage: true, animations: 'disabled' })
+}
+
 test('plantillas: guarda sin recargar, muestra prueba y funciona en claro, oscuro y móvil', async ({ page }, info) => {
   const calls = await setup(page, { empty: true })
   const card = page.locator('.template-card').first()
@@ -82,12 +88,12 @@ test('plantillas: guarda sin recargar, muestra prueba y funciona en claro, oscur
   await expect(page.getByTitle('Vista previa del certificado de prueba')).toBeVisible()
   expect(calls.generations).toHaveLength(0); expect(calls.mails).toHaveLength(0)
   await page.getByRole('dialog', { name: 'Prueba de certificado' }).locator('footer').getByRole('button', { name: 'Cerrar', exact: true }).click()
-  await page.screenshot({ path: info.outputPath('templates-light-desktop.png'), fullPage: true })
+  await capture(page, info.outputPath('templates-light-desktop.png'))
   await page.getByLabel('Apariencia').selectOption('dark')
-  await page.screenshot({ path: info.outputPath('templates-dark-desktop.png'), fullPage: true })
+  await capture(page, info.outputPath('templates-dark-desktop.png'))
   await page.setViewportSize({ width: 390, height: 844 })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  await page.screenshot({ path: info.outputPath('templates-dark-mobile.png'), fullPage: true })
+  await capture(page, info.outputPath('templates-dark-mobile.png'))
 })
 
 test('generación y envío manual: datos reutilizados, confirmaciones y mensaje editable', async ({ page }, info) => {
@@ -114,11 +120,14 @@ test('generación y envío manual: datos reutilizados, confirmaciones y mensaje 
   expect(calls.mails[0]).toMatchObject({ subject: 'Asunto personalizado', text: 'Buen día. Adjuntamos el certificado solicitado.', recipients: ['dos@example.test', 'uno@example.test'] })
   expect(calls.mails[0]!.documents).toHaveLength(1)
   expect(calls.contextCalls).toBe(1)
-  await page.screenshot({ path: info.outputPath('generation-light-desktop.png'), fullPage: true })
+  await capture(page, info.outputPath('generation-light-desktop.png'))
   await page.setViewportSize({ width: 360, height: 740 })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  expect((await page.getByRole('button', { name: 'Enviar certificados', exact: true }).boundingBox())!.height).toBeGreaterThanOrEqual(44)
-  await page.screenshot({ path: info.outputPath('generation-light-mobile.png'), fullPage: true })
+  // Responsive sizes transition briefly; assert the final real touch target.
+  const sendButton = page.getByRole('button', { name: 'Enviar certificados', exact: true })
+  await expect(sendButton).toHaveCSS('min-height', '44px')
+  expect((await sendButton.boundingBox())!.height).toBeGreaterThanOrEqual(44)
+  await capture(page, info.outputPath('generation-light-mobile.png'))
 })
 
 test('fallos: conserva selección, reutiliza idempotencia y bloquea reenvío ambiguo', async ({ page }) => {
