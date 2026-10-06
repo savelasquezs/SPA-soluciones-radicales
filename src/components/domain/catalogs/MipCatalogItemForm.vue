@@ -63,14 +63,31 @@ async function submit(): Promise<void> {
 }
 
 watch(
-  () => props.kind,
-  kind => {
+  [() => props.kind, () => model.value.clasificacion],
+  ([kind, group]) => {
     if (kind === 'methods' && (model.value.clasificacion || model.value.categoriaProducto)) {
       model.value = { ...model.value, clasificacion: null, categoriaProducto: null }
+      emit('change')
     } else if (kind === 'traps' && model.value.categoriaProducto) {
       model.value = { ...model.value, categoriaProducto: null }
+      emit('change')
+    } else if (
+      kind === 'pests'
+      && group === 'VOLADORES'
+      && model.value.categoriaProducto !== 'INSECTOS_VOLADORES'
+    ) {
+      model.value = { ...model.value, categoriaProducto: 'INSECTOS_VOLADORES' }
+      emit('change')
+    } else if (
+      kind === 'pests'
+      && group === 'RASTREROS'
+      && model.value.categoriaProducto === 'INSECTOS_VOLADORES'
+    ) {
+      model.value = { ...model.value, categoriaProducto: null }
+      emit('change')
     }
   },
+  { immediate: true },
 )
 </script>
 
