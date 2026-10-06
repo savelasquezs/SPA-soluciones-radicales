@@ -22,6 +22,7 @@ const emit = defineEmits<{ submit: []; invalid: []; change: [] }>()
 const form = ref<HTMLFormElement | null>(null)
 const touched = reactive({ nombre: false, clasificacion: false, categoriaProducto: false })
 const submitted = ref(false)
+const RASTER_PRODUCT_CATEGORIES = ['INSECTOS_RASTREROS', 'ROEDORES'] as const
 const validation = computed(() => validateCatalogItem(props.kind, model.value))
 
 function error(key: keyof MipItemInput): string | undefined {
@@ -148,7 +149,7 @@ watch(
 
       <div v-else-if="model.clasificacion === 'RASTREROS'" class="item-form__groups">
         <label
-          v-for="category in (['INSECTOS_RASTREROS', 'ROEDORES'] as const)"
+          v-for="category in RASTER_PRODUCT_CATEGORIES"
           :key="category"
           :class="{ selected: model.categoriaProducto === category }"
         >
