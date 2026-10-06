@@ -84,6 +84,7 @@ begin
        )
        or (
          tg_op = 'UPDATE'
+         and old.categoria_producto is not null
          and old.categoria_producto is distinct from new.categoria_producto
          and exists (
            select 1
