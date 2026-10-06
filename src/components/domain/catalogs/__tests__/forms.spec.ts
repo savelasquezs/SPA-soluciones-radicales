@@ -39,6 +39,7 @@ describe('formularios compartidos de catálogos', () => {
     expect(wrapper.emitted('change')?.[0]?.[0]).toEqual({ categorias: ['RASTREROS'], plagaIds: [] })
     await wrapper.setProps({ categories: ['RASTREROS'], pestIds: [] })
     expect(wrapper.text()).toContain('Incluida por categoría')
-    expect(wrapper.findAll('input[type=checkbox]').at(-1)?.attributes('disabled')).toBeDefined()
+    const checkboxes = wrapper.findAll('input[type=checkbox]')
+    expect(checkboxes[checkboxes.length - 1]?.attributes('disabled')).toBeDefined()
   })
 })
