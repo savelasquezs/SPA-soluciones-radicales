@@ -81,6 +81,18 @@ function togglePest(pest: MipCatalogItem): void {
   emit('change', canonicalCoverage(props.categories, selected, props.pests))
 }
 
+function removeLegacyPest(pest: MipCatalogItem): void {
+  if (props.disabled || !props.pestIds.includes(pest.id)) return
+  emit(
+    'change',
+    canonicalCoverage(
+      props.categories,
+      props.pestIds.filter(id => id !== pest.id),
+      props.pests,
+    ),
+  )
+}
+
 function close(restore = false): void {
   open.value = false
   emit('blur')
@@ -187,10 +199,10 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside))
         <fieldset v-if="legacySelected.length">
           <legend>Requieren clasificación de producto</legend>
           <label v-for="pest in legacySelected" :key="pest.id" class="coverage__option">
-            <input type="checkbox" checked disabled />
+            <input type="checkbox" checked :disabled="disabled" @change="removeLegacyPest(pest)" />
             <span>
               {{ pest.nombre }}
-              <small>Edita esta plaga en el catálogo antes de guardar cambios del producto.</small>
+              <small>Sin categoría para productos · corrige la plaga o retírala de este producto.</small>
             </span>
           </label>
         </fieldset>
