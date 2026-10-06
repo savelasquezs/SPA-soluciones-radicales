@@ -107,7 +107,8 @@ describe('formularios compartidos de catálogos', () => {
     wrappers.push(wrapper)
 
     await wrapper.get('#product-coverage').trigger('click')
-    const categoryBoxes = wrapper.findAll('fieldset').at(0)!.findAll('input[type=checkbox]')
+    const fieldsets = wrapper.findAll('fieldset')
+    const categoryBoxes = fieldsets[0]!.findAll('input[type=checkbox]')
     await categoryBoxes[0]!.setValue(true)
 
     expect(wrapper.emitted('change')?.[0]?.[0]).toEqual({
