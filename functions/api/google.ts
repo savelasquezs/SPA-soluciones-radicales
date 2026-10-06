@@ -103,6 +103,28 @@ async function getAccessToken(): Promise<string> {
   return token.access_token
 }
 
+async function enqueueGoogleDriveCleanup(fileId: string): Promise<void> {
+  await pool.query(
+    `insert into private.integration_jobs (job_type, idempotency_key, payload, run_after)
+     values ('STORAGE_CLEANUP', $1, $2::jsonb, now() + interval '5 minutes')
+     on conflict (job_type, idempotency_key) do nothing`,
+    [`google-drive-temp:${fileId}`, JSON.stringify({ scope: 'GOOGLE_DRIVE_TEMP', fileId })],
+  )
+}
+
+export async function deleteGoogleDriveTemporaryFile(fileId: string, accessToken?: string): Promise<void> {
+  if (!fileId || fileId.length > 256) throw new ApiError(422, 'Identificador temporal de Google Drive no válido')
+  const token = accessToken ?? await getAccessToken()
+  const cleanup = await googleFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(20_000),
+  })
+  if (!cleanup.ok && cleanup.status !== 404) {
+    throw new ApiError(502, 'No fue posible eliminar el archivo temporal de Google Drive')
+  }
+}
+
 async function readGoogleFile(response: Response, maxBytes: number): Promise<Buffer> {
   if (Number(response.headers.get('content-length')) > maxBytes) {
     await response.body?.cancel()
@@ -171,11 +193,9 @@ export async function convertDocxToPdfWithGoogleDrive(docx: Uint8Array, maxBytes
 
   if (fileId) {
     try {
-      const cleanup = await googleFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}`, {
-        method: 'DELETE', headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(20_000),
-      })
-      if (!cleanup.ok && cleanup.status !== 404) throw new Error('cleanup failed')
+      await deleteGoogleDriveTemporaryFile(fileId, accessToken)
     } catch {
+      await enqueueGoogleDriveCleanup(fileId).catch(() => undefined)
       if (!failure) failure = new ApiError(502, 'El PDF fue creado, pero no fue posible eliminar el archivo temporal de Google Drive')
     }
   }
