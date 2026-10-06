@@ -69,7 +69,7 @@ async function chooseService(page: Page) {
 }
 
 async function capture(page: Page, path: string) {
-  for (const close of await page.getByRole('button', { name: 'Cerrar notificación', exact: true }).all()) await close.click()
+  for (const close of (await page.getByRole('button', { name: 'Cerrar notificación', exact: true }).all()).reverse()) await close.click()
   await page.evaluate(() => window.scrollTo(0, 0))
   await page.screenshot({ path, fullPage: true, animations: 'disabled' })
 }
