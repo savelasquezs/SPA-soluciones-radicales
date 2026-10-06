@@ -34,7 +34,7 @@ const generate = () => ({ requestId: id, serviceId: id, type: 'ESTABLECIMIENTO',
 beforeEach(() => {
   vi.clearAllMocks()
   loaded = {
-    source: { id, version: '1', solicitud: 'SS-123', state: 'FINALIZADO', serviceType: 'PRINCIPAL', siteType: 'NEGOCIO', clientType: 'NEGOCIO', siteId: id, clientName: 'Negocio', nit: '900', siteName: 'Sede', address: 'Dirección', technicianName: 'Ana', issuedOn: '2026-01-31', businessMonths: 1, vehicleMonths: 2, establishmentTemplate: null, vehicleTemplate: null, vehicleEnabled: true, businessEmails: [], siteEmails: [], contactEmail: null },
+    source: { id, version: '1', solicitud: 'SS-123', state: 'FINALIZADO', serviceType: 'PRINCIPAL', siteType: 'NEGOCIO', clientType: 'NEGOCIO', siteId: id, clientName: 'Negocio', nit: '900', siteName: 'Sede', address: 'Dirección', technicianName: 'Ana', issuedOn: '2026-01-31', businessMonths: 1, vehicleMonths: 2, vehicleEnabled: true, businessEmails: [], siteEmails: [], contactEmail: null },
     settings: settings as LoadedCertificateContext['settings'], products: [], historicalData: {},
     context: { serviceId: id, solicitud: 'SS-123', clientName: 'Negocio', siteName: 'Sede', recipients: ['uno@example.test', 'dos@example.test'], vehicles: [{ id: vehicle, placa: 'ABC-123' }], documents: [], availability: { ESTABLECIMIENTO: { available: true, reason: null, templateSource: 'GLOBAL' }, VEHICULO: { available: true, reason: null, templateSource: 'GLOBAL' } } },
   }
