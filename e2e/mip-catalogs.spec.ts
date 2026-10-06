@@ -2,11 +2,11 @@ import { expect, test, type Page } from '@playwright/test'
 import type { MipCatalogItem, MipCatalogKind, MipProduct, MipProductInput, MipRecord } from '../src/types/mipCatalogs'
 
 const id = '10000000-0000-4000-8000-000000000001'
-const method: MipCatalogItem = { id: '20000000-0000-4000-8000-000000000001', clave: 'ASPERSION', nombre: 'Aspersión', clasificacion: null, activo: true, version: 1 }
-const pest: MipCatalogItem = { id: '30000000-0000-4000-8000-000000000001', clave: 'CUCARACHA', nombre: 'Cucaracha', clasificacion: 'RASTREROS', activo: true, version: 1 }
-const fly: MipCatalogItem = { ...pest, id: '30000000-0000-4000-8000-000000000002', clave: 'MOSCA', nombre: 'Mosca doméstica', clasificacion: 'VOLADORES' }
-const product: MipProduct = { id, nombre: 'Producto de prueba', principioActivo: 'Composición de prueba', dosisAplicacion: 'Según ficha de prueba', registroSanitario: null, gradoToxicologico: null, fabricante: null, antidoto: null, fichaTecnicaStoragePath: null, categorias: ['RASTREROS'], metodos: [method], plagas: [fly], activo: true, version: 1 }
-const trap: MipCatalogItem = { id: '40000000-0000-4000-8000-000000000001', clave: 'TRAMPA_ADHESIVA', nombre: 'Trampa adhesiva', clasificacion: 'RASTREROS', activo: true, version: 1 }
+const method: MipCatalogItem = { id: '20000000-0000-4000-8000-000000000001', clave: 'ASPERSION', nombre: 'Aspersión', clasificacion: null, categoriaProducto: null, activo: true, version: 1 }
+const pest: MipCatalogItem = { id: '30000000-0000-4000-8000-000000000001', clave: 'CUCARACHA', nombre: 'Cucaracha', clasificacion: 'RASTREROS', categoriaProducto: 'INSECTOS_RASTREROS', activo: true, version: 1 }
+const fly: MipCatalogItem = { ...pest, id: '30000000-0000-4000-8000-000000000002', clave: 'MOSCA', nombre: 'Mosca doméstica', clasificacion: 'VOLADORES', categoriaProducto: 'INSECTOS_VOLADORES' }
+const product: MipProduct = { id, nombre: 'Producto de prueba', principioActivo: 'Composición de prueba', dosisAplicacion: 'Según ficha de prueba', registroSanitario: null, gradoToxicologico: null, fabricante: null, antidoto: null, fichaTecnicaStoragePath: null, categorias: ['INSECTOS_RASTREROS'], metodos: [method], plagas: [fly], activo: true, version: 1 }
+const trap: MipCatalogItem = { id: '40000000-0000-4000-8000-000000000001', clave: 'TRAMPA_ADHESIVA', nombre: 'Trampa adhesiva', clasificacion: 'RASTREROS', categoriaProducto: null, activo: true, version: 1 }
 const profile = { id, nombreCompleto: 'Admin de prueba', correoGoogle: 'admin@example.test', esAdmin: true, esTecnico: false, rolActivo: 'ADMINISTRADOR', requiereSeleccionRol: false }
 
 async function setup(page: Page, options: { conflict?: boolean; unavailable?: boolean; technician?: boolean } = {}) {
@@ -71,7 +71,7 @@ test('crear: valida campos y combina categoría completa con una plaga específi
   await dialog.getByLabel('Principio activo / composición').fill('Composición sintética')
   await dialog.getByLabel('Dosis de aplicación').fill('Dosis sintética')
   await dialog.getByRole('button', { name: 'Plagas que controla', exact: true }).click()
-  await dialog.getByLabel('Todos los rastreros', { exact: true }).check()
+  await dialog.getByLabel('Todos los insectos rastreros', { exact: true }).check()
   await dialog.getByLabel('Mosca doméstica', { exact: true }).check()
   await dialog.getByRole('button', { name: 'Listo', exact: true }).click()
   await dialog.getByRole('button', { name: 'Métodos de aplicación', exact: true }).click()
@@ -80,7 +80,7 @@ test('crear: valida campos y combina categoría completa con una plaga específi
   await dialog.getByRole('button', { name: 'Crear producto', exact: true }).click()
   await expect(dialog).toBeHidden()
   const result = records.products[records.products.length - 1] as MipProduct
-  expect(result.categorias).toEqual(['RASTREROS'])
+  expect(result.categorias).toEqual(['INSECTOS_RASTREROS'])
   expect(result.plagas.map(row => row.id)).toEqual([fly.id])
 })
 
@@ -172,7 +172,9 @@ test('plagas: clasificación exclusiva, formulario reutilizado y búsqueda local
   await edit.getByRole('textbox', { name: 'Nombre', exact: true }).fill('Plaga renombrada')
   await edit.getByRole('button', { name: 'Guardar cambios', exact: true }).click()
   await expect(edit).toBeHidden()
-  expect((records.pests.find(row => row.nombre === 'Plaga renombrada') as MipCatalogItem).clasificacion).toBe('VOLADORES')
+  const savedPest = records.pests.find(row => row.nombre === 'Plaga renombrada') as MipCatalogItem
+  expect(savedPest.clasificacion).toBe('VOLADORES')
+  expect(savedPest.categoriaProducto).toBe('INSECTOS_VOLADORES')
   expect(calls.filter(call => call.method === 'GET' && /^\/api\/mip\/pests\//.test(call.path))).toHaveLength(0)
   await page.getByRole('searchbox', { name: 'Buscar plagas', exact: true }).fill('sin coincidencias')
   await expect(page.getByRole('heading', { name: 'No hay coincidencias' })).toBeVisible()

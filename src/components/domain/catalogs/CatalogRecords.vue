@@ -3,13 +3,14 @@ import { Bug, Feather } from 'lucide-vue-next'
 import ResponsiveTable from '@/components/base/ResponsiveTable.vue'
 import CatalogActions from './CatalogActions.vue'
 import CatalogStatus from './CatalogStatus.vue'
-import { coverageSummary, PEST_GROUP_LABELS } from '@/helpers/mipCatalogs'
-import type { MipCatalogKind, MipProduct, MipRecord, PestGroup } from '@/types/mipCatalogs'
+import { coverageSummary, PEST_GROUP_LABELS, PRODUCT_PEST_CATEGORY_LABELS } from '@/helpers/mipCatalogs'
+import type { MipCatalogItem, MipCatalogKind, MipProduct, MipRecord, PestGroup, ProductPestCategory } from '@/types/mipCatalogs'
 
 defineProps<{ kind: MipCatalogKind; rows: MipRecord[]; busy?: boolean }>()
 const emit = defineEmits<{ detail: [record: MipRecord]; edit: [record: MipRecord]; state: [record: MipRecord]; delete: [record: MipRecord] }>()
 const product = (row: MipRecord): MipProduct => row as MipProduct
 const group = (row: MipRecord): PestGroup | null => 'clasificacion' in row ? row.clasificacion : null
+const productCategory = (row: MipRecord): ProductPestCategory | null => 'categoriaProducto' in row ? (row as MipCatalogItem).categoriaProducto : null
 </script>
 
 <template>
@@ -20,7 +21,8 @@ const group = (row: MipRecord): PestGroup | null => 'clasificacion' in row ? row
           <thead><tr>
             <th scope="col">{{ kind === 'products' ? 'Producto' : kind === 'traps' ? 'Trampa' : kind === 'pests' ? 'Plaga' : 'Método' }}</th>
             <template v-if="kind === 'products'"><th scope="col">Principio activo</th><th scope="col">Dosis</th><th scope="col">Métodos</th><th scope="col">Controla</th></template>
-            <th v-else-if="kind !== 'methods'" scope="col">Clasificación</th>
+            <th v-else-if="kind !== 'methods'" scope="col">Monitoreo</th>
+            <th v-if="kind === 'pests'" scope="col">Productos</th>
             <th scope="col">Estado</th><th scope="col">Acciones</th>
           </tr></thead>
           <tbody><tr v-for="row in rows" :key="row.id">
@@ -31,6 +33,7 @@ const group = (row: MipRecord): PestGroup | null => 'clasificacion' in row ? row
               <td>{{ coverageSummary(product(row).categorias, product(row).plagas) }}</td>
             </template>
             <td v-else-if="kind !== 'methods'"><span v-if="group(row)" class="classification"><Bug v-if="group(row) === 'RASTREROS'" :size="15" aria-hidden="true" /><Feather v-else :size="15" aria-hidden="true" />{{ PEST_GROUP_LABELS[group(row)!] }}</span><span v-else class="classification--missing">Completar clasificación</span></td>
+            <td v-if="kind === 'pests'"><span v-if="productCategory(row)" class="classification">{{ PRODUCT_PEST_CATEGORY_LABELS[productCategory(row)!] }}</span><span v-else class="classification--missing">Completar categoría</span></td>
             <td><CatalogStatus :active="row.activo" :feminine="kind === 'pests' || kind === 'traps'" /></td>
             <td><CatalogActions :name="row.nombre" :active="row.activo" :disabled="busy" @edit="emit('edit', row)" @state="emit('state', row)" @delete="emit('delete', row)" /></td>
           </tr></tbody>
@@ -46,7 +49,10 @@ const group = (row: MipRecord): PestGroup | null => 'clasificacion' in row ? row
           <div><dt>Métodos</dt><dd>{{ product(row).metodos.map(m => m.nombre).join(' · ') || 'Sin definir' }}</dd></div>
           <div><dt>Controla</dt><dd>{{ coverageSummary(product(row).categorias, product(row).plagas) }}</dd></div>
         </dl>
-        <p v-else-if="kind !== 'methods'" class="classification">{{ group(row) ? PEST_GROUP_LABELS[group(row)!] : 'Completar clasificación' }}</p>
+        <div v-else-if="kind !== 'methods'" class="catalog-card__classifications">
+          <p class="classification">{{ group(row) ? PEST_GROUP_LABELS[group(row)!] : 'Completar clasificación' }}</p>
+          <p v-if="kind === 'pests'" class="classification">{{ productCategory(row) ? PRODUCT_PEST_CATEGORY_LABELS[productCategory(row)!] : 'Completar categoría para productos' }}</p>
+        </div>
         <footer><CatalogActions :name="row.nombre" :active="row.activo" :disabled="busy" @edit="emit('edit', row)" @state="emit('state', row)" @delete="emit('delete', row)" /></footer>
       </article>
     </template>
@@ -72,5 +78,7 @@ const group = (row: MipRecord): PestGroup | null => 'clasificacion' in row ? row
 .catalog-card dl > div { display: grid; grid-template-columns: 7rem minmax(0, 1fr); gap: .5rem; font-size: .8125rem; }
 .catalog-card dt { color: var(--text-secondary); }
 .catalog-card dd { margin: 0; overflow-wrap: anywhere; }
+.catalog-card__classifications { display: grid; gap: var(--space-4); margin: .5rem 0; }
+.catalog-card__classifications p { margin: 0; }
 .catalog-card footer { display: flex; justify-content: flex-end; }
 </style>
