@@ -19,7 +19,12 @@ const emit = defineEmits<{ select: [file: File | null]; save: []; preview: []; d
     <BaseFileUpload :model-value="file" :name="`certificate-template-${type}`" :label="template.storagePath ? 'Reemplazar Word' : 'Seleccionar Word'" accept=".docx" hint="Word .docx · hasta 10 MB" :error="error || undefined" :disabled="busy" @update:model-value="emit('select', $event)" />
     <footer>
       <BaseButton size="compact" :disabled="busy || !file" :loading="active && !phase.includes('prueba') && !phase.includes('Word')" @click="emit('save')"><Save :size="16" aria-hidden="true" />{{ active ? phase : 'Guardar plantilla' }}</BaseButton>
-      <BaseButton size="compact" variant="secondary" :disabled="busy || !(file || template.storagePath) || !converterReady" @click="emit('preview')"><Eye :size="16" aria-hidden="true" />Probar PDF</BaseButton>
+      <span
+        class="preview-action"
+        :title="!converterReady ? 'Renueva la autorización de Google Drive para probar el PDF.' : undefined"
+      >
+        <BaseButton size="compact" variant="secondary" :disabled="busy || !(file || template.storagePath) || !converterReady" @click="emit('preview')"><Eye :size="16" aria-hidden="true" />Probar PDF</BaseButton>
+      </span>
     </footer>
   </section>
 </template>
@@ -32,4 +37,5 @@ header span { margin-left: auto; font-size: .8rem; color: var(--text-secondary);
 .template-card__current { display: flex; min-width: 0; gap: .4rem; align-items: center; }
 .template-card__current span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .85rem; }
 footer { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: auto; }
+.preview-action { display: inline-flex; }
 </style>
