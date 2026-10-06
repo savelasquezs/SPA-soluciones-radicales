@@ -81,10 +81,12 @@ describe('formularios compartidos de catálogos', () => {
 
     await wrapper.get('input[value=VOLADORES]').setValue(true)
     const emitted = wrapper.emitted('update:modelValue')
-    expect(emitted?.[emitted.length - 1]?.[0]).toMatchObject({
+    const automatic = emitted?.[emitted.length - 1]?.[0] as { nombre: string; clasificacion: 'VOLADORES'; categoriaProducto: 'INSECTOS_VOLADORES' }
+    expect(automatic).toMatchObject({
       clasificacion: 'VOLADORES',
       categoriaProducto: 'INSECTOS_VOLADORES',
     })
+    await wrapper.setProps({ modelValue: automatic })
     expect(wrapper.text()).toContain('Se asigna automáticamente a las plagas voladoras.')
 
     await wrapper.setProps({
@@ -105,7 +107,6 @@ describe('formularios compartidos de catálogos', () => {
     wrappers.push(wrapper)
 
     await wrapper.get('#product-coverage').trigger('click')
-    await wrapper.get('input[type=checkbox][value]').exists()
     const categoryBoxes = wrapper.findAll('fieldset').at(0)!.findAll('input[type=checkbox]')
     await categoryBoxes[0]!.setValue(true)
 
