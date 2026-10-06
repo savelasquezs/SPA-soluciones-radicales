@@ -35,7 +35,7 @@ beforeEach(() => {
   vi.resetAllMocks()
   mocks.requireAdmin.mockResolvedValue({ id })
   mocks.listCatalog.mockResolvedValue([])
-  mocks.saveItem.mockResolvedValue({ id, clave: 'TRAMPA', nombre: 'Trampa', clasificacion: 'RASTREROS', activo: true, version: 1 })
+  mocks.saveItem.mockResolvedValue({ id, clave: 'TRAMPA', nombre: 'Trampa', clasificacion: 'RASTREROS', categoriaProducto: null, activo: true, version: 1 })
 })
 
 describe('API administrativa de catálogos', () => {
