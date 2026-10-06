@@ -83,13 +83,17 @@ No inventar requisitos. Ante una contradicción, detener únicamente la parte af
 - Conservar montos en COP como enteros.
 - No agregar multitenancy.
 
-## Respuestas de formularios
+## Ejecución MIP
 
-- `formularios` define campos y versiones de forma normalizada.
-- Las respuestas históricas se agrupan por Servicio + formulario + versión + Área.
-- No crear una fila PostgreSQL por cada campo respondido.
-- Cada grupo conserva las respuestas de campos en JSONB, incluyendo valor, evaluación, observación y referencias a evidencias cuando apliquen.
-- El documento histórico debe permanecer interpretable contra la versión exacta del formulario.
+- No crear ni extender un motor genérico de formularios para la operación MIP.
+- La pantalla del Técnico se compone desde Servicio, Sede, Áreas, Criterios MIP, Productos, Dispositivos, Plagas, Hallazgos, Evidencias y Firmas.
+- Los Criterios MIP son catálogo administrable; `C/CP/NC/NA` y sus reglas de cálculo son constantes del dominio.
+- Un Área externa incorpora los criterios exclusivos de exterior además de los generales.
+- Al iniciar un Servicio, conservar snapshots suficientes para que cambios posteriores de criterios, plagas o dispositivos no reinterpreten el histórico.
+- Los dispositivos son entidades permanentes de Sede/Área y sus revisiones pertenecen al Servicio; no son campos dinámicos.
+- `formularios`, `respuestas_formulario`, `formularios_aplicables_json` y `formularios_versiones_json` pertenecen al modelo transitorio del baseline. No construir nueva funcionalidad sobre ellos.
+- Cuando se implemente el primer Servicio, sustituir el modelo transitorio mediante una migración nueva; nunca modificar migraciones ya aplicadas.
+- Leer `docs/product/service-execution.md` antes de implementar ejecución técnica o monitoreo.
 
 ## Cloudflare Workers
 
