@@ -50,6 +50,8 @@ describe('API administrativa de catálogos', () => {
     expect(mocks.listCatalog).toHaveBeenCalledWith({}, 'pests', false)
     expect((await app.request('/api/mip/pests?active=unknown')).status).toBe(422)
     expect((await request('traps', { nombre: 'Trampa', clasificacion: 'MIXTO' })).status).toBe(422)
+    expect((await request('pests', { nombre: 'Roedor', clasificacion: 'RASTREROS' })).status).toBe(422)
+    expect((await request('pests', { nombre: 'Mosca', clasificacion: 'VOLADORES', categoriaProducto: 'ROEDORES' })).status).toBe(422)
     expect(mocks.saveItem).not.toHaveBeenCalled()
   })
   it('crea con auditoría y devuelve el snapshot completo sin fetch del cliente', async () => {
