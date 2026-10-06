@@ -38,3 +38,12 @@
 - [ ] Aplicar `20261006_008_global_certificate_templates.sql` en desarrollo para eliminar personalizaciones por Negocio/Sede.
 - [ ] Reautorizar Google con `drive.file` en desarrollo, configurar R2 y mantenimiento/retención, y realizar un envío expresamente autorizado. Los dos diseños Word ya fueron validados visualmente con Drive.
 - [ ] Conectar generación automática al finalizar Servicios, únicamente al implementar y aprobar ese flujo. No llamar el motor desde finalización en esta fase.
+
+## Configuración y catálogos MIP
+
+- [x] Implementar Productos, Trampas, Plagas y Métodos de aplicación en Configuración, con formularios compartidos, cobertura por categorías/plagas y edición desde el snapshot ya cargado.
+- [x] Añadir migración 009, bootstrap idempotente, protección de referencias, concurrencia y ficha técnica en el sistema privado de archivos existente.
+- [ ] Tras aprobar el PR, confirmar la rama Neon autorizada, revisar datos previos y aplicar `20261006_009_mip_catalogs.sql` y `database/bootstrap/002_mip_catalogs.sql`. No importar automáticamente productos ni dosis de los formatos.
+- [ ] Validar subida, visualización, reemplazo y limpieza de una ficha técnica con R2 real y el backend desplegado en desarrollo. Las pruebas de CI no usan credenciales reales.
+- [ ] Al retirar los datos actuales de prueba, resolver las plagas heredadas sin clasificación y validar `configuracion_plaga_clasificacion_check` con una nueva migración. No inventar una categoría adicional ni alterar historia para completar datos de prueba.
+- [ ] En el módulo futuro de Formularios/Monitoreo, consumir las plagas por RASTREROS/VOLADORES con snapshot por Servicio y asociar productos/trampas a puestos permanentes. No está incluido en el CRUD de catálogos.
