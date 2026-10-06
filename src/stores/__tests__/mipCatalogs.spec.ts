@@ -14,9 +14,9 @@ const identity = reactive({ profile: { id: 'admin' }, activeRole: 'ADMINISTRADOR
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => identity }))
 import { useMipCatalogsStore } from '../mipCatalogs'
 
-const trap: MipCatalogItem = { id: '10000000-0000-4000-8000-000000000001', clave: 'TRAMPA', nombre: 'Trampa adhesiva', clasificacion: 'RASTREROS', activo: true, version: 1 }
+const trap: MipCatalogItem = { id: '10000000-0000-4000-8000-000000000001', clave: 'TRAMPA', nombre: 'Trampa adhesiva', clasificacion: 'RASTREROS', categoriaProducto: null, activo: true, version: 1 }
 const lamp: MipCatalogItem = { ...trap, id: '10000000-0000-4000-8000-000000000002', clave: 'UV', nombre: 'Lámpara UV', clasificacion: 'VOLADORES' }
-const method: MipCatalogItem = { ...trap, id: '20000000-0000-4000-8000-000000000001', clave: 'ASPERSION', nombre: 'Aspersión', clasificacion: null }
+const method: MipCatalogItem = { ...trap, id: '20000000-0000-4000-8000-000000000001', clave: 'ASPERSION', nombre: 'Aspersión', clasificacion: null, categoriaProducto: null }
 function deferred<T>() {
   let resolve!: (value: T) => void
   const promise = new Promise<T>(finish => { resolve = finish })
