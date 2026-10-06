@@ -25,11 +25,10 @@
 
 - [ ] Definir valor, duración, programación e informe aplicables a Clientes Casa antes de incluir sus ubicaciones internas en el catálogo de programación.
 
-## Formularios oficiales
+## Ejecución MIP
 
-- [ ] Cargar las secciones y campos oficiales de FO-PS-02 v03.
-- [ ] Cargar las secciones y campos oficiales de FO-PS-10 v01.
-- [ ] Cargar las secciones y campos oficiales de FO-PS-09 v01.
+- [x] Documentar la eliminación del motor genérico de formularios y definir la ejecución por Áreas, Criterios, Dispositivos y snapshots históricos.
+- [ ] Definir, antes de programar cambios de esquema/API/UI, la implementación mínima necesaria para ejecutar y finalizar el primer Servicio Principal según `docs/product/service-execution.md`.
 
 ## Certificados
 
@@ -48,4 +47,4 @@
 - [ ] Tras aprobar el PR de corrección, aplicar `20261006_010_product_pest_categories.sql` y volver a ejecutar el bootstrap en Neon `desarrollo`; después desplegar la Function `api` desde el código integrado.
 - [ ] Validar subida, visualización, reemplazo y limpieza de una ficha técnica con R2 real y el backend desplegado en desarrollo. Las pruebas de CI no usan credenciales reales.
 - [ ] Al retirar los datos actuales de prueba, resolver plagas heredadas incompletas y validar `configuracion_plaga_clasificacion_check` y `configuracion_plaga_categoria_producto_check` con una nueva migración. No alterar historia para completar datos de prueba.
-- [ ] En el módulo futuro de Formularios/Monitoreo, consumir las plagas por RASTREROS/VOLADORES con snapshot por Servicio y asociar productos/trampas a puestos permanentes. No está incluido en el CRUD de catálogos.
+- [ ] En la futura ejecución MIP/Monitoreo, consumir las plagas por RASTREROS/VOLADORES con snapshot por Servicio y asociar productos/trampas a puestos permanentes. No está incluido en el CRUD actual de catálogos.
