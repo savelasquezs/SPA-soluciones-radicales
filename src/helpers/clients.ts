@@ -1,4 +1,3 @@
-import { validateCertificateTemplateFile } from '@/helpers/certificates'
 import type { AreaInput, ClientInput, SiteInput } from '@/types/domain'
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -10,8 +9,7 @@ export type ClientFormErrors = Partial<Record<
   | 'correos'
   | 'residenciaCelular'
   | 'residenciaDireccion'
-  | 'vigenciaCertificadoMeses'
-  | 'plantillaCertificadoStoragePath',
+  | 'vigenciaCertificadoMeses',
   string
 >>
 
@@ -25,7 +23,6 @@ export type SiteFormErrors = Partial<Record<
   | 'periodicidadMeses'
   | 'formulariosAplicablesIds'
   | 'vigenciaCertificadoVehiculoMeses'
-  | 'plantillaCertificadoVehiculoStoragePath'
   | 'duracionServicioMinutos',
   string
 >>
@@ -57,7 +54,7 @@ export function parseEmails(value: string): string[] {
   return normalizeEmails(value.split(/[\n,;]/))
 }
 
-export function validateClientInput(input: ClientInput, templateFile: File | null = null): ClientFormErrors {
+export function validateClientInput(input: ClientInput): ClientFormErrors {
   const errors: ClientFormErrors = {}
   if (input.nombre.trim().length < 2) errors.nombre = 'Ingresa el nombre del cliente'
 
@@ -69,8 +66,6 @@ export function validateClientInput(input: ClientInput, templateFile: File | nul
     if (!Number.isSafeInteger(input.vigenciaCertificadoMeses) || Number(input.vigenciaCertificadoMeses) <= 0) {
       errors.vigenciaCertificadoMeses = 'La vigencia debe ser mayor que cero'
     }
-    const templateError = validateCertificateTemplateFile(templateFile)
-    if (templateError) errors.plantillaCertificadoStoragePath = templateError
   } else {
     if (!normalizePhone(input.residenciaCelular ?? '')) errors.residenciaCelular = 'Ingresa un celular válido'
     if (!input.residenciaDireccion?.trim()) errors.residenciaDireccion = 'La dirección es obligatoria'
@@ -78,7 +73,7 @@ export function validateClientInput(input: ClientInput, templateFile: File | nul
   return errors
 }
 
-export function validateSiteInput(input: SiteInput, vehicleTemplateFile: File | null = null): SiteFormErrors {
+export function validateSiteInput(input: SiteInput): SiteFormErrors {
   const errors: SiteFormErrors = {}
   if (!input.nombre.trim()) errors.nombre = 'El nombre de la Sede es obligatorio'
   if (!input.direccion.trim()) errors.direccion = 'La dirección es obligatoria'
@@ -96,8 +91,6 @@ export function validateSiteInput(input: SiteInput, vehicleTemplateFile: File | 
     if (!Number.isSafeInteger(input.vigenciaCertificadoVehiculoMeses) || Number(input.vigenciaCertificadoVehiculoMeses) <= 0) {
       errors.vigenciaCertificadoVehiculoMeses = 'La vigencia debe ser mayor que cero'
     }
-    const templateError = validateCertificateTemplateFile(vehicleTemplateFile)
-    if (templateError) errors.plantillaCertificadoVehiculoStoragePath = templateError
   }
   return errors
 }
