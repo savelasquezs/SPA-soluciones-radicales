@@ -1,0 +1,57 @@
+name: MIP catalog checks
+on:
+  pull_request:
+    branches: [develop]
+    paths:
+      - 'src/**'
+      - 'functions/**'
+      - 'database/**'
+      - 'e2e/mip-catalogs.spec.ts'
+      - 'scripts/database/test-mip-catalogs.mjs'
+      - 'package*.json'
+      - '.github/workflows/mip-catalogs.yml'
+permissions:
+  contents: read
+concurrency:
+  group: mip-catalogs-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: ci-only-not-a-real-secret
+          POSTGRES_DB: sr_certificates_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+    env:
+      VITE_NEON_AUTH_URL: https://auth.example.test
+      VITE_NEON_DATA_API_URL: https://data.example.test
+      VITE_NEON_FUNCTION_URL: https://api.example.test
+      TEST_DATABASE_URL: postgres://postgres:ci-only-not-a-real-secret@localhost:5432/sr_certificates_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run test:unit:run
+      - run: npm run build
+      - run: npm run db:check
+      - run: node scripts/database/test-certificates.mjs
+      - run: node scripts/database/test-mip-catalogs.mjs
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test e2e/mip-catalogs.spec.ts --project=chromium --reporter=line
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mip-catalogs-qa
+          path: test-results/
+          retention-days: 7
