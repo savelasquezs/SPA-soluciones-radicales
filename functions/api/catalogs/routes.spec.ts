@@ -2,8 +2,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Hono } from 'hono'
 import type { Identity } from '../auth'
+import type * as Repository from './repository'
 
-const mocks = vi.hoisted(() => ({ requireAdmin: vi.fn(), listCatalog: vi.fn(), getCatalogRecord: vi.fn(), saveProduct: vi.fn(), saveItem: vi.fn(), auditCatalog: vi.fn(), setCatalogActive: vi.fn(), removeCatalogRecord: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  requireAdmin: vi.fn<(...args: unknown[]) => Promise<{ id: string }>>(),
+  listCatalog: vi.fn<typeof Repository.listCatalog>(),
+  getCatalogRecord: vi.fn<typeof Repository.getCatalogRecord>(),
+  saveProduct: vi.fn<typeof Repository.saveProduct>(),
+  saveItem: vi.fn<typeof Repository.saveItem>(),
+  auditCatalog: vi.fn<typeof Repository.auditCatalog>(),
+  setCatalogActive: vi.fn<typeof Repository.setCatalogActive>(),
+  removeCatalogRecord: vi.fn<typeof Repository.removeCatalogRecord>(),
+}))
 vi.mock('../db', () => ({ transaction: async (fn: (client: object) => Promise<unknown>) => fn({}) }))
 vi.mock('../auth', () => ({
   ApiError: class extends Error { constructor(public status: number, message: string, public code?: string, public details?: Record<string, unknown>) { super(message) } },
@@ -21,7 +31,12 @@ app.route('/api/mip', mipCatalogRoutes)
 const id = '10000000-0000-4000-8000-000000000001'
 const request = (path: string, value: unknown, method = 'POST') => app.request(`/api/mip/${path}`, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value) })
 
-beforeEach(() => { vi.clearAllMocks(); mocks.requireAdmin.mockResolvedValue({ id }); mocks.listCatalog.mockResolvedValue([]); mocks.saveItem.mockResolvedValue({ id, nombre: 'Trampa', clasificacion: 'RASTREROS', activo: true, version: 1 }) })
+beforeEach(() => {
+  vi.resetAllMocks()
+  mocks.requireAdmin.mockResolvedValue({ id })
+  mocks.listCatalog.mockResolvedValue([])
+  mocks.saveItem.mockResolvedValue({ id, clave: 'TRAMPA', nombre: 'Trampa', clasificacion: 'RASTREROS', activo: true, version: 1 })
+})
 
 describe('API administrativa de catálogos', () => {
   it('rechaza técnico en lectura y escritura', async () => {
@@ -48,7 +63,8 @@ describe('API administrativa de catálogos', () => {
     expect((await request(`traps/${id}`, {}, 'DELETE')).status).toBe(422)
     mocks.saveItem.mockRejectedValue(new ApiError(409, 'Otro usuario modificó el registro.', 'VERSION_CONFLICT'))
     const response = await request(`traps/${id}`, { nombre: 'Trampa', clasificacion: 'RASTREROS', version: 1 }, 'PATCH')
-    expect(response.status).toBe(409); expect(await response.json()).toMatchObject({ code: 'VERSION_CONFLICT' })
+    expect(response.status).toBe(409)
+    expect(await response.json()).toMatchObject({ code: 'VERSION_CONFLICT' })
   })
   it('no filtra nombres SQL ni constraints en errores', async () => {
     mocks.saveItem.mockRejectedValue(Object.assign(new Error('secret SQL constraint'), { code: '23505' }))

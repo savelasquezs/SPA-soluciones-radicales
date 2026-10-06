@@ -5,7 +5,9 @@ import { assertMasterStoragePath, createMasterUploadUrl, MASTER_FILE_KINDS } fro
 afterEach(() => vi.unstubAllEnvs())
 describe('fichas técnicas reutilizan archivos maestros', () => {
   it('admite ficha PDF privada y no credenciales en la respuesta', () => {
-    vi.stubEnv('R2_ACCOUNT_ID', 'test-account'); vi.stubEnv('R2_ACCESS_KEY_ID', 'test-key'); vi.stubEnv('R2_SECRET_ACCESS_KEY', 'test-secret')
+    vi.stubEnv('R2_ACCOUNT_ID', 'test-account')
+    vi.stubEnv('R2_ACCESS_KEY_ID', 'test-key')
+    vi.stubEnv('R2_SECRET_ACCESS_KEY', 'test-secret')
     expect(MASTER_FILE_KINDS).toContain('PRODUCT_TECHNICAL_SHEET')
     const result = createMasterUploadUrl({ kind: 'PRODUCT_TECHNICAL_SHEET', fileName: 'ficha.pdf', contentType: 'application/pdf', size: 100 })
     expect(result.storagePath).toMatch(/^products\/technical-sheets\/.+\.pdf$/)
@@ -14,9 +16,9 @@ describe('fichas técnicas reutilizan archivos maestros', () => {
     expect(() => assertMasterStoragePath(result.storagePath)).not.toThrow()
   })
   it('rechaza ejecutables, MIME incorrecto, tamaño excedido y traversal', () => {
-    expect(() => createMasterUploadUrl({ kind: 'PRODUCT_TECHNICAL_SHEET', fileName: 'file.exe', contentType: 'application/octet-stream', size: 1 })).toThrow()
-    expect(() => createMasterUploadUrl({ kind: 'PRODUCT_TECHNICAL_SHEET', fileName: 'file.pdf', contentType: 'image/png', size: 1 })).toThrow()
-    expect(() => createMasterUploadUrl({ kind: 'PRODUCT_TECHNICAL_SHEET', fileName: 'file.pdf', contentType: 'application/pdf', size: 11 * 1024 * 1024 })).toThrow()
-    expect(() => assertMasterStoragePath('products/technical-sheets/../secret.pdf')).toThrow()
+    expect(() => createMasterUploadUrl({ kind: 'PRODUCT_TECHNICAL_SHEET', fileName: 'file.exe', contentType: 'application/octet-stream', size: 1 })).toThrow('El tipo de archivo no está permitido para este documento')
+    expect(() => createMasterUploadUrl({ kind: 'PRODUCT_TECHNICAL_SHEET', fileName: 'file.pdf', contentType: 'image/png', size: 1 })).toThrow('El tipo MIME no corresponde a la extensión del archivo')
+    expect(() => createMasterUploadUrl({ kind: 'PRODUCT_TECHNICAL_SHEET', fileName: 'file.pdf', contentType: 'application/pdf', size: 11 * 1024 * 1024 })).toThrow('La ficha técnica no puede superar 10 MB')
+    expect(() => assertMasterStoragePath('products/technical-sheets/../secret.pdf')).toThrow('La ruta del archivo privado no es válida')
   })
 })
