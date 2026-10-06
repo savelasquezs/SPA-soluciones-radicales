@@ -9,11 +9,13 @@ const clientId = requiredEnvironment('GOOGLE_CLIENT_ID')
 const clientSecret = requiredEnvironment('GOOGLE_CLIENT_SECRET')
 const redirectUri = requiredEnvironment('GOOGLE_OAUTH_REDIRECT_URI')
 const integrationEmail = 'solucionesradicales1@gmail.com'
+export const GOOGLE_DRIVE_FILE_SCOPE = 'https://www.googleapis.com/auth/drive.file'
 const scopes = [
   'openid',
   'email',
   'https://www.googleapis.com/auth/gmail.send',
   'https://www.googleapis.com/auth/calendar.events',
+  GOOGLE_DRIVE_FILE_SCOPE,
 ]
 
 const encryptionKey = createHash('sha256')
@@ -99,6 +101,110 @@ async function getAccessToken(): Promise<string> {
   )
 
   return token.access_token
+}
+
+async function enqueueGoogleDriveCleanup(fileId: string): Promise<void> {
+  await pool.query(
+    `insert into private.integration_jobs (job_type, idempotency_key, payload, run_after)
+     values ('STORAGE_CLEANUP', $1, $2::jsonb, now() + interval '5 minutes')
+     on conflict (job_type, idempotency_key) do nothing`,
+    [`google-drive-temp:${fileId}`, JSON.stringify({ scope: 'GOOGLE_DRIVE_TEMP', fileId })],
+  )
+}
+
+export async function deleteGoogleDriveTemporaryFile(fileId: string, accessToken?: string): Promise<void> {
+  if (!fileId || fileId.length > 256) throw new ApiError(422, 'Identificador temporal de Google Drive no válido')
+  const token = accessToken ?? await getAccessToken()
+  const cleanup = await googleFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(20_000),
+  })
+  if (!cleanup.ok && cleanup.status !== 404) {
+    throw new ApiError(502, 'No fue posible eliminar el archivo temporal de Google Drive')
+  }
+}
+
+async function readGoogleFile(response: Response, maxBytes: number): Promise<Buffer> {
+  if (Number(response.headers.get('content-length')) > maxBytes) {
+    await response.body?.cancel()
+    throw new ApiError(422, 'El documento supera el tamaño permitido')
+  }
+  const reader = response.body?.getReader()
+  if (!reader) throw new ApiError(502, 'Google Drive devolvió un documento vacío')
+  const chunks: Uint8Array[] = []
+  let length = 0
+  try {
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      length += value.length
+      if (length > maxBytes) {
+        await reader.cancel()
+        throw new ApiError(422, 'El documento supera el tamaño permitido')
+      }
+      chunks.push(value)
+    }
+  } finally { reader.releaseLock() }
+  if (!length) throw new ApiError(502, 'Google Drive devolvió un documento vacío')
+  return Buffer.concat(chunks)
+}
+
+export async function convertDocxToPdfWithGoogleDrive(docx: Uint8Array, maxBytes: number): Promise<Buffer> {
+  const accessToken = await getAccessToken()
+  const boundary = `sr-${randomBytes(18).toString('hex')}`
+  const metadata = JSON.stringify({
+    name: `certificado-temporal-${randomBytes(12).toString('hex')}.docx`,
+    mimeType: 'application/vnd.google-apps.document',
+  })
+  const body = Buffer.concat([
+    Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n`),
+    Buffer.from(`--${boundary}\r\nContent-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document\r\n\r\n`),
+    Buffer.from(docx),
+    Buffer.from(`\r\n--${boundary}--\r\n`),
+  ])
+  let fileId: string | null = null
+  let result: Buffer | null = null
+  let failure: unknown = null
+
+  try {
+    const upload = await googleFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': `multipart/related; boundary=${boundary}` },
+      body,
+      signal: AbortSignal.timeout(60_000),
+    })
+    const uploaded = (await upload.json()) as { id?: string; error?: { message?: string } }
+    if (!upload.ok || !uploaded.id) throw new ApiError(502, uploaded.error?.message ?? 'Google Drive no pudo importar el Word')
+    fileId = uploaded.id
+
+    const exported = await googleFetch(
+      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}/export?mimeType=application%2Fpdf`,
+      { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(60_000) },
+    )
+    if (!exported.ok || !exported.headers.get('content-type')?.toLowerCase().includes('application/pdf')) {
+      await exported.body?.cancel()
+      throw new ApiError(502, 'Google Drive no pudo exportar el certificado como PDF')
+    }
+    result = await readGoogleFile(exported, maxBytes)
+  } catch (error) {
+    failure = error
+  }
+
+  if (fileId) {
+    try {
+      await deleteGoogleDriveTemporaryFile(fileId, accessToken)
+    } catch {
+      await enqueueGoogleDriveCleanup(fileId).catch(() => undefined)
+      if (!failure) failure = new ApiError(502, 'El PDF fue creado, pero no fue posible eliminar el archivo temporal de Google Drive')
+    }
+  }
+
+  if (failure) {
+    if (failure instanceof ApiError) throw failure
+    throw new ApiError(502, 'No fue posible convertir el Word a PDF mediante Google Drive')
+  }
+  return result!
 }
 
 export async function createGoogleAuthorization(
@@ -280,7 +386,7 @@ export async function upsertCalendarEvent(input: {
 
 async function googleFetch(input: string, init: RequestInit): Promise<Response> {
   try {
-    return await fetch(input, { ...init, signal: AbortSignal.timeout(20_000) })
+    return await fetch(input, { ...init, signal: init.signal ?? AbortSignal.timeout(20_000) })
   } catch {
     throw new ApiError(502, 'No fue posible comunicarse con Google')
   }

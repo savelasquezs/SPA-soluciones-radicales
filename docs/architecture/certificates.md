@@ -12,7 +12,7 @@
   no crea tablas, roles, datos ni amplía permisos. Mantiene la restricción antigua de Negocios
   como NOT VALID para no invalidar las filas legacy toleradas por la migración 006.
 
-## Runtime privado
+## Conversión DOCX a PDF
 
 Antes de usar PDF real en el entorno autorizado, configurar en Neon Functions (jamás en Vite):
 
@@ -22,36 +22,23 @@ R2_ACCESS_KEY_ID=<existente>
 R2_SECRET_ACCESS_KEY=<existente>
 R2_BUCKET_MASTER_FILES=sr-master-files
 R2_BUCKET_GENERATED_DOCUMENTS=sr-generated-documents
-CERTIFICATE_CONVERTER_URL=https://conversor-privado.example/
-CERTIFICATE_CONVERTER_TOKEN=<secreto>
 ```
 
-`neon.ts` pasa las nuevas variables al runtime. Vacías, la aplicación informa que el conversor
-no está configurado; todavía permite guardar/validar Word. `converterReady` comprueba configuración,
-**no** realiza un health check ni asegura que el proveedor esté disponible.
+La integración empresarial de Google solicita además `drive.file`. El backend genera el DOCX final
+con Docxtemplater, lo importa temporalmente como Google Docs, lo exporta inmediatamente a PDF y
+elimina el archivo temporal antes de aceptar el resultado. El permiso no permite explorar ni editar
+archivos de Drive ajenos a los creados o abiertos por la aplicación. No existe otro cliente OAuth ni
+otro sistema de credenciales.
 
-El adaptador hace POST multipart a `<base>/forms/libreoffice/convert`, con `files=certificado.docx`,
-`Authorization: Bearer <token>`, timeout de 60 s y sin seguir redirecciones. El servicio privado debe
-implementar este contrato, por ejemplo Gotenberg detrás de una puerta de acceso que valide ese
-Bearer. No basta con exponer una instancia estándar sin configurar su autenticación. El host se
-configura exclusivamente en backend, nunca viene en solicitudes del navegador. Se exige HTTPS;
-solo se permite loopback HTTP en modo no productivo para pruebas.
-
-No se incluye ni se despliega infraestructura del conversor en este PR. Elegir un runtime compatible,
-actualizado, aislado, con límites de CPU/memoria, sin salida a redes internas ni recursos externos,
-y las fuentes necesarias para los Word del cliente. La validación del DOCX reduce superficie de
-ataque, pero no sustituye el aislamiento y actualizaciones del conversor. No usar servicios públicos
-anónimos de conversión. LibreOffice conserva el diseño a partir del DOCX, pero no garantiza igualdad
-píxel a píxel con Microsoft Word: revisar visualmente fuentes, encabezados, imágenes y saltos.
-
-Parámetros nativos: compresión de imagen con calidad 85, resolución máxima 150 dpi, sin formularios
-PDF interactivos ni actualización de índices; después se optimizan object streams mediante pdf-lib.
-En un certificado real se conserva la versión más pequeña entre salida del conversor y optimizada.
-No se rasteriza todo el documento. Un PDF generado admite 1–30 páginas y hasta 15 MiB. Los lectores
-remotos están limitados incluso sin Content-Length. El navegador no carga el motor Word/PDF.
+`converterReady` exige que el refresh token almacenado incluya `drive.file`; una integración anterior
+debe volver a autorizarse. La conversión usa timeouts de 60 s, limita el PDF a 15 MiB y rechaza salidas
+que no sean PDF, documentos vacíos y certificados fuera del rango de 1–30 páginas. Si la limpieza
+inmediata del Google Doc temporal falla, el PDF no se persiste en R2 y el identificador se conserva
+en `private.integration_jobs` como `STORAGE_CLEANUP` para reintento posterior. Después se optimizan
+object streams con pdf-lib y se conserva la salida más pequeña cuando no es una vista previa.
 
 Referencias del contrato: [Docxtemplater API](https://docxtemplater.com/docs/api/) y
-[Gotenberg LibreOffice](https://gotenberg.dev/docs/convert-with-libreoffice/convert-to-pdf).
+[Google Drive import/export](https://developers.google.com/drive/api/guides/manage-uploads#import_to_google_docs_types).
 
 ## Persistencia, concurrencia y archivos
 
@@ -83,12 +70,12 @@ No aplicar una limpieza general de maestros que deje certificados/auditoría sin
 ## Comprobación antes de habilitar
 
 1. Aplicar la migración a la rama Neon autorizada con el flujo normal y comprobar diff.
-2. Configurar R2 privado y el conversor autenticado; desplegar Functions y frontend de desarrollo.
+2. Configurar R2 privado y volver a autorizar la integración Google con `drive.file`; desplegar Functions y frontend de desarrollo.
 3. Subir ambos DOCX preparados, probar PDF con datos ficticios y revisar las fuentes/diseño.
 4. Generar un certificado de establecimiento y uno de un vehículo efectivamente atendido; descargar.
 5. Con autorización explícita de prueba, enviar solo a destinatarios acordados y comprobar Gmail.
 6. Confirmar reemplazo, concurrencia, permisos de Técnico/Administrador y retención/mantenimiento.
 
-Las pruebas automatizadas simulan Auth/R2/Gmail/conversor y no envían mensajes. La prueba SQL de CI
+Las pruebas automatizadas simulan Auth/R2/Gmail/Drive y no envían mensajes. La prueba SQL de CI
 usa PostgreSQL efímero y funciones de identidad de prueba, no constituye validación contra Neon Auth
-real. La prueba local visual de documentos, cuando se ejecute, tampoco demuestra el despliegue privado.
+real. La prueba visual debe repetirse cuando cambien las plantillas o el renderizador de Google.

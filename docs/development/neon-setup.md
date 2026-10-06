@@ -183,6 +183,7 @@ R2_ACCOUNT_ID
 R2_ACCESS_KEY_ID
 R2_SECRET_ACCESS_KEY
 R2_BUCKET_MASTER_FILES
+R2_BUCKET_GENERATED_DOCUMENTS
 ```
 
 Neon inyecta además las variables administradas de conexión, Auth y Data API. Sus valores no se copian al repositorio ni a variables públicas de Vite.
@@ -190,7 +191,9 @@ Neon inyecta además las variables administradas de conexión, Auth y Data API. 
 ### Integración empresarial Google
 
 - El OAuth empresarial es independiente del Google OAuth de los usuarios.
-- Los únicos permisos solicitados son `openid`, `email`, `gmail.send` y `calendar.events`.
+- Los únicos permisos solicitados son `openid`, `email`, `gmail.send`, `calendar.events` y `drive.file`.
+- `drive.file` permite importar y eliminar únicamente los documentos creados o abiertos por la aplicación; no concede acceso general a Drive.
+- Al incorporar este scope, la cuenta empresarial debe volver a autorizarse para actualizar el refresh token almacenado.
 - El flujo usa `access_type=offline` y exige que la cuenta autorizada sea `solucionesradicales1@gmail.com`.
 - El refresh token se cifra con AES-256-GCM antes de persistirse en `private.google_integrations`; nunca llega a la SPA ni se registra en logs.
 - Gmail registra cada intento en `private.integration_jobs` y audita el resultado sin guardar el cuerpo del mensaje.

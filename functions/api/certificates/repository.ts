@@ -3,7 +3,8 @@ import type { PoolClient } from 'pg'
 import { ApiError } from '../auth'
 import type { CertificateContext, CertificateData, CertificateDocument, CertificateSettings, CertificateTemplate, CertificateType } from '../../../src/types/certificates'
 import { CERTIFICATE_TYPES } from '../../../src/types/certificates'
-import { isConverterReady } from './generator'
+
+const GOOGLE_DRIVE_FILE_SCOPE = 'https://www.googleapis.com/auth/drive.file'
 
 export function templateKey(type: CertificateType): string { return `CERTIFICADO_PLANTILLA_${type}` }
 export function targetKey(type: CertificateType, vehicleId: string | null): string { return type === 'VEHICULO' ? vehicleId! : 'ESTABLECIMIENTO' }
@@ -13,8 +14,15 @@ export async function loadSettings(client: PoolClient): Promise<CertificateSetti
     `select clave, valor from public.configuracion where categoria = 'SISTEMA' and clave = any($1::text[]) and activo`,
     [CERTIFICATE_TYPES.map(templateKey)],
   )
+  const converter = await client.query<{ ready: boolean }>(
+    `select exists (
+       select 1 from private.google_integrations
+       where singleton and scopes @> array[$1]::text[]
+     ) as ready`,
+    [GOOGLE_DRIVE_FILE_SCOPE],
+  )
   return {
-    converterReady: isConverterReady(),
+    converterReady: converter.rows[0]?.ready ?? false,
     templates: CERTIFICATE_TYPES.map((type): CertificateTemplate => {
       const value = rows.find((row) => row.clave === templateKey(type))?.valor
       return { type, storagePath: value?.storagePath ?? null, revision: value?.revision ?? null, fileName: value?.fileName ?? null }

@@ -34,6 +34,6 @@
 ## Certificados
 
 - [x] Configuración por tipo, catálogo de variables, prueba PDF sintética y operación manual con correo editable.
-- [ ] Aplicar migración de herencia de plantillas en la rama Neon autorizada y validar permisos reales.
-- [ ] Configurar conversor privado, R2 y mantenimiento/retención; validar ambos diseños Word y un envío expresamente autorizado.
+- [x] Aplicar migración de herencia de plantillas en la rama Neon autorizada y validar permisos reales.
+- [ ] Reautorizar Google con `drive.file` en desarrollo, configurar R2 y mantenimiento/retención, y realizar un envío expresamente autorizado. Los dos diseños Word ya fueron validados visualmente con Drive.
 - [ ] Conectar generación automática al finalizar Servicios, únicamente al implementar y aprobar ese flujo. No llamar el motor desde finalización en esta fase.
