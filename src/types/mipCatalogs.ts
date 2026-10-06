@@ -1,5 +1,9 @@
 export const PEST_GROUPS = ['RASTREROS', 'VOLADORES'] as const
 export type PestGroup = typeof PEST_GROUPS[number]
+
+export const PRODUCT_PEST_CATEGORIES = ['INSECTOS_RASTREROS', 'INSECTOS_VOLADORES', 'ROEDORES'] as const
+export type ProductPestCategory = typeof PRODUCT_PEST_CATEGORIES[number]
+
 export type MipCatalogKind = 'products' | 'traps' | 'pests' | 'methods'
 export type MipItemKind = Exclude<MipCatalogKind, 'products'>
 
@@ -7,13 +11,19 @@ export type MipCatalogItem = {
   id: string
   clave: string
   nombre: string
-  /** Null only for methods or an unclassified record predating this module. */
+  /** Monitoring classification. Null only for methods or an unclassified legacy record. */
   clasificacion: PestGroup | null
+  /** Product-control category. Only pests use it; legacy pests may still be null during transition. */
+  categoriaProducto: ProductPestCategory | null
   activo: boolean
   version: number
 }
 
-export type MipItemInput = { nombre: string; clasificacion: PestGroup | null }
+export type MipItemInput = {
+  nombre: string
+  clasificacion: PestGroup | null
+  categoriaProducto: ProductPestCategory | null
+}
 
 export type MipProductInput = {
   nombre: string
@@ -25,7 +35,7 @@ export type MipProductInput = {
   antidoto: string | null
   fichaTecnicaStoragePath: string | null
   metodoIds: string[]
-  categorias: PestGroup[]
+  categorias: ProductPestCategory[]
   plagaIds: string[]
 }
 
