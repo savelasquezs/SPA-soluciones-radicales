@@ -40,8 +40,6 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
-      - name: Dependency audit details
-        run: npm audit --json || true
       - run: npm run lint
       - run: npm run test:unit:run
       - run: npm run build
