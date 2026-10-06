@@ -20,7 +20,7 @@ El comportamiento funcional aprobado del proyecto anterior se conserva. La reimp
 
 - consulta únicamente servicios asignados;
 - inicia y ejecuta servicios dentro de las reglas permitidas;
-- diligencia formularios, productos, dispositivos, hallazgos, evidencias y firmas;
+- diligencia la evaluación MIP por Áreas, productos, dispositivos, hallazgos, evidencias y firmas;
 - trabaja offline cuando la aplicación fue cargada y autenticada previamente;
 - no administra catálogos ni datos globales.
 
@@ -35,11 +35,11 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 | `usuarios` | Identidad autorizada, roles y certificado del Técnico |
 | `negocios` | Cliente tipo Negocio o Casa; conserva identidad, estado y configuración compartida |
 | `sedes` | Lugar de servicio, contacto, precio y configuración operativa |
-| `areas` | Espacios de una Sede utilizados en formularios y monitoreo |
+| `areas` | Espacios de una Sede utilizados en evaluación MIP y monitoreo |
 | `plantillas_areas` | Conjuntos reutilizables de Áreas globales o privadas |
 | `servicios` | Programación, ejecución, pago, firmas, informe y publicación |
-| `formularios` | Definición versionada de secciones y campos |
-| `respuestas_formulario` | Respuestas históricas agrupadas por Servicio, formulario, versión y Área |
+| `criterios_mip` | Catálogo administrable de criterios de inspección aplicables a Áreas |
+| `evaluaciones_mip_area` | Histórico de criterios evaluados por Servicio y Área, independiente del catálogo vivo |
 | `productos` | Catálogo de productos utilizados |
 | `productos_aplicados` | Planeación y aplicación de productos por Servicio |
 | `configuracion` | Métodos, plagas, tipos de dispositivo y parámetros globales |
@@ -72,7 +72,7 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 
 - El concepto visible es Cliente. Un Cliente puede ser Negocio o Casa.
 - Un Cliente Negocio puede tener varias Sedes y su vigencia de certificado de establecimiento aplica a todas ellas.
-- Un Cliente Casa conserva una única Sede residencial interna, invisible en la interfaz, sin Áreas, formularios MIP, certificados ni vehículos.
+- Un Cliente Casa conserva una única Sede residencial interna, invisible en la interfaz, sin Áreas, recorrido MIP completo, certificados ni vehículos.
 - Áreas, Dispositivos y Vehículos pertenecen a una Sede.
 - El nombre de Área es único dentro de su Sede.
 - El número de Dispositivo y la placa de Vehículo son únicos de forma normalizada dentro de su Sede.
@@ -91,22 +91,23 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 - La edición técnica usa un lease exclusivo renovable.
 - El valor del Servicio Principal se deriva de la Sede.
 - El Refuerzo pertenece a un Principal de la misma Sede, es gratuito, existe máximo uno y se programa exactamente 20 días después.
-- El Refuerzo no usa formularios ni genera informe MIP completo.
-- Una Sede residencial no exige formularios MIP ni informe completo.
+- El Refuerzo no ejecuta la evaluación MIP por Áreas ni genera informe MIP completo.
+- Una Sede residencial no exige evaluación MIP por Áreas ni informe completo.
 - Finalizar exige tiempos reales, datos técnicos requeridos y firmas aplicables.
 
-### Formularios
+### Ejecución MIP
 
-- Los formularios son dinámicos y versionados.
-- Solo un borrador es editable.
-- Publicar una versión no altera versiones ni respuestas históricas.
-- Un Servicio Programado usa la configuración vigente de la Sede al iniciar.
-- Al iniciar, el Servicio conserva el snapshot exacto de versiones.
-- Formularios iniciales: FO-PS-02 v03, FO-PS-10 v01 y FO-PS-09 v01.
-- Las respuestas pueden pertenecer a un Área y conservar evidencias.
-- La persistencia agrupa una fila por Servicio + Formulario + Versión + Área; los campos respondidos viven en `respuestas_jsonb`.
-- Cada entrada de `respuestas_jsonb` puede conservar valor, evaluación (`C`, `CP`, `NC`, `NA`), observación y referencias de evidencias.
-- No se crea una fila PostgreSQL por cada campo respondido.
+- No existe un constructor ni un CRUD de formularios dinámicos para la operación MIP.
+- La interfaz del Técnico tiene una estructura funcional fija y se compone con los datos del dominio: Servicio, Sede, Áreas, criterios, productos, dispositivos, plagas, hallazgos, evidencias y firmas.
+- FO-PS-02 v03, FO-PS-10 y FO-PS-09 se conservan como referencias funcionales de los datos y del informe, no como plantillas editables almacenadas en un motor de formularios.
+- Los criterios de inspección son un catálogo administrable. Cada criterio conserva identidad estable, nombre, orden, estado y si aplica únicamente a Áreas externas/perimetrales.
+- Los estados de evaluación `C`, `CP`, `NC` y `NA` son reglas fijas del sistema, no registros administrables.
+- Un Área externa recibe los criterios generales más los criterios exclusivos de Áreas externas.
+- Un Servicio Programado toma la configuración vigente al iniciar. Desde ese momento conserva snapshots suficientes para que cambios posteriores en catálogos no reinterpreten el histórico.
+- La evaluación histórica debe conservar, como mínimo, la identidad del criterio, nombre y orden observados al iniciar, evaluación, observación y referencias de evidencia cuando apliquen.
+- El Técnico puede recorrer las Áreas en cualquier orden y volver a una anterior sin perder el borrador.
+- Los dispositivos son entidades permanentes de Sede/Área; cada Servicio crea revisiones históricas y puede registrar nuevos dispositivos para visitas futuras.
+- El flujo detallado y las reglas de composición están en [service-execution.md](service-execution.md).
 
 ### Productos
 
@@ -179,6 +180,7 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 - Migración automática de datos reales desde Spreadsheets.
 - Dependencia de Docker o de una instancia PostgreSQL local como requisito de desarrollo.
 - Acceso directo de la SPA a secretos de Google o privilegios de servicio.
+- Constructor genérico, versionado administrativo o CRUD de formularios MIP.
 
 ## Cambios funcionales
 
