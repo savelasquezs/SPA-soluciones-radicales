@@ -13,7 +13,12 @@ set categoria_producto = case
   when upper(clave) in ('POLILLA', 'MOSCA_DOMESTICA', 'MOSCA_FRUTA', 'MOSCA_DE_FRUTA', 'ZANCUDO', 'CUCARRONES', 'OTROS_VOLADORES') then 'INSECTOS_VOLADORES'
 end
 where categoria = 'PLAGA'
-  and categoria_producto is null;
+  and categoria_producto is null
+  and upper(clave) in (
+    'CUCARACHA', 'HORMIGA', 'OTROS_RASTREROS', 'ROEDOR',
+    'POLILLA', 'MOSCA_DOMESTICA', 'MOSCA_FRUTA', 'MOSCA_DE_FRUTA',
+    'ZANCUDO', 'CUCARRONES', 'OTROS_VOLADORES'
+  );
 
 alter table public.configuracion
   add constraint configuracion_plaga_categoria_producto_check
