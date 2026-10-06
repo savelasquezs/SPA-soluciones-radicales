@@ -3,13 +3,13 @@ import { describe, expect, it } from 'vitest'
 import { formatPhone, normalizePhone, validateClientInput, validateSiteInput } from '@/helpers/clients'
 import type { ClientInput, SiteInput } from '@/types/domain'
 
-const business = (): ClientInput => ({ tipoCliente: 'NEGOCIO', nombre: 'Acme SAS', nit: '900123456', correos: [], activo: true, vigenciaCertificadoMeses: 12, plantillaCertificadoStoragePath: 'templates/acme.docx', residenciaDireccion: null, residenciaCelular: null })
-const residence = (): ClientInput => ({ tipoCliente: 'RESIDENCIAL', nombre: 'María Gómez', nit: null, correos: [], activo: true, vigenciaCertificadoMeses: null, plantillaCertificadoStoragePath: null, residenciaDireccion: 'Calle 1 # 2-3', residenciaCelular: '300 123 4567' })
-const site = (): SiteInput => ({ nombre: 'Principal', direccion: 'Calle 10', correos: [], heredaCorreosCliente: true, contactoPrincipalNombre: 'Ana', contactoPrincipalCorreo: null, contactoPrincipalCelular: '3001234567', valorServicio: 150000, periodicidadMeses: 1, manejaRefuerzo: false, formulariosAplicablesIds: [], planoStoragePath: null, manejaVehiculos: false, generaCertificadoVehiculo: false, vigenciaCertificadoVehiculoMeses: null, plantillaCertificadoVehiculoStoragePath: null, duracionServicioMinutos: 120, activo: true })
+const business = (): ClientInput => ({ tipoCliente: 'NEGOCIO', nombre: 'Acme SAS', nit: '900123456', correos: [], activo: true, vigenciaCertificadoMeses: 12, residenciaDireccion: null, residenciaCelular: null })
+const residence = (): ClientInput => ({ tipoCliente: 'RESIDENCIAL', nombre: 'María Gómez', nit: null, correos: [], activo: true, vigenciaCertificadoMeses: null, residenciaDireccion: 'Calle 1 # 2-3', residenciaCelular: '300 123 4567' })
+const site = (): SiteInput => ({ nombre: 'Principal', direccion: 'Calle 10', correos: [], heredaCorreosCliente: true, contactoPrincipalNombre: 'Ana', contactoPrincipalCorreo: null, contactoPrincipalCelular: '3001234567', valorServicio: 150000, periodicidadMeses: 1, manejaRefuerzo: false, formulariosAplicablesIds: [], planoStoragePath: null, manejaVehiculos: false, generaCertificadoVehiculo: false, vigenciaCertificadoVehiculoMeses: null, duracionServicioMinutos: 120, activo: true })
 
 describe('clientes helpers', () => {
-  it('exige nombre y NIT y permite heredar la plantilla general', () => {
-    expect(validateClientInput({ ...business(), nombre: '', nit: '', plantillaCertificadoStoragePath: null })).toMatchObject({ nombre: expect.any(String), nit: expect.any(String) })
+  it('exige nombre, NIT y vigencia para Negocio', () => {
+    expect(validateClientInput({ ...business(), nombre: '', nit: '', vigenciaCertificadoMeses: 0 })).toMatchObject({ nombre: expect.any(String), nit: expect.any(String), vigenciaCertificadoMeses: expect.any(String) })
   })
 
   it('exige únicamente nombre, celular y dirección para Casa', () => {
