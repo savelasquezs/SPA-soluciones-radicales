@@ -39,7 +39,10 @@ docs/
 ├── frontend/
 │   └── reuse.md
 └── product/
-    └── README.md
+    ├── README.md
+    ├── certificates.md
+    ├── mip-catalogs.md
+    └── service-execution.md
 ```
 
 ## Gobierno de cambios
