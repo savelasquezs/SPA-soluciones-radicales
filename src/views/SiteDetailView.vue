@@ -123,7 +123,7 @@ async function saveSite(): Promise<void> {
     const saved = await store.updateSite(current.id, input)
     siteFormOpen.value = false
     sitePlanFile.value = null
-      if (current.planoStoragePath && current.planoStoragePath !== saved.planoStoragePath) {
+    if (current.planoStoragePath && current.planoStoragePath !== saved.planoStoragePath) {
       void deleteMasterFile(current.planoStoragePath).catch(() =>
         notifications.show('La Sede se guardó, pero no fue posible limpiar el plano anterior.', 'warning'))
     }
