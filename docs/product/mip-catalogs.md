@@ -1,10 +1,10 @@
 # Configuración → Catálogos MIP
 
-Decisiones aprobadas con Santiago el 6 de octubre de 2026. Este documento especifica el cambio funcional de Productos/Trampas/Plagas y prevalece sobre las descripciones anteriores del catálogo genérico. No cambia Servicios ni ejecuta el módulo de monitoreo.
+Decisiones aprobadas con Santiago el 6 de octubre de 2026. Este documento especifica el modelo funcional de Productos, Trampas, Plagas y Criterios MIP y prevalece sobre las descripciones anteriores del catálogo genérico. La incorporación documental de Criterios no implementa todavía la ejecución del Servicio.
 
 ## Alcance
 
-- Configuración es la entrada. Productos, Trampas y Plagas son secciones hermanas; Métodos de aplicación es administración auxiliar de Productos.
+- Configuración es la entrada. Productos, Trampas, Plagas y Criterios son secciones hermanas; Métodos de aplicación es administración auxiliar de Productos.
 - La portada de Configuración usa filas compactas agrupadas. Certificados e Integraciones conservan sus rutas reales. No se crean pantallas ficticias de Parámetros.
 - `/catalogos` redirige a `/configuracion/catalogos`; no aparece como entrada principal del sidebar.
 - Solo el rol activo Administrador administra los catálogos. No basta con tener el rol asignado si se está operando como Técnico.
@@ -30,6 +30,34 @@ Cada Plaga tiene dos dimensiones distintas:
 La combinación válida es intencionalmente restringida: una plaga VOLADORES pertenece a INSECTOS_VOLADORES; una plaga RASTREROS pertenece a INSECTOS_RASTREROS o ROEDORES. Por ejemplo, Cucaracha = RASTREROS + INSECTOS_RASTREROS; Roedor = RASTREROS + ROEDORES; Mosca doméstica = VOLADORES + INSECTOS_VOLADORES. La trampa adhesiva puede seguir aplicando al grupo completo RASTREROS, incluido Roedor, porque esa relación pertenece al monitoreo y no a la cobertura química.
 
 Otros rastreros y Otros voladores siguen siendo registros diferentes, no una tercera clasificación de monitoreo. Las claves internas son estables y no se editan. Desactivar impide nuevas selecciones, pero permite conservar referencias existentes al editar un producto. El servidor rechaza asignaciones nuevas a opciones inactivas. Una plaga con relaciones o historia no cambia de identidad semántica ni se elimina; puede desactivarse.
+
+## Criterios MIP
+
+Los criterios definen qué evalúa el Técnico dentro de cada Área durante un Servicio Principal. No son campos de un formulario genérico.
+
+Cada criterio conserva:
+
+- clave interna estable;
+- nombre visible;
+- orden;
+- estado activo/inactivo;
+- indicador de si aplica únicamente a Áreas externas/perimetrales.
+
+Los criterios generales aplican a cualquier Área. Los criterios marcados como exclusivos de exterior se agregan únicamente cuando `Area.es_externa = true`. La V1 no introduce un catálogo adicional de tipos de Área.
+
+Los estados `C` (Cumple), `CP` (Cumple parcialmente), `NC` (No cumple) y `NA` (No aplica) son valores fijos del sistema y no se administran desde Catálogos. El cálculo también permanece fijo: `CP` equivale a la mitad de `C`, `NC` vale cero y `NA` se excluye del denominador.
+
+Los criterios iniciales derivados de FO-PS-02 son:
+
+- Instalación de barreras físicas.
+- Disposición adecuada de residuos sólidos y líquidos.
+- Mantenimiento higiénico.
+- Mantenimiento locativo interno y externo.
+- Mantenimiento de zonas verdes, exclusivo de Áreas externas/perimetrales.
+
+Desactivar o renombrar un criterio solo afecta Servicios que todavía no hayan iniciado. Al iniciar un Servicio se conserva un snapshot suficiente de los criterios aplicables para que el histórico y los informes no cambien al modificar posteriormente el catálogo.
+
+La implementación de este catálogo requiere una migración nueva; no se reutiliza el antiguo motor de `formularios` como almacenamiento de criterios.
 
 ## Persistencia e historial
 
@@ -57,7 +85,7 @@ Antes de activar este ajuste en Neon, confirmar la rama autorizada y aplicar `20
 
 ## Fuera de esta entrega
 
-Puestos permanentes por Sede/Área, composición con trampas/productos, revisiones, campos dinámicos por categoría, snapshots de Servicios y operación técnica. No modificar respuestas históricas al editar el catálogo. La futura revisión conserva las plagas aplicables al iniciar el Servicio; no se reinterpretará contra el catálogo vivo.
+La edición documental de Criterios no modifica todavía esquema, API ni interfaz. Quedan para la implementación del primer Servicio: catálogo persistente de criterios, snapshots de evaluación por Área, puestos permanentes por Sede/Área, composición con trampas/productos, revisiones y operación técnica. La futura revisión conserva las plagas y criterios aplicables al iniciar el Servicio; no se reinterpretan contra catálogos vivos.
 
 ## Referencia visual y pruebas
 
