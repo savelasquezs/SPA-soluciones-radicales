@@ -5,21 +5,21 @@ import { canonicalCoverage, productToInput, validateProductInput } from '../../.
 import type { MipCatalogItem, MipCatalogKind, MipItemInput, MipItemKind, MipProduct, MipProductInput, MipRecord } from '../../../src/types/mipCatalogs'
 import { ApiError } from '../auth'
 
-const ITEM_FIELDS = `id, clave, nombre, clasificacion_mip as clasificacion, activo, version::integer`
-const TRAP_FIELDS = `id, clave, nombre, clasificacion, activo, version::integer`
+const ITEM_FIELDS = `id, clave, nombre, clasificacion_mip as clasificacion, categoria_producto as "categoriaProducto", activo, version::integer`
+const TRAP_FIELDS = `id, clave, nombre, clasificacion, null::text as "categoriaProducto", activo, version::integer`
 const CATEGORY: Record<Exclude<MipItemKind, 'traps'>, string> = { methods: 'METODO_APLICACION', pests: 'PLAGA' }
 const PRODUCT_SELECT = `select p.id, p.nombre, p.principio_activo_composicion as "principioActivo",
   p.dosis_aplicacion as "dosisAplicacion", p.registro_sanitario as "registroSanitario",
   p.grado_toxicologico as "gradoToxicologico", p.fabricante, p.antidoto,
   p.ficha_tecnica_storage_path as "fichaTecnicaStoragePath", p.activo, p.version::integer,
   coalesce((select jsonb_agg(jsonb_build_object('id', c.id, 'clave', c.clave, 'nombre', c.nombre,
-    'clasificacion', c.clasificacion_mip, 'activo', c.activo, 'version', c.version) order by c.orden nulls last, c.nombre)
+    'clasificacion', c.clasificacion_mip, 'categoriaProducto', c.categoria_producto, 'activo', c.activo, 'version', c.version) order by c.orden nulls last, c.nombre)
     from public.producto_metodos pm join public.configuracion c on c.id = pm.metodo_id
     where pm.producto_id = p.id), '[]'::jsonb) as metodos,
-  coalesce((select jsonb_agg(pc.clasificacion order by pc.clasificacion)
+  coalesce((select jsonb_agg(pc.categoria_producto order by pc.categoria_producto)
     from public.producto_categorias_plaga pc where pc.producto_id = p.id), '[]'::jsonb) as categorias,
   coalesce((select jsonb_agg(jsonb_build_object('id', c.id, 'clave', c.clave, 'nombre', c.nombre,
-    'clasificacion', c.clasificacion_mip, 'activo', c.activo, 'version', c.version) order by c.orden nulls last, c.nombre)
+    'clasificacion', c.clasificacion_mip, 'categoriaProducto', c.categoria_producto, 'activo', c.activo, 'version', c.version) order by c.orden nulls last, c.nombre)
     from public.producto_plagas pp join public.configuracion c on c.id = pp.plaga_id
     where pp.producto_id = p.id), '[]'::jsonb) as plagas
   from public.productos p`
@@ -74,7 +74,7 @@ async function validateReferences(client: PoolClient, input: MipProductInput, pr
   ] as const) {
     for (const id of selected) {
       const item = byId.get(id)
-      if (!item || item.categoria !== category || (!item.activo && !prior.some(row => row.id === id)) || (category === 'PLAGA' && !item.clasificacion)) {
+      if (!item || item.categoria !== category || (!item.activo && !prior.some(row => row.id === id)) || (category === 'PLAGA' && (!item.clasificacion || !item.categoriaProducto))) {
         throw new ApiError(422, 'Una opción seleccionada no está disponible. Revisa los métodos y las plagas.', 'VALIDATION', { fields: { [category === 'PLAGA' ? 'plagaIds' : 'metodoIds']: 'Selecciona una opción vigente del catálogo.' } })
       }
     }
@@ -101,7 +101,7 @@ export async function saveProduct(client: PoolClient, input: MipProductInput, id
   await client.query('delete from public.producto_categorias_plaga where producto_id = $1', [productId])
   await client.query('insert into public.producto_metodos (producto_id, metodo_id) select $1, unnest($2::uuid[])', [productId, value.metodoIds])
   await client.query('insert into public.producto_plagas (producto_id, plaga_id) select $1, unnest($2::uuid[])', [productId, value.plagaIds])
-  await client.query('insert into public.producto_categorias_plaga (producto_id, clasificacion) select $1, unnest($2::text[])', [productId, value.categorias])
+  await client.query('insert into public.producto_categorias_plaga (producto_id, categoria_producto) select $1, unnest($2::text[])', [productId, value.categorias])
   return getCatalogRecord(client, 'products', productId) as Promise<MipProduct>
 }
 
@@ -112,10 +112,25 @@ export async function saveItem(client: PoolClient, kind: MipItemKind, input: Mip
     if (previous && previous.clasificacion !== input.clasificacion) await assertUnused(client, kind, previous)
     if (id) await client.query('update public.trampas set nombre = $2, clasificacion = $3 where id = $1', [id, input.nombre, input.clasificacion])
     else await client.query('insert into public.trampas (id, clave, nombre, clasificacion) values ($1,$2,$3,$4)', [itemId, `TRAMPA_${itemId.replace(/-/g, '')}`, input.nombre, input.clasificacion])
-  } else {
+  } else if (kind === 'pests') {
     // Stable generated identity; neither the user nor a rename can alter historical keys.
-    if (id) await client.query('update public.configuracion set nombre = $2, clasificacion_mip = $3 where id = $1', [id, input.nombre, input.clasificacion])
-    else await client.query('insert into public.configuracion (id, categoria, clave, nombre, clasificacion_mip) values ($1,$2,$3,$4,$5)', [itemId, CATEGORY[kind], `MIP_${itemId.replace(/-/g, '')}`, input.nombre, input.clasificacion])
+    if (id) {
+      await client.query(
+        'update public.configuracion set nombre = $2, clasificacion_mip = $3, categoria_producto = $4 where id = $1',
+        [id, input.nombre, input.clasificacion, input.categoriaProducto],
+      )
+    } else {
+      await client.query(
+        'insert into public.configuracion (id, categoria, clave, nombre, clasificacion_mip, categoria_producto) values ($1,$2,$3,$4,$5,$6)',
+        [itemId, CATEGORY[kind], `MIP_${itemId.replace(/-/g, '')}`, input.nombre, input.clasificacion, input.categoriaProducto],
+      )
+    }
+  } else {
+    if (id) await client.query('update public.configuracion set nombre = $2 where id = $1', [id, input.nombre])
+    else await client.query(
+      'insert into public.configuracion (id, categoria, clave, nombre) values ($1,$2,$3,$4)',
+      [itemId, CATEGORY[kind], `MIP_${itemId.replace(/-/g, '')}`, input.nombre],
+    )
   }
   return getCatalogRecord(client, kind, itemId) as Promise<MipCatalogItem>
 }
@@ -127,6 +142,7 @@ export async function setCatalogActive(client: PoolClient, kind: MipCatalogKind,
     if (Object.keys(errors).length) throw new ApiError(422, 'Completa los datos del producto antes de activarlo.', 'VALIDATION', { fields: errors })
   }
   if ((kind === 'pests' || kind === 'traps') && !(current as MipCatalogItem).clasificacion) throw new ApiError(422, 'Edita el registro y completa su clasificación antes de cambiar el estado.', 'VALIDATION')
+  if (kind === 'pests' && !(current as MipCatalogItem).categoriaProducto) throw new ApiError(422, 'Edita la plaga y completa su categoría para productos antes de cambiar el estado.', 'VALIDATION')
   const table = kind === 'products' ? 'productos' : kind === 'traps' ? 'trampas' : 'configuracion'
   await client.query(`update public.${table} set activo = $2 where id = $1`, [id, active])
   return getCatalogRecord(client, kind, id)
