@@ -109,10 +109,10 @@ Este archivo registra decisiones permanentes. Las tareas pendientes se mantienen
 
 ## ADR-016 · Respuestas de formularios agrupadas en JSONB
 
-- **Estado:** Aprobada
+- **Estado:** Supersedida por ADR-019
 - **Fecha:** 2026-10-04
-- **Decisión:** Se reemplaza el modelo de una fila por campo de `respuestas_mip` por una fila por Servicio + Formulario + Versión + Área, con las respuestas de campos agrupadas en JSONB.
-- **Consecuencia:** Se reduce drásticamente la cantidad de filas, claves e índices repetidos. `formularios` continúa normalizado y versionado para poder interpretar el histórico.
+- **Decisión original:** Se reemplazaba el modelo de una fila por campo de `respuestas_mip` por una fila por Servicio + Formulario + Versión + Área, con las respuestas de campos agrupadas en JSONB.
+- **Consecuencia histórica:** El baseline conserva temporalmente `formularios` y `respuestas_formulario`, pero ya no representan el modelo objetivo de ejecución MIP.
 
 ## ADR-017 · Migraciones independientes del proveedor
 
@@ -131,3 +131,15 @@ Este archivo registra decisiones permanentes. Las tareas pendientes se mantienen
 - **Implementación inicial:** `wrangler.jsonc` publica `./dist` con `not_found_handling = "single-page-application"` y no declara un script `main`.
 - **Consecuencia:** La SPA permanece estática en esta fase. No se ejecuta código Worker dinámico para servir los assets. Cualquier Worker futuro debe responder a una necesidad concreta y preferir rutas selectivas.
 - **Despliegue:** Cloudflare Builds ejecuta `npm run build` y luego `npx wrangler deploy`; los preview builds permanecen habilitados.
+
+
+## ADR-019 · Ejecución MIP sin motor genérico de formularios
+
+- **Estado:** Aprobada
+- **Fecha:** 2026-10-06
+- **Decisión:** La ejecución técnica no usa un constructor, definición ni versionado administrativo de formularios. La interfaz es estable y se compone directamente desde Servicio, Sede, Áreas, Criterios MIP, Productos, Dispositivos, Plagas, Hallazgos, Evidencias y Firmas.
+- **Criterios:** Los criterios son un catálogo administrable independiente. Conservan identidad estable, nombre, orden, estado y aplicabilidad exclusiva a Áreas externas/perimetrales cuando corresponda. `C/CP/NC/NA` y sus reglas de cálculo son constantes del dominio.
+- **Histórico:** Al iniciar un Servicio se congelan los datos necesarios para interpretar posteriormente la evaluación y las revisiones, sin depender del nombre, orden, estado o composición futura de los catálogos.
+- **Monitoreo:** Los dispositivos permanecen como entidades de Sede/Área y cada Servicio crea revisiones; no se modelan como campos de formulario.
+- **Transición:** Las tablas y columnas actuales relacionadas con `formularios`, `respuestas_formulario`, `formularios_aplicables_json` y `formularios_versiones_json` son estructura transitoria del baseline. No se amplían para nuevas funcionalidades. Su sustitución o eliminación se realizará mediante una migración nueva después de definir la implementación mínima del primer Servicio; las migraciones aplicadas no se modifican.
+- **Referencia:** La composición funcional se especifica en `docs/product/service-execution.md`.
