@@ -35,7 +35,7 @@ npx -y neon@6.2.4 checkout desarrollo
 Para una feature aislada puede usarse, por ejemplo:
 
 ```bash
-npx -y neon@6.2.4 checkout dev-formularios-jsonb
+npx -y neon@6.2.4 checkout dev-ejecucion-mip
 ```
 
 ## 4. Habilitar Managed Better Auth
@@ -132,7 +132,7 @@ database/migrations/20261004_001_initial_schema.sql
 database/migrations/20261004_002_integrity_and_rls.sql
 ```
 
-El modelo debe incluir `respuestas_formulario` agrupada por Servicio + Formulario + Versión + Área con `respuestas_jsonb`; no recuperar el diseño anterior de una fila por campo.
+El baseline histórico incluye `formularios` y `respuestas_formulario`, pero ADR-019 los declara transitorios. No extender ese modelo. La ejecución MIP nueva se definirá mediante Áreas, Criterios, Dispositivos y snapshots históricos en una migración posterior, sin modificar las migraciones ya aplicadas.
 
 Validar:
 
