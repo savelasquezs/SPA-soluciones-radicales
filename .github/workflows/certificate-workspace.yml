@@ -1,0 +1,27 @@
+name: Certificate implementation workspace
+on:
+  push:
+    branches: [feature/certificate-templates]
+    paths: ['.github/workflows/certificate-workspace.yml']
+permissions:
+  contents: read
+jobs:
+  workspace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Package isolated source and dependencies for validation
+        run: tar --exclude=.git -czf /tmp/certificate-workspace.tar.gz .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: certificate-workspace
+          path: /tmp/certificate-workspace.tar.gz
+          retention-days: 1
