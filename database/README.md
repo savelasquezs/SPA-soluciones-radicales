@@ -82,3 +82,7 @@ npm run db:migrate
 ```
 
 El repo debe estar enlazado a Neon mediante `neon link`. Confirmar siempre la rama Neon antes de migrar. Los runners de migración y bootstrap bloquean `production` salvo autorización explícita mediante `ALLOW_NEON_PRODUCTION=true`.
+
+## Herencia de plantillas de certificados
+
+`20261006_007_certificate_template_defaults.sql` permite path personalizado nulo (herencia de configuración general), manteniendo vigencia positiva y exclusión de residencias. No crea tablas. Aplicar solo con el flujo autorizado; los tests de CI contra PostgreSQL efímero no son una migración a Neon.

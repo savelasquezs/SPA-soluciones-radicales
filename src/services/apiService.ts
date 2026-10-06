@@ -8,46 +8,33 @@ export class ApiClientError extends Error {
     public readonly status: number,
     public readonly code?: string,
     public readonly details?: Record<string, unknown>,
-  ) {
-    super(message)
-  }
+  ) { super(message) }
 }
 
-export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
-  if (!functionUrl) {
-    throw new ApiClientError('VITE_NEON_FUNCTION_URL no está configurada', 500)
-  }
-
+async function authorizedResponse(path: string, init: RequestInit): Promise<Response> {
+  if (!functionUrl) throw new ApiClientError('VITE_NEON_FUNCTION_URL no está configurada', 500)
   const token = await getAccessToken()
   const headers = new Headers(init.headers)
   headers.set('Authorization', `Bearer ${token}`)
-  if (init.body && !headers.has('Content-Type')) {
-    headers.set('Content-Type', 'application/json')
-  }
-  const response = await fetch(new URL(path.replace(/^\//, ''), ensureTrailingSlash(functionUrl)), {
-    ...init,
-    headers,
-  })
-  const body = (await response.json().catch(() => null)) as {
-    error?: string
-    code?: string
-    details?: Record<string, unknown>
-  } | T | null
-
+  if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
+  const response = await fetch(new URL(path.replace(/^\//, ''), functionUrl.endsWith('/') ? functionUrl : `${functionUrl}/`), { ...init, headers })
   if (!response.ok) {
-    const message = body && typeof body === 'object' && 'error' in body ? body.error : null
-    const errorBody = body && typeof body === 'object' ? body : null
-    throw new ApiClientError(
-      message ?? `La solicitud falló (${response.status})`,
-      response.status,
-      errorBody && 'code' in errorBody ? errorBody.code : undefined,
-      errorBody && 'details' in errorBody ? errorBody.details : undefined,
-    )
+    const body = await response.json().catch(() => null) as { error?: string; code?: string; details?: Record<string, unknown> } | null
+    throw new ApiClientError(body?.error ?? `La solicitud falló (${response.status})`, response.status, body?.code, body?.details)
   }
-
-  return body as T
+  return response
 }
 
-function ensureTrailingSlash(value: string): string {
-  return value.endsWith('/') ? value : `${value}/`
+export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const response = await authorizedResponse(path, init)
+  return await response.json().catch(() => null) as T
+}
+
+/** Same authorization/error contract as JSON, without buffering a binary document as JSON. */
+export async function apiBlobRequest(path: string, init: RequestInit = {}): Promise<Blob> {
+  const response = await authorizedResponse(path, init)
+  if (!response.headers.get('content-type')?.includes('application/pdf')) {
+    throw new ApiClientError('El servidor no devolvió un PDF válido', 502)
+  }
+  return response.blob()
 }

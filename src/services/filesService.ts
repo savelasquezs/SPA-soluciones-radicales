@@ -22,7 +22,7 @@ export async function uploadMasterFile(
   originalFile: File,
   onPhase?: MasterFileUploadPhaseHandler,
 ): Promise<string> {
-  onPhase?.('compressing')
+  if (/\.(pdf|jpe?g|png|webp)$/i.test(originalFile.name)) onPhase?.('compressing')
   const file = await optimizeFileForStorage(kind, originalFile)
   onPhase?.('uploading')
   const authorization = await apiRequest<UploadAuthorization>('api/files/master/upload-url', {
@@ -61,9 +61,14 @@ export async function getMasterFileUrl(storagePath: string): Promise<string> {
   return response.url
 }
 
+/** Cleanup only: referenced masters/history must never be removed by a form rollback. */
 export async function deleteMasterFile(storagePath: string): Promise<void> {
-  await apiRequest<void>('api/files/master/delete', {
-    method: 'POST',
-    body: JSON.stringify({ storagePath }),
-  })
+  try {
+    await apiRequest<void>('api/files/master/delete', {
+      method: 'POST', body: JSON.stringify({ storagePath }),
+    })
+  } catch (error) {
+    if (error instanceof ApiClientError && error.code === 'FILE_IN_USE') return
+    throw error
+  }
 }

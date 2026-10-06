@@ -1,6 +1,7 @@
 import { createHash, createHmac, randomUUID } from 'node:crypto'
 
 import { ApiError } from './auth'
+import { readBounded, MAX_PDF_BYTES } from './certificates/generator'
 
 export const MASTER_FILE_KINDS = [
   'USER_CERTIFICATE',
@@ -60,7 +61,7 @@ export function createMasterUploadUrl(input: UploadInput): UploadAuthorization {
   if (!Number.isSafeInteger(input.size) || input.size <= 0) {
     throw new ApiError(422, 'El archivo está vacío o su tamaño no es válido')
   }
-  if (input.kind === 'USER_CERTIFICATE' && input.size > USER_CERTIFICATE_MAX_BYTES) {
+  if (input.kind !== 'SITE_PLAN' && input.size > USER_CERTIFICATE_MAX_BYTES) {
     throw new ApiError(422, 'El certificado no puede superar 10 MB')
   }
 
@@ -104,10 +105,10 @@ export function assertMasterStoragePath(storagePath: string): void {
   }
 }
 
-function presign(method: 'GET' | 'PUT' | 'DELETE', storagePath: string, contentType?: string): string {
+function presign(method: 'GET' | 'PUT' | 'DELETE', storagePath: string, contentType?: string, bucket?: string, responseHeaders: Record<string, string> = {}): string {
   const config = r2Config()
   const host = `${config.accountId}.r2.cloudflarestorage.com`
-  const canonicalUri = `/${awsEncode(config.bucket)}/${storagePath.split('/').map(awsEncode).join('/')}`
+  const canonicalUri = `/${awsEncode(bucket ?? config.bucket)}/${storagePath.split('/').map(awsEncode).join('/')}`
   const now = new Date()
   const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '')
   const date = amzDate.slice(0, 8)
@@ -122,6 +123,7 @@ function presign(method: 'GET' | 'PUT' | 'DELETE', storagePath: string, contentT
   const signedHeaders = headerNames.join(';')
 
   const query: Record<string, string> = {
+    ...responseHeaders,
     'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
     'X-Amz-Credential': `${config.accessKeyId}/${scope}`,
     'X-Amz-Date': amzDate,
@@ -203,4 +205,49 @@ function sha256Hex(value: string): string {
 
 function hmac(key: Buffer, value: string): Buffer {
   return createHmac('sha256', key).update(value, 'utf8').digest()
+}
+
+
+function generatedBucket(): string {
+  return process.env.R2_BUCKET_GENERATED_DOCUMENTS?.trim() || 'sr-generated-documents'
+}
+
+function assertGeneratedPath(path: string): void {
+  if (!/^certificates\/[a-f0-9-]+\/[a-f0-9-]+\/[a-f0-9-]+\.pdf$/.test(path)) {
+    throw new ApiError(422, 'La ruta del certificado no es válida')
+  }
+}
+
+export function createCertificateReadUrl(storagePath: string, fileName?: string): string {
+  assertGeneratedPath(storagePath)
+  return presign('GET', storagePath, undefined, generatedBucket(), fileName ? { 'response-content-disposition': `attachment; filename="${safeFileName(fileName)}"` } : {})
+}
+
+export async function readMasterObject(storagePath: string, maxBytes: number): Promise<Buffer> {
+  const response = await fetch(createMasterReadUrl(storagePath), { signal: AbortSignal.timeout(20_000), redirect: 'error' })
+  if (!response.ok) throw new ApiError(502, 'No fue posible leer la plantilla privada')
+  return readBounded(response, maxBytes)
+}
+
+export async function readCertificateObject(storagePath: string): Promise<Buffer> {
+  const response = await fetch(createCertificateReadUrl(storagePath), { signal: AbortSignal.timeout(20_000), redirect: 'error' })
+  if (!response.ok) throw new ApiError(502, 'No fue posible leer el certificado privado')
+  return readBounded(response, MAX_PDF_BYTES)
+}
+
+export async function putCertificateObject(storagePath: string, bytes: Uint8Array): Promise<void> {
+  assertGeneratedPath(storagePath)
+  const response = await fetch(presign('PUT', storagePath, 'application/pdf', generatedBucket()), {
+    method: 'PUT', headers: { 'Content-Type': 'application/pdf' }, body: new Uint8Array(bytes),
+    signal: AbortSignal.timeout(30_000), redirect: 'error',
+  })
+  if (!response.ok) throw new ApiError(502, 'No fue posible guardar el certificado privado')
+}
+
+export async function deleteCertificateObject(storagePath: string): Promise<void> {
+  assertGeneratedPath(storagePath)
+  const response = await fetch(presign('DELETE', storagePath, undefined, generatedBucket()), {
+    method: 'DELETE', signal: AbortSignal.timeout(20_000), redirect: 'error',
+  })
+  if (!response.ok && response.status !== 404) throw new ApiError(502, 'No fue posible limpiar el documento temporal')
 }

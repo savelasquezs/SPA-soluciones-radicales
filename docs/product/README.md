@@ -183,3 +183,7 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 ## Cambios funcionales
 
 Una issue que cambie estas reglas debe actualizar este documento o agregar un documento específico en `docs/product/` dentro del mismo PR. No se modifica una regla únicamente para simplificar el código.
+
+### Operación manual de certificados
+
+El flujo vigente de plantillas, pruebas, generación manual y correo está definido en [certificates.md](certificates.md). La plantilla particular es opcional: hereda la general del tipo. La generación automática al finalizar sigue fuera de alcance.

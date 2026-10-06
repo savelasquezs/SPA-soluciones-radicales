@@ -38,7 +38,7 @@ function clear(): void {
       <button type="button" :disabled="disabled || readonly" @click="input?.click()">
         {{ displayName || label }}
       </button>
-      <BaseIconButton v-if="displayName && !readonly" label="Quitar archivo" size="small" @click="clear"><X :size="18" /></BaseIconButton>
+      <BaseIconButton v-if="displayName && !readonly" label="Quitar archivo" size="small" :disabled="disabled" @click="clear"><X :size="18" /></BaseIconButton>
       <input
         :id="name"
         ref="input"
