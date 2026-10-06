@@ -4,7 +4,7 @@ import { addCalendarMonths, certificateSnapshot, effectiveTemplate, type LoadedC
 import { sampleCertificateData } from './docx'
 function loaded(): LoadedCertificateContext {
   return {
-    source: { id: 'service', version: '1', solicitud: 'SS-123', state: 'FINALIZADO', serviceType: 'PRINCIPAL', siteType: 'NEGOCIO', clientType: 'NEGOCIO', siteId: 'site', clientName: 'Negocio actual', nit: '900', siteName: 'Sede', address: 'Dirección', technicianName: 'Ana', issuedOn: '2024-01-31', businessMonths: 1, vehicleMonths: 2, establishmentTemplate: null, vehicleTemplate: null, vehicleEnabled: true, businessEmails: [], siteEmails: [], contactEmail: null },
+    source: { id: 'service', version: '1', solicitud: 'SS-123', state: 'FINALIZADO', serviceType: 'PRINCIPAL', siteType: 'NEGOCIO', clientType: 'NEGOCIO', siteId: 'site', clientName: 'Negocio actual', nit: '900', siteName: 'Sede', address: 'Dirección', technicianName: 'Ana', issuedOn: '2024-01-31', businessMonths: 1, vehicleMonths: 2, vehicleEnabled: true, businessEmails: [], siteEmails: [], contactEmail: null },
     settings: { converterReady: true, templates: [{ type: 'ESTABLECIMIENTO', storagePath: 'global.docx', revision: '1', fileName: 'global.docx' }] },
     context: { serviceId: 'service', solicitud: 'SS-123', clientName: 'Negocio', siteName: 'Sede', recipients: [], vehicles: [{ id: 'attended', placa: 'ABC-123' }], documents: [], availability: { ESTABLECIMIENTO: { available: true, reason: null, templateSource: 'GLOBAL' }, VEHICULO: { available: true, reason: null, templateSource: 'GLOBAL' } } },
     products: [{ nombre: 'Producto', metodo: 'Aspersión' }, { nombre: 'Otro producto', metodo: 'Aspersión' }], historicalData: {},
@@ -12,11 +12,9 @@ function loaded(): LoadedCertificateContext {
 }
 describe('certificate domain and historical snapshots', () => {
   it.each([['2024-01-31', 1, '2024-02-29'], ['2025-01-31', 1, '2025-02-28'], ['2024-02-29', 12, '2025-02-28'], ['2025-12-31', 2, '2026-02-28']])('clamps calendar months %s + %i', (date, months, result) => { expect(addCalendarMonths(date, months)).toBe(result) })
-  it('uses the custom template before the global fallback and honors unavailable type', () => {
+  it('uses only the global template and honors unavailable type', () => {
     const value = loaded()
     expect(effectiveTemplate(value, 'ESTABLECIMIENTO')).toBe('global.docx')
-    value.source.establishmentTemplate = 'custom.docx'
-    expect(effectiveTemplate(value, 'ESTABLECIMIENTO')).toBe('custom.docx')
     value.context.availability.ESTABLECIMIENTO.available = false
     expect(() => effectiveTemplate(value, 'ESTABLECIMIENTO')).toThrow("El certificado no está habilitado")
   })
