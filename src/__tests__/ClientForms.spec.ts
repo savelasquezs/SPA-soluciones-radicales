@@ -28,7 +28,7 @@ describe('formularios compartidos de Clientes', () => {
     expect(wrapper.get<HTMLSelectElement>('#client-type').element.disabled).toBe(true)
   })
 
-  it('SiteForm exige contacto y no contiene certificado de establecimiento', () => {
+  it('SiteForm exige contacto y no contiene certificado de establecimiento', async () => {
     const wrapper = mount(SiteForm, { props: { modelValue: site(), mode: 'create', formOptions: [] } })
     expect(wrapper.find('#site-contact').exists()).toBe(true)
     expect(wrapper.find('#site-phone').exists()).toBe(true)
