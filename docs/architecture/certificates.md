@@ -33,8 +33,9 @@ otro sistema de credenciales.
 `converterReady` exige que el refresh token almacenado incluya `drive.file`; una integración anterior
 debe volver a autorizarse. La conversión usa timeouts de 60 s, limita el PDF a 15 MiB y rechaza salidas
 que no sean PDF, documentos vacíos y certificados fuera del rango de 1–30 páginas. Si la limpieza
-del Google Doc temporal falla, el PDF no se persiste en R2. Después se optimizan object streams con
-pdf-lib y se conserva la salida más pequeña cuando no es una vista previa.
+inmediata del Google Doc temporal falla, el PDF no se persiste en R2 y el identificador se conserva
+en `private.integration_jobs` como `STORAGE_CLEANUP` para reintento posterior. Después se optimizan
+object streams con pdf-lib y se conserva la salida más pequeña cuando no es una vista previa.
 
 Referencias del contrato: [Docxtemplater API](https://docxtemplater.com/docs/api/) y
 [Google Drive import/export](https://developers.google.com/drive/api/guides/manage-uploads#import_to_google_docs_types).
