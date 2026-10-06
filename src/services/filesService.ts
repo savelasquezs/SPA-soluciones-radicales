@@ -6,6 +6,7 @@ export type MasterFileKind =
   | 'CLIENT_ESTABLISHMENT_TEMPLATE'
   | 'SITE_PLAN'
   | 'SITE_VEHICLE_TEMPLATE'
+  | 'PRODUCT_TECHNICAL_SHEET'
 
 export type MasterFileUploadPhase = 'compressing' | 'uploading'
 export type MasterFileUploadPhaseHandler = (phase: MasterFileUploadPhase) => void
@@ -27,20 +28,11 @@ export async function uploadMasterFile(
   onPhase?.('uploading')
   const authorization = await apiRequest<UploadAuthorization>('api/files/master/upload-url', {
     method: 'POST',
-    body: JSON.stringify({
-      kind,
-      fileName: file.name,
-      contentType: file.type,
-      size: file.size,
-    }),
+    body: JSON.stringify({ kind, fileName: file.name, contentType: file.type, size: file.size }),
   })
-
   const response = await fetch(authorization.url, {
-    method: 'PUT',
-    headers: { 'Content-Type': authorization.contentType },
-    body: file,
+    method: 'PUT', headers: { 'Content-Type': authorization.contentType }, body: file,
   })
-
   if (!response.ok) {
     throw new ApiClientError(
       response.status === 403
@@ -49,14 +41,12 @@ export async function uploadMasterFile(
       response.status,
     )
   }
-
   return authorization.storagePath
 }
 
 export async function getMasterFileUrl(storagePath: string): Promise<string> {
   const response = await apiRequest<{ url: string }>('api/files/master/read-url', {
-    method: 'POST',
-    body: JSON.stringify({ storagePath }),
+    method: 'POST', body: JSON.stringify({ storagePath }),
   })
   return response.url
 }

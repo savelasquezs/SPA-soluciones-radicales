@@ -1,22 +1,5 @@
 <script setup lang="ts">
-import {
-  Boxes,
-  Building2,
-  CalendarDays,
-  CheckCircle2,
-  ChevronDown,
-  CircleHelp,
-  FileText,
-  Gauge,
-  LogOut,
-  Menu,
-  Search,
-  Settings2,
-  Users,
-  WalletCards,
-  Wrench,
-  X,
-} from 'lucide-vue-next'
+import { Building2, CalendarDays, CheckCircle2, ChevronDown, CircleHelp, FileText, Gauge, LogOut, Menu, Search, Settings2, Users, WalletCards, Wrench, X } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -29,24 +12,15 @@ import type { ActiveRole, ThemePreference } from '@/types/domain'
 
 type NavigationItem = { to: string; label: string; icon: typeof Gauge; admin?: boolean }
 type NavigationGroup = { label: string; items: NavigationItem[] }
-
-const auth = useAuthStore()
-const app = useAppStore()
-const notifications = useNotificationsStore()
-const route = useRoute()
-const router = useRouter()
-const navigationOpen = ref(false)
-const switchingRole = ref(false)
-
+const auth = useAuthStore(), app = useAppStore(), notifications = useNotificationsStore()
+const route = useRoute(), router = useRouter()
+const navigationOpen = ref(false), switchingRole = ref(false)
 const groups: NavigationGroup[] = [
   { label: 'OPERACIÓN', items: [
-    { to: '/', label: 'Resumen', icon: Gauge },
-    { to: '/agenda', label: 'Agenda', icon: CalendarDays },
-    { to: '/servicios', label: 'Servicios', icon: FileText },
+    { to: '/', label: 'Resumen', icon: Gauge }, { to: '/agenda', label: 'Agenda', icon: CalendarDays }, { to: '/servicios', label: 'Servicios', icon: FileText },
   ] },
   { label: 'GESTIÓN', items: [
     { to: '/clientes', label: 'Clientes', icon: Building2, admin: true },
-    { to: '/catalogos', label: 'Catálogos', icon: Boxes, admin: true },
     { to: '/documentos', label: 'Documentos', icon: FileText, admin: true },
     { to: '/pagos', label: 'Pagos y caja', icon: WalletCards, admin: true },
   ] },
@@ -55,23 +29,14 @@ const groups: NavigationGroup[] = [
     { to: '/configuracion', label: 'Configuración', icon: Settings2, admin: true },
   ] },
 ]
-
-const visibleGroups = computed(() => groups
-  .map((group) => ({ ...group, items: group.items.filter((item) => !item.admin || auth.isAdmin) }))
-  .filter((group) => group.items.length))
+const visibleGroups = computed(() => groups.map(group => ({ ...group, items: group.items.filter(item => !item.admin || auth.isAdmin) })).filter(group => group.items.length))
 const breadcrumb = computed(() => route.meta.breadcrumb ?? '')
-
+function isActive(to: string): boolean { return route.path === to || (to !== '/' && route.path.startsWith(`${to}/`)) }
 watch(() => route.fullPath, () => { navigationOpen.value = false })
-
 async function logout(): Promise<void> {
-  try {
-    await auth.logout()
-    await router.replace('/acceso')
-  } catch (error) {
-    notifications.show(error instanceof Error ? error.message : 'No fue posible cerrar sesión', 'error')
-  }
+  try { await auth.logout(); await router.replace('/acceso') }
+  catch (error) { notifications.show(error instanceof Error ? error.message : 'No fue posible cerrar sesión', 'error') }
 }
-
 async function switchRole(role: ActiveRole): Promise<void> {
   if (auth.activeRole === role || switchingRole.value) return
   switchingRole.value = true
@@ -79,98 +44,33 @@ async function switchRole(role: ActiveRole): Promise<void> {
     await auth.selectRole(role)
     if (role === 'TECNICO' && route.meta.roles?.includes('ADMINISTRADOR')) await router.replace('/')
     notifications.show(`Rol ${role === 'ADMINISTRADOR' ? 'Administrador' : 'Técnico'} activo`, 'success')
-  } catch (error) {
-    notifications.show(error instanceof Error ? error.message : 'No fue posible cambiar el rol', 'error')
-  } finally {
-    switchingRole.value = false
-  }
+  } catch (error) { notifications.show(error instanceof Error ? error.message : 'No fue posible cambiar el rol', 'error') }
+  finally { switchingRole.value = false }
 }
-
-function setTheme(event: Event): void {
-  app.setTheme((event.target as HTMLSelectElement).value as ThemePreference)
-}
+function setTheme(event: Event): void { app.setTheme((event.target as HTMLSelectElement).value as ThemePreference) }
 </script>
 
 <template>
   <div class="admin-layout">
     <header class="topbar">
-      <div class="brand">
-        <span aria-hidden="true"></span>
-        <div><strong>Soluciones Radicales</strong><small>MANEJO INTEGRADO DE PLAGAS</small></div>
-      </div>
-
-      <label class="global-search">
-        <Search :size="16" aria-hidden="true" />
-        <span class="sr-only">Búsqueda global</span>
-        <input type="search" readonly placeholder="Buscar cliente, servicio o documento" />
-      </label>
-
+      <div class="brand"><span aria-hidden="true"></span><div><strong>Soluciones Radicales</strong><small>MANEJO INTEGRADO DE PLAGAS</small></div></div>
+      <label class="global-search"><Search :size="16" aria-hidden="true" /><span class="sr-only">Búsqueda global</span><input type="search" readonly placeholder="Buscar cliente, servicio o documento" /></label>
       <div class="topbar__activity">
         <span class="sync-state"><CheckCircle2 :size="16" aria-hidden="true" />Al día</span>
-        <label class="theme-select">
-          <span class="sr-only">Apariencia</span>
-          <select :value="app.theme" @change="setTheme">
-            <option value="light">Claro</option>
-            <option value="dark">Oscuro</option>
-            <option value="system">Sistema</option>
-          </select>
-        </label>
-        <details class="account-menu">
-          <summary>
-            <strong>{{ auth.profile?.nombreCompleto }}</strong>
-            <span>{{ auth.activeRole === 'ADMINISTRADOR' ? 'Administrador' : 'Técnico' }}</span>
-            <ChevronDown :size="16" aria-hidden="true" />
-          </summary>
-          <div class="account-menu__panel">
-            <p>{{ auth.authEmail }}</p>
-            <div v-if="auth.rolesAvailable.length > 1" class="role-options">
-              <BaseButton
-                v-for="role in auth.rolesAvailable"
-                :key="role"
-                variant="ghost"
-                :disabled="switchingRole || auth.activeRole === role"
-                @click="switchRole(role)"
-              >
-                <Wrench v-if="role === 'TECNICO'" :size="17" />
-                <Users v-else :size="17" />
-                {{ role === 'ADMINISTRADOR' ? 'Administrador' : 'Técnico' }}
-              </BaseButton>
-            </div>
-            <BaseButton variant="secondary" @click="logout"><LogOut :size="17" />Cerrar sesión</BaseButton>
-          </div>
+        <label class="theme-select"><span class="sr-only">Apariencia</span><select :value="app.theme" @change="setTheme"><option value="light">Claro</option><option value="dark">Oscuro</option><option value="system">Sistema</option></select></label>
+        <details class="account-menu"><summary><strong>{{ auth.profile?.nombreCompleto }}</strong><span>{{ auth.activeRole === 'ADMINISTRADOR' ? 'Administrador' : 'Técnico' }}</span><ChevronDown :size="16" aria-hidden="true" /></summary>
+          <div class="account-menu__panel"><p>{{ auth.authEmail }}</p><div v-if="auth.rolesAvailable.length > 1" class="role-options"><BaseButton v-for="role in auth.rolesAvailable" :key="role" variant="ghost" :disabled="switchingRole || auth.activeRole === role" @click="switchRole(role)"><Wrench v-if="role === 'TECNICO'" :size="17" /><Users v-else :size="17" />{{ role === 'ADMINISTRADOR' ? 'Administrador' : 'Técnico' }}</BaseButton></div><BaseButton variant="secondary" @click="logout"><LogOut :size="17" />Cerrar sesión</BaseButton></div>
         </details>
       </div>
-
-      <BaseIconButton class="menu-button" :label="navigationOpen ? 'Cerrar navegación' : 'Abrir navegación'" @click="navigationOpen = !navigationOpen">
-        <X v-if="navigationOpen" :size="22" />
-        <Menu v-else :size="22" />
-      </BaseIconButton>
+      <BaseIconButton class="menu-button" :label="navigationOpen ? 'Cerrar navegación' : 'Abrir navegación'" @click="navigationOpen = !navigationOpen"><X v-if="navigationOpen" :size="22" /><Menu v-else :size="22" /></BaseIconButton>
     </header>
-
     <div class="shell-body">
       <button v-if="navigationOpen" type="button" class="drawer-backdrop" aria-label="Cerrar navegación" @click="navigationOpen = false"></button>
       <aside class="sidebar" :class="{ 'sidebar--open': navigationOpen }">
-        <nav aria-label="Navegación principal">
-          <section v-for="group in visibleGroups" :key="group.label">
-            <h2>{{ group.label }}</h2>
-            <RouterLink v-for="item in group.items" :key="item.to" :to="item.to">
-              <component :is="item.icon" :size="17" aria-hidden="true" />
-              {{ item.label }}
-            </RouterLink>
-          </section>
-        </nav>
-        <div class="sidebar__footer">
-          <div><span>Tu espacio de trabajo</span><strong>Soluciones Radicales</strong></div>
-          <a href="https://github.com/savelasquezs/SPA-soluciones-radicales/tree/main/docs" target="_blank" rel="noreferrer">
-            <CircleHelp :size="17" aria-hidden="true" />Ayuda y documentación
-          </a>
-        </div>
+        <nav aria-label="Navegación principal"><section v-for="group in visibleGroups" :key="group.label"><h2>{{ group.label }}</h2><RouterLink v-for="item in group.items" :key="item.to" :to="item.to" :class="{ 'nav-active': isActive(item.to) }"><component :is="item.icon" :size="17" aria-hidden="true" />{{ item.label }}</RouterLink></section></nav>
+        <div class="sidebar__footer"><div><span>Tu espacio de trabajo</span><strong>Soluciones Radicales</strong></div><a href="https://github.com/savelasquezs/SPA-soluciones-radicales/tree/main/docs" target="_blank" rel="noreferrer"><CircleHelp :size="17" aria-hidden="true" />Ayuda y documentación</a></div>
       </aside>
-
-      <main class="content">
-        <p v-if="breadcrumb" class="breadcrumb">{{ breadcrumb }}</p>
-        <RouterView />
-      </main>
+      <main class="content"><p v-if="breadcrumb" class="breadcrumb"><template v-if="route.path.startsWith('/configuracion/')"><RouterLink to="/configuracion">Configuración</RouterLink> / {{ String(breadcrumb).split(' / ').slice(1).join(' / ') }}</template><template v-else>{{ breadcrumb }}</template></p><RouterView /></main>
     </div>
   </div>
 </template>
@@ -204,7 +104,7 @@ function setTheme(event: Event): void {
 .sidebar nav h2 { margin: 0; padding: 0.5rem; color: var(--text-secondary); font-size: 0.75rem; font-weight: 500; line-height: 1rem; }
 .sidebar nav a { display: flex; min-height: 44px; align-items: center; gap: 0.5rem; border-radius: var(--radius-panel); padding: 0.75rem; color: var(--text-secondary); font-size: 0.875rem; font-weight: 500; line-height: 1.25rem; text-decoration: none; }
 .sidebar nav a:hover { background: var(--hover); color: var(--text); }
-.sidebar nav a.router-link-exact-active { background: var(--accent-subtle); color: var(--accent); }
+.sidebar nav a.nav-active { background: var(--accent-subtle); color: var(--accent); }
 .sidebar__footer { display: grid; gap: 0.75rem; margin-top: auto; }
 .sidebar__footer > div { display: grid; gap: 0.5rem; border-radius: 8px; background: var(--surface); padding: 0.75rem; }
 .sidebar__footer span { color: var(--text-secondary); font-size: 0.8125rem; }
@@ -212,9 +112,9 @@ function setTheme(event: Event): void {
 .sidebar__footer a { display: flex; min-height: 44px; align-items: center; gap: 0.5rem; color: var(--text-secondary); font-size: 0.8125rem; text-decoration: none; }
 .content { width: 100%; max-width: 1184px; min-width: 0; margin: 0 auto; padding: 1.75rem 2rem 3rem; }
 .breadcrumb { margin: 0 0 1rem; color: var(--text-secondary); font-size: 0.75rem; }
+.breadcrumb a { color: inherit; text-decoration: none; }.breadcrumb a:hover { text-decoration: underline; }
 .drawer-backdrop { display: none; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-
 @media (max-width: 1024px) {
   .topbar { grid-template-columns: 1fr auto; }
   .global-search, .topbar__activity { display: none; }
@@ -225,7 +125,6 @@ function setTheme(event: Event): void {
   .drawer-backdrop { position: fixed; z-index: 30; inset: 64px 0 0; display: block; border: 0; background: var(--backdrop); }
   .content { padding: 1.5rem; }
 }
-
 @media (max-width: 560px) {
   .topbar { height: 60px; padding: 0 1rem; }
   .brand small { display: none; }

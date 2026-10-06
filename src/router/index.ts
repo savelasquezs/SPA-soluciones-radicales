@@ -25,11 +25,12 @@ const router = createRouter({
         { path: 'clientes', name: 'clients', component: () => import('@/views/ClientsView.vue'), meta: { roles: adminOnly, breadcrumb: 'Clientes' } },
         { path: 'clientes/:id', name: 'client-detail', component: () => import('@/views/ClientDetailView.vue'), meta: { roles: adminOnly, breadcrumb: 'Clientes / Detalle' } },
         { path: 'clientes/:id/sedes/:siteId', name: 'site-detail', component: () => import('@/views/SiteDetailView.vue'), meta: { roles: adminOnly, breadcrumb: 'Clientes / Sede' } },
-        { path: 'catalogos', name: 'catalogs', component: () => import('@/views/PlaceholderView.vue'), meta: { roles: adminOnly, breadcrumb: 'Catálogos', placeholderTitle: 'Catálogos', placeholderDescription: 'Los catálogos se implementarán en sus issues funcionales.' } },
+        { path: 'catalogos', redirect: '/configuracion/catalogos' },
         { path: 'documentos', name: 'documents', component: () => import('@/views/PlaceholderView.vue'), meta: { roles: adminOnly, breadcrumb: 'Documentos', placeholderTitle: 'Documentos', placeholderDescription: 'Los documentos se implementarán en su issue funcional.' } },
         { path: 'pagos', name: 'payments', component: () => import('@/views/PlaceholderView.vue'), meta: { roles: adminOnly, breadcrumb: 'Pagos y caja', placeholderTitle: 'Pagos y caja', placeholderDescription: 'Pagos y caja se implementará en su issue funcional.' } },
         { path: 'usuarios', name: 'users', component: () => import('@/views/UsersView.vue'), meta: { roles: adminOnly, breadcrumb: 'Administración / Usuarios' } },
-        { path: 'configuracion', name: 'settings', component: () => import('@/views/SettingsView.vue'), meta: { roles: adminOnly, breadcrumb: 'Configuración' } },
+        { path: 'configuracion', name: 'settings', component: () => import('@/views/SettingsView.vue'), meta: { roles: adminOnly } },
+        { path: 'configuracion/catalogos', name: 'catalogs', component: () => import('@/views/MipCatalogsView.vue'), meta: { roles: adminOnly, breadcrumb: 'Configuración / Catálogos MIP' } },
         { path: 'configuracion/certificados', name: 'certificates', component: () => import('@/views/CertificatesView.vue'), meta: { roles: adminOnly, breadcrumb: 'Configuración / Certificados' } },
         { path: 'integraciones', name: 'integrations', component: () => import('@/views/IntegrationsView.vue'), meta: { roles: adminOnly, breadcrumb: 'Integraciones' } },
       ],
@@ -37,7 +38,5 @@ const router = createRouter({
     { path: '/:pathMatch(.*)*', name: 'not-found', component: () => import('@/views/NotFoundView.vue'), meta: { public: true } },
   ],
 })
-
 router.beforeEach(authGuard)
-
 export default router
