@@ -49,7 +49,6 @@ export type ClientRecord = {
   activo: boolean
   version: number
   vigenciaCertificadoMeses: number | null
-  plantillaCertificadoStoragePath: string | null
   residenciaDireccion: string | null
   residenciaCelular: string | null
   sedesCount: number
@@ -63,7 +62,6 @@ export type ClientInput = Pick<
   | 'correos'
   | 'activo'
   | 'vigenciaCertificadoMeses'
-  | 'plantillaCertificadoStoragePath'
   | 'residenciaDireccion'
   | 'residenciaCelular'
 > & { version?: number }
@@ -87,7 +85,6 @@ export type SiteRecord = {
   manejaVehiculos: boolean
   generaCertificadoVehiculo: boolean
   vigenciaCertificadoVehiculoMeses: number | null
-  plantillaCertificadoVehiculoStoragePath: string | null
   duracionServicioMinutos: number
   activo: boolean
   version: number
@@ -113,7 +110,6 @@ export type SiteInput = Pick<
   | 'manejaVehiculos'
   | 'generaCertificadoVehiculo'
   | 'vigenciaCertificadoVehiculoMeses'
-  | 'plantillaCertificadoVehiculoStoragePath'
   | 'duracionServicioMinutos'
   | 'activo'
 > & { version?: number }
