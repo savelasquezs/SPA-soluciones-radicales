@@ -1,0 +1,28 @@
+name: Temporary npm audit
+on:
+  push:
+    branches: [feature/certificate-templates]
+    paths: ['.github/workflows/npm-audit-temp.yml']
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Full audit
+        run: npm audit --json > audit-full.json || true
+      - name: Runtime audit
+        run: npm audit --omit=dev --json > audit-runtime.json || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-json
+          path: |
+            audit-full.json
+            audit-runtime.json
+          retention-days: 1
