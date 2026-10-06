@@ -29,7 +29,9 @@ Aclaración aprobada durante la revisión del prototipo del 6 de octubre de 2026
 
 La fuente del informe debe contemplar ambos orígenes: no consultar únicamente la selección administrativa. Si un mismo producto participa como principal y en uno o varios Puestos, se puede agrupar visualmente, pero deben conservarse los usos y las referencias de cada origen, sin duplicar aplicaciones ni perder el detalle por Puesto.
 
-No convertir el consumo observado de un cebo anterior en una aplicación nueva de hoy. Diferenciar producto encontrado, producto revisado y producto dejado después de una instalación/cambio. Lote y vencimiento de productos adicionales: captura y obligatoriedad pendientes de confirmación; nunca inventarlos ni heredarlos de otra aplicación por compartir el mismo producto maestro.
+No convertir el consumo observado de un cebo anterior en una aplicación nueva de hoy. Diferenciar producto encontrado, producto revisado y producto dejado después de una instalación/cambio.
+
+Decisión confirmada con Santiago: los productos adicionales de los Puestos no requieren lote ni fecha de vencimiento y el flujo técnico no solicita esos campos. El informe los incluye sin exigir ni inventar esos datos, conservando producto, Área/Puesto, consumo cuando aplique, observaciones, evidencias y cambios. No mostrar su ausencia como dato pendiente o error ni bloquear la generación del informe. Nunca heredar lote o vencimiento de otra aplicación por compartir el mismo producto maestro. Para los productos principales se mantienen los datos preparados por Administración.
 
 ## 2. Resultado por Área
 
