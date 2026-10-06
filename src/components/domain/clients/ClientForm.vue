@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
 
-import BaseButton from '@/components/base/BaseButton.vue'
-import BaseFileUpload from '@/components/base/BaseFileUpload.vue'
 import BaseInput from '@/components/base/BaseInput.vue'
 import BaseSelect from '@/components/base/BaseSelect.vue'
 import BaseTextarea from '@/components/base/BaseTextarea.vue'
@@ -11,11 +9,10 @@ import type { ClientInput } from '@/types/domain'
 
 const props = defineProps<{ mode: 'create' | 'edit'; saving?: boolean }>()
 const model = defineModel<ClientInput>({ required: true })
-const emit = defineEmits<{ submit: []; invalid: []; 'file-selected': [file: File | null]; 'view-template': [] }>()
+const emit = defineEmits<{ submit: []; invalid: [] }>()
 const touched = reactive<Partial<Record<keyof ClientFormErrors, boolean>>>({})
 const submitted = ref(false)
-const templateFile = ref<File | null>(null)
-const errors = computed(() => validateClientInput(model.value, templateFile.value))
+const errors = computed(() => validateClientInput(model.value))
 const emailsText = computed({
   get: () => model.value.correos.join('\n'),
   set: (value: string) => update('correos', parseEmails(value)),
@@ -42,10 +39,6 @@ function submit(): void {
   emit('submit')
 }
 
-function selectTemplate(file: File | null): void {
-  templateFile.value = file
-  emit('file-selected', file)
-}
 </script>
 
 <template>
@@ -90,18 +83,6 @@ function selectTemplate(file: File | null): void {
           @update:model-value="update('vigenciaCertificadoMeses', $event ? Number($event) : null)"
           @blur="touch('vigenciaCertificadoMeses')"
         />
-        <div v-if="modelValue.plantillaCertificadoStoragePath" class="current-file-row"><p class="current-file">Plantilla actual: {{ modelValue.plantillaCertificadoStoragePath.split('/').slice(-1)[0] }}</p><BaseButton type="button" variant="ghost" @click="emit('view-template')">Ver plantilla</BaseButton><BaseButton variant="ghost" @click="update('plantillaCertificadoStoragePath', null); selectTemplate(null)">Usar plantilla general</BaseButton></div>
-        <BaseFileUpload
-          :model-value="templateFile"
-          name="client-certificate-template"
-          label="Seleccionar plantilla"
-          accept=".docx"
-          
-          :error="error('plantillaCertificadoStoragePath')"
-          :hint="modelValue.plantillaCertificadoStoragePath ? 'Déjalo vacío para conservar la plantilla actual.' : 'Sin archivo propio se usa la plantilla general de Configuración → Certificados.'"
-          @update:model-value="selectTemplate"
-          @blur="touch('plantillaCertificadoStoragePath')"
-        />
       </section>
     </template>
 
@@ -117,6 +98,5 @@ function selectTemplate(file: File | null): void {
 .client-form__section { display: grid; gap: 1rem; border-top: 1px solid var(--border); padding-top: 1.25rem; }
 .client-form__section header h3, .client-form__section header p { margin: 0; }
 .client-form__section header h3 { font-size: 0.95rem; }
-.client-form__section header p, .current-file { margin-top: 0.25rem; color: var(--text-secondary); font-size: 0.82rem; overflow-wrap: anywhere; }
-.current-file-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; }.current-file-row p { margin: 0; }
+.client-form__section header p { margin-top: 0.25rem; color: var(--text-secondary); font-size: 0.82rem; }
 </style>
