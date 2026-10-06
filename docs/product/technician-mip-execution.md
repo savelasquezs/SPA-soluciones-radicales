@@ -179,7 +179,7 @@ Los productos adicionales se conservan relacionados con Servicio, Área, Puesto,
 
 El informe no se puede construir consultando únicamente la lista de productos principales. Debe recoger ambos orígenes y conservar su trazabilidad sin duplicar artificialmente aplicaciones ni confundir producto encontrado, consumo observado y producto dejado después de la intervención.
 
-Pendiente puntual: confirmar quién captura lote y vencimiento de un producto adicional instalado por el Técnico, y cuándo serán obligatorios. No copiar esos valores de un producto principal ni del catálogo suponiendo que se trata del mismo lote.
+Decisión confirmada con Santiago: los productos adicionales de los Puestos no requieren lote ni fecha de vencimiento. El flujo técnico no solicita esos campos al instalar, cambiar o revisar el producto de un Puesto. Su ausencia no impide guardar, completar la revisión, finalizar el Servicio ni incluir el producto adicional en el informe. No copiar ni inferir esos valores desde el catálogo o desde un producto principal. Se conservan producto, consumo cuando aplique, observaciones y evidencias según las reglas de la operación. Esta excepción no cambia la preparación de lote y vencimiento de los productos principales por Administración.
 
 ## 7. Crear un Puesto durante una visita
 
@@ -461,5 +461,5 @@ El diseño debe contemplar al menos:
 - estados de guardado/offline;
 - resumen de pendientes antes de finalizar;
 - productos principales con lote/vencimiento preparados por Administración y de consulta para el Técnico;
-- productos adicionales del catálogo seleccionables dentro del Puesto e incluidos en el informe;
+- productos adicionales del catálogo seleccionables dentro del Puesto e incluidos en el informe, sin solicitar lote ni vencimiento;
 - Marcar todo C por Área, confirmación de reemplazo y Deshacer.
