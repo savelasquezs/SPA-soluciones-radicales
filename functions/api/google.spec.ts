@@ -51,6 +51,26 @@ describe('Google Drive DOCX conversion', () => {
     expect(remote.mock.calls[3]).toMatchObject(['https://www.googleapis.com/drive/v3/files/temporary-id', { method: 'DELETE' }])
   })
 
+  it('queues durable cleanup when deleting the temporary Google Doc fails', async () => {
+    const module = await googleModule()
+    const output = await pdf()
+    const remote = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'access', expires_in: 3600, token_type: 'Bearer' })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: 'temporary-id' })))
+      .mockResolvedValueOnce(new Response(output, { headers: { 'content-type': 'application/pdf' } }))
+      .mockResolvedValueOnce(new Response('error', { status: 503 }))
+    vi.stubGlobal('fetch', remote)
+
+    await expect(module.convertDocxToPdfWithGoogleDrive(Buffer.from('docx'), 1024 * 1024))
+      .rejects.toThrow('no fue posible eliminar el archivo temporal')
+    const cleanupJob = db.query.mock.calls.find(([sql]) => String(sql).includes("values ('STORAGE_CLEANUP'"))
+    expect(cleanupJob).toBeDefined()
+    expect(cleanupJob?.[1]).toEqual([
+      'google-drive-temp:temporary-id',
+      JSON.stringify({ scope: 'GOOGLE_DRIVE_TEMP', fileId: 'temporary-id' }),
+    ])
+  })
+
   it('deletes the temporary Google Doc when the PDF export fails', async () => {
     const module = await googleModule()
     const remote = vi.fn<typeof fetch>()
