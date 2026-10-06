@@ -12,7 +12,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - name: Verify and apply the reviewed feature patch
+      - name: Verify and apply the reviewed source patch
         run: |
           python3 - <<'PY'
           import base64, hashlib, lzma
@@ -23,10 +23,10 @@ jobs:
           assert hashlib.sha256(patch).hexdigest() == expected, 'Implementation patch checksum mismatch'
           Path('/tmp/certificates.patch').write_bytes(patch)
           PY
-          git apply --check --unidiff-zero /tmp/certificates.patch
-          git apply --unidiff-zero /tmp/certificates.patch
+          # Workflow files are managed separately by the authorized connector.
+          git apply --check --unidiff-zero --exclude='.github/workflows/*' /tmp/certificates.patch
+          git apply --unidiff-zero --exclude='.github/workflows/*' /tmp/certificates.patch
           rm -rf .implementation/certificates
-          rm .github/workflows/certificate-workspace.yml
           git add -A
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
