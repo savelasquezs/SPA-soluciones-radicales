@@ -185,7 +185,7 @@ fieldset p { margin: .5rem 0 0; font-size: .8125rem; }
 .item-form__groups { display: flex; gap: var(--space-8); }
 .item-form__groups label { display: flex; min-height: 44px; flex: 1; gap: var(--space-8); align-items: center; border: 1px solid var(--border); border-radius: var(--radius); padding: .65rem; cursor: pointer; }
 .item-form__groups label.selected { border-color: var(--accent); background: var(--accent-subtle); }
-.item-form__fixed-category { display: grid; gap: var(--space-4); min-height: 44px; padding: .65rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-subtle); }
+.item-form__fixed-category { display: grid; gap: var(--space-4); min-height: 44px; padding: .65rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-raised); }
 .item-form__fixed-category small, .item-form__hint { color: var(--text-secondary); }
 input { accent-color: var(--accent); }
 @media (max-width: 520px) {
