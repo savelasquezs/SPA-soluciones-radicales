@@ -53,9 +53,7 @@ const deleteClientTarget = ref(false)
 const dependencyClientTarget = ref(false)
 const clientForm = ref<ClientInput>(blankClient())
 const siteForm = ref<SiteInput>(blankSite())
-const clientTemplateFile = ref<File | null>(null)
 const sitePlanFile = ref<File | null>(null)
-const siteVehicleTemplateFile = ref<File | null>(null)
 
 onMounted(load)
 
@@ -103,7 +101,6 @@ async function loadHistory(page = 1): Promise<void> {
 function openClientEdit(): void {
   if (!client.value) return
   clientForm.value = toClientInput(client.value)
-  clientTemplateFile.value = null
   clientFormOpen.value = true
 }
 
@@ -112,7 +109,6 @@ function openSiteCreate(): void {
   editingSiteId.value = null
   siteForm.value = blankSite()
   sitePlanFile.value = null
-  siteVehicleTemplateFile.value = null
   siteFormOpen.value = true
 }
 
@@ -121,7 +117,6 @@ function openSiteEdit(site: SiteRecord): void {
   editingSiteId.value = site.id
   siteForm.value = toSiteInput(site)
   sitePlanFile.value = null
-  siteVehicleTemplateFile.value = null
   siteFormOpen.value = true
 }
 
@@ -130,24 +125,12 @@ async function saveClient(): Promise<void> {
   if (!current || saving.value) return
   saving.value = true
   resetSaveProgress()
-  let uploadedPath: string | null = null
   try {
-    let input = { ...clientForm.value }
-    if (input.tipoCliente === 'NEGOCIO' && clientTemplateFile.value) {
-      uploadedPath = await uploadMasterFile('CLIENT_ESTABLISHMENT_TEMPLATE', clientTemplateFile.value, onUploadPhase)
-      input = { ...input, plantillaCertificadoStoragePath: uploadedPath }
-    }
     markSaving()
-    const saved = await store.updateClient(current.id, input)
+    await store.updateClient(current.id, { ...clientForm.value })
     clientFormOpen.value = false
-    clientTemplateFile.value = null
-    if (current.plantillaCertificadoStoragePath && current.plantillaCertificadoStoragePath !== saved.plantillaCertificadoStoragePath) {
-      void deleteMasterFile(current.plantillaCertificadoStoragePath).catch(() =>
-        notifications.show('El Cliente se guardó, pero no fue posible limpiar la plantilla anterior.', 'warning'))
-    }
     notifications.show('Cliente actualizado correctamente.', 'success')
   } catch (error) {
-    if (uploadedPath) await deleteMasterFile(uploadedPath).catch(() => undefined)
     if (error instanceof ApiClientError && error.code === 'VERSION_CONFLICT') store.upsertClient(await getClient(current.id))
     notifications.show(message(error, 'No fue posible actualizar el Cliente'), 'error')
   } finally {
@@ -169,23 +152,15 @@ async function saveSite(): Promise<void> {
       uploadedPaths.push(path)
       input = { ...input, planoStoragePath: path }
     }
-    if (input.generaCertificadoVehiculo && siteVehicleTemplateFile.value) {
-      const path = await uploadMasterFile('SITE_VEHICLE_TEMPLATE', siteVehicleTemplateFile.value, onUploadPhase)
-      uploadedPaths.push(path)
-      input = { ...input, plantillaCertificadoVehiculoStoragePath: path }
-    }
     markSaving()
     const saved = siteFormMode.value === 'create'
       ? await store.createSite(clientId.value, input)
       : await store.updateSite(editingSiteId.value!, input)
     siteFormOpen.value = false
     sitePlanFile.value = null
-    siteVehicleTemplateFile.value = null
-    for (const oldPath of [previous?.planoStoragePath, previous?.plantillaCertificadoVehiculoStoragePath]) {
-      if (oldPath && oldPath !== saved.planoStoragePath && oldPath !== saved.plantillaCertificadoVehiculoStoragePath) {
-        void deleteMasterFile(oldPath).catch(() =>
-          notifications.show('La Sede se guardó, pero no fue posible limpiar un archivo anterior.', 'warning'))
-      }
+      if (previous?.planoStoragePath && previous.planoStoragePath !== saved.planoStoragePath) {
+      void deleteMasterFile(previous.planoStoragePath).catch(() =>
+        notifications.show('La Sede se guardó, pero no fue posible limpiar el plano anterior.', 'warning'))
     }
     notifications.show(siteFormMode.value === 'create' ? 'Sede creada correctamente.' : 'Sede actualizada correctamente.', 'success')
   } catch (error) {
@@ -263,9 +238,8 @@ async function setClientActive(active: boolean): Promise<void> {
   }
 }
 
-function selectSiteFile(kind: 'plan' | 'vehicle-template', file: File | null): void {
+function selectSiteFile(kind: 'plan', file: File | null): void {
   if (kind === 'plan') sitePlanFile.value = file
-  else siteVehicleTemplateFile.value = file
 }
 
 async function openPrivateFile(storagePath: string): Promise<void> {
@@ -285,19 +259,19 @@ function openPlan(storagePath: string | null): void {
 }
 
 function blankClient(): ClientInput {
-  return { tipoCliente: 'NEGOCIO', nombre: '', nit: null, correos: [], activo: true, vigenciaCertificadoMeses: 12, plantillaCertificadoStoragePath: null, residenciaDireccion: null, residenciaCelular: null }
+  return { tipoCliente: 'NEGOCIO', nombre: '', nit: null, correos: [], activo: true, vigenciaCertificadoMeses: 12, residenciaDireccion: null, residenciaCelular: null }
 }
 
 function blankSite(): SiteInput {
-  return { nombre: '', direccion: '', correos: [], heredaCorreosCliente: true, contactoPrincipalNombre: '', contactoPrincipalCorreo: null, contactoPrincipalCelular: '', valorServicio: 0, periodicidadMeses: 1, manejaRefuerzo: false, formulariosAplicablesIds: [], planoStoragePath: null, manejaVehiculos: false, generaCertificadoVehiculo: false, vigenciaCertificadoVehiculoMeses: null, plantillaCertificadoVehiculoStoragePath: null, duracionServicioMinutos: 120, activo: true }
+  return { nombre: '', direccion: '', correos: [], heredaCorreosCliente: true, contactoPrincipalNombre: '', contactoPrincipalCorreo: null, contactoPrincipalCelular: '', valorServicio: 0, periodicidadMeses: 1, manejaRefuerzo: false, formulariosAplicablesIds: [], planoStoragePath: null, manejaVehiculos: false, generaCertificadoVehiculo: false, vigenciaCertificadoVehiculoMeses: null, duracionServicioMinutos: 120, activo: true }
 }
 
 function toClientInput(record: ClientRecord): ClientInput {
-  return { tipoCliente: record.tipoCliente, nombre: record.nombre, nit: record.nit, correos: [...record.correos], activo: record.activo, vigenciaCertificadoMeses: record.vigenciaCertificadoMeses, plantillaCertificadoStoragePath: record.plantillaCertificadoStoragePath, residenciaDireccion: record.residenciaDireccion, residenciaCelular: record.residenciaCelular, version: record.version }
+  return { tipoCliente: record.tipoCliente, nombre: record.nombre, nit: record.nit, correos: [...record.correos], activo: record.activo, vigenciaCertificadoMeses: record.vigenciaCertificadoMeses, residenciaDireccion: record.residenciaDireccion, residenciaCelular: record.residenciaCelular, version: record.version }
 }
 
 function toSiteInput(site: SiteRecord): SiteInput {
-  return { nombre: site.nombre, direccion: site.direccion, correos: [...site.correos], heredaCorreosCliente: site.heredaCorreosCliente, contactoPrincipalNombre: site.contactoPrincipalNombre, contactoPrincipalCorreo: site.contactoPrincipalCorreo, contactoPrincipalCelular: site.contactoPrincipalCelular, valorServicio: site.valorServicio, periodicidadMeses: site.periodicidadMeses, manejaRefuerzo: site.manejaRefuerzo, formulariosAplicablesIds: [...site.formulariosAplicablesIds], planoStoragePath: site.planoStoragePath, manejaVehiculos: site.manejaVehiculos, generaCertificadoVehiculo: site.generaCertificadoVehiculo, vigenciaCertificadoVehiculoMeses: site.vigenciaCertificadoVehiculoMeses, plantillaCertificadoVehiculoStoragePath: site.plantillaCertificadoVehiculoStoragePath, duracionServicioMinutos: site.duracionServicioMinutos, activo: site.activo, version: site.version }
+  return { nombre: site.nombre, direccion: site.direccion, correos: [...site.correos], heredaCorreosCliente: site.heredaCorreosCliente, contactoPrincipalNombre: site.contactoPrincipalNombre, contactoPrincipalCorreo: site.contactoPrincipalCorreo, contactoPrincipalCelular: site.contactoPrincipalCelular, valorServicio: site.valorServicio, periodicidadMeses: site.periodicidadMeses, manejaRefuerzo: site.manejaRefuerzo, formulariosAplicablesIds: [...site.formulariosAplicablesIds], planoStoragePath: site.planoStoragePath, manejaVehiculos: site.manejaVehiculos, generaCertificadoVehiculo: site.generaCertificadoVehiculo, vigenciaCertificadoVehiculoMeses: site.vigenciaCertificadoVehiculoMeses, duracionServicioMinutos: site.duracionServicioMinutos, activo: site.activo, version: site.version }
 }
 
 function message(error: unknown, fallback: string): string { return error instanceof Error ? error.message : fallback }
@@ -315,7 +289,7 @@ function formatDate(value: string): string { return new Intl.DateTimeFormat('es-
     </header>
 
     <section class="summary-card">
-      <template v-if="client.tipoCliente === 'NEGOCIO'"><div><span>NIT</span><strong>{{ client.nit }}</strong></div><div><span>Sedes</span><strong>{{ client.sedesCount }}</strong></div><div><span>Vigencia certificado</span><strong>{{ client.vigenciaCertificadoMeses }} meses</strong></div><div><span>Plantilla</span><strong>{{ client.plantillaCertificadoStoragePath?.split('/').slice(-1)[0] }}</strong></div></template>
+      <template v-if="client.tipoCliente === 'NEGOCIO'"><div><span>NIT</span><strong>{{ client.nit }}</strong></div><div><span>Sedes</span><strong>{{ client.sedesCount }}</strong></div><div><span>Vigencia certificado</span><strong>{{ client.vigenciaCertificadoMeses }} meses</strong></div></template>
       <template v-else><div><span>Celular</span><WhatsAppPhoneLink v-if="client.residenciaCelular" :phone="client.residenciaCelular" /></div><div><span>Dirección</span><strong>{{ client.residenciaDireccion }}</strong></div></template>
     </section>
 
@@ -337,8 +311,8 @@ function formatDate(value: string): string { return new Intl.DateTimeFormat('es-
       <div v-if="historyTotal > 20" class="pagination"><BaseButton size="compact" variant="secondary" :disabled="historyPage === 1" @click="loadHistory(historyPage - 1)">Anterior</BaseButton><span>Página {{ historyPage }}</span><BaseButton size="compact" variant="secondary" :disabled="historyPage * 20 >= historyTotal" @click="loadHistory(historyPage + 1)">Siguiente</BaseButton></div>
     </section>
 
-    <BaseDialog :model-value="clientFormOpen" title="Editar cliente" @update:model-value="!saving && (clientFormOpen = $event)"><ClientForm v-model="clientForm" mode="edit" :saving="saving" @submit="saveClient" @invalid="notifications.show('Revisa los campos marcados.', 'error')" @file-selected="clientTemplateFile = $event" @view-template="clientForm.plantillaCertificadoStoragePath && openPrivateFile(clientForm.plantillaCertificadoStoragePath)" /><template #footer><BaseButton variant="secondary" :disabled="saving" @click="clientFormOpen = false">Cancelar</BaseButton><BaseButton type="submit" form="client-form" :loading="saving">{{ savePhaseLabel ?? 'Guardar cambios' }}</BaseButton></template></BaseDialog>
-    <BaseDialog :model-value="siteFormOpen" :title="siteFormMode === 'create' ? 'Crear Sede' : 'Editar Sede'" @update:model-value="!saving && (siteFormOpen = $event)"><SiteForm v-model="siteForm" :mode="siteFormMode" :saving="saving" :form-options="forms" :client-name="client.nombre" @submit="saveSite" @invalid="notifications.show('Revisa los campos marcados.', 'error')" @file-selected="selectSiteFile" @view-plan="openPlan(siteForm.planoStoragePath)" @view-vehicle-template="siteForm.plantillaCertificadoVehiculoStoragePath && openPrivateFile(siteForm.plantillaCertificadoVehiculoStoragePath)" /><template #footer><BaseButton variant="secondary" :disabled="saving" @click="siteFormOpen = false">Cancelar</BaseButton><BaseButton type="submit" form="site-form" :loading="saving">{{ savePhaseLabel ?? (siteFormMode === 'create' ? 'Crear Sede' : 'Guardar cambios') }}</BaseButton></template></BaseDialog>
+    <BaseDialog :model-value="clientFormOpen" title="Editar cliente" @update:model-value="!saving && (clientFormOpen = $event)"><ClientForm v-model="clientForm" mode="edit" :saving="saving" @submit="saveClient" @invalid="notifications.show('Revisa los campos marcados.', 'error')" /><template #footer><BaseButton variant="secondary" :disabled="saving" @click="clientFormOpen = false">Cancelar</BaseButton><BaseButton type="submit" form="client-form" :loading="saving">{{ savePhaseLabel ?? 'Guardar cambios' }}</BaseButton></template></BaseDialog>
+    <BaseDialog :model-value="siteFormOpen" :title="siteFormMode === 'create' ? 'Crear Sede' : 'Editar Sede'" @update:model-value="!saving && (siteFormOpen = $event)"><SiteForm v-model="siteForm" :mode="siteFormMode" :saving="saving" :form-options="forms" :client-name="client.nombre" @submit="saveSite" @invalid="notifications.show('Revisa los campos marcados.', 'error')" @file-selected="selectSiteFile" @view-plan="openPlan(siteForm.planoStoragePath)" /><template #footer><BaseButton variant="secondary" :disabled="saving" @click="siteFormOpen = false">Cancelar</BaseButton><BaseButton type="submit" form="site-form" :loading="saving">{{ savePhaseLabel ?? (siteFormMode === 'create' ? 'Crear Sede' : 'Guardar cambios') }}</BaseButton></template></BaseDialog>
     <ConfirmDialog :open="deleteClientTarget" title="Eliminar cliente" :message="`Se eliminará ${client.nombre} si no tiene historial ni dependencias.`" confirm-label="Eliminar" danger :loading="saving" @cancel="deleteClientTarget = false" @confirm="removeClient" />
     <ConfirmDialog :open="dependencyClientTarget" title="Desactivar cliente" message="El Cliente tiene historial o dependencias. Se conservará toda la información y pasará a Inactivos." confirm-label="Desactivar" danger :loading="saving" @cancel="dependencyClientTarget = false" @confirm="setClientActive(false)" />
     <ConfirmDialog :open="Boolean(deleteSiteTarget)" title="Eliminar Sede" :message="`Se eliminará ${deleteSiteTarget?.nombre ?? 'la Sede'} si no tiene dependencias.`" confirm-label="Eliminar" danger :loading="saving" @cancel="deleteSiteTarget = null" @confirm="removeSite" />
@@ -355,7 +329,7 @@ function formatDate(value: string): string { return new Intl.DateTimeFormat('es-
 .back:hover, .back:focus-visible { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
 .site-actions a { display: inline-flex; min-width: 36px; min-height: 36px; align-items: center; justify-content: center; color: var(--text-secondary); text-decoration: none; }
 .site-actions a:hover, .site-actions a:focus-visible { color: var(--text); }
-.summary-card { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: 0.7rem 0.85rem; }
+.summary-card { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: 0.7rem 0.85rem; }
 .summary-card div { display: grid; align-content: start; gap: 0.1rem; min-width: 0; }
 .summary-card span, .site-card p, dt { color: var(--text-secondary); }
 .summary-card > div > span { font-size: 0.75rem; }
