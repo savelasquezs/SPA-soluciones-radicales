@@ -60,17 +60,17 @@ SQL activo no debe contener dependencias de Supabase como:
 
 Para Data API, los roles esperados son `authenticated` y `anonymous`, y la identidad se obtiene mediante el contexto JWT de Neon.
 
-## Modelo de formularios
+## Estado transitorio de ejecución MIP
 
-`formularios` conserva definición normalizada y versionada de campos.
+ADR-019 eliminó el motor genérico de formularios del modelo objetivo. La ejecución futura se compone desde Áreas, Criterios MIP, Productos, Dispositivos, Plagas, Hallazgos, Evidencias y Firmas, con snapshots históricos al iniciar el Servicio.
 
-La respuesta histórica se agrupa en `respuestas_formulario` con una fila por:
+El baseline aplicado todavía contiene `formularios`, `respuestas_formulario`, `sedes.formularios_aplicables_json` y `servicios.formularios_versiones_json`. Estas estructuras son transitorias:
 
-```text
-servicio_id + formulario_id + version_formulario + area_id
-```
+- no agregar nuevas funcionalidades sobre ellas;
+- no modificar las migraciones ya aplicadas para retirarlas;
+- sustituirlas o eliminarlas mediante una migración nueva cuando se apruebe la implementación mínima del primer Servicio.
 
-y un objeto `respuestas_jsonb` con las respuestas de los campos.
+La especificación funcional vigente está en `docs/product/service-execution.md`.
 
 ## Ejecución
 
