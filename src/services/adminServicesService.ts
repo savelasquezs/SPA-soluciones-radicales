@@ -13,6 +13,7 @@ export const fetchAdminServices = (filter: ServiceFilter, signal?: AbortSignal) 
 export const fetchUpcomingServices = (filter: UpcomingFilter, signal?: AbortSignal) => apiRequest<PagedResult<UpcomingService>>(`${base}/upcoming?${query(filter)}`,{ signal })
 export const fetchAdminService = (id: string) => apiRequest<AdminService>(`${base}/${id}`)
 export const fetchUpcomingService = (id: string) => apiRequest<UpcomingService>(`${base}/upcoming/${id}`)
+export const fetchServiceCommand = (requestId: string) => apiRequest<{ result: ServiceMutation | null }>(`${base}/commands/${requestId}`)
 export const fetchPendingCount = () => apiRequest<{ count: number }>(`${base}/pending-count`)
 export const createAdminService = (requestId: string, input: ServiceInput, allowConflicts = false, upcoming?: { id: string; version: number; confirmed: boolean }) =>
   apiRequest<ServiceMutation>(base,json('POST',{ requestId,input,allowConflicts,upcoming }))
@@ -32,12 +33,6 @@ export const previewConfirmationEmail = (id: string) =>
   apiRequest<{ upcoming: UpcomingService; email: ConfirmationEmail }>(`${base}/upcoming/${id}/email-preview`)
 export const sendConfirmationEmail = (record: UpcomingService, requestId: string, recipient: string, reviewedUnknown = false, resend = false) =>
   apiRequest<{ upcoming: UpcomingService; pendingCount: number }>(`${base}/upcoming/${record.id}/email`,json('POST',{ requestId,version:record.version,recipient,reviewedUnknown,resend }))
-export interface ServiceAuditEntry {
-  id: string
-  fechaHora: string
-  usuarioNombre: string
-  accion: string
-  detalle: Record<string,unknown> | null
-}
+export interface ServiceAuditEntry { id: string; fechaHora: string; usuarioNombre: string; accion: string; detalle: Record<string,unknown> | null }
 export const fetchServiceAudit = (id: string, page = 1) =>
   apiRequest<{ items: ServiceAuditEntry[]; total: number; page: number; pageSize: number }>(`${base}/${id}/audit?page=${page}`)

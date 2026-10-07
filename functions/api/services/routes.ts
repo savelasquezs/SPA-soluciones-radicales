@@ -2,7 +2,7 @@ import { Hono, type Context } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import type { PoolClient } from 'pg'
-import type { FollowUpState, ServiceFilter, ServicePaymentInput, UpcomingFilter, UpcomingPatch } from '../../../src/types/adminServices'
+import type { FollowUpState, ServiceFilter, ServiceMutation, ServicePaymentInput, UpcomingFilter, UpcomingPatch } from '../../../src/types/adminServices'
 import { addDateDays, isDateOnly, isServiceId, todayBogota, validateSchedule, validateServiceInput } from '../../../src/helpers/adminServices'
 import { ApiError, requireAdmin, type DomainProfile, type Identity } from '../auth'
 import { transaction } from '../db'
@@ -13,7 +13,6 @@ import { getService, getUpcoming, listServices, listUpcoming, pendingCount, work
 type Environment = { Variables: { identity: Identity } }
 export const adminServiceRoutes = new Hono<Environment>()
 adminServiceRoutes.use('*',bodyLimit({ maxSize:200_000,onError:context=>context.json({ error:'La información enviada supera el tamaño permitido.',code:'VALIDATION' },413) }))
-
 function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new ApiError(400,'La información enviada no es válida.','VALIDATION')
   return value as Record<string,unknown>
@@ -35,7 +34,7 @@ function text(value: unknown, max = 5_000, required = false): string {
   if (result.length > max || (required && !result)) throw new ApiError(422,'Revisa el texto y los campos obligatorios.','VALIDATION')
   return result
 }
-function choice<T extends string>(value: unknown, values: readonly T[], fallback?: T): T {
+function choice<const T extends string>(value: unknown, values: readonly T[], fallback?: T): T {
   if (typeof value === 'string' && values.includes(value as T)) return value as T
   if ((value == null || value === '') && fallback !== undefined) return fallback
   throw new ApiError(422,'El filtro o estado seleccionado no es válido.','VALIDATION')
@@ -52,12 +51,9 @@ function dates(query: Record<string,string>, fallbackFrom: string): { from: stri
   return { from,to }
 }
 function listFilter(query: Record<string,string>): ServiceFilter {
-  return {
-    ...dates(query,todayBogota()),tab:choice(query.tab,['agenda','history'],'agenda'),
-    estado:choice(query.estado,['','PROGRAMADO','EN_PROCESO','FINALIZADO','CANCELADO'],''),
-    tipo:choice(query.tipo,['','PRINCIPAL','REFUERZO'],''),tecnicoId:query.tecnicoId ? id(query.tecnicoId) : '',
-    query:text(query.query,160),page:pageNumber(query.page,1,100_000),pageSize:pageNumber(query.pageSize,25,100),
-  }
+  return { ...dates(query,todayBogota()),tab:choice(query.tab,['agenda','history'],'agenda'),
+    estado:choice(query.estado,['','PROGRAMADO','EN_PROCESO','FINALIZADO','CANCELADO'],''),tipo:choice(query.tipo,['','PRINCIPAL','REFUERZO'],''),
+    tecnicoId:query.tecnicoId ? id(query.tecnicoId) : '',query:text(query.query,160),page:pageNumber(query.page,1,100_000),pageSize:pageNumber(query.pageSize,25,100) }
 }
 function upcomingFilter(query: Record<string,string>): UpcomingFilter {
   return { ...dates(query,addDateDays(todayBogota(),-30)),estado:choice(query.estado,['','PENDIENTE','CONTACTADO','CONFIRMADO','POSPUESTO','NO_DESEA'],''),
@@ -87,6 +83,13 @@ function scheduleInput(value: unknown, prefix = 'programacion') {
 
 adminServiceRoutes.get('/workspace',async context => context.json(await read(context,workspace)))
 adminServiceRoutes.get('/pending-count',async context => context.json({ count:await read(context,pendingCount) }))
+adminServiceRoutes.get('/commands/:id',async context => {
+  const requestId=id(context.req.param('id'))
+  return context.json(await read(context,async (client,admin)=>{
+    const { rows }=await client.query<{ result: ServiceMutation }>("select result from private.service_admin_commands where request_id=$1 and actor_id=$2 and operation='service:create'",[requestId,admin.id])
+    return { result:rows[0]?.result ?? null }
+  }))
+})
 adminServiceRoutes.get('/upcoming',async context => context.json(await read(context,client=>listUpcoming(client,upcomingFilter(context.req.query())))))
 adminServiceRoutes.get('/upcoming/:id',async context => context.json(await read(context,client=>getUpcoming(client,id(context.req.param('id'))))))
 adminServiceRoutes.get('/upcoming/:id/email-preview',async context => {
@@ -112,9 +115,9 @@ adminServiceRoutes.get('/:id/audit',async context => {
   const result=await read(context,async client=>{
     await getService(client,recordId)
     const count=(await client.query<{ total: number }>("select count(*)::integer as total from public.auditoria where entidad='Servicios' and registro_id=$1",[recordId])).rows[0]?.total ?? 0
-    const { rows }=await client.query(`select a.id,a.fecha_hora as "fechaHora",u.nombre_completo as "usuarioNombre",a.accion,
-      a.detalle_json as detalle from public.auditoria a join public.usuarios u on u.id=a.usuario_id
-      where a.entidad='Servicios' and a.registro_id=$1 order by a.fecha_hora desc,a.id desc limit 20 offset $2`,[recordId,(page-1)*20])
+    const { rows }=await client.query(`select a.id,a.fecha_hora as "fechaHora",u.nombre_completo as "usuarioNombre",a.accion,a.detalle_json as detalle
+      from public.auditoria a join public.usuarios u on u.id=a.usuario_id where a.entidad='Servicios' and a.registro_id=$1
+      order by a.fecha_hora desc,a.id desc limit 20 offset $2`,[recordId,(page-1)*20])
     return { items:rows,total:count,page,pageSize:20 }
   })
   return context.json(result)
@@ -148,7 +151,6 @@ adminServiceRoutes.post('/:id/calendar/retry',async context => {
   const payload=await body(context.req.raw), recordId=id(context.req.param('id'))
   return context.json(await write(context,payload,`service:calendar:${recordId}`,(client,admin)=>retryCalendar(client,admin.id,recordId)),202)
 })
-
 adminServiceRoutes.onError((error,context)=>{
   if (error instanceof ApiError) return context.json({ error:error.message,code:error.code,details:error.details },error.status as ContentfulStatusCode)
   const code=(error as Error & { code?: string }).code
