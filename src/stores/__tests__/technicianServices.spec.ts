@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as api from '@/services/servicesService'
 import * as cacheService from '@/services/technicianPackageService'
 import * as mutationService from '@/services/technicianMutationService'
+import * as mediaService from '@/services/technicianMediaService'
+import * as serviceMedia from '@/services/serviceMediaService'
 import { ApiClientError } from '@/services/apiService'
 import { useAuthStore } from '@/stores/auth'
 import { useTechnicianServicesStore } from '@/stores/technicianServices'
@@ -15,6 +17,16 @@ vi.mock('@/services/servicesService', () => ({
   claimTechnicianService: vi.fn<typeof api.claimTechnicianService>(),
   saveTechnicianAreaOrder: vi.fn<typeof api.saveTechnicianAreaOrder>(),
   saveTechnicianCriterionEvaluation: vi.fn<typeof api.saveTechnicianCriterionEvaluation>(),
+  saveTechnicianAreaAccess: vi.fn<typeof api.saveTechnicianAreaAccess>(),
+}))
+vi.mock('@/services/technicianMediaService', () => ({
+  saveTechnicianMedia: vi.fn<typeof mediaService.saveTechnicianMedia>(),
+  loadTechnicianMedia: vi.fn<typeof mediaService.loadTechnicianMedia>(),
+  deleteTechnicianMedia: vi.fn<typeof mediaService.deleteTechnicianMedia>(),
+}))
+vi.mock('@/services/serviceMediaService', () => ({
+  uploadTechnicianAreaPhoto: vi.fn<typeof serviceMedia.uploadTechnicianAreaPhoto>(),
+  deleteTechnicianAreaPhoto: vi.fn<typeof serviceMedia.deleteTechnicianAreaPhoto>(),
 }))
 vi.mock('@/services/technicianPackageService', () => ({
   getTechnicianDeviceId: vi.fn<typeof cacheService.getTechnicianDeviceId>(),
@@ -107,6 +119,10 @@ beforeEach(() => {
   vi.mocked(mutationService.deleteTechnicianMutation).mockImplementation(async value => {
     mutationRecords = mutationRecords.filter(item => item.requestId !== value.requestId)
   })
+  vi.mocked(mediaService.saveTechnicianMedia).mockResolvedValue()
+  vi.mocked(mediaService.loadTechnicianMedia).mockResolvedValue(null)
+  vi.mocked(mediaService.deleteTechnicianMedia).mockResolvedValue()
+  vi.mocked(serviceMedia.deleteTechnicianAreaPhoto).mockResolvedValue()
 })
 
 describe('technician services state', () => {
@@ -190,6 +206,42 @@ describe('technician services state', () => {
     expect(store.currentPackage?.areas[0]?.criterios[0]).toMatchObject({ evaluacion: 'NC', observacion: 'Limpieza requerida' })
     expect(mutationRecords[0]).toMatchObject({ kind: 'CRITERION_EVALUATION', criterionId, status: 'PENDING' })
     expect(api.saveTechnicianCriterionEvaluation).not.toHaveBeenCalled()
+  })
+
+  it('preserves an area access exception and its photo while offline', async () => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+    vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([executionCache()])
+    const store = useTechnicianServicesStore()
+    await store.ensurePackage(serviceId)
+    const photo = new File(['photo'], 'sin-acceso.jpg', { type: 'image/jpeg' })
+    expect(await store.applyAreaAccess(serviceId, areaIds[0]!, true, 'Puerta cerrada', photo)).toBe('pending')
+    expect(mutationRecords[0]).toMatchObject({ kind: 'AREA_ACCESS', areaId: areaIds[0], withoutAccess: true, description: 'Puerta cerrada', status: 'PENDING' })
+    expect(mediaService.saveTechnicianMedia).toHaveBeenCalledWith(expect.objectContaining({ serviceId, areaId: areaIds[0], file: photo }))
+    expect(store.currentPackage?.areas[0]).toMatchObject({ sinAcceso: true, sinAccesoDescripcion: 'Puerta cerrada' })
+    expect(store.currentPackage?.areas[0]?.sinAccesoFotoLocalId).toEqual(expect.any(String))
+    expect(api.saveTechnicianAreaAccess).not.toHaveBeenCalled()
+  })
+
+  it('uploads and synchronizes an area access photo before saving the exception', async () => {
+    vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([executionCache()])
+    const photo = new File(['photo'], 'sin-acceso.jpg', { type: 'image/jpeg' })
+    vi.mocked(mediaService.loadTechnicianMedia).mockImplementation(async (_actor, mediaId) => ({
+      schemaVersion: 1, id: mediaId, actorId, serviceId, areaId: areaIds[0]!, fileName: photo.name, contentType: photo.type,
+      size: photo.size, lastModified: photo.lastModified, file: photo, savedAt: '2026-10-07T13:30:00Z',
+    }))
+    const storagePath = `services/${serviceId}/areas/${areaIds[0]}/no-access/photo.jpg`
+    vi.mocked(serviceMedia.uploadTechnicianAreaPhoto).mockResolvedValue(storagePath)
+    vi.mocked(api.saveTechnicianAreaAccess).mockResolvedValue({ area: {
+      id: areaIds[0]!, sinAcceso: true, sinAccesoDescripcion: 'Puerta cerrada', sinAccesoFotoStoragePath: storagePath, version: 2,
+    } })
+    const store = useTechnicianServicesStore()
+    await store.ensurePackage(serviceId)
+    expect(await store.applyAreaAccess(serviceId, areaIds[0]!, true, 'Puerta cerrada', photo)).toBe('synced')
+    expect(serviceMedia.uploadTechnicianAreaPhoto).toHaveBeenCalledWith(serviceId, areaIds[0], deviceId, lockToken, photo)
+    expect(api.saveTechnicianAreaAccess).toHaveBeenCalledWith(serviceId, areaIds[0], expect.any(String), deviceId, lockToken, 1, true, 'Puerta cerrada', storagePath)
+    expect(mediaService.deleteTechnicianMedia).toHaveBeenCalled()
+    expect(store.currentPackage?.areas[0]).toMatchObject({ sinAcceso: true, sinAccesoFotoStoragePath: storagePath, sinAccesoFotoLocalId: null, version: 2 })
+    expect(store.pendingSyncCount).toBe(0)
   })
 
   it('keeps a local criterion answer until the technician resolves a version conflict', async () => {

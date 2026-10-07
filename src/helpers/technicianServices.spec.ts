@@ -67,6 +67,7 @@ describe('technician area route', () => {
     expect(technicianAreaResolved(area('a', 0, true))).toBe(true)
     expect(technicianAreaResolved({ ...area('a', 0, true), dispositivos: [{ id: 'd', dispositivoId: 'd', numero: '1', ubicacion: 'x', tipoCodigo: 'TRAMPA', estadoAnterior: 'ACTIVO', revisado: false }] })).toBe(false)
     expect(technicianAreaResolved({ ...area('a', 0), sinAcceso: true, sinAccesoDescripcion: 'Cerrada', sinAccesoFotoStoragePath: 'services/photo.jpg' })).toBe(true)
+    expect(technicianAreaResolved({ ...area('a', 0), sinAcceso: true, sinAccesoDescripcion: 'Cerrada', sinAccesoFotoLocalId: 'local-photo' })).toBe(true)
   })
 
   it('wraps to an earlier pending area and never returns the current area', () => {

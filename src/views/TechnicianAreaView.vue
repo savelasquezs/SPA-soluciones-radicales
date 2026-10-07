@@ -9,10 +9,11 @@ import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import StatusBadge from '@/components/base/StatusBadge.vue'
 import StatusPanel from '@/components/base/StatusPanel.vue'
 import ServicePage from '@/components/domain/services/ServicePage.vue'
+import TechnicianAreaAccessEditor from '@/components/domain/services/TechnicianAreaAccessEditor.vue'
 import TechnicianCriterionEditor from '@/components/domain/services/TechnicianCriterionEditor.vue'
 import { nextTechnicianArea, orderedTechnicianAreas, technicianAreaResolved } from '@/helpers/technicianServices'
 import { useTechnicianServicesStore } from '@/stores/technicianServices'
-import type { MipEvaluation, TechnicianCriterionEvaluationMutation } from '@/types/technicianServices'
+import type { MipEvaluation, TechnicianAreaAccessMutation, TechnicianCriterionEvaluationMutation } from '@/types/technicianServices'
 
 const route = useRoute()
 const router = useRouter()
@@ -27,7 +28,9 @@ const loading = ref(true)
 const error = ref('')
 const saveError = ref('')
 const drafts = ref<Record<string, { evaluation: MipEvaluation | null; observation: string }>>({})
+const accessDraft = ref<{ areaId: string; withoutAccess: boolean; description: string; photo: File | null } | null>(null)
 const saveQueue = new Map<string, Promise<boolean>>()
+let accessSaveQueue: Promise<boolean> | null = null
 const canEditRoute = computed(() => packageValue.value?.service.estado === 'EN_PROCESO' && Boolean(currentCache.value?.lock))
 const next = computed(() => currentArea.value ? nextTechnicianArea(orderedAreas.value, currentArea.value.id) : { kind: 'PENDING' as const })
 const nextLabel = computed(() => next.value.kind === 'AREA' ? `Siguiente: ${next.value.area.nombre}` : next.value.kind === 'CLOSURE' ? 'Revisar cierre' : 'Revisar pendientes')
@@ -55,6 +58,46 @@ function orderAreas(): void {
 
 function criterionMutation(criterionId: string): TechnicianCriterionEvaluationMutation | null {
   return currentMutations.value.find((item): item is TechnicianCriterionEvaluationMutation => item.kind === 'CRITERION_EVALUATION' && item.criterionId === criterionId) ?? null
+}
+
+function accessMutation(): TechnicianAreaAccessMutation | null {
+  return currentMutations.value.find((item): item is TechnicianAreaAccessMutation => item.kind === 'AREA_ACCESS' && item.areaId === currentArea.value?.id) ?? null
+}
+
+function trackAccessDraft(withoutAccess: boolean, description: string, photo: File | null): void {
+  if (!currentArea.value) return
+  accessDraft.value = { areaId: currentArea.value.id, withoutAccess, description, photo }
+}
+
+function clearAccessDraft(expected: { areaId: string; withoutAccess: boolean; description: string; photo: File | null }): void {
+  const current = accessDraft.value
+  if (!current || current.areaId !== expected.areaId || current.withoutAccess !== expected.withoutAccess
+    || current.description.trim() !== expected.description || current.photo !== expected.photo) return
+  accessDraft.value = null
+}
+
+async function saveAccess(withoutAccess: boolean, description: string, photo: File | null): Promise<boolean> {
+  if (!currentArea.value) return false
+  const expected = { areaId: currentArea.value.id, withoutAccess, description: description.trim(), photo }
+  const previous = accessSaveQueue ?? Promise.resolve(true)
+  const task = previous.then(async () => {
+    saveError.value = ''
+    if (withoutAccess && saveQueue.size) await Promise.all(saveQueue.values())
+    try {
+      const result = await services.applyAreaAccess(serviceId.value, expected.areaId, withoutAccess, expected.description, photo)
+      if (result === 'conflict') return false
+      if (withoutAccess) drafts.value = {}
+      clearAccessDraft(expected)
+      return true
+    } catch (failure) {
+      saveError.value = failure instanceof Error ? failure.message : 'No fue posible guardar el acceso al Área.'
+      return false
+    }
+  })
+  accessSaveQueue = task
+  const saved = await task
+  if (accessSaveQueue === task) accessSaveQueue = null
+  return saved
 }
 
 function trackCriterionDraft(criterionId: string, evaluation: MipEvaluation | null, observation: string): void {
@@ -93,6 +136,15 @@ async function saveCriterion(criterionId: string, evaluation: MipEvaluation, obs
 }
 
 async function flushDrafts(): Promise<boolean> {
+  if (accessSaveQueue) await accessSaveQueue
+  if (accessDraft.value) {
+    const draft = accessDraft.value
+    if (draft.withoutAccess && (!draft.description.trim() || (!draft.photo && !currentArea.value?.sinAccesoFotoStoragePath && !currentArea.value?.sinAccesoFotoLocalId))) {
+      saveError.value = 'Describe la novedad y adjunta una fotografía antes de salir del Área.'
+      return false
+    }
+    if (!await saveAccess(draft.withoutAccess, draft.description, draft.photo)) return false
+  }
   if (saveQueue.size) await Promise.all(saveQueue.values())
   for (const [criterionId, draft] of Object.entries(drafts.value)) {
     if (!draft.evaluation) {
@@ -114,6 +166,20 @@ async function retryCriterion(criterionId: string): Promise<void> {
   saveError.value = ''
   try { const result = await services.retryCriterionEvaluationConflict(serviceId.value, criterionId); if (result !== 'conflict') clearCriterionDraft(criterionId) }
   catch (failure) { saveError.value = failure instanceof Error ? failure.message : 'No fue posible reintentar la evaluación.' }
+}
+
+async function useRemoteAccess(): Promise<void> {
+  if (!currentArea.value) return
+  saveError.value = ''
+  try { await services.discardAreaAccessConflict(serviceId.value, currentArea.value.id); accessDraft.value = null }
+  catch (failure) { saveError.value = failure instanceof Error ? failure.message : 'No fue posible recuperar el estado sincronizado.' }
+}
+
+async function retryAccess(): Promise<void> {
+  if (!currentArea.value) return
+  saveError.value = ''
+  try { const result = await services.retryAreaAccessConflict(serviceId.value, currentArea.value.id); if (result !== 'conflict') accessDraft.value = null }
+  catch (failure) { saveError.value = failure instanceof Error ? failure.message : 'No fue posible reintentar la excepción del Área.' }
 }
 
 function goNext(): void {
@@ -140,10 +206,11 @@ function goNext(): void {
       <section class="area-panel" aria-labelledby="area-criteria-title">
         <header><div><h2 id="area-criteria-title">Condiciones del Área</h2><p>{{ currentArea.criterios.length }} criterios aplicables · guardado automático</p></div><StatusBadge :tone="technicianAreaResolved(currentArea) ? 'success' : 'neutral'"><Check v-if="technicianAreaResolved(currentArea)" :size="15" aria-hidden="true" /><MonitorCheck v-else :size="15" aria-hidden="true" />{{ technicianAreaResolved(currentArea) ? 'Resuelta' : 'Pendiente' }}</StatusBadge></header>
         <StatusPanel v-if="saveError" title="No fue posible guardar" :message="saveError" tone="danger" />
-        <p v-if="currentArea.sinAcceso" class="area-no-access"><strong>Sin acceso:</strong> {{ currentArea.sinAccesoDescripcion }}</p>
+        <TechnicianAreaAccessEditor :area="currentArea" :mutation="accessMutation()" :editable="canEditRoute" :syncing="syncing" @draft="trackAccessDraft" @save="saveAccess" @use-remote="useRemoteAccess" @retry="retryAccess" />
+        <p v-if="currentArea.sinAcceso" class="area-no-access">Los criterios y dispositivos quedan exceptuados porque no fue posible acceder al Área.</p>
         <div v-else class="criteria-list"><TechnicianCriterionEditor v-for="criterion in currentArea.criterios" :key="criterion.id" :criterion="criterion" :mutation="criterionMutation(criterion.id)" :editable="canEditRoute" :syncing="syncing" @draft="(evaluation, observation) => trackCriterionDraft(criterion.id, evaluation, observation)" @save="(evaluation, observation) => saveCriterion(criterion.id, evaluation, observation)" @use-remote="useRemoteCriterion(criterion.id)" @retry="retryCriterion(criterion.id)" /></div>
       </section>
-      <section class="area-panel" aria-labelledby="area-devices-title">
+      <section v-if="!currentArea.sinAcceso" class="area-panel" aria-labelledby="area-devices-title">
         <header><div><h2 id="area-devices-title">Dispositivos</h2><p>{{ currentArea.dispositivos.length }} puntos congelados</p></div></header>
         <p v-if="!currentArea.dispositivos.length" class="area-empty">Esta Área no tiene Dispositivos asignados.</p>
         <ul v-else class="area-list"><li v-for="device in currentArea.dispositivos" :key="device.id"><span><strong>{{ device.numero }}</strong><small>{{ device.ubicacion }}</small></span><StatusBadge :tone="device.revisado ? 'success' : 'neutral'">{{ device.revisado ? 'Revisado' : 'Pendiente' }}</StatusBadge></li></ul>

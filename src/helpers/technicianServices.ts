@@ -32,7 +32,7 @@ export function orderedTechnicianAreas(areas: TechnicianArea[]): TechnicianArea[
 }
 
 export function technicianAreaResolved(area: TechnicianArea): boolean {
-  if (area.sinAcceso) return Boolean(area.sinAccesoDescripcion?.trim() && area.sinAccesoFotoStoragePath)
+  if (area.sinAcceso) return Boolean(area.sinAccesoDescripcion?.trim() && (area.sinAccesoFotoStoragePath || area.sinAccesoFotoLocalId))
   return area.criterios.length > 0
     && area.criterios.every(criterion => criterion.evaluacion)
     && area.dispositivos.every(device => device.revisado)

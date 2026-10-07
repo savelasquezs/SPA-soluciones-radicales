@@ -5,7 +5,7 @@ import type { PoolClient } from 'pg'
 vi.mock('@neon/functions', () => ({ attachDatabasePool: vi.fn<() => void>(), waitUntil: vi.fn<() => void>() }))
 
 import { pool, transaction } from '../../functions/api/db'
-import { claimTechnicianService, releaseTechnicianServiceLock, saveTechnicianCriterionEvaluation, startTechnicianService, technicianCommand } from '../../functions/api/technician-services/commands'
+import { claimTechnicianService, releaseTechnicianServiceLock, saveTechnicianAreaAccess, saveTechnicianCriterionEvaluation, startTechnicianService, technicianCommand } from '../../functions/api/technician-services/commands'
 import { getTechnicianPackage } from '../../functions/api/technician-services/queries'
 
 const target = new URL(process.env.TEST_DATABASE_URL ?? '')
@@ -132,6 +132,25 @@ describe('technician service execution · real PostgreSQL', () => {
     await expect(transaction(client => saveTechnicianCriterionEvaluation(client, value.technician, value.service, deviceId, session.lock.token,
       criterion.id, 1, 'NC', 'Otra respuesta'))).rejects.toMatchObject({ code: 'VERSION_CONFLICT', details: { remote: { evaluacion: 'CP', version: 2 } } })
     expect(Number((await pool.query("select count(*) from public.auditoria where registro_id=$1 and accion='SERVICIO_CRITERIO_EVALUADO'", [value.service])).rows[0].count)).toBe(1)
+  })
+
+  it('registers a no-access Area with mandatory evidence and optimistic concurrency', async () => {
+    const value = await fixture(), deviceId = randomUUID(), requestId = randomUUID()
+    const session = await transaction(client => startTechnicianService(client, value.technician, value.service, 1, deviceId))
+    const area = session.package.areas.find(item => item.areaId === value.internalArea)!
+    const photoPath = `services/${value.service}/areas/${area.id}/no-access/evidence.jpg`
+    const payload = { deviceId, areaId: area.id, version: area.version, withoutAccess: true, description: 'Puerta cerrada', photoStoragePath: photoPath }
+    const save = () => transaction(client => technicianCommand(client, value.technician, requestId, 'AREA_ACCESS', value.service, area.version,
+      payload, () => saveTechnicianAreaAccess(client, value.technician, value.service, deviceId, session.lock.token, area.id, area.version, true, 'Puerta cerrada', photoPath)))
+    const first = await save(), replay = await save()
+    expect(first.area).toMatchObject({ sinAcceso: true, sinAccesoDescripcion: 'Puerta cerrada', sinAccesoFotoStoragePath: photoPath, version: 2 })
+    expect(replay).toEqual(first)
+    await expect(transaction(client => saveTechnicianAreaAccess(client, value.technician, value.service, deviceId, session.lock.token,
+      area.id, 1, false, '', null))).rejects.toMatchObject({ code: 'VERSION_CONFLICT', details: { remote: { sinAcceso: true, version: 2 } } })
+    const criterion = area.criterios.find(item => item.criterioId === value.generalCriterion)!
+    await expect(transaction(client => saveTechnicianCriterionEvaluation(client, value.technician, value.service, deviceId, session.lock.token,
+      criterion.id, criterion.version, 'C', ''))).rejects.toMatchObject({ code: 'AREA_WITHOUT_ACCESS' })
+    expect(Number((await pool.query("select count(*) from public.auditoria where registro_id=$1 and accion='SERVICIO_AREA_SIN_ACCESO_REGISTRADA'", [value.service])).rows[0].count)).toBe(1)
   })
 
   it('keeps one persistent mobile editor until an administrator releases the service', async () => {

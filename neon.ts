@@ -23,6 +23,7 @@ export default defineConfig({
         R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID!,
         R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY!,
         R2_BUCKET_MASTER_FILES: process.env.R2_BUCKET_MASTER_FILES!,
+        R2_BUCKET_SERVICE_MEDIA: process.env.R2_BUCKET_SERVICE_MEDIA || 'sr-service-media',
         R2_BUCKET_GENERATED_DOCUMENTS: process.env.R2_BUCKET_GENERATED_DOCUMENTS || 'sr-generated-documents',
       },
     },

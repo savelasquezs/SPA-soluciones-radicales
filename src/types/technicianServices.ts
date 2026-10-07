@@ -61,6 +61,7 @@ export interface TechnicianArea {
   sinAcceso: boolean
   sinAccesoDescripcion: string | null
   sinAccesoFotoStoragePath: string | null
+  sinAccesoFotoLocalId?: string | null
   version: number
   criterios: TechnicianCriterion[]
   dispositivos: TechnicianDevice[]
@@ -152,4 +153,41 @@ export interface TechnicianCriterionEvaluationMutation extends TechnicianMutatio
   conflict: TechnicianCriterion | null
 }
 
-export type TechnicianMutation = TechnicianAreaOrderMutation | TechnicianCriterionEvaluationMutation
+export interface TechnicianAreaAccessState {
+  id: string
+  sinAcceso: boolean
+  sinAccesoDescripcion: string | null
+  sinAccesoFotoStoragePath: string | null
+  version: number
+}
+
+export interface TechnicianAreaAccessResult {
+  area: TechnicianAreaAccessState
+}
+
+export interface TechnicianAreaAccessMutation extends TechnicianMutationBase {
+  kind: 'AREA_ACCESS'
+  areaId: string
+  withoutAccess: boolean
+  description: string
+  photoMediaId: string | null
+  photoStoragePath: string | null
+  version: number
+  conflict: TechnicianAreaAccessState | null
+}
+
+export interface TechnicianMediaDraft {
+  schemaVersion: 1
+  id: string
+  actorId: string
+  serviceId: string
+  areaId: string
+  fileName: string
+  contentType: string
+  size: number
+  lastModified: number
+  bytes: ArrayBuffer
+  savedAt: string
+}
+
+export type TechnicianMutation = TechnicianAreaOrderMutation | TechnicianCriterionEvaluationMutation | TechnicianAreaAccessMutation

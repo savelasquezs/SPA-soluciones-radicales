@@ -5,7 +5,8 @@ import type { PoolClient } from 'pg'
 import { isServiceId } from '../../../src/helpers/adminServices'
 import { ApiError, requireTechnician, type DomainProfile, type Identity } from '../auth'
 import { transaction } from '../db'
-import { claimTechnicianService, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, startTechnicianService, technicianCommand } from './commands'
+import { assertAreaNoAccessStoragePath, createAreaNoAccessUploadUrl, deleteAreaNoAccessObject, serviceMediaObjectExists } from '../r2'
+import { authorizeTechnicianAreaChange, claimTechnicianService, saveTechnicianAreaAccess, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, startTechnicianService, technicianCommand } from './commands'
 import { getTechnicianPackage, listTechnicianServices } from './queries'
 
 type Environment = { Variables: { identity: Identity } }
@@ -18,6 +19,14 @@ function id(value: unknown): string {
 }
 function version(value: unknown): number {
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1) throw new ApiError(422, 'Carga la versión actual del servicio.', 'VALIDATION')
+  return value
+}
+function requiredString(value: unknown, message: string, max = 2_000): string {
+  if (typeof value !== 'string' || !value.trim() || value.length > max) throw new ApiError(422, message, 'VALIDATION')
+  return value.trim()
+}
+function optionalString(value: unknown, max = 2_000): string {
+  if (typeof value !== 'string' || value.length > max) throw new ApiError(422, 'La información enviada no es válida.', 'VALIDATION')
   return value
 }
 async function body(request: Request): Promise<Record<string, unknown>> {
@@ -61,6 +70,58 @@ technicianServiceRoutes.post('/:id/areas/order', async context => {
   })
   return context.json(await read(context, (client, technician) => technicianCommand(client, technician.id, requestId, 'AREA_ORDER', serviceId, null,
     { deviceId, areaIds, versions }, () => saveTechnicianAreaOrder(client, technician.id, serviceId, deviceId, lockToken, areaIds, versions))))
+})
+technicianServiceRoutes.post('/:id/areas/:areaId/media/upload-url', async context => {
+  const payload = await body(context.req.raw)
+  const serviceId = id(context.req.param('id'))
+  const areaId = id(context.req.param('areaId'))
+  const deviceId = id(payload.deviceId)
+  const lockToken = id(payload.lockToken)
+  const fileName = requiredString(payload.fileName, 'El nombre de la fotografía es obligatorio.', 255)
+  const contentType = typeof payload.contentType === 'string' ? payload.contentType : ''
+  const size = payload.size
+  if (typeof size !== 'number' || !Number.isSafeInteger(size) || size < 1) throw new ApiError(422, 'El tamaño de la fotografía no es válido.', 'VALIDATION')
+  await read(context, (client, technician) => authorizeTechnicianAreaChange(client, technician.id, serviceId, deviceId, lockToken, areaId))
+  return context.json(createAreaNoAccessUploadUrl({ serviceId, areaId, fileName, contentType, size }))
+})
+technicianServiceRoutes.post('/:id/areas/:areaId/access', async context => {
+  const payload = await body(context.req.raw)
+  const serviceId = id(context.req.param('id'))
+  const areaId = id(context.req.param('areaId'))
+  const requestId = id(payload.requestId)
+  const deviceId = id(payload.deviceId)
+  const lockToken = id(payload.lockToken)
+  const expected = version(payload.version)
+  if (typeof payload.withoutAccess !== 'boolean') throw new ApiError(422, 'El estado de acceso no es válido.', 'VALIDATION')
+  const description = optionalString(payload.description)
+  const photoStoragePath = payload.photoStoragePath === null ? null : requiredString(payload.photoStoragePath, 'Adjunta una fotografía válida.', 1_000)
+  if (payload.withoutAccess) {
+    if (!description.trim() || !photoStoragePath) throw new ApiError(422, 'Describe la novedad y adjunta una fotografía.', 'VALIDATION')
+    assertAreaNoAccessStoragePath(photoStoragePath, serviceId, areaId)
+    await read(context, (client, technician) => authorizeTechnicianAreaChange(client, technician.id, serviceId, deviceId, lockToken, areaId))
+    if (!await serviceMediaObjectExists(photoStoragePath, serviceId, areaId)) throw new ApiError(422, 'La fotografía todavía no está disponible. Vuelve a cargarla.', 'PHOTO_NOT_FOUND')
+  }
+  const input = { deviceId, areaId, version: expected, withoutAccess: payload.withoutAccess, description, photoStoragePath }
+  const saved = await read(context, (client, technician) => technicianCommand(client, technician.id, requestId, 'AREA_ACCESS', serviceId, expected,
+    input, () => saveTechnicianAreaAccess(client, technician.id, serviceId, deviceId, lockToken, areaId, expected, payload.withoutAccess as boolean, description, photoStoragePath)))
+  if (saved.replacedPhotoPath) await deleteAreaNoAccessObject(saved.replacedPhotoPath, serviceId, areaId)
+  return context.json({ area: saved.area })
+})
+technicianServiceRoutes.post('/:id/areas/:areaId/media/delete', async context => {
+  const payload = await body(context.req.raw)
+  const serviceId = id(context.req.param('id'))
+  const areaId = id(context.req.param('areaId'))
+  const deviceId = id(payload.deviceId)
+  const lockToken = id(payload.lockToken)
+  const storagePath = requiredString(payload.storagePath, 'La ruta de la fotografía es obligatoria.', 1_000)
+  assertAreaNoAccessStoragePath(storagePath, serviceId, areaId)
+  await read(context, async (client, technician) => {
+    await authorizeTechnicianAreaChange(client, technician.id, serviceId, deviceId, lockToken, areaId)
+    const referenced = (await client.query<{ found: boolean }>('select exists(select 1 from public.servicio_areas where servicio_id=$1 and sin_acceso_foto_storage_path=$2) as found', [serviceId, storagePath])).rows[0]?.found
+    if (referenced) throw new ApiError(409, 'La fotografía está asociada al servicio y no puede eliminarse.', 'FILE_IN_USE')
+  })
+  await deleteAreaNoAccessObject(storagePath, serviceId, areaId)
+  return context.body(null, 204)
 })
 technicianServiceRoutes.post('/:id/criteria/:criterionId', async context => {
   const payload = await body(context.req.raw)

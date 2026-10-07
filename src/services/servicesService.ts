@@ -1,5 +1,5 @@
 import { apiRequest } from '@/services/apiService'
-import type { MipEvaluation, TechnicianAreaOrderResult, TechnicianAreaOrderVersion, TechnicianCriterionEvaluationResult, TechnicianExecutionSession, TechnicianServicePackage, TechnicianServiceSummary } from '@/types/technicianServices'
+import type { MipEvaluation, TechnicianAreaAccessResult, TechnicianAreaOrderResult, TechnicianAreaOrderVersion, TechnicianCriterionEvaluationResult, TechnicianExecutionSession, TechnicianServicePackage, TechnicianServiceSummary } from '@/types/technicianServices'
 
 const base = 'api/technician/services'
 const json = (value: unknown): RequestInit => ({ method: 'POST', body: JSON.stringify(value) })
@@ -14,3 +14,5 @@ export const saveTechnicianAreaOrder = (serviceId: string, requestId: string, de
   apiRequest<TechnicianAreaOrderResult>(`${base}/${serviceId}/areas/order`, json({ requestId, deviceId, lockToken, areaIds, versions }))
 export const saveTechnicianCriterionEvaluation = (serviceId: string, requestId: string, deviceId: string, lockToken: string, criterionId: string, version: number, evaluation: MipEvaluation, observation: string) =>
   apiRequest<TechnicianCriterionEvaluationResult>(`${base}/${serviceId}/criteria/${criterionId}`, json({ requestId, deviceId, lockToken, version, evaluation, observation }))
+export const saveTechnicianAreaAccess = (serviceId: string, areaId: string, requestId: string, deviceId: string, lockToken: string, version: number, withoutAccess: boolean, description: string, photoStoragePath: string | null) =>
+  apiRequest<TechnicianAreaAccessResult>(`${base}/${serviceId}/areas/${areaId}/access`, json({ requestId, deviceId, lockToken, version, withoutAccess, description, photoStoragePath }))
