@@ -15,11 +15,11 @@ import { useFileSaveProgress } from '@/composables/useFileSaveProgress'
 import ClientForm from '@/components/domain/clients/ClientForm.vue'
 import SiteForm from '@/components/domain/clients/SiteForm.vue'
 import { ApiClientError } from '@/services/apiService'
-import { getClient, getSite, listClientHistory, listFormOptions } from '@/services/clientsService'
+import { getClient, getSite, listClientHistory } from '@/services/clientsService'
 import { deleteMasterFile, getMasterFileUrl, uploadMasterFile } from '@/services/filesService'
 import { useClientsStore } from '@/stores/clients'
 import { useNotificationsStore } from '@/stores/notifications'
-import type { ClientInput, ClientRecord, FormOption, ServiceHistoryItem, SiteInput, SiteRecord } from '@/types/domain'
+import type { ClientInput, ClientRecord, ServiceHistoryItem, SiteInput, SiteRecord } from '@/types/domain'
 
 const route = useRoute()
 const router = useRouter()
@@ -41,7 +41,6 @@ const history = ref<ServiceHistoryItem[]>([])
 const historyPage = ref(1)
 const historyTotal = ref(0)
 const historyLoading = ref(false)
-const forms = ref<FormOption[]>([])
 const clientFormOpen = ref(false)
 const siteFormOpen = ref(false)
 const siteFormMode = ref<'create' | 'edit'>('create')
@@ -63,7 +62,7 @@ async function load(): Promise<void> {
   try {
     const loaded = await store.ensureClient(clientId.value)
     if (loaded.tipoCliente === 'NEGOCIO') {
-      await Promise.all([store.loadSites(loaded.id), loadForms()])
+      await store.loadSites(loaded.id)
     } else {
       tab.value = 'history'
       await loadHistory()
@@ -73,10 +72,6 @@ async function load(): Promise<void> {
   } finally {
     loading.value = false
   }
-}
-
-async function loadForms(): Promise<void> {
-  if (!forms.value.length) forms.value = await listFormOptions()
 }
 
 async function changeTab(next: 'sites' | 'history'): Promise<void> {
@@ -263,7 +258,7 @@ function blankClient(): ClientInput {
 }
 
 function blankSite(): SiteInput {
-  return { nombre: '', direccion: '', correos: [], heredaCorreosCliente: true, contactoPrincipalNombre: '', contactoPrincipalCorreo: null, contactoPrincipalCelular: '', valorServicio: 0, periodicidadMeses: 1, manejaRefuerzo: false, formulariosAplicablesIds: [], planoStoragePath: null, manejaVehiculos: false, generaCertificadoVehiculo: false, vigenciaCertificadoVehiculoMeses: null, duracionServicioMinutos: 120, activo: true }
+  return { nombre: '', direccion: '', correos: [], heredaCorreosCliente: true, contactoPrincipalNombre: '', contactoPrincipalCorreo: null, contactoPrincipalCelular: '', valorServicio: 0, periodicidadMeses: 1, manejaRefuerzo: false, planoStoragePath: null, manejaVehiculos: false, generaCertificadoVehiculo: false, vigenciaCertificadoVehiculoMeses: null, duracionServicioMinutos: 120, activo: true }
 }
 
 function toClientInput(record: ClientRecord): ClientInput {
@@ -271,7 +266,7 @@ function toClientInput(record: ClientRecord): ClientInput {
 }
 
 function toSiteInput(site: SiteRecord): SiteInput {
-  return { nombre: site.nombre, direccion: site.direccion, correos: [...site.correos], heredaCorreosCliente: site.heredaCorreosCliente, contactoPrincipalNombre: site.contactoPrincipalNombre, contactoPrincipalCorreo: site.contactoPrincipalCorreo, contactoPrincipalCelular: site.contactoPrincipalCelular, valorServicio: site.valorServicio, periodicidadMeses: site.periodicidadMeses, manejaRefuerzo: site.manejaRefuerzo, formulariosAplicablesIds: [...site.formulariosAplicablesIds], planoStoragePath: site.planoStoragePath, manejaVehiculos: site.manejaVehiculos, generaCertificadoVehiculo: site.generaCertificadoVehiculo, vigenciaCertificadoVehiculoMeses: site.vigenciaCertificadoVehiculoMeses, duracionServicioMinutos: site.duracionServicioMinutos, activo: site.activo, version: site.version }
+  return { nombre: site.nombre, direccion: site.direccion, correos: [...site.correos], heredaCorreosCliente: site.heredaCorreosCliente, contactoPrincipalNombre: site.contactoPrincipalNombre, contactoPrincipalCorreo: site.contactoPrincipalCorreo, contactoPrincipalCelular: site.contactoPrincipalCelular, valorServicio: site.valorServicio, periodicidadMeses: site.periodicidadMeses, manejaRefuerzo: site.manejaRefuerzo, planoStoragePath: site.planoStoragePath, manejaVehiculos: site.manejaVehiculos, generaCertificadoVehiculo: site.generaCertificadoVehiculo, vigenciaCertificadoVehiculoMeses: site.vigenciaCertificadoVehiculoMeses, duracionServicioMinutos: site.duracionServicioMinutos, activo: site.activo, version: site.version }
 }
 
 function message(error: unknown, fallback: string): string { return error instanceof Error ? error.message : fallback }
@@ -299,7 +294,7 @@ function formatDate(value: string): string { return new Intl.DateTimeFormat('es-
       <EmptyState v-if="sites.length === 0" title="Este Cliente aún no tiene Sedes" message="Agrega la primera Sede para configurar su operación."><BaseButton size="compact" @click="openSiteCreate">Agregar Sede</BaseButton></EmptyState>
       <article v-for="site in sites" :key="site.id" class="site-card">
         <header><button @click="router.push(`/clientes/${client.id}/sedes/${site.id}`)">{{ site.nombre }}</button><StatusBadge :tone="site.activo ? 'success' : 'neutral'">{{ site.activo ? 'Activa' : 'Inactiva' }}</StatusBadge></header>
-        <p>{{ site.direccion }}</p><dl><div><dt>Contacto</dt><dd class="contact-value"><span>{{ site.contactoPrincipalNombre }}</span><WhatsAppPhoneLink v-if="site.contactoPrincipalCelular" :phone="site.contactoPrincipalCelular" /></dd></div><div><dt>Próximo servicio</dt><dd>{{ site.proximoServicio ? formatDate(site.proximoServicio) : 'Sin programar' }}</dd></div><div><dt>Áreas</dt><dd>{{ site.areasCount }}</dd></div><div><dt>Formularios</dt><dd>{{ site.formulariosCount }}</dd></div></dl>
+        <p>{{ site.direccion }}</p><dl><div><dt>Contacto</dt><dd class="contact-value"><span>{{ site.contactoPrincipalNombre }}</span><WhatsAppPhoneLink v-if="site.contactoPrincipalCelular" :phone="site.contactoPrincipalCelular" /></dd></div><div><dt>Próximo servicio</dt><dd>{{ site.proximoServicio ? formatDate(site.proximoServicio) : 'Sin programar' }}</dd></div><div><dt>Áreas</dt><dd>{{ site.areasCount }}</dd></div></dl>
         <div class="site-actions"><a v-if="site.contactoPrincipalCorreo" :href="`mailto:${site.contactoPrincipalCorreo}`" aria-label="Enviar correo"><Mail :size="17" /></a><BaseButton v-if="site.planoStoragePath" size="compact" variant="ghost" @click="openPlan(site.planoStoragePath)"><Map :size="16" />Ver plano</BaseButton><BaseButton size="compact" variant="secondary" @click="openSiteEdit(site)"><Pencil :size="16" />Editar</BaseButton><BaseButton v-if="site.activo" size="compact" variant="ghost" @click="deleteSiteTarget = site"><Trash2 :size="16" />Eliminar</BaseButton><BaseButton v-else size="compact" variant="ghost" @click="setSiteActive(site, true)"><RotateCcw :size="16" />Reactivar</BaseButton></div>
       </article>
     </section>
@@ -312,7 +307,7 @@ function formatDate(value: string): string { return new Intl.DateTimeFormat('es-
     </section>
 
     <BaseDialog :model-value="clientFormOpen" title="Editar cliente" @update:model-value="!saving && (clientFormOpen = $event)"><ClientForm v-model="clientForm" mode="edit" :saving="saving" @submit="saveClient" @invalid="notifications.show('Revisa los campos marcados.', 'error')" /><template #footer><BaseButton variant="secondary" :disabled="saving" @click="clientFormOpen = false">Cancelar</BaseButton><BaseButton type="submit" form="client-form" :loading="saving">{{ savePhaseLabel ?? 'Guardar cambios' }}</BaseButton></template></BaseDialog>
-    <BaseDialog :model-value="siteFormOpen" :title="siteFormMode === 'create' ? 'Crear Sede' : 'Editar Sede'" @update:model-value="!saving && (siteFormOpen = $event)"><SiteForm v-model="siteForm" :mode="siteFormMode" :saving="saving" :form-options="forms" :client-name="client.nombre" @submit="saveSite" @invalid="notifications.show('Revisa los campos marcados.', 'error')" @file-selected="selectSiteFile" @view-plan="openPlan(siteForm.planoStoragePath)" /><template #footer><BaseButton variant="secondary" :disabled="saving" @click="siteFormOpen = false">Cancelar</BaseButton><BaseButton type="submit" form="site-form" :loading="saving">{{ savePhaseLabel ?? (siteFormMode === 'create' ? 'Crear Sede' : 'Guardar cambios') }}</BaseButton></template></BaseDialog>
+    <BaseDialog :model-value="siteFormOpen" :title="siteFormMode === 'create' ? 'Crear Sede' : 'Editar Sede'" @update:model-value="!saving && (siteFormOpen = $event)"><SiteForm v-model="siteForm" :mode="siteFormMode" :saving="saving" :client-name="client.nombre" @submit="saveSite" @invalid="notifications.show('Revisa los campos marcados.', 'error')" @file-selected="selectSiteFile" @view-plan="openPlan(siteForm.planoStoragePath)" /><template #footer><BaseButton variant="secondary" :disabled="saving" @click="siteFormOpen = false">Cancelar</BaseButton><BaseButton type="submit" form="site-form" :loading="saving">{{ savePhaseLabel ?? (siteFormMode === 'create' ? 'Crear Sede' : 'Guardar cambios') }}</BaseButton></template></BaseDialog>
     <ConfirmDialog :open="deleteClientTarget" title="Eliminar cliente" :message="`Se eliminará ${client.nombre} si no tiene historial ni dependencias.`" confirm-label="Eliminar" danger :loading="saving" @cancel="deleteClientTarget = false" @confirm="removeClient" />
     <ConfirmDialog :open="dependencyClientTarget" title="Desactivar cliente" message="El Cliente tiene historial o dependencias. Se conservará toda la información y pasará a Inactivos." confirm-label="Desactivar" danger :loading="saving" @cancel="dependencyClientTarget = false" @confirm="setClientActive(false)" />
     <ConfirmDialog :open="Boolean(deleteSiteTarget)" title="Eliminar Sede" :message="`Se eliminará ${deleteSiteTarget?.nombre ?? 'la Sede'} si no tiene dependencias.`" confirm-label="Eliminar" danger :loading="saving" @cancel="deleteSiteTarget = null" @confirm="removeSite" />
