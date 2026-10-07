@@ -101,19 +101,26 @@ export async function checkSchedules(client: PoolClient, schedules: ServiceSched
 }
 async function saveProducts(client: PoolClient, service: AdminService | null, serviceId: string, input: ServiceInput['productos']): Promise<void> {
   const ids = input.map(product => product.productoId)
-  const products = (await client.query<{ id: string; activo: boolean }>('select id,activo from public.productos where id=any($1::uuid[]) for share', [ids])).rows
+  const products = (await client.query<{ id: string; activo: boolean; methods: string[] }>(`select p.id,p.activo,
+    (select coalesce(array_agg(c.clave order by c.clave),'{}'::text[]) from public.producto_metodos pm
+      join public.configuracion c on c.id=pm.metodo_id and c.categoria='METODO_APLICACION' where pm.producto_id=p.id and c.activo) as methods
+    from public.productos p where p.id=any($1::uuid[]) for share of p`, [ids])).rows
   const existing = service?.productos ?? []
   if (input.some(product => !products.some(row => row.id===product.productoId && (row.activo || existing.some(old => old.productoId===row.id))))) throw new ApiError(422, 'Hay productos que ya no están disponibles.', 'VALIDATION', { fields: { productos: 'Actualiza el catálogo y revisa los productos previstos.' } })
+  const invalidMethod=input.find(product=>!products.find(row=>row.id===product.productoId)?.methods.includes(product.metodoAplicacionCodigo)
+    && !existing.some(old=>old.productoId===product.productoId && old.metodoAplicacionCodigo===product.metodoAplicacionCodigo))
+  if (invalidMethod) throw new ApiError(422,'El método no corresponde al producto seleccionado.','VALIDATION',{ fields:{ productos:'Actualiza el catálogo y selecciona un método disponible para cada producto.' } })
   for (const old of existing.filter(product => product.aplicado)) {
     const next = input.find(product => product.productoId===old.productoId)
-    if (!next || next.lote!==old.lote || next.fechaFabricacion!==old.fechaFabricacion || next.fechaVencimiento!==old.fechaVencimiento) throw new ApiError(409, 'No se modifica un producto que el técnico ya aplicó.', 'PRODUCT_ALREADY_APPLIED')
+    if (!next || next.lote!==old.lote || next.fechaFabricacion!==old.fechaFabricacion || next.fechaVencimiento!==old.fechaVencimiento || next.dosis!==old.dosis || next.metodoAplicacionCodigo!==old.metodoAplicacionCodigo) throw new ApiError(409, 'No se modifica un producto que el técnico ya aplicó.', 'PRODUCT_ALREADY_APPLIED')
   }
   await client.query('delete from public.productos_aplicados where servicio_id=$1 and not aplicado and not(producto_id=any($2::uuid[]))', [serviceId,ids])
   for (const product of input) {
-    await client.query(`insert into public.productos_aplicados(servicio_id,producto_id,lote,fecha_fabricacion,fecha_vencimiento)
-      values($1,$2,$3,$4::date,$5::date) on conflict(servicio_id,producto_id) do update set lote=excluded.lote,
-      fecha_fabricacion=excluded.fecha_fabricacion,fecha_vencimiento=excluded.fecha_vencimiento where not productos_aplicados.aplicado`,
-    [serviceId,product.productoId,product.lote || null,product.fechaFabricacion,product.fechaVencimiento])
+    await client.query(`insert into public.productos_aplicados(servicio_id,producto_id,lote,fecha_fabricacion,fecha_vencimiento,dosis,metodo_aplicacion_codigo)
+      values($1,$2,$3,$4::date,$5::date,to_jsonb($6::text),$7) on conflict(servicio_id,producto_id) do update set lote=excluded.lote,
+      fecha_fabricacion=excluded.fecha_fabricacion,fecha_vencimiento=excluded.fecha_vencimiento,dosis=excluded.dosis,
+      metodo_aplicacion_codigo=excluded.metodo_aplicacion_codigo where not productos_aplicados.aplicado`,
+    [serviceId,product.productoId,product.lote,product.fechaFabricacion,product.fechaVencimiento,product.dosis,product.metodoAplicacionCodigo])
   }
 }
 async function saveSchedule(client: PoolClient, id: string, schedule: ServiceSchedule, expected: number): Promise<void> {

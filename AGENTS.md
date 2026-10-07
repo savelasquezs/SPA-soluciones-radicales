@@ -23,15 +23,14 @@ Consultar en este orden:
 4. `docs/frontend/reuse.md` para reutilización, componentes, composables y stores.
 5. `docs/architecture/` para decisiones técnicas vigentes.
 6. `database/README.md` para reglas de esquema y migraciones.
-7. Linear para alcance, prioridad, dependencias y estado.
-8. Código y pruebas como evidencia de lo implementado.
+7. Código y pruebas como evidencia de lo implementado.
 
 No inventar requisitos. Ante una contradicción, detener únicamente la parte afectada.
 
 ## Antes de implementar
 
 - Partir de `origin/develop` actualizado salvo autorización explícita para trabajar sobre otra base.
-- Leer la issue completa y comprobar el comportamiento solicitado.
+- Leer el alcance aprobado en `docs/` y comprobar el comportamiento solicitado.
 - Revisar reglas, entidades y criterios de aceptación afectados.
 - Inspeccionar el flujo existente cuando ya sea ejecutable.
 - Buscar piezas reutilizables antes de crear otras.

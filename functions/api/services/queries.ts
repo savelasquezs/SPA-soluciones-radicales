@@ -25,8 +25,11 @@ export const SERVICE_SELECT = `select ${linkJson('s')} || jsonb_build_object(
   'colaboradores',(select coalesce(jsonb_agg(${technicianJson('u')} order by u.nombre_completo),'[]'::jsonb)
     from public.usuarios u where coalesce(s.tecnicos_colaboradores_ids_json,'[]'::jsonb) ? u.id::text),
   'contacto',${contactJson},'valorServicio',s.valor_servicio,'observaciones',coalesce(s.observaciones,''),
-  'productos',(select coalesce(jsonb_agg(jsonb_build_object('id',pa.id,'productoId',p.id,'nombre',p.nombre,
-    'activo',p.activo,'aplicado',pa.aplicado,'lote',coalesce(pa.lote,''),'fechaFabricacion',pa.fecha_fabricacion,'fechaVencimiento',pa.fecha_vencimiento)
+  'productos',(select coalesce(jsonb_agg(jsonb_build_object('id',pa.id,'productoId',p.id,'nombre',coalesce(pa.producto_nombre_snapshot,p.nombre),
+    'activo',p.activo,'aplicado',pa.aplicado,'lote',coalesce(pa.lote,''),'fechaFabricacion',pa.fecha_fabricacion,'fechaVencimiento',pa.fecha_vencimiento,
+    'dosis',case when jsonb_typeof(pa.dosis)='string' then pa.dosis #>> '{}' else coalesce(pa.dosis::text,'') end,
+    'metodoAplicacionCodigo',coalesce(pa.metodo_aplicacion_codigo,''),'metodoAplicacionNombre',coalesce(pa.metodo_aplicacion_nombre_snapshot,
+      (select c.nombre from public.configuracion c where c.categoria='METODO_APLICACION' and c.clave=pa.metodo_aplicacion_codigo)))
     order by p.nombre,p.id),'[]'::jsonb) from public.productos_aplicados pa join public.productos p on p.id=pa.producto_id where pa.servicio_id=s.id),
   'refuerzo',(select ${linkJson('r')} from public.servicios r where r.servicio_principal_id=s.id),
   'principal',(select ${linkJson('r')} from public.servicios r where r.id=s.servicio_principal_id),
@@ -92,8 +95,10 @@ export async function workspace(client: PoolClient): Promise<ServiceWorkspace> {
     from public.sedes se join public.negocios n on n.id=se.negocio_id
     where se.activo and n.activo and se.tipo_sede='NEGOCIO' and se.valor_servicio is not null order by n.nombre,se.nombre`)).rows.map(row => row.record)
   const tecnicos = (await client.query<{ record: ServiceTechnician }>(`select ${technicianJson('u')} as record from public.usuarios u where u.activo and u.es_tecnico order by u.nombre_completo`)).rows.map(row => row.record)
-  const productos = (await client.query<{ record: ServiceProductOption }>(`select jsonb_build_object('id',id,'nombre',nombre,'principioActivo',principio_activo_composicion,
-    'dosisAplicacion',dosis_aplicacion,'activo',activo) as record from public.productos where activo order by nombre`)).rows.map(row => row.record)
+  const productos = (await client.query<{ record: ServiceProductOption }>(`select jsonb_build_object('id',p.id,'nombre',p.nombre,'principioActivo',p.principio_activo_composicion,
+    'dosisAplicacion',p.dosis_aplicacion,'metodos',(select coalesce(jsonb_agg(jsonb_build_object('codigo',c.clave,'nombre',c.nombre) order by coalesce(c.orden,2147483647),c.nombre,c.id),'[]'::jsonb)
+      from public.producto_metodos pm join public.configuracion c on c.id=pm.metodo_id where pm.producto_id=p.id and c.categoria='METODO_APLICACION' and c.activo),
+    'activo',p.activo) as record from public.productos p where p.activo order by p.nombre`)).rows.map(row => row.record)
   return { sedes, tecnicos, productos }
 }
 

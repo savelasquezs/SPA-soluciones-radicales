@@ -99,3 +99,16 @@ export async function requireAdmin(
 
   return profile
 }
+
+export async function requireTechnician(
+  client: PoolClient,
+  identity: Identity,
+): Promise<DomainProfile> {
+  const profile = await bootstrapProfile(client, identity)
+
+  if (!profile.esTecnico || profile.rolActivo !== 'TECNICO') {
+    throw new ApiError(403, 'Se requiere el rol Técnico')
+  }
+
+  return profile
+}

@@ -59,7 +59,7 @@
 .svc-summary dd, .svc-detail-dl dd { margin:0.25rem 0 0; font-size:0.875rem; overflow-wrap:anywhere; }
 .svc-amount { font-size:1.2rem; font-weight:600; font-variant-numeric:tabular-nums; }
 .svc-product-list { display:grid; gap:0.75rem; margin-top:0.875rem; }
-.svc-product-row { display:grid; grid-template-columns:minmax(7rem,0.8fr) repeat(2,minmax(12rem,1fr)) auto; gap:0.625rem; align-items:start; padding:0.75rem 0; border-top:1px solid var(--border); }
+.svc-product-row { display:grid; grid-template-columns:repeat(2,minmax(10rem,1fr)) auto; gap:0.625rem; align-items:start; padding:0.75rem 0; border-top:1px solid var(--border); }
 .svc-product-row > :first-child { grid-column:1/-1; }
 .svc-product-row strong { display:block; font-size:0.875rem; font-weight:500; padding-top:0.25rem; }
 .svc-product-row small { font-size:0.75rem; }

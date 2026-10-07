@@ -111,7 +111,7 @@ El servidor valida que el usuario pueda editar ese Servicio y que la secuencia s
 
 Un orden inválido se rechaza sin mutación parcial. El orden se actualiza atómicamente; no se envía una escritura independiente por cada fila movida.
 
-Se mantiene el lease/exclusividad de edición, estado editable del Servicio y controles de autorización existentes. Un Servicio finalizado o cancelado no se vuelve editable por esta funcionalidad.
+Se mantiene el bloqueo persistente de un celular por Servicio, el estado editable y los controles de autorización. Un Servicio finalizado o cancelado no se vuelve editable por esta funcionalidad.
 
 Si otra operación autorizada cambia legítimamente la composición del recorrido, se debe reconciliar el conjunto de IDs antes de aceptar un reordenamiento obsoleto. No inventar Áreas ni recrear datos descartados para conservar posiciones.
 

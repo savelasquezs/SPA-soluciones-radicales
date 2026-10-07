@@ -33,7 +33,11 @@
 
 - [x] Documentar la eliminación del motor genérico de formularios y definir la ejecución por Áreas, Criterios, Dispositivos y snapshots históricos.
 - [x] Retirar por completo el motor legacy de formularios MIP de BD, API y frontend mediante la migración 011.
-- [ ] Definir la implementación mínima necesaria para ejecutar y finalizar el primer Servicio Principal según `docs/product/service-execution.md`.
+- [x] Definir la implementación mínima necesaria para ejecutar y finalizar el primer Servicio Principal según `docs/product/service-execution.md`.
+- [x] Implementar la fundación de ejecución: inicio online desde una hora antes, snapshots, Productos administrativos de solo lectura, bloqueo persistente por celular, liberación administrativa, idempotencia y RLS.
+- [ ] Implementar la superficie mobile-first del Técnico y preparación durable del paquete por usuario/Servicio.
+- [ ] Implementar autosave/outbox offline, recorrido, evaluaciones, revisiones de Dispositivos, Hallazgos y evidencias sobre la fundación autoritativa.
+- [ ] Implementar firmas a pantalla completa, revisión de pendientes y finalización idempotente con confirmación del servidor.
 - [x] Diseñar en Figma el orden editable del recorrido por Servicio, en claro/oscuro, con Subir/Bajar, Aplicar/Cancelar, restablecimiento y navegación a la siguiente Área pendiente; documentar en `docs/product/service-area-route.md`.
 - [ ] Implementar el recorrido editable según `docs/product/service-area-route.md`: orden compartido por Servicio, persistencia local/sincronización idempotente, validación de pertenencia y permutación completa, concurrencia, siguiente pendiente con vuelta al inicio y validaciones de casos límite. No modificar el orden de la Sede ni reintroducir formularios legacy.
 

@@ -1,4 +1,4 @@
-name: Admin services verification
+name: Services verification
 on:
   pull_request:
     branches: [develop]
@@ -7,7 +7,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: admin-services-${{ github.ref }}
+  group: services-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   verify:
@@ -51,7 +51,7 @@ jobs:
         id: database
         if: always() && steps.install.outcome == 'success'
         run: node scripts/database/test-certificates.mjs
-      - name: Real service commands, outbox and RLS integration tests
+      - name: Real service scheduling, execution and RLS integration tests
         if: always() && steps.database.outcome == 'success'
         run: npx vitest run --config vitest.services.config.ts
       - run: npx playwright install --with-deps chromium
@@ -62,7 +62,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: admin-services-review
+          name: services-review
           path: |
             playwright-report
             test-results

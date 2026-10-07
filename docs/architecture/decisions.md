@@ -138,8 +138,19 @@ Este archivo registra decisiones permanentes. Las tareas pendientes se mantienen
 - **Estado:** Aprobada
 - **Fecha:** 2026-10-06
 - **Decisión:** La ejecución técnica no usa un constructor, definición ni versionado administrativo de formularios. La interfaz es estable y se compone directamente desde Servicio, Sede, Áreas, Criterios MIP, Productos, Dispositivos, Plagas, Hallazgos, Evidencias y Firmas.
-- **Criterios:** Los criterios son un catálogo administrable independiente. Conservan identidad estable, nombre, orden, estado y aplicabilidad exclusiva a Áreas externas/perimetrales cuando corresponda. `C/CP/NC/NA` y sus reglas de cálculo son constantes del dominio.
-- **Histórico:** Al iniciar un Servicio se congelan los datos necesarios para interpretar posteriormente la evaluación y las revisiones, sin depender del nombre, orden, estado o composición futura de los catálogos.
+- **Criterios:** Los criterios son un catálogo administrable independiente. Conservan identidad estable, nombre, estado y aplicabilidad exclusiva a Áreas externas/perimetrales cuando corresponda; se presentan alfabéticamente y no tienen orden administrable. `C/CP/NC/NA` y sus reglas de cálculo son constantes del dominio.
+- **Histórico:** Al iniciar un Servicio se congelan los datos necesarios para interpretar posteriormente la evaluación y las revisiones, sin depender del nombre, estado o composición futura de los catálogos.
 - **Monitoreo:** Los dispositivos permanecen como entidades de Sede/Área y cada Servicio crea revisiones; no se modelan como campos de formulario.
 - **Transición completada:** `20261006_011_remove_legacy_mip_forms.sql` elimina `formularios`, `respuestas_formulario`, `formularios_aplicables_json` y `formularios_versiones_json` sin modificar migraciones ya aplicadas.
 - **Referencia:** La composición funcional se especifica en `docs/product/service-execution.md`.
+
+## ADR-020 · Inicio autoritativo y exclusividad móvil del Servicio
+
+- **Estado:** Aprobada
+- **Fecha:** 2026-10-07
+- **Decisión:** La ejecución inicial aplica únicamente a Servicios `PRINCIPAL` de Sedes Negocio. Iniciar requiere conexión y confirmación del servidor desde una hora antes de la programación.
+- **Snapshot:** La misma transacción crea la composición congelada de Áreas, Criterios, Dispositivos y Productos, registra `inicio_real` y cambia el estado a `EN_PROCESO`.
+- **Exclusividad:** Un bloqueo persistente por Servicio, usuario y dispositivo permite un solo celular editor. No expira por inactividad; un Administrador puede liberarlo mediante una operación idempotente y auditada.
+- **Productos:** El Administrador completa lote, dosis y método. El Técnico los consulta en modo de solo lectura y el inicio congela su significado histórico.
+- **Offline:** La preparación puede almacenarse antes, pero no autoriza edición. El trabajo offline comienza después del inicio online confirmado.
+- **Autoridad:** Neon Function valida rol, asignación, versión, tipo, estado, ventana temporal y completitud de Productos. RLS limita la lectura de snapshots y no concede escritura directa al rol autenticado.
