@@ -1,12 +1,16 @@
-name: Documentation video · bootstrap V4
+name: Documentation video · Gestión de productos V4
 
 on:
-  push:
-    branches:
-      - codex/documentation-video-products-v4
+  workflow_dispatch:
+    inputs:
+      voice:
+        description: 'Voz femenina Chirp 3 HD'
+        required: false
+        default: 'es-US-Chirp3-HD-Kore'
+        type: string
 
 permissions:
-  contents: write
+  contents: read
   id-token: write
 
 concurrency:
@@ -20,66 +24,10 @@ jobs:
     env:
       GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
       TTS_LANGUAGE_CODE: es-US
-      TTS_VOICE: ${{ vars.GOOGLE_TTS_VOICE || 'es-US-Chirp3-HD-Kore' }}
+      TTS_VOICE: ${{ inputs.voice || vars.GOOGLE_TTS_VOICE || 'es-US-Chirp3-HD-Kore' }}
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Materialize V4 sources
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import gzip
-          import pathlib
-          import shutil
-
-          mapping = {
-              'e2e/documentation/mip-catalogs.docs.spec.ts': [
-                  '.video-v4-bootstrap/mip-catalogs.docs.spec.ts.gz.part01',
-                  '.video-v4-bootstrap/mip-catalogs.docs.spec.ts.gz.part02',
-                  '.video-v4-bootstrap/mip-catalogs.docs.spec.ts.gz.part03',
-                  '.video-v4-bootstrap/mip-catalogs.docs.spec.ts.gz.part04',
-              ],
-              'e2e/documentation/mip-catalogs.narration.json': [
-                  '.video-v4-bootstrap/mip-catalogs.narration.json.gz',
-              ],
-              'e2e/documentation/mip-catalogs.storyboard.md': [
-                  '.video-v4-bootstrap/mip-catalogs.storyboard.md.gz.part01',
-                  '.video-v4-bootstrap/mip-catalogs.storyboard.md.gz.part02',
-              ],
-              'playwright.docs.config.ts': [
-                  '.video-v4-bootstrap/playwright.docs.config.ts.gz',
-              ],
-              'scripts/documentation/render-video.mjs': [
-                  '.video-v4-bootstrap/render-video.mjs.gz',
-              ],
-              '.github/workflows/documentation-video.yml': [
-                  '.video-v4-bootstrap/documentation-video.final.yml.gz',
-              ],
-          }
-
-          for target_name, source_names in mapping.items():
-              compressed = bytearray()
-              for source_name in source_names:
-                  source = pathlib.Path(source_name)
-                  if not source.is_file():
-                      raise SystemExit(f'Falta el archivo de bootstrap: {source}')
-                  compressed.extend(source.read_bytes())
-              target = pathlib.Path(target_name)
-              target.parent.mkdir(parents=True, exist_ok=True)
-              target.write_bytes(gzip.decompress(bytes(compressed)))
-
-          shutil.rmtree('.video-v4-bootstrap')
-          PY
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add --all
-          git commit -m "docs: rebuild product management video v4"
-          git push origin HEAD:${GITHUB_REF_NAME}
 
       - uses: actions/setup-node@v4
         with:

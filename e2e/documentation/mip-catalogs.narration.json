@@ -1,50 +1,122 @@
 {
-  "title": "Cómo crear un producto",
-  "subtitle": "Catálogos MIP",
+  "title": "Gestión de productos",
+  "subtitle": "Crear, consultar y administrar el catálogo MIP",
   "segments": [
     {
+      "id": "intro",
+      "text": "En esta guía aprenderás a gestionar los productos del catálogo MIP."
+    },
+    {
       "id": "open-catalogs",
-      "text": "En Configuración, abre Catálogos MIP y entra en Productos."
+      "text": "Desde Configuración, abre Catálogos MIP. La sección Productos aparece seleccionada."
+    },
+    {
+      "id": "catalog-overview",
+      "text": "Aquí puedes buscar productos y alternar entre los registros activos e inactivos."
     },
     {
       "id": "new-product",
-      "text": "Selecciona Nuevo producto para comenzar. Los campos marcados con asterisco son obligatorios."
+      "text": "Para registrar un producto, selecciona Nuevo producto."
     },
     {
       "id": "required-fields",
-      "text": "Completa el nombre comercial, el principio activo o composición y la dosis de aplicación."
+      "text": "Los campos marcados con asterisco son obligatorios."
+    },
+    {
+      "id": "product-identity",
+      "text": "Ingresa el nombre comercial y el principio activo o la composición."
+    },
+    {
+      "id": "product-dose",
+      "text": "Registra la dosis con su unidad de aplicación."
     },
     {
       "id": "optional-details",
-      "text": "También puedes registrar el número sanitario, el grado toxicológico, el laboratorio o fabricante y el antídoto."
+      "text": "También puedes guardar el registro sanitario, el grado toxicológico y el fabricante."
     },
     {
-      "id": "coverage-intro",
-      "text": "En Plagas que controla puedes elegir una categoría completa o seleccionar plagas específicas."
+      "id": "antidote",
+      "text": "En Antídoto, registra la indicación definida en la ficha de seguridad."
+    },
+    {
+      "id": "coverage-open",
+      "text": "Abre Plagas que controla para definir la cobertura del producto."
     },
     {
       "id": "coverage-category",
-      "text": "Si eliges una categoría completa, por ejemplo todos los insectos rastreros, las plagas de esa categoría quedan incluidas automáticamente."
+      "text": "Puedes seleccionar una categoría completa, como Insectos rastreros."
     },
     {
-      "id": "coverage-specific",
-      "text": "También puedes agregar una plaga concreta de otra categoría, como Mosca doméstica, sin seleccionar todos los insectos voladores. Puedes combinar categorías completas y plagas específicas según el producto. Cuando termines, presiona Listo para volver al formulario."
+      "id": "coverage-included",
+      "text": "Las plagas de esa categoría quedan incluidas automáticamente."
     },
     {
-      "id": "methods",
-      "text": "Selecciona uno o varios métodos de aplicación que correspondan al producto."
+      "id": "coverage-individual",
+      "text": "También puedes añadir una plaga individual de otra categoría, como Mosca doméstica."
     },
     {
-      "id": "technical-sheet",
-      "text": "La ficha técnica es opcional. Puedes adjuntar un PDF o una imagen para conservarla junto al producto. Al seleccionarla, verás su nombre en el formulario y el archivo se cargará cuando guardes."
+      "id": "coverage-done",
+      "text": "Cuando la selección esté lista, presiona Listo."
     },
     {
-      "id": "save",
-      "text": "Revisa la información y crea el producto. El sistema prepara la ficha técnica y guarda todos los datos; espera a que finalice antes de cerrar. Cuando termine, el formulario se cerrará automáticamente."
+      "id": "methods-open",
+      "text": "En Métodos de aplicación, selecciona una o varias opciones."
     },
     {
-      "id": "done",
-      "text": "Listo. El producto queda disponible en el catálogo para utilizarlo en los servicios."
+      "id": "methods-example",
+      "text": "En este ejemplo agregaremos Aspersión y Termonebulización."
+    },
+    {
+      "id": "technical-sheet-intro",
+      "text": "La ficha técnica es opcional y admite archivos PDF o imágenes."
+    },
+    {
+      "id": "technical-sheet-attach",
+      "text": "Selecciona Adjuntar archivo y verifica que el nombre aparezca en el formulario."
+    },
+    {
+      "id": "save-product",
+      "text": "Revisa la información y selecciona Crear producto."
+    },
+    {
+      "id": "saving-product",
+      "text": "Espera hasta que finalicen la carga y el guardado."
+    },
+    {
+      "id": "created-product",
+      "text": "Al finalizar, el producto aparece en la lista de activos."
+    },
+    {
+      "id": "open-detail",
+      "text": "Selecciona su nombre para consultar el detalle."
+    },
+    {
+      "id": "product-detail",
+      "text": "Aquí encontrarás la dosis, los métodos, la cobertura y los demás datos registrados."
+    },
+    {
+      "id": "open-technical-sheet",
+      "text": "Selecciona Ver ficha técnica para abrir el archivo guardado en una nueva pestaña."
+    },
+    {
+      "id": "row-actions",
+      "text": "Regresa al catálogo. En la fila encontrarás las acciones Editar, Desactivar y Eliminar."
+    },
+    {
+      "id": "deactivate-product",
+      "text": "Usa Desactivar para impedir nuevas selecciones sin perder el historial del producto."
+    },
+    {
+      "id": "confirm-deactivation",
+      "text": "Confirma la desactivación."
+    },
+    {
+      "id": "inactive-product",
+      "text": "El registro sale de Activos y queda disponible en la pestaña Inactivos."
+    },
+    {
+      "id": "outro",
+      "text": "Con esto puedes crear, consultar y administrar los productos del catálogo MIP."
     }
   ]
 }
