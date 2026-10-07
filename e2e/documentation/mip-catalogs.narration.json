@@ -1,0 +1,34 @@
+{
+  "title": "Cómo crear un producto",
+  "subtitle": "Catálogos MIP",
+  "segments": [
+    {
+      "id": "open-catalogs",
+      "text": "En Configuración, abre Catálogos MIP."
+    },
+    {
+      "id": "new-product",
+      "text": "Selecciona Nuevo producto para comenzar."
+    },
+    {
+      "id": "basic-info",
+      "text": "Completa el nombre comercial, el principio activo y la dosis de aplicación."
+    },
+    {
+      "id": "pests",
+      "text": "Indica las plagas que controla el producto."
+    },
+    {
+      "id": "method",
+      "text": "Selecciona el método de aplicación."
+    },
+    {
+      "id": "save",
+      "text": "Cuando la información esté completa, crea el producto."
+    },
+    {
+      "id": "done",
+      "text": "Listo. El producto quedó disponible en el catálogo."
+    }
+  ]
+}
