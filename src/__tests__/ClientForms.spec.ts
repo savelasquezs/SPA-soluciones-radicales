@@ -7,7 +7,7 @@ import SiteForm from '@/components/domain/clients/SiteForm.vue'
 import type { AreaInput, ClientInput, SiteInput } from '@/types/domain'
 
 const client = (type: ClientInput['tipoCliente']): ClientInput => ({ tipoCliente: type, nombre: type === 'NEGOCIO' ? 'Acme SAS' : 'María Gómez', nit: type === 'NEGOCIO' ? '900123' : null, correos: [], activo: true, vigenciaCertificadoMeses: type === 'NEGOCIO' ? 12 : null, residenciaDireccion: type === 'RESIDENCIAL' ? 'Calle 1' : null, residenciaCelular: type === 'RESIDENCIAL' ? '+573001234567' : null })
-const site = (): SiteInput => ({ nombre: 'Principal', direccion: 'Calle 1', correos: [], heredaCorreosCliente: true, contactoPrincipalNombre: 'Ana', contactoPrincipalCorreo: null, contactoPrincipalCelular: '+573001234567', valorServicio: 100000, periodicidadMeses: 1, manejaRefuerzo: false, formulariosAplicablesIds: [], planoStoragePath: null, manejaVehiculos: false, generaCertificadoVehiculo: false, vigenciaCertificadoVehiculoMeses: null, duracionServicioMinutos: 120, activo: true })
+const site = (): SiteInput => ({ nombre: 'Principal', direccion: 'Calle 1', correos: [], heredaCorreosCliente: true, contactoPrincipalNombre: 'Ana', contactoPrincipalCorreo: null, contactoPrincipalCelular: '+573001234567', valorServicio: 100000, periodicidadMeses: 1, manejaRefuerzo: false, planoStoragePath: null, manejaVehiculos: false, generaCertificadoVehiculo: false, vigenciaCertificadoVehiculoMeses: null, duracionServicioMinutos: 120, activo: true })
 
 describe('formularios compartidos de Clientes', () => {
   it('ClientForm muestra reglas de Negocio y oculta esos campos para Casa', async () => {
@@ -29,7 +29,7 @@ describe('formularios compartidos de Clientes', () => {
   })
 
   it('SiteForm exige contacto y no contiene certificado de establecimiento', async () => {
-    const wrapper = mount(SiteForm, { props: { modelValue: site(), mode: 'create', formOptions: [] } })
+    const wrapper = mount(SiteForm, { props: { modelValue: site(), mode: 'create' } })
     expect(wrapper.find('#site-contact').exists()).toBe(true)
     expect(wrapper.find('#site-phone').exists()).toBe(true)
     expect(wrapper.text()).toContain('Certificado de establecimiento: configuración de Cliente.')
