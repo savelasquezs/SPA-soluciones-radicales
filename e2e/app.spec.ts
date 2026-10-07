@@ -233,12 +233,12 @@ test('navega Cliente, Sede y Área reutilizando snapshots cargados', async ({ pa
   const site = {
     id: 'site-1', clientId: 'client-1', nombre: 'Principal', direccion: 'Calle 1', correos: [], heredaCorreosCliente: true,
     contactoPrincipalNombre: 'Ana', contactoPrincipalCorreo: 'ana@acme.co', contactoPrincipalCelular: '+573001234567',
-    valorServicio: 100000, periodicidadMeses: 1, manejaRefuerzo: false, tipoSede: 'NEGOCIO', formulariosAplicablesIds: ['form-1'],
+    valorServicio: 100000, periodicidadMeses: 1, manejaRefuerzo: false, tipoSede: 'NEGOCIO',
     planoStoragePath: 'plans/principal.pdf', manejaVehiculos: false, generaCertificadoVehiculo: false,
     vigenciaCertificadoVehiculoMeses: null, duracionServicioMinutos: 120,
-    activo: true, version: 1, areasCount: 1, formulariosCount: 1, proximoServicio: '2026-10-20T15:00:00.000Z',
+    activo: true, version: 1, areasCount: 1, proximoServicio: '2026-10-20T15:00:00.000Z',
   }
-  let area = { id: 'area-1', siteId: 'site-1', nombre: 'Cocina', esExterna: false, activo: true, version: 1, dispositivosCount: 2, ultimoServicio: '2026-09-30T15:00:00.000Z' }
+  let area = { id: 'area-1', siteId: 'site-1', nombre: 'Cocina', esExterna: false, activo: true, version: 1, dispositivosCount: 2 }
   let siteGets = 0
   let areaPatches = 0
 
@@ -253,7 +253,6 @@ test('navega Cliente, Sede y Área reutilizando snapshots cargados', async ({ pa
     if (url.pathname === '/api/session') [body, status] = [adminProfile, 200]
     else if (url.pathname === '/api/clients/client-1') [body, status] = [client, 200]
     else if (url.pathname === '/api/clients/client-1/sites') [body, status] = [[site], 200]
-    else if (url.pathname === '/api/catalogs/forms') [body, status] = [[{ id: 'form-1', codigo: 'FO-PS-02', version: 3, nombre: 'Control MIP' }], 200]
     else if (url.pathname === '/api/sites/site-1' && method === 'GET') {
       siteGets += 1
       ;[body, status] = [site, 200]
