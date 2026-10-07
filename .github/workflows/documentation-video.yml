@@ -1,9 +1,6 @@
 name: Documentation video · Gestión de productos V4
 
 on:
-  push:
-    branches:
-      - codex/documentation-video-products-v4
   workflow_dispatch:
     inputs:
       voice:
