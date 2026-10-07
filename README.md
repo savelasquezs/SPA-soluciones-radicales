@@ -130,6 +130,7 @@ npm run db:bootstrap
 - [Base de datos y migraciones](database/README.md)
 - [Configuración de Neon](docs/development/neon-setup.md)
 - [Despliegue con Cloudflare Workers](docs/development/cloudflare-workers.md)
+- [Videos del manual de usuario](docs/development/documentation-videos.md)
 - [Reutilización frontend](docs/frontend/reuse.md)
 - [Flujo de desarrollo](docs/development/workflow.md)
 - [UX](docs/ux-guidelines.md)
