@@ -95,7 +95,6 @@ const SITE_SELECT = `select s.id,
                             s.periodicidad_meses as "periodicidadMeses",
                             s.maneja_refuerzo as "manejaRefuerzo",
                             s.tipo_sede as "tipoSede",
-                            coalesce(s.formularios_aplicables_json, '[]'::jsonb) as "formulariosAplicablesIds",
                             s.plano_storage_path as "planoStoragePath",
                             s.maneja_vehiculos as "manejaVehiculos",
                             s.genera_certificado_vehiculo as "generaCertificadoVehiculo",
@@ -104,7 +103,6 @@ const SITE_SELECT = `select s.id,
                             s.activo,
                             s.version,
                             (select count(*)::integer from public.areas a where a.sede_id = s.id and a.activo) as "areasCount",
-                            jsonb_array_length(coalesce(s.formularios_aplicables_json, '[]'::jsonb)) as "formulariosCount",
                             (select min(sv.inicio_programado)
                              from public.servicios sv
                              where sv.sede_id = s.id
@@ -117,11 +115,7 @@ const AREA_SELECT = `select a.id,
                             a.es_externa as "esExterna",
                             a.activo,
                             a.version,
-                            (select count(*)::integer from public.dispositivos d where d.area_id = a.id and d.activo) as "dispositivosCount",
-                            (select max(sv.inicio_programado)
-                             from public.respuestas_formulario rf
-                             join public.servicios sv on sv.id = rf.servicio_id
-                             where rf.area_id = a.id and sv.estado = 'FINALIZADO') as "ultimoServicio"
+                            (select count(*)::integer from public.dispositivos d where d.area_id = a.id and d.activo) as "dispositivosCount"
                      from public.areas a`
 
 app.use(
@@ -427,10 +421,10 @@ app.post('/api/clients', async (context) => {
            negocio_id, nombre, direccion, correos_json, hereda_correos_negocio,
            contacto_principal_nombre, contacto_principal_correo, contacto_principal_celular,
            valor_servicio, periodicidad_meses, maneja_refuerzo, tipo_sede,
-           formularios_aplicables_json, maneja_vehiculos, genera_certificado_vehiculo,
+           maneja_vehiculos, genera_certificado_vehiculo,
            duracion_servicio_minutos, activo
          ) values ($1, $2, $3, '[]'::jsonb, false, $2, null, $4, null, null,
-                   false, 'RESIDENCIAL', null, false, false, null, $5)`,
+                   false, 'RESIDENCIAL', false, false, null, $5)`,
         [id, input.nombre, input.residenciaDireccion, input.residenciaCelular, input.activo],
       )
     }
@@ -529,24 +523,6 @@ app.get('/api/catalogs/client-sites', async (context) => {
   return context.json(rows)
 })
 
-app.get('/api/catalogs/forms', async (context) => {
-  const rows = await transaction(async (client) => {
-    await requireAdmin(client, context.get('identity'))
-    const result = await client.query(
-      `select formulario_id as id,
-              min(codigo_formulario) as codigo,
-              min(nombre_formulario) as nombre,
-              version
-       from public.formularios
-       where estado_version = 'ACTIVA'
-       group by formulario_id, version
-       order by min(codigo_formulario), version`,
-    )
-    return result.rows
-  })
-  return context.json(rows)
-})
-
 app.get('/api/clients/:id/sites', async (context) => {
   const rows = await transaction(async (client) => {
     await requireAdmin(client, context.get('identity'))
@@ -566,22 +542,21 @@ app.post('/api/clients/:id/sites', async (context) => {
     const admin = await requireAdmin(client, context.get('identity'))
     const owner = await client.query('select id from public.negocios where id = $1 and tipo_cliente = $2', [clientId, 'NEGOCIO'])
     if (!owner.rowCount) throw new ApiError(422, 'El Cliente Negocio no existe')
-    await validateFormIds(client, input.formulariosAplicablesIds)
     const inserted = await client.query<{ id: string }>(
       `insert into public.sedes (
          negocio_id, nombre, direccion, correos_json, hereda_correos_negocio,
          contacto_principal_nombre, contacto_principal_correo, contacto_principal_celular,
          valor_servicio, periodicidad_meses, maneja_refuerzo, tipo_sede,
-         formularios_aplicables_json, plano_storage_path, maneja_vehiculos,
+         plano_storage_path, maneja_vehiculos,
          genera_certificado_vehiculo, vigencia_cert_vehiculo_meses,
          duracion_servicio_minutos, activo
        ) values ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10, $11,
-                 'NEGOCIO', $12::jsonb, $13, $14, $15, $16, $17, $18)
+                 'NEGOCIO', $12, $13, $14, $15, $16, $17)
        returning id`,
       [clientId, input.nombre, input.direccion, JSON.stringify(input.correos), input.heredaCorreosCliente,
         input.contactoPrincipalNombre, input.contactoPrincipalCorreo, input.contactoPrincipalCelular,
         input.valorServicio, input.periodicidadMeses, input.manejaRefuerzo,
-        JSON.stringify(input.formulariosAplicablesIds), input.planoStoragePath, input.manejaVehiculos,
+        input.planoStoragePath, input.manejaVehiculos,
         input.generaCertificadoVehiculo, input.vigenciaCertificadoVehiculoMeses,
         input.duracionServicioMinutos, input.activo],
     )
@@ -608,23 +583,22 @@ app.patch('/api/sites/:id', async (context) => {
     const admin = await requireAdmin(client, context.get('identity'))
     const current = await client.query<{ activo: boolean }>('select activo from public.sedes where id = $1 and tipo_sede = $2', [id, 'NEGOCIO'])
     if (!current.rows[0]) throw new ApiError(404, 'La Sede no existe')
-    await validateFormIds(client, input.formulariosAplicablesIds)
     const updated = await client.query(
       `update public.sedes
        set nombre = $1, direccion = $2, correos_json = $3::jsonb,
            hereda_correos_negocio = $4, contacto_principal_nombre = $5,
            contacto_principal_correo = $6, contacto_principal_celular = $7,
            valor_servicio = $8, periodicidad_meses = $9, maneja_refuerzo = $10,
-           formularios_aplicables_json = $11::jsonb, plano_storage_path = $12,
-           maneja_vehiculos = $13, genera_certificado_vehiculo = $14,
-           vigencia_cert_vehiculo_meses = $15,
-           duracion_servicio_minutos = $16, activo = $17
-       where id = $18 and tipo_sede = 'NEGOCIO' and version = $19
+           plano_storage_path = $11,
+           maneja_vehiculos = $12, genera_certificado_vehiculo = $13,
+           vigencia_cert_vehiculo_meses = $14,
+           duracion_servicio_minutos = $15, activo = $16
+       where id = $17 and tipo_sede = 'NEGOCIO' and version = $18
        returning id`,
       [input.nombre, input.direccion, JSON.stringify(input.correos), input.heredaCorreosCliente,
         input.contactoPrincipalNombre, input.contactoPrincipalCorreo, input.contactoPrincipalCelular,
         input.valorServicio, input.periodicidadMeses, input.manejaRefuerzo,
-        JSON.stringify(input.formulariosAplicablesIds), input.planoStoragePath, input.manejaVehiculos,
+        input.planoStoragePath, input.manejaVehiculos,
         input.generaCertificadoVehiculo, input.vigenciaCertificadoVehiculoMeses,
         input.duracionServicioMinutos, input.activo, id, input.version],
     )
@@ -716,7 +690,6 @@ app.delete('/api/areas/:id', async (context) => {
     const admin = await requireAdmin(client, context.get('identity'))
     const dependency = await client.query<{ hasDependencies: boolean }>(
       `select exists (select 1 from public.dispositivos where area_id = $1)
-          or exists (select 1 from public.respuestas_formulario where area_id = $1)
           or exists (select 1 from public.hallazgos where area_id = $1) as "hasDependencies"`,
       [id],
     )
@@ -803,11 +776,11 @@ app.post('/api/services', async (context) => {
       `insert into public.servicios (
          solicitud, sede_id, tipo_servicio, estado, inicio_programado,
          fin_programado, creado_por_id, tecnico_responsable_id,
-         tecnicos_colaboradores_ids_json, formularios_versiones_json,
+         tecnicos_colaboradores_ids_json,
          valor_servicio, observaciones, calendar_sync_estado
        ) values (
          'PENDIENTE', $1, 'PRINCIPAL', 'PROGRAMADO', $2, $3, $4, $5,
-         $6::jsonb, '[]'::jsonb, $7, $8, 'PENDIENTE'
+         $6::jsonb, $7, $8, 'PENDIENTE'
        )
        returning id, solicitud`,
       [
@@ -1138,19 +1111,6 @@ async function findArea(client: PoolClient, id: string): Promise<unknown> {
   return rows[0]
 }
 
-async function validateFormIds(client: PoolClient, ids: string[]): Promise<void> {
-  if (!ids.length) return
-  const { rows } = await client.query<{ count: string }>(
-    `select count(distinct formulario_id)::text as count
-     from public.formularios
-     where estado_version = 'ACTIVA' and formulario_id = any($1::uuid[])`,
-    [ids],
-  )
-  if (Number(rows[0]?.count) !== ids.length) {
-    throw new ApiError(422, 'La selección contiene un Formulario inactivo o inexistente')
-  }
-}
-
 async function serviceHistory(
   client: PoolClient,
   scope: 'client' | 'site',
@@ -1217,7 +1177,6 @@ function clientInput(body: Record<string, unknown>, editing = false) {
 function siteInput(body: Record<string, unknown>, editing = false) {
   const manejaVehiculos = requiredBoolean(body, 'manejaVehiculos')
   const generaCertificadoVehiculo = manejaVehiculos && requiredBoolean(body, 'generaCertificadoVehiculo')
-  const formulariosAplicablesIds = uniqueStrings(body.formulariosAplicablesIds)
   return {
     nombre: requiredString(body, 'nombre'),
     direccion: requiredString(body, 'direccion'),
@@ -1229,7 +1188,6 @@ function siteInput(body: Record<string, unknown>, editing = false) {
     valorServicio: requiredInteger(body, 'valorServicio'),
     periodicidadMeses: requiredPositiveInteger(body, 'periodicidadMeses'),
     manejaRefuerzo: requiredBoolean(body, 'manejaRefuerzo'),
-    formulariosAplicablesIds,
     planoStoragePath: optionalString(body.planoStoragePath),
     manejaVehiculos,
     generaCertificadoVehiculo,
