@@ -54,3 +54,11 @@
 - [ ] Al retirar los datos actuales de prueba, resolver plagas heredadas incompletas y validar `configuracion_plaga_clasificacion_check` y `configuracion_plaga_categoria_producto_check` con una nueva migración. No alterar historia para completar datos de prueba.
 - [x] Implementar Catálogo de Criterios MIP con los cinco criterios iniciales, mismo patrón UX de Catálogos, edición desde snapshot sin GET adicional y sin clave/orden/versión.
 - [ ] En la futura ejecución MIP/Monitoreo, consumir las plagas por RASTREROS/VOLADORES con snapshot por Servicio y asociar productos/trampas a puestos permanentes. No está incluido en el CRUD actual de catálogos.
+
+
+## Programación de Servicios
+
+- [x] Documentar reglas de Principal, Refuerzo editable a +21 días iniciales y Próximos por confirmar en `docs/product/service-scheduling.md`.
+- [ ] Actualizar BD/API/frontend para retirar la restricción actual de Refuerzo a +20 días exactos y soportar propuesta inicial +21 días con reprogramación libre.
+- [ ] Implementar reprogramación transaccional conjunta de Principal + Refuerzo, manteniendo reprogramación independiente del Refuerzo.
+- [ ] Implementar Próximos por confirmar como preagenda separada de `servicios`, con estados, contactos por WhatsApp/correo, badge de próximos siete días y acción Agendar precargada.
