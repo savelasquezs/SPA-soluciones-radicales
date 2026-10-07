@@ -1,6 +1,7 @@
 import { test, expect, type Page, type Route } from '@playwright/test'
 import type { AdminService, ServiceInput, ServiceLink, ServiceMutation, ServiceSchedule, ServiceTechnician, ServiceWorkspace, UpcomingService } from '../src/types/adminServices'
 import { addDateDays, addInstantDays, fromBogotaInput, scheduleEnd, suggestReinforcement, todayBogota, toBogotaInput } from '../src/helpers/adminServices'
+import { serviceDateShortcutRange } from '../src/helpers/serviceDateRanges'
 
 const uid=(n: number)=>`10000000-0000-4000-8000-${String(n).padStart(12,'0')}`
 const ids={ admin:uid(1),tech:uid(2),other:uid(3),third:uid(4),site:uid(5),client:uid(6),product:uid(7),principal:uid(8),refuerzo:uid(9),upcoming:uid(10) }
@@ -288,6 +289,20 @@ test('lost creation response is recovered from the scoped draft without creating
   expect(api.calls.filter(call=>call.method==='POST' && call.path==='/api/admin/services')).toHaveLength(1)
 })
 
+test('quick date ranges update the URL and expose the active selection',async({ page })=>{
+  await setup(page);await page.goto('/servicios')
+  const today=todayBogota()
+  const cases=[
+    ['Ayer','yesterday'],['Hoy','today'],['Mañana','tomorrow'],['Esta semana','week'],['Este mes','month'],
+  ] as const
+  for(const [label,id] of cases) {
+    await page.getByRole('button',{ name:label,exact:true }).click()
+    const expected=serviceDateShortcutRange(id,today)
+    await expect(page).toHaveURL(url=>url.pathname==='/servicios' && url.searchParams.get('from')===expected.from && url.searchParams.get('to')===expected.to)
+    await expect(page.getByRole('button',{ name:label,exact:true })).toHaveAttribute('aria-pressed','true')
+  }
+})
+
 test('weekly calendar expands its time grid and reveals operational detail on hover',async({ page })=>{
   const api=await setup(page)
   api.records[0]!.inicioProgramado=fromBogotaInput(`${day}T07:30`)
@@ -315,8 +330,11 @@ test('error retry, compact desktop, dark mode and mobile do not overflow the pag
   await expect(page.getByText('No fue posible cargar la lista',{ exact:true })).toBeVisible()
   await page.getByRole('button',{ name:'Reintentar',exact:true }).click()
   await expect(page.locator(`[data-service-id="${ids.principal}"]`)).toBeVisible()
-  const filterBottoms=await page.locator('.svc-filters > *').evaluateAll(elements=>elements.map(element=>Math.round(element.getBoundingClientRect().bottom)))
-  expect(Math.max(...filterBottoms)-Math.min(...filterBottoms)).toBeLessThanOrEqual(2)
+  const filterTops=await page.locator('.svc-filters > .base-field, .svc-date-filter .base-field').evaluateAll(elements=>elements.map(element=>Math.round(element.getBoundingClientRect().top)))
+  expect(Math.max(...filterTops)-Math.min(...filterTops)).toBeLessThanOrEqual(2)
+  const dateControlBottom=await page.locator('.svc-date-filter .date-range-control').evaluate(element=>Math.round(element.getBoundingClientRect().bottom))
+  const shortcutTop=await page.getByRole('group',{ name:'Rangos rápidos de fecha' }).evaluate(element=>Math.round(element.getBoundingClientRect().top))
+  expect(shortcutTop).toBeGreaterThan(dateControlBottom)
   await page.screenshot({ path:info.outputPath('services-desktop-light.png'),fullPage:true })
   await page.evaluate(()=>{ document.documentElement.dataset.theme='dark' })
   await page.screenshot({ path:info.outputPath('services-desktop-dark.png'),fullPage:true })
