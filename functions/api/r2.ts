@@ -14,6 +14,8 @@ export type MasterFileKind = typeof MASTER_FILE_KINDS[number]
 type UploadInput = { kind: MasterFileKind; fileName: string; contentType: string; size: number }
 type ServicePhotoUploadInput = { serviceId: string; areaId: string; fileName: string; contentType: string; size: number }
 type DeviceReviewPhotoUploadInput = { serviceId: string; serviceDeviceId: string; fileName: string; contentType: string; size: number }
+type FindingEvidenceUploadInput = { serviceId: string; findingId: string; phase: FindingEvidencePhase; fileName: string; contentType: string; size: number }
+export type FindingEvidencePhase = 'OPENING' | 'CLOSURE'
 export type UploadAuthorization = { url: string; storagePath: string; contentType: string; expiresIn: number }
 const PRESIGNED_TTL_SECONDS = 300
 const USER_CERTIFICATE_MAX_BYTES = 10 * 1024 * 1024
@@ -75,6 +77,11 @@ export function createDeviceReviewUploadUrl(input: DeviceReviewPhotoUploadInput)
   return createServicePhotoUploadUrl(input, `services/${input.serviceId}/devices/${input.serviceDeviceId}/review`)
 }
 
+export function createFindingEvidenceUploadUrl(input: FindingEvidenceUploadInput): UploadAuthorization {
+  const folder = input.phase === 'OPENING' ? 'opening' : 'closure'
+  return createServicePhotoUploadUrl(input, `services/${input.serviceId}/findings/${input.findingId}/${folder}`)
+}
+
 function createServicePhotoUploadUrl(input: Pick<ServicePhotoUploadInput, 'fileName' | 'contentType' | 'size'>, prefix: string): UploadAuthorization {
   const extension = extensionOf(input.fileName)
   if (!SERVICE_PHOTO_EXTENSIONS.has(extension)) throw new ApiError(422, 'La evidencia debe ser una imagen JPG, PNG o WebP')
@@ -97,6 +104,11 @@ export function assertDeviceReviewStoragePath(storagePath: string, serviceId: st
   assertServiceMediaStoragePath(storagePath, `services/${serviceId}/devices/${serviceDeviceId}/review/`)
 }
 
+export function assertFindingEvidenceStoragePath(storagePath: string, serviceId: string, findingId: string, phase: FindingEvidencePhase): void {
+  const folder = phase === 'OPENING' ? 'opening' : 'closure'
+  assertServiceMediaStoragePath(storagePath, `services/${serviceId}/findings/${findingId}/${folder}/`)
+}
+
 function assertServiceMediaStoragePath(storagePath: string, prefix: string): void {
   const normalized = storagePath.trim()
   if (!normalized.startsWith(prefix) || normalized.length <= prefix.length || normalized.includes('..') || normalized.startsWith('/')) {
@@ -111,6 +123,11 @@ export async function serviceMediaObjectExists(storagePath: string, serviceId: s
 
 export async function deviceReviewMediaObjectExists(storagePath: string, serviceId: string, serviceDeviceId: string): Promise<boolean> {
   assertDeviceReviewStoragePath(storagePath, serviceId, serviceDeviceId)
+  return privateServiceMediaObjectExists(storagePath)
+}
+
+export async function findingEvidenceObjectExists(storagePath: string, serviceId: string, findingId: string, phase: FindingEvidencePhase): Promise<boolean> {
+  assertFindingEvidenceStoragePath(storagePath, serviceId, findingId, phase)
   return privateServiceMediaObjectExists(storagePath)
 }
 
@@ -130,6 +147,11 @@ export async function deleteAreaNoAccessObject(storagePath: string, serviceId: s
 
 export async function deleteDeviceReviewObject(storagePath: string, serviceId: string, serviceDeviceId: string): Promise<void> {
   assertDeviceReviewStoragePath(storagePath, serviceId, serviceDeviceId)
+  await deleteServiceMediaObject(storagePath)
+}
+
+export async function deleteFindingEvidenceObject(storagePath: string, serviceId: string, findingId: string, phase: FindingEvidencePhase): Promise<void> {
+  assertFindingEvidenceStoragePath(storagePath, serviceId, findingId, phase)
   await deleteServiceMediaObject(storagePath)
 }
 

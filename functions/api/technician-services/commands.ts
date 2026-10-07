@@ -1,5 +1,5 @@
 import type { PoolClient } from 'pg'
-import type { MipEvaluation, TechnicianAreaAccessResult, TechnicianAreaAccessState, TechnicianAreaOrderResult, TechnicianAreaOrderVersion, TechnicianCriterion, TechnicianCriterionEvaluationResult, TechnicianDevice, TechnicianDeviceCapture, TechnicianDeviceCreationInput, TechnicianDeviceCreationResult, TechnicianDeviceReview, TechnicianDeviceReviewInput, TechnicianDeviceReviewResult, TechnicianExecutionLock, TechnicianExecutionSession, TechnicianPestSnapshot } from '../../../src/types/technicianServices'
+import type { MipEvaluation, TechnicianAreaAccessResult, TechnicianAreaAccessState, TechnicianAreaOrderResult, TechnicianAreaOrderVersion, TechnicianCriterion, TechnicianCriterionEvaluationResult, TechnicianDevice, TechnicianDeviceCapture, TechnicianDeviceCreationInput, TechnicianDeviceCreationResult, TechnicianDeviceReview, TechnicianDeviceReviewInput, TechnicianDeviceReviewResult, TechnicianExecutionLock, TechnicianExecutionSession, TechnicianFinding, TechnicianFindingCreateInput, TechnicianFindingResult, TechnicianFindingStatusInput, TechnicianPestSnapshot } from '../../../src/types/technicianServices'
 import { technicianDevicePhotoRequired } from '../../../src/helpers/technicianServices'
 import { ApiError } from '../auth'
 import { assertVersion, audit } from '../services/commands'
@@ -285,6 +285,145 @@ export async function createTechnicianDevice(
     tipoCodigo,
   })
   return { device }
+}
+
+type TechnicianFindingContext = {
+  sourceAreaId: string
+  siteId: string
+  finding: TechnicianFinding
+}
+
+async function getFinding(client: PoolClient, findingId: string): Promise<TechnicianFinding | null> {
+  const row = (await client.query<{ record: TechnicianFinding }>(`select jsonb_build_object(
+    'id',h.id,'servicioAperturaId',h.servicio_apertura_id,'fechaApertura',h.fecha_apertura,
+    'descripcion',h.descripcion,'recomendacionAccion',h.recomendacion_accion,
+    'evidenciasAperturaStoragePaths',coalesce(h.evidencias_apertura_storage_paths,'[]'::jsonb),
+    'estado',h.estado,'responsableNombre',h.responsable_nombre,'responsableCorreo',h.responsable_correo,
+    'servicioCierreId',h.servicio_cierre_id,'fechaCierre',h.fecha_cierre,
+    'evidenciasCierreStoragePaths',coalesce(h.evidencias_cierre_storage_paths,'[]'::jsonb),
+    'observacionCierre',h.observacion_cierre,'version',h.version
+  ) as record from public.hallazgos h where h.id=$1`, [findingId])).rows[0]
+  return row?.record ?? null
+}
+
+async function editableFindingArea(
+  client: PoolClient,
+  userId: string,
+  serviceId: string,
+  deviceId: string,
+  lockToken: string,
+  areaId: string,
+): Promise<{ sourceAreaId: string; siteId: string }> {
+  const area = await authorizeTechnicianAreaChange(client, userId, serviceId, deviceId, lockToken, areaId, true)
+  if (area.sinAcceso) throw new ApiError(409, 'Habilita el acceso al Área antes de registrar Hallazgos.', 'AREA_WITHOUT_ACCESS')
+  const context = (await client.query<{ sourceAreaId: string; siteId: string }>(`select sa.area_id as "sourceAreaId",s.sede_id as "siteId"
+    from public.servicio_areas sa join public.servicios s on s.id=sa.servicio_id
+    where sa.id=$2 and sa.servicio_id=$1`, [serviceId, areaId])).rows[0]
+  if (!context) throw new ApiError(404, 'El Área no pertenece a este servicio.', 'AREA_NOT_FOUND')
+  return context
+}
+
+export async function authorizeTechnicianFindingChange(
+  client: PoolClient,
+  userId: string,
+  serviceId: string,
+  deviceId: string,
+  lockToken: string,
+  areaId: string,
+  findingId: string,
+): Promise<TechnicianFindingContext> {
+  const context = await editableFindingArea(client, userId, serviceId, deviceId, lockToken, areaId)
+  const finding = await getFinding(client, findingId)
+  if (!finding || !(await client.query(`select 1 from public.hallazgos h where h.id=$1 and h.sede_id=$2 and h.area_id=$3
+    and (h.servicio_apertura_id=$4 or exists(select 1 from public.servicios opening_service,public.servicios current_service
+      where opening_service.id=h.servicio_apertura_id and current_service.id=$4
+      and opening_service.inicio_programado<current_service.inicio_programado)) limit 1`,
+  [findingId, context.siteId, context.sourceAreaId, serviceId])).rowCount) {
+    throw new ApiError(404, 'El Hallazgo no pertenece a esta Área o no está disponible para seguimiento.', 'FINDING_NOT_FOUND')
+  }
+  return { ...context, finding }
+}
+
+export async function createTechnicianFinding(
+  client: PoolClient,
+  userId: string,
+  serviceId: string,
+  deviceId: string,
+  lockToken: string,
+  areaId: string,
+  findingId: string,
+  input: TechnicianFindingCreateInput,
+  evidenceStoragePaths: string[],
+): Promise<TechnicianFindingResult> {
+  const context = await editableFindingArea(client, userId, serviceId, deviceId, lockToken, areaId)
+  const descripcion = input.descripcion.trim(), recomendacion = input.recomendacionAccion.trim()
+  const responsableNombre = input.responsableNombre.trim(), responsableCorreo = input.responsableCorreo.trim().toLowerCase()
+  if (!descripcion || descripcion.length > 2_000 || !recomendacion || recomendacion.length > 2_000 || !responsableNombre || responsableNombre.length > 200) {
+    throw new ApiError(422, 'Completa la descripción, la acción recomendada y el responsable del Hallazgo.', 'VALIDATION')
+  }
+  if (responsableCorreo && (responsableCorreo.length > 320 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(responsableCorreo))) {
+    throw new ApiError(422, 'El correo del responsable no es válido.', 'VALIDATION')
+  }
+  if (evidenceStoragePaths.length > 10 || new Set(evidenceStoragePaths).size !== evidenceStoragePaths.length) {
+    throw new ApiError(422, 'Las evidencias del Hallazgo no son válidas.', 'VALIDATION')
+  }
+  await client.query(`insert into public.hallazgos(id,sede_id,area_id,servicio_apertura_id,fecha_apertura,descripcion,
+    recomendacion_accion,evidencias_apertura_storage_paths,estado,responsable_nombre,responsable_correo)
+    values($1,$2,$3,$4,now(),$5,$6,$7::jsonb,'ABIERTO',$8,$9)`,
+  [findingId, context.siteId, context.sourceAreaId, serviceId, descripcion, recomendacion,
+    JSON.stringify(evidenceStoragePaths), responsableNombre, responsableCorreo || null])
+  const finding = await getFinding(client, findingId)
+  if (!finding) throw new ApiError(500, 'No fue posible recuperar el Hallazgo creado.', 'UNEXPECTED')
+  await audit(client, userId, 'SERVICIO_HALLAZGO_CREADO', serviceId, { areaId, findingId, evidenceCount: evidenceStoragePaths.length })
+  return { finding }
+}
+
+export async function saveTechnicianFindingStatus(
+  client: PoolClient,
+  userId: string,
+  serviceId: string,
+  deviceId: string,
+  lockToken: string,
+  areaId: string,
+  findingId: string,
+  expectedVersion: number,
+  input: TechnicianFindingStatusInput,
+  evidenceStoragePaths: string[],
+): Promise<TechnicianFindingResult> {
+  const context = await authorizeTechnicianFindingChange(client, userId, serviceId, deviceId, lockToken, areaId, findingId)
+  await client.query('select id from public.hallazgos where id=$1 for update', [findingId])
+  const current = await getFinding(client, findingId)
+  if (!current) throw new ApiError(404, 'El Hallazgo ya no está disponible.', 'FINDING_NOT_FOUND')
+  if (current.version !== expectedVersion) {
+    throw new ApiError(409, 'El Hallazgo cambió. Conservamos tu actualización para que decidas cómo continuar.', 'VERSION_CONFLICT', { remote: current })
+  }
+  if (current.servicioAperturaId === serviceId) {
+    throw new ApiError(409, 'Un Hallazgo se verifica o cierra en un Servicio posterior.', 'FINDING_SAME_SERVICE')
+  }
+  if (current.estado === 'CERRADO') throw new ApiError(409, 'El Hallazgo ya fue cerrado.', 'FINDING_CLOSED', { remote: current })
+  if (input.observacionCierre.length > 2_000 || evidenceStoragePaths.length > 10 || new Set(evidenceStoragePaths).size !== evidenceStoragePaths.length) {
+    throw new ApiError(422, 'La actualización del Hallazgo no es válida.', 'VALIDATION')
+  }
+  if (input.estado === 'CERRADO' && !evidenceStoragePaths.length) {
+    throw new ApiError(422, 'Adjunta al menos una evidencia para cerrar el Hallazgo.', 'VALIDATION')
+  }
+  if (input.estado === 'EN_PROCESO') {
+    if (current.estado !== 'ABIERTO') throw new ApiError(409, 'El Hallazgo ya está en seguimiento.', 'FINDING_ALREADY_IN_PROGRESS', { remote: current })
+    await client.query("update public.hallazgos set estado='EN_PROCESO' where id=$1", [findingId])
+  } else {
+    await client.query(`update public.hallazgos set estado='CERRADO',servicio_cierre_id=$2,fecha_cierre=now(),
+      evidencias_cierre_storage_paths=$3::jsonb,observacion_cierre=$4 where id=$1`,
+    [findingId, serviceId, JSON.stringify(evidenceStoragePaths), input.observacionCierre.trim() || null])
+  }
+  const finding = await getFinding(client, findingId)
+  if (!finding) throw new ApiError(500, 'No fue posible recuperar el Hallazgo actualizado.', 'UNEXPECTED')
+  await audit(client, userId, input.estado === 'CERRADO' ? 'SERVICIO_HALLAZGO_CERRADO' : 'SERVICIO_HALLAZGO_EN_PROCESO', serviceId, {
+    areaId,
+    findingId,
+    evidenceCount: evidenceStoragePaths.length,
+    previousState: context.finding.estado,
+  })
+  return { finding }
 }
 
 export async function authorizeTechnicianDeviceChange(

@@ -2,13 +2,13 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { isExactAreaPermutation, sortTechnicianServices, technicianDevicePhotoRequired } from '@/helpers/technicianServices'
 import { useAuthStore } from '@/stores/auth'
-import { claimTechnicianService, createTechnicianDevice, fetchTechnicianPackage, fetchTechnicianServices, saveTechnicianAreaAccess, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, startTechnicianService } from '@/services/servicesService'
+import { claimTechnicianService, createTechnicianDevice, createTechnicianFinding, fetchTechnicianPackage, fetchTechnicianServices, saveTechnicianAreaAccess, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, saveTechnicianFindingStatus, startTechnicianService } from '@/services/servicesService'
 import { ApiClientError } from '@/services/apiService'
 import { getTechnicianDeviceId, listTechnicianPackageCaches, loadTechnicianPackageCache, saveTechnicianPackageCache } from '@/services/technicianPackageService'
 import { deleteTechnicianMutation, listTechnicianMutations, saveTechnicianMutation } from '@/services/technicianMutationService'
 import { deleteTechnicianMedia, loadTechnicianMedia, saveTechnicianMedia } from '@/services/technicianMediaService'
-import { deleteTechnicianAreaPhoto, deleteTechnicianDevicePhoto, uploadTechnicianAreaPhoto, uploadTechnicianDevicePhoto } from '@/services/serviceMediaService'
-import type { MipEvaluation, TechnicianAreaAccessMutation, TechnicianAreaAccessState, TechnicianAreaOrderConflict, TechnicianAreaOrderMutation, TechnicianAreaOrderResult, TechnicianCriterion, TechnicianCriterionEvaluationMutation, TechnicianDevice, TechnicianDeviceCreationInput, TechnicianDeviceCreationMutation, TechnicianDeviceReview, TechnicianDeviceReviewInput, TechnicianDeviceReviewMutation, TechnicianExecutionSession, TechnicianMutation, TechnicianPackageCache, TechnicianPendingOperation, TechnicianServicePackage, TechnicianServiceSummary } from '@/types/technicianServices'
+import { deleteTechnicianAreaPhoto, deleteTechnicianDevicePhoto, deleteTechnicianFindingEvidence, uploadTechnicianAreaPhoto, uploadTechnicianDevicePhoto, uploadTechnicianFindingEvidence } from '@/services/serviceMediaService'
+import type { MipEvaluation, TechnicianAreaAccessMutation, TechnicianAreaAccessState, TechnicianAreaOrderConflict, TechnicianAreaOrderMutation, TechnicianAreaOrderResult, TechnicianCriterion, TechnicianCriterionEvaluationMutation, TechnicianDevice, TechnicianDeviceCreationInput, TechnicianDeviceCreationMutation, TechnicianDeviceReview, TechnicianDeviceReviewInput, TechnicianDeviceReviewMutation, TechnicianExecutionSession, TechnicianFinding, TechnicianFindingCreateInput, TechnicianFindingCreateMutation, TechnicianFindingStatusInput, TechnicianFindingStatusMutation, TechnicianMutation, TechnicianPackageCache, TechnicianPendingOperation, TechnicianServicePackage, TechnicianServiceSummary } from '@/types/technicianServices'
 
 function onlineNow(): boolean {
   return typeof navigator === 'undefined' || navigator.onLine
@@ -226,6 +226,33 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     await persistPackage({ ...cache.package, areas })
   }
 
+  async function persistFinding(serviceId: string, areaId: string, finding: TechnicianFinding): Promise<void> {
+    const cache = caches.value[serviceId]
+    if (!cache) throw new Error('Prepara el servicio antes de registrar Hallazgos.')
+    let found = false
+    const areas = cache.package.areas.map(area => {
+      if (area.id !== areaId) return area
+      found = true
+      const currentFindings = area.hallazgos ?? []
+      const existing = currentFindings.find(item => item.id === finding.id)
+      const hallazgos = existing
+        ? currentFindings.map(item => item.id === finding.id ? finding : item)
+        : [...currentFindings, finding]
+      return { ...area, hallazgos }
+    })
+    if (!found) throw new Error('El Área no pertenece al servicio preparado.')
+    await persistPackage({ ...cache.package, areas })
+  }
+
+  async function removeLocalFinding(serviceId: string, areaId: string, findingId: string): Promise<void> {
+    const cache = caches.value[serviceId]
+    if (!cache) return
+    const areas = cache.package.areas.map(area => area.id === areaId
+      ? { ...area, hallazgos: (area.hallazgos ?? []).filter(finding => finding.id !== findingId) }
+      : area)
+    await persistPackage({ ...cache.package, areas })
+  }
+
   function reviewFromMutation(device: TechnicianDevice, mutation: TechnicianDeviceReviewMutation, base?: TechnicianDeviceReview): TechnicianDeviceReview {
     const pestNames = new Map(device.plagas.map(pest => [pest.codigo, pest.nombre]))
     return {
@@ -273,6 +300,36 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     if (!record.id || !['ACTIVO', 'DANADO', 'FUERA_DE_USO'].includes(record.estadoObservado ?? '')
       || !Array.isArray(record.capturas) || !Number.isSafeInteger(record.version)) return null
     return record as TechnicianDeviceReview
+  }
+
+  function findingConflictDetails(failure: ApiClientError): TechnicianFinding | null {
+    const remote = failure.details?.remote
+    if (!remote || typeof remote !== 'object' || Array.isArray(remote)) return null
+    const record = remote as Partial<TechnicianFinding>
+    if (!record.id || !['ABIERTO', 'EN_PROCESO', 'CERRADO'].includes(record.estado ?? '')
+      || !Array.isArray(record.evidenciasAperturaStoragePaths) || !Array.isArray(record.evidenciasCierreStoragePaths)
+      || !Number.isSafeInteger(record.version)) return null
+    return record as TechnicianFinding
+  }
+
+  async function uploadFindingMutationEvidences<T extends TechnicianFindingCreateMutation | TechnicianFindingStatusMutation>(
+    operation: T,
+    phase: 'OPENING' | 'CLOSURE',
+  ): Promise<T> {
+    let current = operation
+    for (const evidence of current.evidences) {
+      if (evidence.storagePath) continue
+      const media = await loadTechnicianMedia(current.actorId, evidence.mediaId)
+      if (!media) throw new Error('Una evidencia local del Hallazgo no está disponible.')
+      const storagePath = await uploadTechnicianFindingEvidence(current.serviceId, current.areaId, current.findingId,
+        phase, current.deviceId, current.lockToken, media.file)
+      current = { ...current,
+        evidences: current.evidences.map(item => item.mediaId === evidence.mediaId ? { ...item, storagePath } : item),
+        updatedAt: new Date().toISOString() } as T
+      await saveTechnicianMutation(current)
+      await reloadMutations(current.serviceId)
+    }
+    return current
   }
 
   async function syncPending(serviceId: string): Promise<'synced' | 'pending' | 'conflict'> {
@@ -357,6 +414,29 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
               { numero: sending.numero, tipoCodigo: sending.tipoCodigo, ubicacion: sending.ubicacion })
             await deleteTechnicianMutation(sending)
             await persistDeviceCreation(serviceId, sending.areaId, { ...result.device, creacionPendiente: false })
+          } else if (sending.kind === 'FINDING_CREATE') {
+            const findingOperation = await uploadFindingMutationEvidences(sending, 'OPENING')
+            sending = findingOperation
+            const result = await createTechnicianFinding(serviceId, findingOperation.areaId, findingOperation.requestId,
+              findingOperation.deviceId, findingOperation.lockToken, findingOperation.findingId,
+              { descripcion: findingOperation.descripcion, recomendacionAccion: findingOperation.recomendacionAccion,
+                responsableNombre: findingOperation.responsableNombre, responsableCorreo: findingOperation.responsableCorreo },
+              findingOperation.evidences.flatMap(evidence => evidence.storagePath ? [evidence.storagePath] : []))
+            await deleteTechnicianMutation(findingOperation)
+            for (const evidence of findingOperation.evidences) await deleteTechnicianMedia(findingOperation.actorId, evidence.mediaId)
+            await persistFinding(serviceId, findingOperation.areaId, result.finding)
+          } else if (sending.kind === 'FINDING_STATUS') {
+            const findingOperation = sending.estado === 'CERRADO'
+              ? await uploadFindingMutationEvidences(sending, 'CLOSURE')
+              : sending
+            sending = findingOperation
+            const result = await saveTechnicianFindingStatus(serviceId, findingOperation.areaId, findingOperation.findingId,
+              findingOperation.requestId, findingOperation.deviceId, findingOperation.lockToken, findingOperation.version,
+              { estado: findingOperation.estado, observacionCierre: findingOperation.observacionCierre },
+              findingOperation.evidences.flatMap(evidence => evidence.storagePath ? [evidence.storagePath] : []))
+            await deleteTechnicianMutation(findingOperation)
+            for (const evidence of findingOperation.evidences) await deleteTechnicianMedia(findingOperation.actorId, evidence.mediaId)
+            await persistFinding(serviceId, findingOperation.areaId, result.finding)
           } else {
             let reviewOperation = sending as TechnicianDeviceReviewMutation
             const serviceDeviceId = reviewOperation.serviceDeviceId
@@ -401,6 +481,17 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
             await reloadMutations(serviceId)
             return 'pending'
           }
+          if ((sending.kind === 'FINDING_CREATE' || sending.kind === 'FINDING_STATUS') && failure instanceof ApiClientError
+            && failure.code === 'PHOTO_NOT_FOUND') {
+            const missingPath = typeof failure.details?.storagePath === 'string' ? failure.details.storagePath : null
+            await saveTechnicianMutation({ ...sending,
+              evidences: sending.evidences.map(evidence => !missingPath || evidence.storagePath === missingPath
+                ? { ...evidence, storagePath: null }
+                : evidence),
+              status: 'PENDING', error: failure.message, updatedAt: new Date().toISOString() })
+            await reloadMutations(serviceId)
+            return 'pending'
+          }
           const retryable = !(failure instanceof ApiClientError) || failure.status >= 500 || failure.status === 408 || failure.status === 429
           const error = failure instanceof Error ? failure.message : 'No fue posible sincronizar el cambio.'
           if (sending.kind === 'AREA_ORDER') {
@@ -414,6 +505,12 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
               conflict: failure instanceof ApiClientError ? areaAccessConflictDetails(failure) : null, error, updatedAt: new Date().toISOString() })
           } else if (sending.kind === 'DEVICE_CREATE') {
             await saveTechnicianMutation({ ...sending, status: retryable ? 'SENDING' : 'CONFLICT', error, updatedAt: new Date().toISOString() })
+          } else if (sending.kind === 'FINDING_CREATE') {
+            await saveTechnicianMutation({ ...sending, status: retryable ? 'SENDING' : 'CONFLICT', error, updatedAt: new Date().toISOString() })
+          } else if (sending.kind === 'FINDING_STATUS') {
+            await saveTechnicianMutation({ ...sending, status: retryable ? 'SENDING' : 'CONFLICT',
+              conflict: failure instanceof ApiClientError ? findingConflictDetails(failure) : null,
+              error, updatedAt: new Date().toISOString() })
           } else {
             await saveTechnicianMutation({ ...sending, status: retryable ? 'SENDING' : 'CONFLICT',
               conflict: failure instanceof ApiClientError ? deviceReviewConflictDetails(failure) : null, error, updatedAt: new Date().toISOString() })
@@ -788,6 +885,156 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     return onlineNow() ? syncPending(serviceId) : 'pending'
   }
 
+  function findingMutation(findingId: string): TechnicianFindingCreateMutation | TechnicianFindingStatusMutation | null {
+    return currentMutations.value.find((item): item is TechnicianFindingCreateMutation | TechnicianFindingStatusMutation =>
+      (item.kind === 'FINDING_CREATE' || item.kind === 'FINDING_STATUS') && item.findingId === findingId) ?? null
+  }
+
+  async function saveFindingMedia(serviceId: string, areaId: string, files: File[]): Promise<string[]> {
+    if (files.length > 10) throw new Error('Puedes adjuntar máximo 10 evidencias por Hallazgo.')
+    const ids: string[] = []
+    try {
+      for (const file of files) {
+        const id = crypto.randomUUID()
+        await saveTechnicianMedia({ schemaVersion: 1, id, actorId: actorId(), serviceId, areaId, file, savedAt: new Date().toISOString() })
+        ids.push(id)
+      }
+      return ids
+    } catch (failure) {
+      for (const id of ids) await deleteTechnicianMedia(actorId(), id)
+      throw failure
+    }
+  }
+
+  async function applyFindingCreate(
+    serviceId: string,
+    areaId: string,
+    input: TechnicianFindingCreateInput,
+    files: File[],
+  ): Promise<'synced' | 'pending' | 'conflict'> {
+    const cache = caches.value[serviceId]
+    if (!cache || cache.package.service.estado !== 'EN_PROCESO' || !cache.lock) throw new Error('Este celular no puede registrar Hallazgos en el servicio.')
+    const area = cache.package.areas.find(item => item.id === areaId)
+    if (!area) throw new Error('El Área no pertenece al servicio preparado.')
+    if (area.sinAcceso) throw new Error('Habilita el acceso al Área antes de registrar Hallazgos.')
+    const normalized = {
+      descripcion: input.descripcion.trim(),
+      recomendacionAccion: input.recomendacionAccion.trim(),
+      responsableNombre: input.responsableNombre.trim(),
+      responsableCorreo: input.responsableCorreo.trim().toLowerCase(),
+    }
+    if (!normalized.descripcion || normalized.descripcion.length > 2_000 || !normalized.recomendacionAccion
+      || normalized.recomendacionAccion.length > 2_000 || !normalized.responsableNombre || normalized.responsableNombre.length > 200) {
+      throw new Error('Completa la descripción, la acción recomendada y el responsable del Hallazgo.')
+    }
+    if (normalized.responsableCorreo && (normalized.responsableCorreo.length > 320 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(normalized.responsableCorreo))) {
+      throw new Error('El correo del responsable no es válido.')
+    }
+    const mediaIds = await saveFindingMedia(serviceId, areaId, files)
+    const now = new Date().toISOString(), findingId = crypto.randomUUID()
+    const operation: TechnicianFindingCreateMutation = {
+      schemaVersion: 1, requestId: crypto.randomUUID(), actorId: actorId(), serviceId,
+      deviceId: cache.deviceId, lockToken: cache.lock.token, kind: 'FINDING_CREATE', areaId, findingId,
+      ...normalized, evidences: mediaIds.map(mediaId => ({ mediaId, storagePath: null })),
+      status: 'PENDING', createdAt: now, updatedAt: now, error: null,
+    }
+    try { await saveTechnicianMutation(operation) }
+    catch (failure) { for (const mediaId of mediaIds) await deleteTechnicianMedia(operation.actorId, mediaId); throw failure }
+    await reloadMutations(serviceId)
+    await persistFinding(serviceId, areaId, {
+      id: findingId, servicioAperturaId: serviceId, fechaApertura: now,
+      descripcion: normalized.descripcion, recomendacionAccion: normalized.recomendacionAccion,
+      evidenciasAperturaStoragePaths: [], evidenciasAperturaLocalIds: mediaIds,
+      estado: 'ABIERTO', responsableNombre: normalized.responsableNombre,
+      responsableCorreo: normalized.responsableCorreo || null, servicioCierreId: null, fechaCierre: null,
+      evidenciasCierreStoragePaths: [], observacionCierre: null, version: 1,
+    })
+    return onlineNow() ? syncPending(serviceId) : 'pending'
+  }
+
+  async function applyFindingStatus(
+    serviceId: string,
+    areaId: string,
+    findingId: string,
+    input: TechnicianFindingStatusInput,
+    files: File[],
+  ): Promise<'synced' | 'pending' | 'conflict'> {
+    const cache = caches.value[serviceId]
+    if (!cache || cache.package.service.estado !== 'EN_PROCESO' || !cache.lock) throw new Error('Este celular no puede actualizar Hallazgos en el servicio.')
+    const area = cache.package.areas.find(item => item.id === areaId)
+    const finding = area?.hallazgos?.find(item => item.id === findingId)
+    if (!area || !finding) throw new Error('El Hallazgo no pertenece al Área seleccionada.')
+    if (area.sinAcceso) throw new Error('Habilita el acceso al Área antes de actualizar Hallazgos.')
+    if (finding.servicioAperturaId === serviceId) throw new Error('Este Hallazgo se verificará en un Servicio posterior.')
+    if (finding.estado === 'CERRADO') throw new Error('El Hallazgo ya fue cerrado.')
+    if (input.estado === 'CERRADO' && !files.length) throw new Error('Adjunta al menos una evidencia para cerrar el Hallazgo.')
+    if (input.observacionCierre.length > 2_000) throw new Error('La observación no puede superar 2000 caracteres.')
+    const existing = await reloadMutations(serviceId)
+    const existingStatus = existing.find((item): item is TechnicianFindingStatusMutation => item.kind === 'FINDING_STATUS' && item.findingId === findingId)
+    if (existingStatus?.status === 'CONFLICT') return 'conflict'
+    if (existingStatus) throw new Error('Espera a que termine la sincronización del Hallazgo antes de cambiarlo.')
+    const mediaIds = await saveFindingMedia(serviceId, areaId, input.estado === 'CERRADO' ? files : [])
+    const now = new Date().toISOString()
+    const operation: TechnicianFindingStatusMutation = {
+      schemaVersion: 1, requestId: crypto.randomUUID(), actorId: actorId(), serviceId,
+      deviceId: cache.deviceId, lockToken: cache.lock.token, kind: 'FINDING_STATUS', areaId, findingId,
+      estado: input.estado, observacionCierre: input.observacionCierre.trim(), version: finding.version,
+      evidences: mediaIds.map(mediaId => ({ mediaId, storagePath: null })), conflict: null,
+      status: 'PENDING', createdAt: now, updatedAt: now, error: null,
+    }
+    try { await saveTechnicianMutation(operation) }
+    catch (failure) { for (const mediaId of mediaIds) await deleteTechnicianMedia(operation.actorId, mediaId); throw failure }
+    await reloadMutations(serviceId)
+    await persistFinding(serviceId, areaId, input.estado === 'EN_PROCESO'
+      ? { ...finding, estado: 'EN_PROCESO' }
+      : { ...finding, estado: 'CERRADO', servicioCierreId: serviceId, fechaCierre: now,
+          evidenciasCierreStoragePaths: [], evidenciasCierreLocalIds: mediaIds,
+          observacionCierre: input.observacionCierre.trim() || null })
+    return onlineNow() ? syncPending(serviceId) : 'pending'
+  }
+
+  async function cleanupFindingMutation(operation: TechnicianFindingCreateMutation | TechnicianFindingStatusMutation): Promise<void> {
+    const phase = operation.kind === 'FINDING_CREATE' ? 'OPENING' : 'CLOSURE'
+    for (const evidence of operation.evidences) {
+      if (evidence.storagePath) {
+        await deleteTechnicianFindingEvidence(operation.serviceId, operation.areaId, operation.findingId, phase,
+          operation.deviceId, operation.lockToken, evidence.storagePath)
+      }
+      await deleteTechnicianMedia(operation.actorId, evidence.mediaId)
+    }
+    await deleteTechnicianMutation(operation)
+  }
+
+  async function discardFindingConflict(serviceId: string, findingId: string): Promise<void> {
+    const pending = await reloadMutations(serviceId)
+    const conflicted = pending.find((item): item is TechnicianFindingCreateMutation | TechnicianFindingStatusMutation =>
+      (item.kind === 'FINDING_CREATE' || item.kind === 'FINDING_STATUS') && item.findingId === findingId && item.status === 'CONFLICT')
+    if (!conflicted) throw new Error('No hay un conflicto pendiente para este Hallazgo.')
+    await cleanupFindingMutation(conflicted)
+    await reloadMutations(serviceId)
+    if (conflicted.kind === 'FINDING_CREATE') await removeLocalFinding(serviceId, conflicted.areaId, findingId)
+    else if (conflicted.conflict) await persistFinding(serviceId, conflicted.areaId, conflicted.conflict)
+    else if (onlineNow()) await persistPackage(await fetchTechnicianPackage(serviceId))
+  }
+
+  async function retryFindingConflict(serviceId: string, findingId: string): Promise<'synced' | 'pending' | 'conflict'> {
+    const pending = await reloadMutations(serviceId)
+    const conflicted = pending.find((item): item is TechnicianFindingCreateMutation | TechnicianFindingStatusMutation =>
+      (item.kind === 'FINDING_CREATE' || item.kind === 'FINDING_STATUS') && item.findingId === findingId && item.status === 'CONFLICT')
+    if (!conflicted) throw new Error('No hay un conflicto pendiente para este Hallazgo.')
+    const now = new Date().toISOString()
+    if (conflicted.kind === 'FINDING_STATUS') {
+      if (!conflicted.conflict || conflicted.conflict.estado === 'CERRADO') throw new Error('Usa la versión sincronizada del Hallazgo.')
+      await saveTechnicianMutation({ ...conflicted, requestId: crypto.randomUUID(), version: conflicted.conflict.version,
+        status: 'PENDING', conflict: null, error: null, createdAt: now, updatedAt: now })
+    } else {
+      await saveTechnicianMutation({ ...conflicted, requestId: crypto.randomUUID(), status: 'PENDING', error: null,
+        createdAt: now, updatedAt: now })
+    }
+    await reloadMutations(serviceId)
+    return onlineNow() ? syncPending(serviceId) : 'pending'
+  }
+
   function deviceReviewMutation(serviceDeviceId: string): TechnicianDeviceReviewMutation | null {
     return currentMutations.value.find((item): item is TechnicianDeviceReviewMutation => item.kind === 'DEVICE_REVIEW'
       && item.serviceDeviceId === serviceDeviceId) ?? null
@@ -1042,6 +1289,11 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     applyDeviceCreation,
     discardDeviceCreationConflict,
     retryDeviceCreationConflict,
+    findingMutation,
+    applyFindingCreate,
+    applyFindingStatus,
+    discardFindingConflict,
+    retryFindingConflict,
     deviceReviewMutation,
     applyDeviceReview,
     discardDeviceReviewConflict,

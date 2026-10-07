@@ -6,6 +6,7 @@ type UploadAuthorization = {
   storagePath: string
   contentType: string
 }
+type FindingEvidencePhase = 'OPENING' | 'CLOSURE'
 
 export async function uploadTechnicianAreaPhoto(
   serviceId: string,
@@ -80,5 +81,43 @@ export async function deleteTechnicianDevicePhoto(
   await apiRequest<void>(`api/technician/services/${serviceId}/devices/${serviceDeviceId}/media/delete`, {
     method: 'POST',
     body: JSON.stringify({ deviceId, lockToken, storagePath }),
+  })
+}
+
+export async function uploadTechnicianFindingEvidence(
+  serviceId: string,
+  areaId: string,
+  findingId: string,
+  phase: FindingEvidencePhase,
+  deviceId: string,
+  lockToken: string,
+  original: File,
+): Promise<string> {
+  const file = await optimizeFileForStorage('SERVICE_PHOTO', original)
+  const authorization = await apiRequest<UploadAuthorization>(`api/technician/services/${serviceId}/areas/${areaId}/findings/${findingId}/media/upload-url`, {
+    method: 'POST',
+    body: JSON.stringify({ deviceId, lockToken, phase, fileName: file.name, contentType: file.type, size: file.size }),
+  })
+  const response = await fetch(authorization.url, {
+    method: 'PUT',
+    headers: { 'Content-Type': authorization.contentType },
+    body: file,
+  })
+  if (!response.ok) throw new ApiClientError('No fue posible subir la evidencia del Hallazgo.', response.status)
+  return authorization.storagePath
+}
+
+export async function deleteTechnicianFindingEvidence(
+  serviceId: string,
+  areaId: string,
+  findingId: string,
+  phase: FindingEvidencePhase,
+  deviceId: string,
+  lockToken: string,
+  storagePath: string,
+): Promise<void> {
+  await apiRequest<void>(`api/technician/services/${serviceId}/areas/${areaId}/findings/${findingId}/media/delete`, {
+    method: 'POST',
+    body: JSON.stringify({ deviceId, lockToken, phase, storagePath }),
   })
 }

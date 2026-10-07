@@ -20,6 +20,8 @@ vi.mock('@/services/servicesService', () => ({
   saveTechnicianAreaAccess: vi.fn<typeof api.saveTechnicianAreaAccess>(),
   createTechnicianDevice: vi.fn<typeof api.createTechnicianDevice>(),
   saveTechnicianDeviceReview: vi.fn<typeof api.saveTechnicianDeviceReview>(),
+  createTechnicianFinding: vi.fn<typeof api.createTechnicianFinding>(),
+  saveTechnicianFindingStatus: vi.fn<typeof api.saveTechnicianFindingStatus>(),
 }))
 vi.mock('@/services/technicianMediaService', () => ({
   saveTechnicianMedia: vi.fn<typeof mediaService.saveTechnicianMedia>(),
@@ -31,6 +33,8 @@ vi.mock('@/services/serviceMediaService', () => ({
   deleteTechnicianAreaPhoto: vi.fn<typeof serviceMedia.deleteTechnicianAreaPhoto>(),
   uploadTechnicianDevicePhoto: vi.fn<typeof serviceMedia.uploadTechnicianDevicePhoto>(),
   deleteTechnicianDevicePhoto: vi.fn<typeof serviceMedia.deleteTechnicianDevicePhoto>(),
+  uploadTechnicianFindingEvidence: vi.fn<typeof serviceMedia.uploadTechnicianFindingEvidence>(),
+  deleteTechnicianFindingEvidence: vi.fn<typeof serviceMedia.deleteTechnicianFindingEvidence>(),
 }))
 vi.mock('@/services/technicianPackageService', () => ({
   getTechnicianDeviceId: vi.fn<typeof cacheService.getTechnicianDeviceId>(),
@@ -117,6 +121,7 @@ const executionCache = (): TechnicianPackageCache => ({
         revisado: false,
         revision: null,
       }],
+      hallazgos: [],
     })),
   },
   lock: { token: lockToken, deviceId, acquiredAt: '2026-10-07T13:30:00Z' },
@@ -144,6 +149,7 @@ beforeEach(() => {
   vi.mocked(mediaService.deleteTechnicianMedia).mockResolvedValue()
   vi.mocked(serviceMedia.deleteTechnicianAreaPhoto).mockResolvedValue()
   vi.mocked(serviceMedia.deleteTechnicianDevicePhoto).mockResolvedValue()
+  vi.mocked(serviceMedia.deleteTechnicianFindingEvidence).mockResolvedValue()
 })
 
 describe('technician services state', () => {
@@ -294,6 +300,47 @@ describe('technician services state', () => {
       numero: 'D-02', tipoNombre: 'Trampa', creadoDuranteServicio: true, creacionPendiente: true,
     })
     expect(api.createTechnicianDevice).not.toHaveBeenCalled()
+  })
+
+  it('preserves a new finding and all its evidence while offline', async () => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+    vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([executionCache()])
+    const store = useTechnicianServicesStore()
+    await store.ensurePackage(serviceId)
+    const files = [
+      new File(['photo-1'], 'hallazgo-1.jpg', { type: 'image/jpeg' }),
+      new File(['photo-2'], 'hallazgo-2.png', { type: 'image/png' }),
+    ]
+    expect(await store.applyFindingCreate(serviceId, areaIds[0]!, {
+      descripcion: 'Abertura junto al muro', recomendacionAccion: 'Sellar el paso',
+      responsableNombre: 'Mantenimiento', responsableCorreo: 'mantenimiento@example.invalid',
+    }, files)).toBe('pending')
+    expect(mutationRecords[0]).toMatchObject({ kind: 'FINDING_CREATE', areaId: areaIds[0], status: 'PENDING', evidences: [{ storagePath: null }, { storagePath: null }] })
+    expect(mediaService.saveTechnicianMedia).toHaveBeenCalledTimes(2)
+    expect(store.currentPackage?.areas[0]?.hallazgos[0]).toMatchObject({
+      descripcion: 'Abertura junto al muro', estado: 'ABIERTO', evidenciasAperturaLocalIds: [expect.any(String), expect.any(String)],
+    })
+    expect(api.createTechnicianFinding).not.toHaveBeenCalled()
+  })
+
+  it('queues a later-service finding closure with mandatory evidence while offline', async () => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+    const prepared = executionCache()
+    const findingId = '10000000-0000-4000-8000-000000000011'
+    prepared.package.areas[0]!.hallazgos = [{
+      id: findingId, servicioAperturaId: '10000000-0000-4000-8000-000000000012', fechaApertura: '2026-09-07T14:00:00Z',
+      descripcion: 'Abertura junto al muro', recomendacionAccion: 'Sellar el paso', evidenciasAperturaStoragePaths: [],
+      estado: 'EN_PROCESO', responsableNombre: 'Mantenimiento', responsableCorreo: null, servicioCierreId: null,
+      fechaCierre: null, evidenciasCierreStoragePaths: [], observacionCierre: null, version: 2,
+    }]
+    vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([prepared])
+    const store = useTechnicianServicesStore()
+    await store.ensurePackage(serviceId)
+    await expect(store.applyFindingStatus(serviceId, areaIds[0]!, findingId, { estado: 'CERRADO', observacionCierre: 'Paso sellado' }, [])).rejects.toThrow('evidencia')
+    const photo = new File(['closed'], 'cierre.jpg', { type: 'image/jpeg' })
+    expect(await store.applyFindingStatus(serviceId, areaIds[0]!, findingId, { estado: 'CERRADO', observacionCierre: 'Paso sellado' }, [photo])).toBe('pending')
+    expect(mutationRecords[0]).toMatchObject({ kind: 'FINDING_STATUS', findingId, estado: 'CERRADO', version: 2, status: 'PENDING' })
+    expect(store.currentPackage?.areas[0]?.hallazgos[0]).toMatchObject({ estado: 'CERRADO', servicioCierreId: serviceId, observacionCierre: 'Paso sellado' })
   })
 
   it('uploads and synchronizes a device condition photo before saving the review', async () => {
