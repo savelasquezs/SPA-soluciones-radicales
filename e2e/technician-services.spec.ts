@@ -68,6 +68,7 @@ async function setup(page: Page) {
   let packageReads = 0
   const starts: Array<Record<string, unknown>> = []
   const orders: Array<Record<string, unknown>> = []
+  const evaluations: Array<Record<string, unknown>> = []
   await page.route('**/get-session', route => route.fulfill({ json: {
     session: { id: 'session', userId: 'auth-tech', token: 'e2e-token', expiresAt: '2099-01-01T00:00:00.000Z', createdAt: '2026-10-04T00:00:00.000Z', updatedAt: '2026-10-04T00:00:00.000Z' },
     user: { id: 'auth-tech', name: 'Técnico de prueba', email: 'santyvan974@gmail.com', emailVerified: true, createdAt: '2026-10-04T00:00:00.000Z', updatedAt: '2026-10-04T00:00:00.000Z' },
@@ -98,9 +99,18 @@ async function setup(page: Page) {
       await json(route, { areas: current.areas.map(area => ({ id: area.id, posicionRecorrido: area.posicionRecorrido, version: area.version })) })
       return
     }
+    if (path === `/api/technician/services/${ids.service}/criteria/${ids.criterion}`) {
+      const body = request.postDataJSON() as { evaluation: 'C' | 'CP' | 'NC' | 'NA'; observation: string }
+      evaluations.push(body)
+      const area = current.areas.find(item => item.id === ids.area)!
+      const criterion = { ...area.criterios[0]!, evaluacion: body.evaluation, observacion: body.observation || null, version: area.criterios[0]!.version + 1 }
+      current = { ...current, areas: current.areas.map(item => item.id === ids.area ? { ...item, criterios: [criterion] } : item) }
+      await json(route, { criterion })
+      return
+    }
     await json(route, { error: `Unexpected technician endpoint: ${path}` }, 404)
   })
-  return { starts, orders, get packageReads() { return packageReads } }
+  return { starts, orders, evaluations, get packageReads() { return packageReads } }
 }
 
 test('technician prepares and starts the service from a mobile-first read-only surface', async ({ page }) => {
@@ -140,6 +150,16 @@ test('technician prepares and starts the service from a mobile-first read-only s
   await expect(page.getByRole('button', { name: 'Siguiente: Cocina' })).toBeVisible()
   await page.getByRole('button', { name: 'Siguiente: Cocina' }).click()
   await expect(page.getByRole('heading', { name: 'Cocina', exact: true })).toBeVisible()
+  await page.getByLabel('Observación').fill('Limpieza parcial')
+  await page.getByRole('button', { name: 'CP Cumple parcialmente' }).click()
+  await expect(page.getByText('Guardado', { exact: true })).toBeVisible()
+  expect(api.evaluations).toHaveLength(1)
+  expect(api.evaluations[0]).toMatchObject({ evaluation: 'CP', observation: 'Limpieza parcial', version: 1 })
+  await page.getByLabel('Observación').fill('Limpieza parcial actualizada')
+  await page.getByRole('button', { name: 'Siguiente: Bodega' }).click()
+  await expect(page.getByRole('heading', { name: 'Bodega', exact: true })).toBeVisible()
+  expect(api.evaluations).toHaveLength(2)
+  expect(api.evaluations[1]).toMatchObject({ evaluation: 'CP', observation: 'Limpieza parcial actualizada', version: 2 })
 })
 
 test('an offline route order survives reload and stays queued on the same phone', async ({ page }) => {
@@ -162,6 +182,27 @@ test('an offline route order survives reload and stays queued on the same phone'
   const areaButtons = page.locator('section[aria-labelledby="technician-areas-title"] li button')
   await expect(areaButtons.first()).toHaveAccessibleName('Abrir Área Bodega')
   expect(api.orders).toHaveLength(0)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})
+
+test('an offline criterion evaluation survives reload in the shared outbox', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const api = await setup(page)
+  await page.goto(`/servicios/${ids.service}/trabajo`)
+  await page.getByRole('button', { name: 'Iniciar servicio' }).click()
+  await page.getByRole('button', { name: 'Abrir Área Cocina' }).click()
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false })
+    window.dispatchEvent(new Event('offline'))
+  })
+  await page.getByLabel('Observación').fill('Requiere limpieza')
+  await page.getByRole('button', { name: 'NC No cumple' }).click()
+  await expect(page.getByText('Guardado local', { exact: true })).toBeVisible()
+  await page.addInitScript(() => Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }))
+  await page.reload()
+  await expect(page.getByRole('button', { name: 'NC No cumple' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByLabel('Observación')).toHaveValue('Requiere limpieza')
+  expect(api.evaluations).toHaveLength(0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 })
 

@@ -6,7 +6,7 @@ import * as mutationService from '@/services/technicianMutationService'
 import { ApiClientError } from '@/services/apiService'
 import { useAuthStore } from '@/stores/auth'
 import { useTechnicianServicesStore } from '@/stores/technicianServices'
-import type { TechnicianAreaOrderMutation, TechnicianExecutionSession, TechnicianPackageCache, TechnicianServicePackage, TechnicianServiceSummary } from '@/types/technicianServices'
+import type { TechnicianExecutionSession, TechnicianMutation, TechnicianPackageCache, TechnicianServicePackage, TechnicianServiceSummary } from '@/types/technicianServices'
 
 vi.mock('@/services/servicesService', () => ({
   fetchTechnicianServices: vi.fn<typeof api.fetchTechnicianServices>(),
@@ -14,6 +14,7 @@ vi.mock('@/services/servicesService', () => ({
   startTechnicianService: vi.fn<typeof api.startTechnicianService>(),
   claimTechnicianService: vi.fn<typeof api.claimTechnicianService>(),
   saveTechnicianAreaOrder: vi.fn<typeof api.saveTechnicianAreaOrder>(),
+  saveTechnicianCriterionEvaluation: vi.fn<typeof api.saveTechnicianCriterionEvaluation>(),
 }))
 vi.mock('@/services/technicianPackageService', () => ({
   getTechnicianDeviceId: vi.fn<typeof cacheService.getTechnicianDeviceId>(),
@@ -27,13 +28,14 @@ vi.mock('@/services/technicianMutationService', () => ({
   deleteTechnicianMutation: vi.fn<typeof mutationService.deleteTechnicianMutation>(),
 }))
 
-let mutationRecords: TechnicianAreaOrderMutation[] = []
+let mutationRecords: TechnicianMutation[] = []
 
 const actorId = '10000000-0000-4000-8000-000000000001'
 const serviceId = '10000000-0000-4000-8000-000000000002'
 const deviceId = '10000000-0000-4000-8000-000000000003'
 const lockToken = '10000000-0000-4000-8000-000000000004'
 const areaIds = ['10000000-0000-4000-8000-000000000005', '10000000-0000-4000-8000-000000000006']
+const criterionId = '10000000-0000-4000-8000-000000000007'
 const summary = (estado: TechnicianServiceSummary['estado'] = 'PROGRAMADO'): TechnicianServiceSummary => ({
   id: serviceId,
   solicitud: 'SR-0101',
@@ -81,7 +83,7 @@ const executionCache = (): TechnicianPackageCache => ({
       sinAccesoDescripcion: null,
       sinAccesoFotoStoragePath: null,
       version: 1,
-      criterios: [],
+      criterios: position ? [] : [{ id: criterionId, criterioId: criterionId, nombre: 'Orden y aseo', soloAreaExterna: false, evaluacion: null, observacion: null, evidenciasStoragePaths: [], version: 1 }],
       dispositivos: [],
     })),
   },
@@ -164,6 +166,49 @@ describe('technician services state', () => {
     expect(await store.applyAreaOrder(serviceId, [...areaIds].reverse())).toBe('synced')
     expect(store.pendingSyncCount).toBe(0)
     expect(store.currentPackage?.areas.map(area => [area.id, area.version])).toEqual([[areaIds[1], 2], [areaIds[0], 2]])
+  })
+
+  it('persists a criterion evaluation offline and synchronizes its definitive version', async () => {
+    vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([executionCache()])
+    vi.mocked(api.saveTechnicianCriterionEvaluation).mockResolvedValue({ criterion: {
+      id: criterionId, criterioId: criterionId, nombre: 'Orden y aseo', soloAreaExterna: false, evaluacion: 'CP', observacion: 'Mejora pendiente', evidenciasStoragePaths: [], version: 2,
+    } })
+    const store = useTechnicianServicesStore()
+    await store.ensurePackage(serviceId)
+    expect(await store.applyCriterionEvaluation(serviceId, areaIds[0]!, criterionId, 'CP', 'Mejora pendiente')).toBe('synced')
+    expect(store.currentPackage?.areas[0]?.criterios[0]).toMatchObject({ evaluacion: 'CP', observacion: 'Mejora pendiente', version: 2 })
+    expect(store.pendingSyncCount).toBe(0)
+    expect(api.saveTechnicianCriterionEvaluation).toHaveBeenCalledWith(serviceId, expect.any(String), deviceId, lockToken, criterionId, 1, 'CP', 'Mejora pendiente')
+  })
+
+  it('keeps a criterion response in the shared queue while offline', async () => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+    vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([executionCache()])
+    const store = useTechnicianServicesStore()
+    await store.ensurePackage(serviceId)
+    expect(await store.applyCriterionEvaluation(serviceId, areaIds[0]!, criterionId, 'NC', 'Limpieza requerida')).toBe('pending')
+    expect(store.currentPackage?.areas[0]?.criterios[0]).toMatchObject({ evaluacion: 'NC', observacion: 'Limpieza requerida' })
+    expect(mutationRecords[0]).toMatchObject({ kind: 'CRITERION_EVALUATION', criterionId, status: 'PENDING' })
+    expect(api.saveTechnicianCriterionEvaluation).not.toHaveBeenCalled()
+  })
+
+  it('keeps a local criterion answer until the technician resolves a version conflict', async () => {
+    vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([executionCache()])
+    vi.mocked(api.saveTechnicianCriterionEvaluation).mockRejectedValue(new ApiClientError(
+      'El criterio cambió.',
+      409,
+      'VERSION_CONFLICT',
+      { remote: { id: criterionId, criterioId: criterionId, nombre: 'Orden y aseo', soloAreaExterna: false,
+        evaluacion: 'C', observacion: 'Respuesta remota', evidenciasStoragePaths: [], version: 2 } },
+    ))
+    const store = useTechnicianServicesStore()
+    await store.ensurePackage(serviceId)
+    expect(await store.applyCriterionEvaluation(serviceId, areaIds[0]!, criterionId, 'NC', 'Respuesta local')).toBe('conflict')
+    expect(store.currentPackage?.areas[0]?.criterios[0]).toMatchObject({ evaluacion: 'NC', observacion: 'Respuesta local' })
+    expect(store.criterionConflict(criterionId)?.conflict).toMatchObject({ evaluacion: 'C', version: 2 })
+    await store.discardCriterionEvaluationConflict(serviceId, criterionId)
+    expect(store.currentPackage?.areas[0]?.criterios[0]).toMatchObject({ evaluacion: 'C', observacion: 'Respuesta remota', version: 2 })
+    expect(store.criterionConflict(criterionId)).toBeNull()
   })
 
   it('keeps the local proposal until the technician resolves a version conflict', async () => {

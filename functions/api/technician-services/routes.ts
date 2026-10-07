@@ -5,7 +5,7 @@ import type { PoolClient } from 'pg'
 import { isServiceId } from '../../../src/helpers/adminServices'
 import { ApiError, requireTechnician, type DomainProfile, type Identity } from '../auth'
 import { transaction } from '../db'
-import { claimTechnicianService, saveTechnicianAreaOrder, startTechnicianService, technicianCommand } from './commands'
+import { claimTechnicianService, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, startTechnicianService, technicianCommand } from './commands'
 import { getTechnicianPackage, listTechnicianServices } from './queries'
 
 type Environment = { Variables: { identity: Identity } }
@@ -61,6 +61,25 @@ technicianServiceRoutes.post('/:id/areas/order', async context => {
   })
   return context.json(await read(context, (client, technician) => technicianCommand(client, technician.id, requestId, 'AREA_ORDER', serviceId, null,
     { deviceId, areaIds, versions }, () => saveTechnicianAreaOrder(client, technician.id, serviceId, deviceId, lockToken, areaIds, versions))))
+})
+technicianServiceRoutes.post('/:id/criteria/:criterionId', async context => {
+  const payload = await body(context.req.raw)
+  const serviceId = id(context.req.param('id'))
+  const criterionId = id(context.req.param('criterionId'))
+  const requestId = id(payload.requestId)
+  const deviceId = id(payload.deviceId)
+  const lockToken = id(payload.lockToken)
+  const expected = version(payload.version)
+  if (typeof payload.evaluation !== 'string' || !['C', 'CP', 'NC', 'NA'].includes(payload.evaluation)) {
+    throw new ApiError(422, 'Selecciona una evaluación válida.', 'VALIDATION')
+  }
+  if (typeof payload.observation !== 'string' || payload.observation.length > 2_000) {
+    throw new ApiError(422, 'La observación no puede superar 2000 caracteres.', 'VALIDATION')
+  }
+  const evaluation = payload.evaluation as 'C' | 'CP' | 'NC' | 'NA'
+  const input = { deviceId, criterionId, version: expected, evaluation, observation: payload.observation }
+  return context.json(await read(context, (client, technician) => technicianCommand(client, technician.id, requestId, 'CRITERION_EVALUATION', serviceId, expected,
+    input, () => saveTechnicianCriterionEvaluation(client, technician.id, serviceId, deviceId, lockToken, criterionId, expected, evaluation, payload.observation as string))))
 })
 
 technicianServiceRoutes.onError((error, context) => {
