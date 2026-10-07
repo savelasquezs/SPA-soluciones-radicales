@@ -8,13 +8,14 @@ vi.mock('./auth', () => ({
   },
 }))
 
-import { createMasterReadUrl, createMasterUploadUrl } from './r2'
+import { assertAreaNoAccessStoragePath, createAreaNoAccessUploadUrl, createMasterReadUrl, createMasterUploadUrl } from './r2'
 
 const original = {
   accountId: process.env.R2_ACCOUNT_ID,
   accessKeyId: process.env.R2_ACCESS_KEY_ID,
   secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
   bucket: process.env.R2_BUCKET_MASTER_FILES,
+  serviceBucket: process.env.R2_BUCKET_SERVICE_MEDIA,
 }
 
 describe('Cloudflare R2 presigned URLs', () => {
@@ -23,6 +24,7 @@ describe('Cloudflare R2 presigned URLs', () => {
     process.env.R2_ACCESS_KEY_ID = 'access-key'
     process.env.R2_SECRET_ACCESS_KEY = 'secret-key'
     process.env.R2_BUCKET_MASTER_FILES = 'sr-master-files'
+    process.env.R2_BUCKET_SERVICE_MEDIA = 'sr-service-media'
   })
 
   afterEach(() => {
@@ -30,6 +32,7 @@ describe('Cloudflare R2 presigned URLs', () => {
     process.env.R2_ACCESS_KEY_ID = original.accessKeyId
     process.env.R2_SECRET_ACCESS_KEY = original.secretAccessKey
     process.env.R2_BUCKET_MASTER_FILES = original.bucket
+    process.env.R2_BUCKET_SERVICE_MEDIA = original.serviceBucket
   })
 
   it('firma PUT limitado a content-type y a una ruta generada por servidor', () => {
@@ -65,5 +68,22 @@ describe('Cloudflare R2 presigned URLs', () => {
       size: 10,
     })).toThrow('El tipo de archivo no está permitido')
     expect(() => createMasterReadUrl('otra-carpeta/archivo.pdf')).toThrow('La ruta del archivo privado no es válida')
+  })
+
+  it('firma fotografías del Área únicamente en el bucket y prefijo del Servicio', () => {
+    const serviceId = '10000000-0000-4000-8000-000000000001'
+    const areaId = '10000000-0000-4000-8000-000000000002'
+    const signed = createAreaNoAccessUploadUrl({ serviceId, areaId, fileName: 'Puerta cerrada.jpg', contentType: 'image/jpeg', size: 2_048 })
+    const url = new URL(signed.url)
+    expect(signed.storagePath).toMatch(new RegExp(`^services/${serviceId}/areas/${areaId}/no-access/[0-9a-f-]+-Puerta-cerrada\\.jpg$`))
+    expect(url.pathname).toContain(`/sr-service-media/services/${serviceId}/areas/${areaId}/no-access/`)
+    expect(url.searchParams.get('X-Amz-SignedHeaders')).toBe('content-type;host')
+    expect(() => assertAreaNoAccessStoragePath(signed.storagePath, serviceId, '10000000-0000-4000-8000-000000000003')).toThrow('ruta de la fotografía')
+  })
+
+  it('rechaza fotografías mayores de 10 MB o con un tipo no permitido', () => {
+    const input = { serviceId: '10000000-0000-4000-8000-000000000001', areaId: '10000000-0000-4000-8000-000000000002' }
+    expect(() => createAreaNoAccessUploadUrl({ ...input, fileName: 'foto.jpg', contentType: 'image/jpeg', size: 10 * 1024 * 1024 + 1 })).toThrow('10 MB')
+    expect(() => createAreaNoAccessUploadUrl({ ...input, fileName: 'foto.pdf', contentType: 'application/pdf', size: 1_000 })).toThrow('JPG, PNG o WebP')
   })
 })

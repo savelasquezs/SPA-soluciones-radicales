@@ -41,6 +41,7 @@
 - [x] Diseñar en Figma el orden editable del recorrido por Servicio, en claro/oscuro, con Subir/Bajar, Aplicar/Cancelar, restablecimiento y navegación a la siguiente Área pendiente; documentar en `docs/product/service-area-route.md`.
 - [x] Implementar el recorrido editable según `docs/product/service-area-route.md`: orden compartido por Servicio, persistencia local/sincronización idempotente, validación de pertenencia y permutación completa, concurrencia, siguiente pendiente con vuelta al inicio y validaciones de casos límite. No modificar el orden de la Sede ni reintroducir formularios legacy.
 - [x] Implementar evaluación `C/CP/NC/NA` y observación por Criterio MIP con autosave, outbox offline compartida, bloqueo del celular, idempotencia y resolución explícita de conflicto de versión.
+- [x] Implementar la excepción de Área sin acceso con descripción y fotografía obligatorias, persistencia offline del archivo, carga autorizada a `sr-service-media`, idempotencia, concurrencia y limpieza de reemplazos.
 
 ## Certificados
 

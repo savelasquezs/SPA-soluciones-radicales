@@ -1,5 +1,5 @@
 import type { MasterFileKind } from '@/services/filesService'
-import { MAX_CERTIFICATE_BYTES, MAX_OPTIMIZATION_SOURCE_BYTES } from '@/types/fileOptimization'
+import { MAX_CERTIFICATE_BYTES, MAX_OPTIMIZATION_SOURCE_BYTES, MAX_SERVICE_PHOTO_BYTES } from '@/types/fileOptimization'
 import type { OptimizationRequest, OptimizationResponse } from '@/types/fileOptimization'
 
 const MIME_BY_EXTENSION: Record<string, string> = {
@@ -8,7 +8,7 @@ const MIME_BY_EXTENSION: Record<string, string> = {
 const OPTIMIZATION_TIMEOUT_MS = 120_000
 
 /** Returns the file to upload. No upload, metrics, persistence or UI side effects. */
-export async function optimizeFileForStorage(kind: MasterFileKind, original: File): Promise<File> {
+export async function optimizeFileForStorage(kind: MasterFileKind | 'SERVICE_PHOTO', original: File): Promise<File> {
   const extension = original.name.trim().split('.').pop()?.toLowerCase() ?? ''
   const contentType = MIME_BY_EXTENSION[extension]
   if (!contentType) return original
@@ -56,6 +56,9 @@ export async function optimizeFileForStorage(kind: MasterFileKind, original: Fil
 
   if (kind === 'USER_CERTIFICATE' && optimized.size > MAX_CERTIFICATE_BYTES) {
     throw new Error('El certificado no puede superar 10 MB después de comprimirlo')
+  }
+  if (kind === 'SERVICE_PHOTO' && optimized.size > MAX_SERVICE_PHOTO_BYTES) {
+    throw new Error('La fotografía no puede superar 10 MB después de comprimirla')
   }
   return optimized
 }

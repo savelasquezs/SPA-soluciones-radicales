@@ -53,6 +53,20 @@ function validMutation(value: unknown, actorId?: string, serviceId?: string): va
       && isServiceId(record.conflict?.id)
       && typeof record.conflict?.version === 'number'
     ))
+  if (record.kind === 'AREA_ACCESS') return isServiceId(record.areaId)
+    && typeof record.withoutAccess === 'boolean'
+    && typeof record.description === 'string'
+    && record.description.length <= 2_000
+    && (record.photoMediaId === null || isServiceId(record.photoMediaId))
+    && (record.photoStoragePath === null || typeof record.photoStoragePath === 'string')
+    && Number.isSafeInteger(record.version)
+    && Number(record.version) > 0
+    && (record.conflict === null || (
+      Boolean(record.conflict)
+      && isServiceId(record.conflict?.id)
+      && typeof record.conflict?.sinAcceso === 'boolean'
+      && typeof record.conflict?.version === 'number'
+    ))
   return false
 }
 

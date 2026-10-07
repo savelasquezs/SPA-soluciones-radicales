@@ -2,11 +2,13 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { isExactAreaPermutation, sortTechnicianServices } from '@/helpers/technicianServices'
 import { useAuthStore } from '@/stores/auth'
-import { claimTechnicianService, fetchTechnicianPackage, fetchTechnicianServices, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, startTechnicianService } from '@/services/servicesService'
+import { claimTechnicianService, fetchTechnicianPackage, fetchTechnicianServices, saveTechnicianAreaAccess, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, startTechnicianService } from '@/services/servicesService'
 import { ApiClientError } from '@/services/apiService'
 import { getTechnicianDeviceId, listTechnicianPackageCaches, loadTechnicianPackageCache, saveTechnicianPackageCache } from '@/services/technicianPackageService'
 import { deleteTechnicianMutation, listTechnicianMutations, saveTechnicianMutation } from '@/services/technicianMutationService'
-import type { MipEvaluation, TechnicianAreaOrderConflict, TechnicianAreaOrderMutation, TechnicianAreaOrderResult, TechnicianCriterion, TechnicianCriterionEvaluationMutation, TechnicianExecutionSession, TechnicianMutation, TechnicianPackageCache, TechnicianPendingOperation, TechnicianServicePackage, TechnicianServiceSummary } from '@/types/technicianServices'
+import { deleteTechnicianMedia, loadTechnicianMedia, saveTechnicianMedia } from '@/services/technicianMediaService'
+import { deleteTechnicianAreaPhoto, uploadTechnicianAreaPhoto } from '@/services/serviceMediaService'
+import type { MipEvaluation, TechnicianAreaAccessMutation, TechnicianAreaAccessState, TechnicianAreaOrderConflict, TechnicianAreaOrderMutation, TechnicianAreaOrderResult, TechnicianCriterion, TechnicianCriterionEvaluationMutation, TechnicianExecutionSession, TechnicianMutation, TechnicianPackageCache, TechnicianPendingOperation, TechnicianServicePackage, TechnicianServiceSummary } from '@/types/technicianServices'
 
 function onlineNow(): boolean {
   return typeof navigator === 'undefined' || navigator.onLine
@@ -168,6 +170,19 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     await persistPackage({ ...cache.package, areas })
   }
 
+  async function persistAreaAccess(serviceId: string, state: TechnicianAreaAccessState, localPhotoId: string | null = null): Promise<void> {
+    const cache = caches.value[serviceId]
+    if (!cache) throw new Error('Prepara el servicio antes de registrar la excepción de acceso.')
+    let found = false
+    const areas = cache.package.areas.map(area => {
+      if (area.id !== state.id) return area
+      found = true
+      return { ...area, ...state, sinAccesoFotoLocalId: localPhotoId }
+    })
+    if (!found) throw new Error('El Área no pertenece al servicio preparado.')
+    await persistPackage({ ...cache.package, areas })
+  }
+
   function conflictDetails(failure: ApiClientError): TechnicianAreaOrderConflict | null {
     const remote = failure.details?.remote
     if (!remote || typeof remote !== 'object' || Array.isArray(remote)) return null
@@ -184,6 +199,14 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     return record as TechnicianCriterion
   }
 
+  function areaAccessConflictDetails(failure: ApiClientError): TechnicianAreaAccessState | null {
+    const remote = failure.details?.remote
+    if (!remote || typeof remote !== 'object' || Array.isArray(remote)) return null
+    const record = remote as Partial<TechnicianAreaAccessState>
+    if (!record.id || typeof record.sinAcceso !== 'boolean' || !Number.isSafeInteger(record.version)) return null
+    return record as TechnicianAreaAccessState
+  }
+
   async function syncPending(serviceId: string): Promise<'synced' | 'pending' | 'conflict'> {
     if (!onlineNow()) return 'pending'
     if (syncing.value) return currentMutations.value.some(item => item.status === 'CONFLICT') ? 'conflict' : 'pending'
@@ -194,7 +217,7 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
         if (pending.some(item => item.status === 'CONFLICT')) return 'conflict'
         const operation = pending[0]
         if (!operation) return 'synced'
-        const sending = { ...operation, status: 'SENDING' as const, updatedAt: new Date().toISOString(), error: null } as TechnicianMutation
+        let sending = { ...operation, status: 'SENDING' as const, updatedAt: new Date().toISOString(), error: null } as TechnicianMutation
         await saveTechnicianMutation(sending)
         await reloadMutations(serviceId)
         try {
@@ -206,15 +229,20 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
             for (const queued of remaining.filter((item): item is TechnicianAreaOrderMutation => item.kind === 'AREA_ORDER' && item.status !== 'CONFLICT')) {
               await saveTechnicianMutation({ ...queued, versions: definitiveVersions, updatedAt: new Date().toISOString() })
             }
+            for (const queued of remaining.filter((item): item is TechnicianAreaAccessMutation => item.kind === 'AREA_ACCESS' && item.status !== 'CONFLICT')) {
+              const saved = result.areas.find(area => area.id === queued.areaId)
+              if (saved) await saveTechnicianMutation({ ...queued, version: saved.version, updatedAt: new Date().toISOString() })
+            }
             const latest = [...remaining].reverse().find((item): item is TechnicianAreaOrderMutation => item.kind === 'AREA_ORDER' && item.status !== 'CONFLICT')
             await persistAreaOrder(serviceId, latest?.areaIds ?? result.areas.map(area => area.id), result)
-          } else {
+          } else if (sending.kind === 'CRITERION_EVALUATION') {
+            const criterionId = sending.criterionId
             const result = await saveTechnicianCriterionEvaluation(serviceId, sending.requestId, sending.deviceId, sending.lockToken,
-              sending.criterionId, sending.version, sending.evaluation, sending.observation)
+              criterionId, sending.version, sending.evaluation, sending.observation)
             await deleteTechnicianMutation(sending)
             const remaining = await listTechnicianMutations(actorId(), serviceId)
             const sameCriterion = remaining.filter((item): item is TechnicianCriterionEvaluationMutation => item.kind === 'CRITERION_EVALUATION'
-              && item.criterionId === sending.criterionId && item.status !== 'CONFLICT')
+              && item.criterionId === criterionId && item.status !== 'CONFLICT')
             for (const queued of sameCriterion) {
               await saveTechnicianMutation({ ...queued, version: result.criterion.version, updatedAt: new Date().toISOString() })
             }
@@ -223,16 +251,56 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
               ? { ...result.criterion, evaluacion: latest.evaluation, observacion: latest.observation || null }
               : result.criterion
             await persistCriterionEvaluation(serviceId, sending.areaId, criterion)
+          } else {
+            const areaId = sending.areaId
+            let photoStoragePath = sending.photoStoragePath
+            if (sending.withoutAccess && !photoStoragePath) {
+              if (!sending.photoMediaId) throw new Error('La fotografía local del Área no está disponible.')
+              const media = await loadTechnicianMedia(sending.actorId, sending.photoMediaId)
+              if (!media) throw new Error('La fotografía local del Área no está disponible.')
+              photoStoragePath = await uploadTechnicianAreaPhoto(serviceId, areaId, sending.deviceId, sending.lockToken, media.file)
+              sending = { ...sending, photoStoragePath, updatedAt: new Date().toISOString() }
+              await saveTechnicianMutation(sending)
+              await reloadMutations(serviceId)
+            }
+            const result = await saveTechnicianAreaAccess(serviceId, areaId, sending.requestId, sending.deviceId, sending.lockToken,
+              sending.version, sending.withoutAccess, sending.description, sending.withoutAccess ? photoStoragePath : null)
+            await deleteTechnicianMutation(sending)
+            if (sending.photoMediaId) await deleteTechnicianMedia(sending.actorId, sending.photoMediaId)
+            const remaining = await listTechnicianMutations(actorId(), serviceId)
+            for (const queued of remaining.filter((item): item is TechnicianAreaOrderMutation => item.kind === 'AREA_ORDER' && item.status !== 'CONFLICT')) {
+              await saveTechnicianMutation({ ...queued,
+                versions: queued.versions.map(value => value.id === areaId ? { ...value, version: result.area.version } : value),
+                updatedAt: new Date().toISOString() })
+            }
+            for (const queued of remaining.filter((item): item is TechnicianAreaAccessMutation => item.kind === 'AREA_ACCESS'
+              && item.areaId === areaId && item.status !== 'CONFLICT')) {
+              await saveTechnicianMutation({ ...queued, version: result.area.version, updatedAt: new Date().toISOString() })
+            }
+            const latest = [...remaining].reverse().find((item): item is TechnicianAreaAccessMutation => item.kind === 'AREA_ACCESS'
+              && item.areaId === areaId && item.status !== 'CONFLICT')
+            await persistAreaAccess(serviceId, latest
+              ? { ...result.area, sinAcceso: latest.withoutAccess, sinAccesoDescripcion: latest.withoutAccess ? latest.description : null,
+                  sinAccesoFotoStoragePath: latest.withoutAccess ? latest.photoStoragePath : null }
+              : result.area, latest?.photoMediaId ?? null)
           }
         } catch (failure) {
+          if (sending.kind === 'AREA_ACCESS' && failure instanceof ApiClientError && failure.code === 'PHOTO_NOT_FOUND' && sending.photoMediaId) {
+            await saveTechnicianMutation({ ...sending, photoStoragePath: null, status: 'PENDING', error: failure.message, updatedAt: new Date().toISOString() })
+            await reloadMutations(serviceId)
+            return 'pending'
+          }
           const retryable = !(failure instanceof ApiClientError) || failure.status >= 500 || failure.status === 408 || failure.status === 429
           const error = failure instanceof Error ? failure.message : 'No fue posible sincronizar el cambio.'
           if (sending.kind === 'AREA_ORDER') {
             await saveTechnicianMutation({ ...sending, status: retryable ? 'SENDING' : 'CONFLICT',
               conflict: failure instanceof ApiClientError ? conflictDetails(failure) : null, error, updatedAt: new Date().toISOString() })
-          } else {
+          } else if (sending.kind === 'CRITERION_EVALUATION') {
             await saveTechnicianMutation({ ...sending, status: retryable ? 'SENDING' : 'CONFLICT',
               conflict: failure instanceof ApiClientError ? criterionConflictDetails(failure) : null, error, updatedAt: new Date().toISOString() })
+          } else {
+            await saveTechnicianMutation({ ...sending, status: retryable ? 'SENDING' : 'CONFLICT',
+              conflict: failure instanceof ApiClientError ? areaAccessConflictDetails(failure) : null, error, updatedAt: new Date().toISOString() })
           }
           await reloadMutations(serviceId)
           return retryable ? 'pending' : 'conflict'
@@ -376,6 +444,112 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     return syncPending(serviceId)
   }
 
+  function areaAccessConflict(areaId: string): TechnicianAreaAccessMutation | null {
+    return currentMutations.value.find((item): item is TechnicianAreaAccessMutation => item.kind === 'AREA_ACCESS'
+      && item.areaId === areaId && item.status === 'CONFLICT') ?? null
+  }
+
+  async function applyAreaAccess(
+    serviceId: string,
+    areaId: string,
+    withoutAccess: boolean,
+    description: string,
+    photo: File | null,
+  ): Promise<'synced' | 'pending' | 'conflict'> {
+    const cache = caches.value[serviceId]
+    if (!cache || cache.package.service.estado !== 'EN_PROCESO' || !cache.lock) throw new Error('Este celular no puede registrar excepciones del servicio.')
+    const area = cache.package.areas.find(item => item.id === areaId)
+    if (!area) throw new Error('El Área no pertenece al servicio preparado.')
+    const normalizedDescription = description.trim()
+    if (normalizedDescription.length > 2_000) throw new Error('La descripción no puede superar 2000 caracteres.')
+    const existing = await reloadMutations(serviceId)
+    if (existing.some(item => item.kind === 'AREA_ACCESS' && item.areaId === areaId && item.status === 'CONFLICT')) return 'conflict'
+    if (existing.some(item => item.kind === 'AREA_ACCESS' && item.areaId === areaId && item.status === 'SENDING')) {
+      throw new Error('Espera a que termine la sincronización del Área antes de cambiarla.')
+    }
+    const reusable = [...existing].reverse().find((item): item is TechnicianAreaAccessMutation => item.kind === 'AREA_ACCESS'
+      && item.areaId === areaId && item.status === 'PENDING')
+    const newMediaId = photo ? crypto.randomUUID() : null
+    const photoMediaId = withoutAccess ? newMediaId ?? reusable?.photoMediaId ?? area.sinAccesoFotoLocalId ?? null : null
+    const photoStoragePath = withoutAccess && !photoMediaId ? reusable?.photoStoragePath ?? area.sinAccesoFotoStoragePath : null
+    if (withoutAccess && (!normalizedDescription || (!photoMediaId && !photoStoragePath))) {
+      throw new Error('Describe la novedad y adjunta una fotografía para registrar el Área sin acceso.')
+    }
+    if (photo && newMediaId) {
+      await saveTechnicianMedia({ schemaVersion: 1, id: newMediaId, actorId: actorId(), serviceId, areaId, file: photo, savedAt: new Date().toISOString() })
+    }
+    const now = new Date().toISOString()
+    const operation: TechnicianAreaAccessMutation = reusable
+      ? { ...reusable, withoutAccess, description: withoutAccess ? normalizedDescription : '', photoMediaId, photoStoragePath,
+          updatedAt: now, error: null }
+      : {
+          schemaVersion: 1,
+          requestId: crypto.randomUUID(),
+          actorId: actorId(),
+          serviceId,
+          deviceId: cache.deviceId,
+          lockToken: cache.lock.token,
+          kind: 'AREA_ACCESS',
+          areaId,
+          withoutAccess,
+          description: withoutAccess ? normalizedDescription : '',
+          photoMediaId,
+          photoStoragePath,
+          version: area.version,
+          status: 'PENDING',
+          createdAt: now,
+          updatedAt: now,
+          conflict: null,
+          error: null,
+        }
+    try {
+      await saveTechnicianMutation(operation)
+    } catch (failure) {
+      if (newMediaId) await deleteTechnicianMedia(actorId(), newMediaId)
+      throw failure
+    }
+    if (reusable?.photoMediaId && reusable.photoMediaId !== photoMediaId) await deleteTechnicianMedia(actorId(), reusable.photoMediaId)
+    await reloadMutations(serviceId)
+    await persistAreaAccess(serviceId, {
+      id: area.id,
+      sinAcceso: withoutAccess,
+      sinAccesoDescripcion: withoutAccess ? normalizedDescription : null,
+      sinAccesoFotoStoragePath: withoutAccess ? photoStoragePath : null,
+      version: area.version,
+    }, photoMediaId)
+    return onlineNow() ? syncPending(serviceId) : 'pending'
+  }
+
+  async function discardAreaAccessConflict(serviceId: string, areaId: string): Promise<void> {
+    const pending = await reloadMutations(serviceId)
+    const conflicted = pending.find((item): item is TechnicianAreaAccessMutation => item.kind === 'AREA_ACCESS'
+      && item.areaId === areaId && item.status === 'CONFLICT' && Boolean(item.conflict))
+    if (!conflicted?.conflict) throw new Error('No hay un estado sincronizado disponible para el Área.')
+    const affected = pending.filter((item): item is TechnicianAreaAccessMutation => item.kind === 'AREA_ACCESS' && item.areaId === areaId)
+    for (const operation of affected) {
+      if (operation.photoStoragePath && operation.photoStoragePath !== conflicted.conflict.sinAccesoFotoStoragePath) {
+        await deleteTechnicianAreaPhoto(serviceId, areaId, operation.deviceId, operation.lockToken, operation.photoStoragePath)
+      }
+      await deleteTechnicianMutation(operation)
+      if (operation.photoMediaId) await deleteTechnicianMedia(operation.actorId, operation.photoMediaId)
+    }
+    await reloadMutations(serviceId)
+    await persistAreaAccess(serviceId, conflicted.conflict)
+  }
+
+  async function retryAreaAccessConflict(serviceId: string, areaId: string): Promise<'synced' | 'pending' | 'conflict'> {
+    const pending = await reloadMutations(serviceId)
+    const conflicted = pending.find((item): item is TechnicianAreaAccessMutation => item.kind === 'AREA_ACCESS'
+      && item.areaId === areaId && item.status === 'CONFLICT' && Boolean(item.conflict))
+    if (!conflicted?.conflict) throw new Error('No es posible reintentar la excepción del Área.')
+    for (const operation of pending.filter(item => item.kind === 'AREA_ACCESS' && item.areaId === areaId)) await deleteTechnicianMutation(operation)
+    const now = new Date().toISOString()
+    await saveTechnicianMutation({ ...conflicted, requestId: crypto.randomUUID(), version: conflicted.conflict.version,
+      status: 'PENDING', conflict: null, error: null, createdAt: now, updatedAt: now })
+    await reloadMutations(serviceId)
+    return syncPending(serviceId)
+  }
+
   async function loadPackage(serviceId: string): Promise<TechnicianServicePackage> {
     const request = ++packageRequest
     currentServiceId.value = serviceId
@@ -495,5 +669,9 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     applyCriterionEvaluation,
     discardCriterionEvaluationConflict,
     retryCriterionEvaluationConflict,
+    areaAccessConflict,
+    applyAreaAccess,
+    discardAreaAccessConflict,
+    retryAreaAccessConflict,
   }
 })

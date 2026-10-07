@@ -1,5 +1,5 @@
 import type { PoolClient } from 'pg'
-import type { MipEvaluation, TechnicianAreaOrderResult, TechnicianAreaOrderVersion, TechnicianCriterion, TechnicianCriterionEvaluationResult, TechnicianExecutionLock, TechnicianExecutionSession } from '../../../src/types/technicianServices'
+import type { MipEvaluation, TechnicianAreaAccessResult, TechnicianAreaAccessState, TechnicianAreaOrderResult, TechnicianAreaOrderVersion, TechnicianCriterion, TechnicianCriterionEvaluationResult, TechnicianExecutionLock, TechnicianExecutionSession } from '../../../src/types/technicianServices'
 import { ApiError } from '../auth'
 import { assertVersion, audit } from '../services/commands'
 import { assignedServiceState, getTechnicianPackage } from './queries'
@@ -45,6 +45,68 @@ async function assertExecutionLock(client: PoolClient, userId: string, serviceId
     'select user_id,device_id,lock_token from private.service_execution_locks where service_id=$1 for update', [serviceId])).rows[0]
   if (!current || current.user_id !== userId || current.device_id !== deviceId || current.lock_token !== lockToken) {
     throw new ApiError(409, 'Este celular ya no tiene permiso para editar el servicio. Solicita al Administrador liberar el acceso.', 'SERVICE_LOCKED')
+  }
+}
+
+export async function authorizeTechnicianAreaChange(
+  client: PoolClient,
+  userId: string,
+  serviceId: string,
+  deviceId: string,
+  lockToken: string,
+  areaId: string,
+  lockArea = false,
+): Promise<TechnicianAreaAccessState> {
+  const service = await assignedServiceState(client, userId, serviceId, true)
+  if (service.tipo_servicio !== 'PRINCIPAL' || service.estado !== 'EN_PROCESO') {
+    throw new ApiError(409, 'Las excepciones de acceso solo se registran durante un servicio Principal En proceso.', 'SERVICE_NOT_IN_PROGRESS')
+  }
+  await assertExecutionLock(client, userId, serviceId, deviceId, lockToken)
+  const area = (await client.query<TechnicianAreaAccessState>(`select id,sin_acceso as "sinAcceso",
+    sin_acceso_descripcion as "sinAccesoDescripcion",sin_acceso_foto_storage_path as "sinAccesoFotoStoragePath",
+    version::integer from public.servicio_areas where id=$2 and servicio_id=$1${lockArea ? ' for update' : ''}`,
+  [serviceId, areaId])).rows[0]
+  if (!area) throw new ApiError(404, 'El Área no pertenece a este servicio.', 'AREA_NOT_FOUND')
+  return area
+}
+
+export async function saveTechnicianAreaAccess(
+  client: PoolClient,
+  userId: string,
+  serviceId: string,
+  deviceId: string,
+  lockToken: string,
+  areaId: string,
+  expectedVersion: number,
+  withoutAccess: boolean,
+  description: string,
+  photoStoragePath: string | null,
+): Promise<TechnicianAreaAccessResult & { replacedPhotoPath: string | null }> {
+  const current = await authorizeTechnicianAreaChange(client, userId, serviceId, deviceId, lockToken, areaId, true)
+  if (current.version !== expectedVersion) {
+    throw new ApiError(409, 'El estado de acceso del Área cambió. Conservamos tu respuesta para que decidas cómo continuar.', 'VERSION_CONFLICT', { remote: current })
+  }
+  const normalizedDescription = description.trim()
+  if (withoutAccess && (!normalizedDescription || !photoStoragePath)) {
+    throw new ApiError(422, 'Describe la novedad y adjunta una fotografía para registrar el Área sin acceso.', 'VALIDATION')
+  }
+  if (normalizedDescription.length > 2_000) throw new ApiError(422, 'La descripción no puede superar 2000 caracteres.', 'VALIDATION')
+  const { rows } = await client.query<TechnicianAreaAccessState>(`update public.servicio_areas
+    set sin_acceso=$3,sin_acceso_descripcion=$4,sin_acceso_foto_storage_path=$5
+    where servicio_id=$1 and id=$2
+    returning id,sin_acceso as "sinAcceso",sin_acceso_descripcion as "sinAccesoDescripcion",
+      sin_acceso_foto_storage_path as "sinAccesoFotoStoragePath",version::integer`,
+  [serviceId, areaId, withoutAccess, withoutAccess ? normalizedDescription : null, withoutAccess ? photoStoragePath : null])
+  const area = rows[0]!
+  await audit(client, userId, withoutAccess ? 'SERVICIO_AREA_SIN_ACCESO_REGISTRADA' : 'SERVICIO_AREA_ACCESO_HABILITADO', serviceId, {
+    areaId,
+    hasPhoto: Boolean(area.sinAccesoFotoStoragePath),
+  })
+  return {
+    area,
+    replacedPhotoPath: current.sinAccesoFotoStoragePath && current.sinAccesoFotoStoragePath !== area.sinAccesoFotoStoragePath
+      ? current.sinAccesoFotoStoragePath
+      : null,
   }
 }
 

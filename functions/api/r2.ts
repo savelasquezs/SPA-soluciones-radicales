@@ -12,9 +12,12 @@ export const MASTER_FILE_KINDS = [
 ] as const
 export type MasterFileKind = typeof MASTER_FILE_KINDS[number]
 type UploadInput = { kind: MasterFileKind; fileName: string; contentType: string; size: number }
+type ServicePhotoUploadInput = { serviceId: string; areaId: string; fileName: string; contentType: string; size: number }
 export type UploadAuthorization = { url: string; storagePath: string; contentType: string; expiresIn: number }
 const PRESIGNED_TTL_SECONDS = 300
 const USER_CERTIFICATE_MAX_BYTES = 10 * 1024 * 1024
+const SERVICE_PHOTO_MAX_BYTES = 10 * 1024 * 1024
+const SERVICE_PHOTO_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp'])
 const PREFIX_BY_KIND: Record<MasterFileKind, string> = {
   USER_CERTIFICATE: 'users/certificates',
   CLIENT_ESTABLISHMENT_TEMPLATE: 'clients/establishment-templates',
@@ -61,7 +64,50 @@ export function assertMasterStoragePath(storagePath: string): void {
   if (!allowed || normalized.includes('..') || normalized.startsWith('/')) throw new ApiError(422, 'La ruta del archivo privado no es válida')
 }
 
-function presign(method: 'GET' | 'PUT' | 'DELETE', storagePath: string, contentType?: string, bucket?: string, responseHeaders: Record<string, string> = {}): string {
+function serviceMediaBucket(): string { return process.env.R2_BUCKET_SERVICE_MEDIA?.trim() || 'sr-service-media' }
+
+export function createAreaNoAccessUploadUrl(input: ServicePhotoUploadInput): UploadAuthorization {
+  const extension = extensionOf(input.fileName)
+  if (!SERVICE_PHOTO_EXTENSIONS.has(extension)) throw new ApiError(422, 'La evidencia debe ser una imagen JPG, PNG o WebP')
+  if (!Number.isSafeInteger(input.size) || input.size <= 0 || input.size > SERVICE_PHOTO_MAX_BYTES) {
+    throw new ApiError(422, 'La fotografía no puede superar 10 MB')
+  }
+  const expectedContentType = MIME_BY_EXTENSION[extension]!
+  const suppliedContentType = input.contentType.trim().toLowerCase()
+  const contentType = !suppliedContentType || suppliedContentType === 'application/octet-stream' ? expectedContentType : suppliedContentType
+  if (contentType !== expectedContentType) throw new ApiError(422, 'El tipo MIME no corresponde a la extensión de la fotografía')
+  const storagePath = `services/${input.serviceId}/areas/${input.areaId}/no-access/${randomUUID()}-${safeFileName(input.fileName)}`
+  assertAreaNoAccessStoragePath(storagePath, input.serviceId, input.areaId)
+  return { url: presign('PUT', storagePath, contentType, serviceMediaBucket()), storagePath, contentType, expiresIn: PRESIGNED_TTL_SECONDS }
+}
+
+export function assertAreaNoAccessStoragePath(storagePath: string, serviceId: string, areaId: string): void {
+  const prefix = `services/${serviceId}/areas/${areaId}/no-access/`
+  const normalized = storagePath.trim()
+  if (!normalized.startsWith(prefix) || normalized.length <= prefix.length || normalized.includes('..') || normalized.startsWith('/')) {
+    throw new ApiError(422, 'La ruta de la fotografía no es válida')
+  }
+}
+
+export async function serviceMediaObjectExists(storagePath: string, serviceId: string, areaId: string): Promise<boolean> {
+  assertAreaNoAccessStoragePath(storagePath, serviceId, areaId)
+  const response = await fetch(presign('HEAD', storagePath, undefined, serviceMediaBucket()), {
+    method: 'HEAD', signal: AbortSignal.timeout(20_000), redirect: 'error',
+  })
+  if (response.status === 404) return false
+  if (!response.ok) throw new ApiError(502, 'No fue posible validar la fotografía privada')
+  return true
+}
+
+export async function deleteAreaNoAccessObject(storagePath: string, serviceId: string, areaId: string): Promise<void> {
+  assertAreaNoAccessStoragePath(storagePath, serviceId, areaId)
+  const response = await fetch(presign('DELETE', storagePath, undefined, serviceMediaBucket()), {
+    method: 'DELETE', signal: AbortSignal.timeout(20_000), redirect: 'error',
+  })
+  if (!response.ok && response.status !== 404) throw new ApiError(502, 'No fue posible limpiar la fotografía privada')
+}
+
+function presign(method: 'GET' | 'PUT' | 'DELETE' | 'HEAD', storagePath: string, contentType?: string, bucket?: string, responseHeaders: Record<string, string> = {}): string {
   const config = r2Config()
   const host = `${config.accountId}.r2.cloudflarestorage.com`
   const canonicalUri = `/${awsEncode(bucket ?? config.bucket)}/${storagePath.split('/').map(awsEncode).join('/')}`
