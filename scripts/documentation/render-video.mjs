@@ -122,7 +122,8 @@ ordered.forEach((item, index) => {
 
 if (voiceLabels.length) {
   filters.push(`${voiceLabels.join('')}amix=inputs=${voiceLabels.length}:duration=longest:normalize=0[voice]`)
-  filters.push('[voice]asplit=2[voice_sc][voice_mix]')
+  filters.push(`[voice]apad=whole_dur=${videoDuration.toFixed(3)},atrim=0:${videoDuration.toFixed(3)}[voice_full]`)
+  filters.push('[voice_full]asplit=2[voice_sc][voice_mix]')
   filters.push('[music][voice_sc]sidechaincompress=threshold=0.012:ratio=10:attack=20:release=550[ducked]')
   filters.push(`[ducked][voice_mix]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.94,atrim=0:${videoDuration.toFixed(3)}[aout]`)
 } else {
@@ -142,7 +143,7 @@ args.push(
   '-c:a', 'aac',
   '-b:a', '160k',
   '-movflags', '+faststart',
-  '-shortest',
+  '-t', videoDuration.toFixed(3),
   mp4,
 )
 
