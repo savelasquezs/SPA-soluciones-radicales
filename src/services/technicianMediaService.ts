@@ -19,6 +19,7 @@ function validMedia(value: unknown, actorId?: string, mediaId?: string): value i
     && isServiceId(record.actorId)
     && isServiceId(record.serviceId)
     && isServiceId(record.areaId)
+    && (record.serviceDeviceId === undefined || isServiceId(record.serviceDeviceId))
     && (!actorId || record.actorId === actorId)
     && (!mediaId || record.id === mediaId)
     && typeof record.fileName === 'string'
@@ -40,6 +41,7 @@ export async function saveTechnicianMedia(value: TechnicianMediaInput): Promise<
     actorId: value.actorId,
     serviceId: value.serviceId,
     areaId: value.areaId,
+    ...(value.serviceDeviceId ? { serviceDeviceId: value.serviceDeviceId } : {}),
     fileName: value.file.name,
     contentType: value.file.type,
     size: value.file.size,

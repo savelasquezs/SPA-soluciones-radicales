@@ -67,6 +67,28 @@ function validMutation(value: unknown, actorId?: string, serviceId?: string): va
       && typeof record.conflict?.sinAcceso === 'boolean'
       && typeof record.conflict?.version === 'number'
     ))
+  if (record.kind === 'DEVICE_REVIEW') return isServiceId(record.areaId)
+    && isServiceId(record.serviceDeviceId)
+    && isServiceId(record.reviewId)
+    && ['ACTIVO', 'DANADO', 'FUERA_DE_USO'].includes(record.estadoObservado ?? '')
+    && Array.isArray(record.capturas)
+    && record.capturas.length <= 200
+    && new Set(record.capturas.map(capture => capture.plagaCodigo)).size === record.capturas.length
+    && record.capturas.every(capture => typeof capture.plagaCodigo === 'string' && capture.plagaCodigo.length > 0
+      && capture.plagaCodigo.length <= 160 && Number.isSafeInteger(capture.cantidad) && capture.cantidad > 0 && capture.cantidad <= 1_000_000)
+    && typeof record.consumo === 'string' && record.consumo.length <= 500
+    && typeof record.productoQuimico === 'string' && record.productoQuimico.length <= 500
+    && typeof record.antidoto === 'string' && record.antidoto.length <= 500
+    && typeof record.observaciones === 'string' && record.observaciones.length <= 2_000
+    && (record.photoMediaId === null || isServiceId(record.photoMediaId))
+    && (record.photoStoragePath === null || typeof record.photoStoragePath === 'string')
+    && Number.isSafeInteger(record.version)
+    && Number(record.version) >= 0
+    && (record.conflict === null || (
+      Boolean(record.conflict)
+      && isServiceId(record.conflict?.id)
+      && typeof record.conflict?.version === 'number'
+    ))
   return false
 }
 

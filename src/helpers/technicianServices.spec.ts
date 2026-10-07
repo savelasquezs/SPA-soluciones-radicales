@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatTechnicianDateTime, isExactAreaPermutation, moveTechnicianArea, nextTechnicianArea, orderedTechnicianAreas, sortTechnicianServices, technicianAreaResolved, technicianServiceStateLabel } from '@/helpers/technicianServices'
+import { formatTechnicianDateTime, isExactAreaPermutation, moveTechnicianArea, nextTechnicianArea, orderedTechnicianAreas, sortTechnicianServices, technicianAreaResolved, technicianDevicePhotoRequired, technicianServiceStateLabel } from '@/helpers/technicianServices'
 import type { TechnicianArea, TechnicianServiceSummary } from '@/types/technicianServices'
 
 const record = (id: string, estado: TechnicianServiceSummary['estado'], inicioProgramado: string): TechnicianServiceSummary => ({
@@ -65,9 +65,16 @@ describe('technician area route', () => {
 
   it('uses criteria, device reviews and the complete no-access exception', () => {
     expect(technicianAreaResolved(area('a', 0, true))).toBe(true)
-    expect(technicianAreaResolved({ ...area('a', 0, true), dispositivos: [{ id: 'd', dispositivoId: 'd', numero: '1', ubicacion: 'x', tipoCodigo: 'TRAMPA', estadoAnterior: 'ACTIVO', revisado: false }] })).toBe(false)
+    expect(technicianAreaResolved({ ...area('a', 0, true), dispositivos: [{ id: 'd', dispositivoId: 'd', numero: '1', ubicacion: 'x', tipoCodigo: 'TRAMPA', tipoNombre: 'Trampa', clasificacion: 'RASTREROS', plagas: [], estadoAnterior: 'ACTIVO', revisado: false, revision: null }] })).toBe(false)
     expect(technicianAreaResolved({ ...area('a', 0), sinAcceso: true, sinAccesoDescripcion: 'Cerrada', sinAccesoFotoStoragePath: 'services/photo.jpg' })).toBe(true)
     expect(technicianAreaResolved({ ...area('a', 0), sinAcceso: true, sinAccesoDescripcion: 'Cerrada', sinAccesoFotoLocalId: 'local-photo' })).toBe(true)
+  })
+
+  it('requires evidence only for a newly observed damaged or out-of-use state', () => {
+    expect(technicianDevicePhotoRequired('ACTIVO', 'DANADO')).toBe(true)
+    expect(technicianDevicePhotoRequired('ACTIVO', 'FUERA_DE_USO')).toBe(true)
+    expect(technicianDevicePhotoRequired('DANADO', 'DANADO')).toBe(false)
+    expect(technicianDevicePhotoRequired('FUERA_DE_USO', 'ACTIVO')).toBe(false)
   })
 
   it('wraps to an earlier pending area and never returns the current area', () => {

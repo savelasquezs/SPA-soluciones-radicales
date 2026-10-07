@@ -1,4 +1,4 @@
-import type { TechnicianArea, TechnicianServiceSummary } from '@/types/technicianServices'
+import type { DeviceState, TechnicianArea, TechnicianServiceSummary } from '../types/technicianServices'
 
 export function technicianServiceStateLabel(state: TechnicianServiceSummary['estado']): string {
   return ({ PROGRAMADO: 'Programado', EN_PROCESO: 'En proceso', FINALIZADO: 'Finalizado', CANCELADO: 'Cancelado' } as const)[state] ?? state
@@ -36,6 +36,10 @@ export function technicianAreaResolved(area: TechnicianArea): boolean {
   return area.criterios.length > 0
     && area.criterios.every(criterion => criterion.evaluacion)
     && area.dispositivos.every(device => device.revisado)
+}
+
+export function technicianDevicePhotoRequired(previous: DeviceState, observed: DeviceState): boolean {
+  return previous !== observed && (observed === 'DANADO' || observed === 'FUERA_DE_USO')
 }
 
 export function moveTechnicianArea(areaIds: string[], index: number, direction: -1 | 1): string[] {

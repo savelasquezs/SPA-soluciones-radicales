@@ -18,6 +18,7 @@ vi.mock('@/services/servicesService', () => ({
   saveTechnicianAreaOrder: vi.fn<typeof api.saveTechnicianAreaOrder>(),
   saveTechnicianCriterionEvaluation: vi.fn<typeof api.saveTechnicianCriterionEvaluation>(),
   saveTechnicianAreaAccess: vi.fn<typeof api.saveTechnicianAreaAccess>(),
+  saveTechnicianDeviceReview: vi.fn<typeof api.saveTechnicianDeviceReview>(),
 }))
 vi.mock('@/services/technicianMediaService', () => ({
   saveTechnicianMedia: vi.fn<typeof mediaService.saveTechnicianMedia>(),
@@ -27,6 +28,8 @@ vi.mock('@/services/technicianMediaService', () => ({
 vi.mock('@/services/serviceMediaService', () => ({
   uploadTechnicianAreaPhoto: vi.fn<typeof serviceMedia.uploadTechnicianAreaPhoto>(),
   deleteTechnicianAreaPhoto: vi.fn<typeof serviceMedia.deleteTechnicianAreaPhoto>(),
+  uploadTechnicianDevicePhoto: vi.fn<typeof serviceMedia.uploadTechnicianDevicePhoto>(),
+  deleteTechnicianDevicePhoto: vi.fn<typeof serviceMedia.deleteTechnicianDevicePhoto>(),
 }))
 vi.mock('@/services/technicianPackageService', () => ({
   getTechnicianDeviceId: vi.fn<typeof cacheService.getTechnicianDeviceId>(),
@@ -48,6 +51,8 @@ const deviceId = '10000000-0000-4000-8000-000000000003'
 const lockToken = '10000000-0000-4000-8000-000000000004'
 const areaIds = ['10000000-0000-4000-8000-000000000005', '10000000-0000-4000-8000-000000000006']
 const criterionId = '10000000-0000-4000-8000-000000000007'
+const serviceDeviceId = '10000000-0000-4000-8000-000000000008'
+const permanentDeviceId = '10000000-0000-4000-8000-000000000009'
 const summary = (estado: TechnicianServiceSummary['estado'] = 'PROGRAMADO'): TechnicianServiceSummary => ({
   id: serviceId,
   solicitud: 'SR-0101',
@@ -96,7 +101,19 @@ const executionCache = (): TechnicianPackageCache => ({
       sinAccesoFotoStoragePath: null,
       version: 1,
       criterios: position ? [] : [{ id: criterionId, criterioId: criterionId, nombre: 'Orden y aseo', soloAreaExterna: false, evaluacion: null, observacion: null, evidenciasStoragePaths: [], version: 1 }],
-      dispositivos: [],
+      dispositivos: position ? [] : [{
+        id: serviceDeviceId,
+        dispositivoId: permanentDeviceId,
+        numero: 'D-01',
+        ubicacion: 'Bajo mesón',
+        tipoCodigo: 'TRAMPA_ADHESIVA',
+        tipoNombre: 'Trampa adhesiva',
+        clasificacion: 'RASTREROS',
+        plagas: [{ codigo: 'CUCARACHA', nombre: 'Cucaracha' }],
+        estadoAnterior: 'ACTIVO',
+        revisado: false,
+        revision: null,
+      }],
     })),
   },
   lock: { token: lockToken, deviceId, acquiredAt: '2026-10-07T13:30:00Z' },
@@ -123,6 +140,7 @@ beforeEach(() => {
   vi.mocked(mediaService.loadTechnicianMedia).mockResolvedValue(null)
   vi.mocked(mediaService.deleteTechnicianMedia).mockResolvedValue()
   vi.mocked(serviceMedia.deleteTechnicianAreaPhoto).mockResolvedValue()
+  vi.mocked(serviceMedia.deleteTechnicianDevicePhoto).mockResolvedValue()
 })
 
 describe('technician services state', () => {
@@ -241,6 +259,51 @@ describe('technician services state', () => {
     expect(api.saveTechnicianAreaAccess).toHaveBeenCalledWith(serviceId, areaIds[0], expect.any(String), deviceId, lockToken, 1, true, 'Puerta cerrada', storagePath)
     expect(mediaService.deleteTechnicianMedia).toHaveBeenCalled()
     expect(store.currentPackage?.areas[0]).toMatchObject({ sinAcceso: true, sinAccesoFotoStoragePath: storagePath, sinAccesoFotoLocalId: null, version: 2 })
+    expect(store.pendingSyncCount).toBe(0)
+  })
+
+  it('preserves a device review and its condition photo while offline', async () => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+    vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([executionCache()])
+    const store = useTechnicianServicesStore()
+    await store.ensurePackage(serviceId)
+    const photo = new File(['photo'], 'dano.jpg', { type: 'image/jpeg' })
+    expect(await store.applyDeviceReview(serviceId, areaIds[0]!, serviceDeviceId, {
+      estadoObservado: 'DANADO', capturas: [{ plagaCodigo: 'CUCARACHA', cantidad: 2 }],
+      consumo: 'Parcial', productoQuimico: '', antidoto: '', observaciones: 'Base desprendida',
+    }, photo)).toBe('pending')
+    expect(mutationRecords[0]).toMatchObject({ kind: 'DEVICE_REVIEW', serviceDeviceId, estadoObservado: 'DANADO', version: 0, status: 'PENDING' })
+    expect(mediaService.saveTechnicianMedia).toHaveBeenCalledWith(expect.objectContaining({ serviceId, areaId: areaIds[0], serviceDeviceId, file: photo }))
+    expect(store.currentPackage?.areas[0]?.dispositivos[0]).toMatchObject({ revisado: true, revision: { estadoObservado: 'DANADO' } })
+    expect(api.saveTechnicianDeviceReview).not.toHaveBeenCalled()
+  })
+
+  it('uploads and synchronizes a device condition photo before saving the review', async () => {
+    vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([executionCache()])
+    const photo = new File(['photo'], 'dano.jpg', { type: 'image/jpeg' })
+    vi.mocked(mediaService.loadTechnicianMedia).mockImplementation(async (_actor, mediaId) => ({
+      schemaVersion: 1, id: mediaId, actorId, serviceId, areaId: areaIds[0]!, serviceDeviceId,
+      fileName: photo.name, contentType: photo.type, size: photo.size, lastModified: photo.lastModified,
+      file: photo, savedAt: '2026-10-07T13:30:00Z',
+    }))
+    const storagePath = `services/${serviceId}/devices/${serviceDeviceId}/review/photo.jpg`
+    vi.mocked(serviceMedia.uploadTechnicianDevicePhoto).mockResolvedValue(storagePath)
+    vi.mocked(api.saveTechnicianDeviceReview).mockResolvedValue({ review: {
+      id: '10000000-0000-4000-8000-000000000010', estadoObservado: 'DANADO',
+      capturas: [{ plagaCodigo: 'CUCARACHA', plagaNombreSnapshot: 'Cucaracha', cantidad: 2 }],
+      consumo: '', productoQuimico: '', antidoto: '', observaciones: 'Base desprendida',
+      fotoStoragePath: storagePath, version: 1,
+    } })
+    const store = useTechnicianServicesStore()
+    await store.ensurePackage(serviceId)
+    expect(await store.applyDeviceReview(serviceId, areaIds[0]!, serviceDeviceId, {
+      estadoObservado: 'DANADO', capturas: [{ plagaCodigo: 'CUCARACHA', cantidad: 2 }],
+      consumo: '', productoQuimico: '', antidoto: '', observaciones: 'Base desprendida',
+    }, photo)).toBe('synced')
+    expect(serviceMedia.uploadTechnicianDevicePhoto).toHaveBeenCalledWith(serviceId, serviceDeviceId, deviceId, lockToken, photo)
+    expect(api.saveTechnicianDeviceReview).toHaveBeenCalledWith(serviceId, serviceDeviceId, expect.any(String), deviceId, lockToken,
+      expect.any(String), 0, expect.objectContaining({ estadoObservado: 'DANADO' }), storagePath)
+    expect(store.currentPackage?.areas[0]?.dispositivos[0]?.revision).toMatchObject({ fotoStoragePath: storagePath, version: 1 })
     expect(store.pendingSyncCount).toBe(0)
   })
 

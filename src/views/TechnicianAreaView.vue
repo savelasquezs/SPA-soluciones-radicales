@@ -11,9 +11,10 @@ import StatusPanel from '@/components/base/StatusPanel.vue'
 import ServicePage from '@/components/domain/services/ServicePage.vue'
 import TechnicianAreaAccessEditor from '@/components/domain/services/TechnicianAreaAccessEditor.vue'
 import TechnicianCriterionEditor from '@/components/domain/services/TechnicianCriterionEditor.vue'
+import TechnicianDeviceReviewEditor from '@/components/domain/services/TechnicianDeviceReviewEditor.vue'
 import { nextTechnicianArea, orderedTechnicianAreas, technicianAreaResolved } from '@/helpers/technicianServices'
 import { useTechnicianServicesStore } from '@/stores/technicianServices'
-import type { MipEvaluation, TechnicianAreaAccessMutation, TechnicianCriterionEvaluationMutation } from '@/types/technicianServices'
+import type { MipEvaluation, TechnicianAreaAccessMutation, TechnicianCriterionEvaluationMutation, TechnicianDeviceReviewInput, TechnicianDeviceReviewMutation } from '@/types/technicianServices'
 
 const route = useRoute()
 const router = useRouter()
@@ -28,8 +29,10 @@ const loading = ref(true)
 const error = ref('')
 const saveError = ref('')
 const drafts = ref<Record<string, { evaluation: MipEvaluation | null; observation: string }>>({})
+const deviceDrafts = ref<Record<string, { input: TechnicianDeviceReviewInput; photo: File | null }>>({})
 const accessDraft = ref<{ areaId: string; withoutAccess: boolean; description: string; photo: File | null } | null>(null)
 const saveQueue = new Map<string, Promise<boolean>>()
+const deviceSaveQueue = new Map<string, Promise<boolean>>()
 let accessSaveQueue: Promise<boolean> | null = null
 const canEditRoute = computed(() => packageValue.value?.service.estado === 'EN_PROCESO' && Boolean(currentCache.value?.lock))
 const next = computed(() => currentArea.value ? nextTechnicianArea(orderedAreas.value, currentArea.value.id) : { kind: 'PENDING' as const })
@@ -64,6 +67,10 @@ function accessMutation(): TechnicianAreaAccessMutation | null {
   return currentMutations.value.find((item): item is TechnicianAreaAccessMutation => item.kind === 'AREA_ACCESS' && item.areaId === currentArea.value?.id) ?? null
 }
 
+function deviceMutation(serviceDeviceId: string): TechnicianDeviceReviewMutation | null {
+  return currentMutations.value.find((item): item is TechnicianDeviceReviewMutation => item.kind === 'DEVICE_REVIEW' && item.serviceDeviceId === serviceDeviceId) ?? null
+}
+
 function trackAccessDraft(withoutAccess: boolean, description: string, photo: File | null): void {
   if (!currentArea.value) return
   accessDraft.value = { areaId: currentArea.value.id, withoutAccess, description, photo }
@@ -82,11 +89,11 @@ async function saveAccess(withoutAccess: boolean, description: string, photo: Fi
   const previous = accessSaveQueue ?? Promise.resolve(true)
   const task = previous.then(async () => {
     saveError.value = ''
-    if (withoutAccess && saveQueue.size) await Promise.all(saveQueue.values())
+    if (withoutAccess && (saveQueue.size || deviceSaveQueue.size)) await Promise.all([...saveQueue.values(), ...deviceSaveQueue.values()])
     try {
       const result = await services.applyAreaAccess(serviceId.value, expected.areaId, withoutAccess, expected.description, photo)
       if (result === 'conflict') return false
-      if (withoutAccess) drafts.value = {}
+      if (withoutAccess) { drafts.value = {}; deviceDrafts.value = {} }
       clearAccessDraft(expected)
       return true
     } catch (failure) {
@@ -135,6 +142,41 @@ async function saveCriterion(criterionId: string, evaluation: MipEvaluation, obs
   return saved
 }
 
+function trackDeviceDraft(serviceDeviceId: string, input: TechnicianDeviceReviewInput, photo: File | null): void {
+  deviceDrafts.value = { ...deviceDrafts.value, [serviceDeviceId]: { input, photo } }
+}
+
+function clearDeviceDraft(serviceDeviceId: string, expected?: { input: TechnicianDeviceReviewInput; photo: File | null }): void {
+  const current = deviceDrafts.value[serviceDeviceId]
+  if (!current || (expected && (JSON.stringify(current.input) !== JSON.stringify(expected.input) || current.photo !== expected.photo))) return
+  const next = { ...deviceDrafts.value }
+  delete next[serviceDeviceId]
+  deviceDrafts.value = next
+}
+
+async function saveDevice(serviceDeviceId: string, input: TechnicianDeviceReviewInput, photo: File | null): Promise<boolean> {
+  if (!currentArea.value) return false
+  const areaId = currentArea.value.id
+  const expected = { input, photo }
+  const previous = deviceSaveQueue.get(serviceDeviceId) ?? Promise.resolve(true)
+  const task = previous.then(async () => {
+    saveError.value = ''
+    try {
+      const result = await services.applyDeviceReview(serviceId.value, areaId, serviceDeviceId, input, photo)
+      if (result === 'conflict') return false
+      clearDeviceDraft(serviceDeviceId, expected)
+      return true
+    } catch (failure) {
+      saveError.value = failure instanceof Error ? failure.message : 'No fue posible guardar la revisión del dispositivo.'
+      return false
+    }
+  })
+  deviceSaveQueue.set(serviceDeviceId, task)
+  const saved = await task
+  if (deviceSaveQueue.get(serviceDeviceId) === task) deviceSaveQueue.delete(serviceDeviceId)
+  return saved
+}
+
 async function flushDrafts(): Promise<boolean> {
   if (accessSaveQueue) await accessSaveQueue
   if (accessDraft.value) {
@@ -152,6 +194,10 @@ async function flushDrafts(): Promise<boolean> {
       return false
     }
     if (!await saveCriterion(criterionId, draft.evaluation, draft.observation)) return false
+  }
+  if (deviceSaveQueue.size) await Promise.all(deviceSaveQueue.values())
+  for (const [serviceDeviceId, draft] of Object.entries(deviceDrafts.value)) {
+    if (!await saveDevice(serviceDeviceId, draft.input, draft.photo)) return false
   }
   return true
 }
@@ -180,6 +226,18 @@ async function retryAccess(): Promise<void> {
   saveError.value = ''
   try { const result = await services.retryAreaAccessConflict(serviceId.value, currentArea.value.id); if (result !== 'conflict') accessDraft.value = null }
   catch (failure) { saveError.value = failure instanceof Error ? failure.message : 'No fue posible reintentar la excepción del Área.' }
+}
+
+async function useRemoteDevice(serviceDeviceId: string): Promise<void> {
+  saveError.value = ''
+  try { await services.discardDeviceReviewConflict(serviceId.value, serviceDeviceId); clearDeviceDraft(serviceDeviceId) }
+  catch (failure) { saveError.value = failure instanceof Error ? failure.message : 'No fue posible recuperar la revisión sincronizada.' }
+}
+
+async function retryDevice(serviceDeviceId: string): Promise<void> {
+  saveError.value = ''
+  try { const result = await services.retryDeviceReviewConflict(serviceId.value, serviceDeviceId); if (result !== 'conflict') clearDeviceDraft(serviceDeviceId) }
+  catch (failure) { saveError.value = failure instanceof Error ? failure.message : 'No fue posible reintentar la revisión del dispositivo.' }
 }
 
 function goNext(): void {
@@ -213,7 +271,7 @@ function goNext(): void {
       <section v-if="!currentArea.sinAcceso" class="area-panel" aria-labelledby="area-devices-title">
         <header><div><h2 id="area-devices-title">Dispositivos</h2><p>{{ currentArea.dispositivos.length }} puntos congelados</p></div></header>
         <p v-if="!currentArea.dispositivos.length" class="area-empty">Esta Área no tiene Dispositivos asignados.</p>
-        <ul v-else class="area-list"><li v-for="device in currentArea.dispositivos" :key="device.id"><span><strong>{{ device.numero }}</strong><small>{{ device.ubicacion }}</small></span><StatusBadge :tone="device.revisado ? 'success' : 'neutral'">{{ device.revisado ? 'Revisado' : 'Pendiente' }}</StatusBadge></li></ul>
+        <div v-else class="device-list"><TechnicianDeviceReviewEditor v-for="device in currentArea.dispositivos" :key="device.id" :device="device" :mutation="deviceMutation(device.id)" :editable="canEditRoute" :syncing="syncing" @draft="(input, photo) => trackDeviceDraft(device.id, input, photo)" @save="(input, photo) => saveDevice(device.id, input, photo)" @use-remote="useRemoteDevice(device.id)" @retry="retryDevice(device.id)" /></div>
       </section>
       <BaseButton class="area-next" @click="goNext"><ClipboardCheck v-if="next.kind !== 'AREA'" :size="18" aria-hidden="true" /><ChevronRight v-else :size="18" aria-hidden="true" />{{ nextLabel }}</BaseButton>
     </template>
@@ -226,7 +284,7 @@ function goNext(): void {
 .area-panel > header { display:flex; align-items:flex-start; justify-content:space-between; gap:0.75rem; }
 h2, p, ul { margin:0; }
 h2 { font-size:1rem; }
-.area-list { display:grid; gap:0.6rem; padding:0; list-style:none; }
+.area-list, .device-list { display:grid; gap:0.6rem; padding:0; list-style:none; }
 .criteria-list { display:grid; gap:0.75rem; }
 .area-list li { display:flex; min-height:52px; align-items:center; justify-content:space-between; gap:0.75rem; border:1px solid var(--border); border-radius:var(--radius); padding:0.7rem; }
 .area-list li > span { display:grid; min-width:0; gap:0.15rem; overflow-wrap:anywhere; }
