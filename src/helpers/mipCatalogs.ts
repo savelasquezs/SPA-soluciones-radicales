@@ -4,6 +4,7 @@ import {
   type CatalogErrors,
   type CatalogValidation,
   type MipCatalogItem,
+  type MipCriterionInput,
   type MipItemInput,
   type MipItemKind,
   type MipProduct,
@@ -151,6 +152,15 @@ export function validateProductInput(input: unknown): CatalogValidation<MipProdu
   }
 
   return { value, errors }
+}
+
+export function validateCriterionInput(input: unknown): CatalogValidation<MipCriterionInput> {
+  const source = object(input)
+  const errors: CatalogErrors = {}
+  const nombre = text(source, 'nombre', 'El nombre', errors, true, 160) ?? ''
+  const soloAreaExterna = typeof source.soloAreaExterna === 'boolean' ? source.soloAreaExterna : false
+  if (typeof source.soloAreaExterna !== 'boolean') errors.soloAreaExterna = 'Selecciona dónde aplica el criterio.'
+  return { value: { nombre, soloAreaExterna }, errors }
 }
 
 export function validateCatalogItem(kind: MipItemKind, input: unknown): CatalogValidation<MipItemInput> {
