@@ -80,7 +80,7 @@
 .svc-week-calendar__day { position:relative; height:100%; border-right:1px solid color-mix(in srgb,var(--border) 60%,transparent); }
 .svc-week-calendar__day:last-child { border-right:0; }
 .svc-week-calendar__hour-line { position:absolute; right:0; left:0; border-top:1px solid color-mix(in srgb,var(--border) 48%,transparent); }
-.svc-week-calendar__event { position:absolute; z-index:2; display:block; min-height:24px; overflow:hidden; border:1px solid var(--border-strong); border-left:3px solid var(--accent); border-radius:var(--radius-sm); background:var(--surface-raised); padding:0.28rem 0.38rem; color:var(--text); text-decoration:none; font-size:0.72rem; line-height:1.2; }
+.svc-week-calendar__event { position:absolute; z-index:2; display:block; min-height:24px; overflow:visible; border:1px solid var(--border-strong); border-left:3px solid var(--accent); border-radius:var(--radius-sm); background:var(--surface-raised); padding:0.28rem 0.38rem; color:var(--text); text-decoration:none; font-size:0.72rem; line-height:1.2; }
 .svc-week-calendar__event:hover, .svc-week-calendar__event:focus-visible { z-index:6; background:var(--hover); outline:2px solid var(--accent); outline-offset:1px; }
 .svc-week-calendar__event > strong, .svc-week-calendar__event > small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .svc-week-calendar__event > strong { font-weight:600; }
