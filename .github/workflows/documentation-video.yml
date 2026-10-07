@@ -1,26 +1,31 @@
 name: Documentation video
 
 on:
-  push:
-    branches: [develop]
-    paths:
-      - 'e2e/documentation/**'
-      - 'playwright.docs.config.ts'
-      - 'package.json'
-      - '.github/workflows/documentation-video.yml'
   workflow_dispatch:
+    inputs:
+      voice:
+        description: 'Voz femenina Chirp 3 HD'
+        required: false
+        default: 'es-US-Chirp3-HD-Kore'
+        type: string
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
-  group: documentation-video-develop
+  group: documentation-video
   cancel-in-progress: true
 
 jobs:
   record:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      TTS_LANGUAGE_CODE: es-US
+      TTS_VOICE: ${{ inputs.voice || vars.GOOGLE_TTS_VOICE || 'es-US-Chirp3-HD-Kore' }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -29,35 +34,57 @@ jobs:
           node-version: 24
           cache: npm
 
+      - name: Validate Google Cloud configuration
+        shell: bash
+        env:
+          WIF_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          SERVICE_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          test -n "$GCP_PROJECT_ID" || { echo "::error::Falta la variable GCP_PROJECT_ID"; exit 1; }
+          test -n "$WIF_PROVIDER" || { echo "::error::Falta la variable GCP_WORKLOAD_IDENTITY_PROVIDER"; exit 1; }
+          test -n "$SERVICE_ACCOUNT" || { echo "::error::Falta la variable GCP_SERVICE_ACCOUNT"; exit 1; }
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v3
+
       - run: npm ci
+
+      - name: Install media tools
+        shell: bash
+        run: |
+          if ! command -v ffmpeg >/dev/null 2>&1 || ! command -v ffprobe >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+          fi
+
+      - name: Generate female Chirp 3 narration
+        run: npm run docs:tts
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Record documentation flow
+      - name: Record interface
         run: npm run docs:record
 
-      - name: Prepare final video
-        if: success()
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p docs-media/final
-          VIDEO="$(find docs-media/playwright -type f -name video.webm | head -n 1)"
-          test -n "$VIDEO"
-          cp "$VIDEO" docs-media/final/mip-catalogs-crear-producto.webm
-          if ! command -v ffmpeg >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install -y ffmpeg
-          fi
-          ffmpeg -y -i "$VIDEO"             -c:v libx264 -preset veryfast -crf 23             -pix_fmt yuv420p -movflags +faststart -an             docs-media/final/mip-catalogs-crear-producto.mp4
+      - name: Render final video
+        run: npm run docs:render
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: documentation-video-mip-catalogs
+          name: documentation-video-mip-catalogs-v2
           path: |
             docs-media/final/
+            docs-media/audio/
+            docs-media/timeline.json
             docs-media/playwright/
           if-no-files-found: warn
           retention-days: 14
