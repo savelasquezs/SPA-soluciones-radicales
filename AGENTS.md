@@ -91,8 +91,8 @@ No inventar requisitos. Ante una contradicción, detener únicamente la parte af
 - Un Área externa incorpora los criterios exclusivos de exterior además de los generales.
 - Al iniciar un Servicio, conservar snapshots suficientes para que cambios posteriores de criterios, plagas o dispositivos no reinterpreten el histórico.
 - Los dispositivos son entidades permanentes de Sede/Área y sus revisiones pertenecen al Servicio; no son campos dinámicos.
-- `formularios`, `respuestas_formulario`, `formularios_aplicables_json` y `formularios_versiones_json` pertenecen al modelo transitorio del baseline. No construir nueva funcionalidad sobre ellos.
-- Cuando se implemente el primer Servicio, sustituir el modelo transitorio mediante una migración nueva; nunca modificar migraciones ya aplicadas.
+- El modelo legacy de formularios MIP fue retirado por la migración `20261006_011_remove_legacy_mip_forms.sql`.
+- No reintroducir `formularios`, `respuestas_formulario`, `formularios_aplicables_json` ni `formularios_versiones_json`.
 - Leer `docs/product/service-execution.md` antes de implementar ejecución técnica o monitoreo.
 
 ## Cloudflare Workers
