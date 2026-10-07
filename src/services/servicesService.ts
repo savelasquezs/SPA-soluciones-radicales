@@ -30,3 +30,7 @@ export const saveTechnicianFindingStatus = (serviceId: string, areaId: string, f
     json({ requestId, deviceId, lockToken, version, ...input, evidenceStoragePaths }))
 export const saveTechnicianDeviceReview = (serviceId: string, serviceDeviceId: string, requestId: string, deviceId: string, lockToken: string, reviewId: string, version: number, input: TechnicianDeviceReviewInput, photoStoragePath: string | null) =>
   apiRequest<TechnicianDeviceReviewResult>(`${base}/${serviceId}/devices/${serviceDeviceId}/review`, json({ requestId, deviceId, lockToken, reviewId, version, ...input, photoStoragePath }))
+export const finalizeTechnicianService = (serviceId: string, requestId: string, deviceId: string, lockToken: string,
+  technicianStoragePath: string, clientStoragePath: string, clientName: string) =>
+  apiRequest<{ package: TechnicianServicePackage }>(`${base}/${serviceId}/finalize`,
+    json({ requestId, deviceId, lockToken, technicianStoragePath, clientStoragePath, clientName }))

@@ -7,6 +7,7 @@ type UploadAuthorization = {
   contentType: string
 }
 type FindingEvidencePhase = 'OPENING' | 'CLOSURE'
+type ServiceSignatureRole = 'TECHNICIAN' | 'CLIENT'
 
 export async function uploadTechnicianAreaPhoto(
   serviceId: string,
@@ -120,4 +121,22 @@ export async function deleteTechnicianFindingEvidence(
     method: 'POST',
     body: JSON.stringify({ deviceId, lockToken, phase, storagePath }),
   })
+}
+
+export async function uploadTechnicianSignature(
+  serviceId: string,
+  role: ServiceSignatureRole,
+  deviceId: string,
+  lockToken: string,
+  file: File,
+): Promise<string> {
+  const authorization = await apiRequest<UploadAuthorization>(`api/technician/services/${serviceId}/signatures/upload-url`, {
+    method: 'POST',
+    body: JSON.stringify({ deviceId, lockToken, role, fileName: file.name, contentType: file.type, size: file.size }),
+  })
+  const response = await fetch(authorization.url, {
+    method: 'PUT', headers: { 'Content-Type': authorization.contentType }, body: file,
+  })
+  if (!response.ok) throw new ApiClientError('No fue posible subir la firma.', response.status)
+  return authorization.storagePath
 }

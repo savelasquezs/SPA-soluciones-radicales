@@ -5,8 +5,8 @@ import type { PoolClient } from 'pg'
 import { isServiceId } from '../../../src/helpers/adminServices'
 import { ApiError, requireTechnician, type DomainProfile, type Identity } from '../auth'
 import { transaction } from '../db'
-import { assertAreaNoAccessStoragePath, assertDeviceReviewStoragePath, assertFindingEvidenceStoragePath, createAreaNoAccessUploadUrl, createDeviceReviewUploadUrl, createFindingEvidenceUploadUrl, deleteAreaNoAccessObject, deleteDeviceReviewObject, deleteFindingEvidenceObject, deviceReviewMediaObjectExists, findingEvidenceObjectExists, serviceMediaObjectExists, type FindingEvidencePhase } from '../r2'
-import { authorizeTechnicianAreaChange, authorizeTechnicianDeviceChange, authorizeTechnicianFindingChange, claimTechnicianService, createTechnicianDevice, createTechnicianFinding, saveTechnicianAreaAccess, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, saveTechnicianFindingStatus, startTechnicianService, technicianCommand } from './commands'
+import { assertAreaNoAccessStoragePath, assertDeviceReviewStoragePath, assertFindingEvidenceStoragePath, assertServiceSignatureStoragePath, createAreaNoAccessUploadUrl, createDeviceReviewUploadUrl, createFindingEvidenceUploadUrl, createServiceSignatureUploadUrl, deleteAreaNoAccessObject, deleteDeviceReviewObject, deleteFindingEvidenceObject, deviceReviewMediaObjectExists, findingEvidenceObjectExists, serviceMediaObjectExists, serviceSignatureObjectExists, type FindingEvidencePhase, type ServiceSignatureRole } from '../r2'
+import { authorizeTechnicianAreaChange, authorizeTechnicianDeviceChange, authorizeTechnicianFindingChange, authorizeTechnicianServiceChange, claimTechnicianService, createTechnicianDevice, createTechnicianFinding, finalizeTechnicianService, saveTechnicianAreaAccess, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, saveTechnicianFindingStatus, startTechnicianService, technicianCommand } from './commands'
 import { getTechnicianPackage, listTechnicianServices } from './queries'
 
 type Environment = { Variables: { identity: Identity } }
@@ -43,6 +43,10 @@ function findingPhase(value: unknown): FindingEvidencePhase {
   if (value !== 'OPENING' && value !== 'CLOSURE') throw new ApiError(422, 'La etapa de la evidencia no es válida.', 'VALIDATION')
   return value
 }
+function signatureRole(value: unknown): ServiceSignatureRole {
+  if (value !== 'TECHNICIAN' && value !== 'CLIENT') throw new ApiError(422, 'El tipo de firma no es válido.', 'VALIDATION')
+  return value
+}
 async function body(request: Request): Promise<Record<string, unknown>> {
   try {
     const value = await request.json()
@@ -67,6 +71,42 @@ technicianServiceRoutes.post('/:id/claim', async context => {
   const payload = await body(context.req.raw), serviceId = id(context.req.param('id')), requestId = id(payload.requestId), deviceId = id(payload.deviceId)
   return context.json(await read(context, (client, technician) => technicianCommand(client, technician.id, requestId, 'SERVICE_CLAIM', serviceId, null,
     { deviceId }, () => claimTechnicianService(client, technician.id, serviceId, deviceId))))
+})
+technicianServiceRoutes.post('/:id/signatures/upload-url', async context => {
+  const payload = await body(context.req.raw)
+  const serviceId = id(context.req.param('id'))
+  const deviceId = id(payload.deviceId)
+  const lockToken = id(payload.lockToken)
+  const role = signatureRole(payload.role)
+  const fileName = requiredString(payload.fileName, 'El archivo de firma es obligatorio.', 255)
+  const contentType = typeof payload.contentType === 'string' ? payload.contentType : ''
+  const size = payload.size
+  if (typeof size !== 'number' || !Number.isSafeInteger(size) || size < 1) throw new ApiError(422, 'El tamaño de la firma no es válido.', 'VALIDATION')
+  await read(context, (client, technician) => authorizeTechnicianServiceChange(client, technician.id, serviceId, deviceId, lockToken))
+  return context.json(createServiceSignatureUploadUrl({ serviceId, role, fileName, contentType, size }))
+})
+technicianServiceRoutes.post('/:id/finalize', async context => {
+  const payload = await body(context.req.raw)
+  const serviceId = id(context.req.param('id'))
+  const requestId = id(payload.requestId)
+  const deviceId = id(payload.deviceId)
+  const lockToken = id(payload.lockToken)
+  const technicianStoragePath = requiredString(payload.technicianStoragePath, 'La firma del Técnico es obligatoria.', 1_000)
+  const clientStoragePath = requiredString(payload.clientStoragePath, 'La firma del cliente es obligatoria.', 1_000)
+  const clientName = requiredString(payload.clientName, 'Indica el nombre de quien firma por el cliente.', 200)
+  assertServiceSignatureStoragePath(technicianStoragePath, serviceId, 'TECHNICIAN')
+  assertServiceSignatureStoragePath(clientStoragePath, serviceId, 'CLIENT')
+  const commandPayload = { deviceId, technicianStoragePath, clientStoragePath, clientName }
+  return context.json(await read(context, (client, technician) => technicianCommand(client, technician.id, requestId, 'SERVICE_FINALIZE', serviceId, null,
+    commandPayload, async () => {
+      const [technicianExists, clientExists] = await Promise.all([
+        serviceSignatureObjectExists(technicianStoragePath, serviceId, 'TECHNICIAN'),
+        serviceSignatureObjectExists(clientStoragePath, serviceId, 'CLIENT'),
+      ])
+      if (!technicianExists || !clientExists) throw new ApiError(422, 'Una firma todavía no está disponible. Vuelve a intentarlo.', 'SIGNATURE_NOT_FOUND')
+      return finalizeTechnicianService(client, technician.id, serviceId, deviceId, lockToken,
+        technicianStoragePath, clientStoragePath, clientName)
+    })))
 })
 technicianServiceRoutes.post('/:id/areas/order', async context => {
   const payload = await body(context.req.raw)

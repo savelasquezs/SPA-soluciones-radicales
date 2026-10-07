@@ -162,6 +162,17 @@ export interface TechnicianServicePackage {
   products: TechnicianProduct[]
   deviceTypes: TechnicianDeviceTypeSnapshot[]
   areas: TechnicianArea[]
+  signatures: TechnicianServiceSignatures
+}
+
+export interface TechnicianServiceSignatures {
+  technicianStoragePath: string | null
+  technicianUserId: string | null
+  technicianLocalId?: string | null
+  clientStoragePath: string | null
+  clientName: string | null
+  clientSignedAt: string | null
+  clientLocalId?: string | null
 }
 
 export interface TechnicianExecutionLock {
@@ -314,12 +325,21 @@ export interface TechnicianFindingStatusMutation extends TechnicianMutationBase,
   conflict: TechnicianFinding | null
 }
 
+export interface TechnicianServiceFinalizeMutation extends TechnicianMutationBase {
+  kind: 'SERVICE_FINALIZE'
+  technicianMediaId: string
+  clientMediaId: string
+  technicianStoragePath: string | null
+  clientStoragePath: string | null
+  clientName: string
+}
+
 export interface TechnicianMediaDraft {
   schemaVersion: 1
   id: string
   actorId: string
   serviceId: string
-  areaId: string
+  areaId?: string
   serviceDeviceId?: string
   fileName: string
   contentType: string
@@ -329,4 +349,4 @@ export interface TechnicianMediaDraft {
   savedAt: string
 }
 
-export type TechnicianMutation = TechnicianAreaOrderMutation | TechnicianCriterionEvaluationMutation | TechnicianAreaAccessMutation | TechnicianDeviceCreationMutation | TechnicianDeviceReviewMutation | TechnicianFindingCreateMutation | TechnicianFindingStatusMutation
+export type TechnicianMutation = TechnicianAreaOrderMutation | TechnicianCriterionEvaluationMutation | TechnicianAreaAccessMutation | TechnicianDeviceCreationMutation | TechnicianDeviceReviewMutation | TechnicianFindingCreateMutation | TechnicianFindingStatusMutation | TechnicianServiceFinalizeMutation

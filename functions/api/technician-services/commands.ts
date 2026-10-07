@@ -1,5 +1,5 @@
 import type { PoolClient } from 'pg'
-import type { MipEvaluation, TechnicianAreaAccessResult, TechnicianAreaAccessState, TechnicianAreaOrderResult, TechnicianAreaOrderVersion, TechnicianCriterion, TechnicianCriterionEvaluationResult, TechnicianDevice, TechnicianDeviceCapture, TechnicianDeviceCreationInput, TechnicianDeviceCreationResult, TechnicianDeviceReview, TechnicianDeviceReviewInput, TechnicianDeviceReviewResult, TechnicianExecutionLock, TechnicianExecutionSession, TechnicianFinding, TechnicianFindingCreateInput, TechnicianFindingResult, TechnicianFindingStatusInput, TechnicianPestSnapshot } from '../../../src/types/technicianServices'
+import type { MipEvaluation, TechnicianAreaAccessResult, TechnicianAreaAccessState, TechnicianAreaOrderResult, TechnicianAreaOrderVersion, TechnicianCriterion, TechnicianCriterionEvaluationResult, TechnicianDevice, TechnicianDeviceCapture, TechnicianDeviceCreationInput, TechnicianDeviceCreationResult, TechnicianDeviceReview, TechnicianDeviceReviewInput, TechnicianDeviceReviewResult, TechnicianExecutionLock, TechnicianExecutionSession, TechnicianFinding, TechnicianFindingCreateInput, TechnicianFindingResult, TechnicianFindingStatusInput, TechnicianPestSnapshot, TechnicianServicePackage } from '../../../src/types/technicianServices'
 import { technicianDevicePhotoRequired } from '../../../src/helpers/technicianServices'
 import { ApiError } from '../auth'
 import { assertVersion, audit } from '../services/commands'
@@ -47,6 +47,14 @@ async function assertExecutionLock(client: PoolClient, userId: string, serviceId
   if (!current || current.user_id !== userId || current.device_id !== deviceId || current.lock_token !== lockToken) {
     throw new ApiError(409, 'Este celular ya no tiene permiso para editar el servicio. Solicita al Administrador liberar el acceso.', 'SERVICE_LOCKED')
   }
+}
+
+export async function authorizeTechnicianServiceChange(client: PoolClient, userId: string, serviceId: string, deviceId: string, lockToken: string): Promise<void> {
+  const service = await assignedServiceState(client, userId, serviceId, true)
+  if (service.tipo_servicio !== 'PRINCIPAL' || service.estado !== 'EN_PROCESO') {
+    throw new ApiError(409, 'El servicio no está disponible para edición técnica.', 'SERVICE_NOT_IN_PROGRESS')
+  }
+  await assertExecutionLock(client, userId, serviceId, deviceId, lockToken)
 }
 
 export async function authorizeTechnicianAreaChange(
@@ -617,6 +625,42 @@ export async function claimTechnicianService(client: PoolClient, userId: string,
   if (service.tipo_servicio !== 'PRINCIPAL' || service.estado !== 'EN_PROCESO') throw new ApiError(409, 'Solo se recupera un servicio Principal En proceso.', 'SERVICE_NOT_IN_PROGRESS')
   const executionLock = await acquireLock(client, userId, serviceId, deviceId)
   return { package: await getTechnicianPackage(client, userId, serviceId), lock: executionLock }
+}
+
+export async function finalizeTechnicianService(
+  client: PoolClient,
+  userId: string,
+  serviceId: string,
+  deviceId: string,
+  lockToken: string,
+  technicianStoragePath: string,
+  clientStoragePath: string,
+  clientName: string,
+): Promise<{ package: TechnicianServicePackage }> {
+  const service = await assignedServiceState(client, userId, serviceId, true)
+  if (service.tipo_servicio !== 'PRINCIPAL' || service.estado !== 'EN_PROCESO') {
+    throw new ApiError(409, 'Solo se finaliza un servicio Principal En proceso.', 'SERVICE_NOT_IN_PROGRESS')
+  }
+  await assertExecutionLock(client, userId, serviceId, deviceId, lockToken)
+  const incomplete = (await client.query<{ count: number }>(`select count(*)::integer as count
+    from public.servicio_areas sa where sa.servicio_id=$1 and not (
+      (sa.sin_acceso and nullif(btrim(sa.sin_acceso_descripcion),'') is not null and sa.sin_acceso_foto_storage_path is not null)
+      or (not sa.sin_acceso
+        and not exists(select 1 from public.evaluaciones_mip_area e where e.servicio_area_id=sa.id and e.evaluacion is null)
+        and not exists(select 1 from public.servicio_dispositivos sd left join public.revisiones_dispositivos r
+          on r.servicio_dispositivo_id=sd.id where sd.servicio_area_id=sa.id and (r.id is null
+            or (r.estado_observado<>sd.estado_anterior_snapshot and r.estado_observado in ('DANADO','FUERA_DE_USO') and r.foto_storage_path is null))))
+    )`, [serviceId])).rows[0]?.count ?? 0
+  if (incomplete) throw new ApiError(422, 'Completa todas las Áreas y dispositivos antes de finalizar.', 'SERVICE_INCOMPLETE')
+  const normalizedClientName = clientName.trim()
+  if (!normalizedClientName || normalizedClientName.length > 200) throw new ApiError(422, 'Indica el nombre de quien firma por el cliente.', 'VALIDATION')
+  await client.query(`update public.servicios set estado='FINALIZADO',fin_real=now(),
+    firma_tecnico_storage_path=$2,firma_tecnico_usuario_id=$3,
+    firma_cliente_storage_path=$4,firma_cliente_nombre=$5,firma_cliente_at=now()
+    where id=$1`, [serviceId, technicianStoragePath, userId, clientStoragePath, normalizedClientName])
+  await client.query('delete from private.service_execution_locks where service_id=$1', [serviceId])
+  await audit(client, userId, 'SERVICIO_FINALIZADO', serviceId, { deviceId, clientSigner: normalizedClientName })
+  return { package: await getTechnicianPackage(client, userId, serviceId) }
 }
 
 export async function releaseTechnicianServiceLock(client: PoolClient, adminId: string, serviceId: string, reason: string): Promise<{ serviceId: string; released: boolean }> {
