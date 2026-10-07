@@ -49,7 +49,8 @@
 - [x] Añadir migración 009, bootstrap idempotente, protección de referencias, concurrencia y ficha técnica en el sistema privado de archivos existente.
 - [x] Aplicar `20261006_009_mip_catalogs.sql` y `database/bootstrap/002_mip_catalogs.sql` en la rama Neon `desarrollo`, sin importar automáticamente productos ni dosis de los formatos.
 - [x] Separar la clasificación de monitoreo RASTREROS/VOLADORES de la cobertura de productos INSECTOS_RASTREROS/INSECTOS_VOLADORES/ROEDORES, preservando Trampa adhesiva para todo RASTREROS y Lámpara UV para VOLADORES.
-- [ ] Tras aprobar el PR de corrección, aplicar `20261006_010_product_pest_categories.sql` y volver a ejecutar el bootstrap en Neon `desarrollo`; después desplegar la Function `api` desde el código integrado.
+- [x] Aplicar `20261006_010_product_pest_categories.sql`, ejecutar bootstrap y desplegar la Function `api` en Neon `desarrollo`.
 - [ ] Validar subida, visualización, reemplazo y limpieza de una ficha técnica con R2 real y el backend desplegado en desarrollo. Las pruebas de CI no usan credenciales reales.
 - [ ] Al retirar los datos actuales de prueba, resolver plagas heredadas incompletas y validar `configuracion_plaga_clasificacion_check` y `configuracion_plaga_categoria_producto_check` con una nueva migración. No alterar historia para completar datos de prueba.
+- [x] Implementar Catálogo de Criterios MIP con los cinco criterios iniciales, mismo patrón UX de Catálogos, edición desde snapshot sin GET adicional y sin clave/orden/versión.
 - [ ] En la futura ejecución MIP/Monitoreo, consumir las plagas por RASTREROS/VOLADORES con snapshot por Servicio y asociar productos/trampas a puestos permanentes. No está incluido en el CRUD actual de catálogos.
