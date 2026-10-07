@@ -40,7 +40,7 @@ function mutable(record: AdminService): void {
 }
 async function siteForScheduling(client: PoolClient, id: string): Promise<{ maneja_refuerzo: boolean }> {
   const site = (await client.query<{ maneja_refuerzo: boolean }>(`select s.maneja_refuerzo from public.sedes s join public.negocios n on n.id=s.negocio_id
-    where s.id=$1 and s.activo and n.activo and s.tipo_sede='NEGOCIO' and s.valor_servicio is not null`, [id])).rows[0]
+    where s.id=$1 and s.activo and n.activo and s.tipo_sede='NEGOCIO' and s.valor_servicio is not null and s.periodicidad_meses > 0 and s.duracion_servicio_minutos > 0`, [id])).rows[0]
   if (!site) throw new ApiError(422, 'Selecciona una sede activa con su configuración de servicio completa.', 'VALIDATION', { fields: { sedeId: 'Esta sede no está disponible para programación.' } })
   return site
 }
@@ -157,7 +157,7 @@ export async function editService(client: PoolClient, actorId: string, id: strin
     if (!before.refuerzo || reinforcementVersion===undefined) throw new ApiError(422,'Falta la versión del Refuerzo asociado.','VALIDATION')
     child=await getService(client,before.refuerzo.id); assertVersion(child.version,reinforcementVersion); mutable(child)
   }
-  const overlaps=await checkSchedules(client,[input.programacion,...input.refuerzo ? [input.refuerzo] : []],ids,accepted)
+  const overlaps=await checkSchedules(client,[input.programacion,...input.refuerzo ? [input.refuerzo] : []],[id,...(child ? [child.id] : [])],accepted)
   const planChanged=input.cobro.metodoPago!==before.pago.metodoPago || input.cobro.tecnicoRecaudoPrevistoId!==before.pago.tecnicoRecaudoPrevistoId
   if (planChanged && before.pago.estadoPago==='CONFIRMADO') throw new ApiError(409,'El pago ya está confirmado. No se modifica desde la programación.','PAYMENT_CONFIRMED')
   if (planChanged) await validateCollector(client,input.cobro.tecnicoRecaudoPrevistoId)
@@ -179,7 +179,7 @@ export async function rescheduleService(client: PoolClient, actorId: string, id:
     if (!before.refuerzo) throw new ApiError(422,'No hay Refuerzo asociado.','VALIDATION')
     child=await getService(client,before.refuerzo.id); assertVersion(child.version,reinforcement.version); mutable(child)
   }
-  const overlaps=await checkSchedules(client,[schedule,...reinforcement ? [reinforcement.schedule] : []],ids,accepted)
+  const overlaps=await checkSchedules(client,[schedule,...reinforcement ? [reinforcement.schedule] : []],[id,...(child ? [child.id] : [])],accepted)
   await saveSchedule(client,id,schedule,expected)
   if (child && reinforcement) await saveSchedule(client,child.id,reinforcement.schedule,child.version)
   const result=await mutation(client,ids)

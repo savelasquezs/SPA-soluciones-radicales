@@ -2,11 +2,11 @@ import { randomUUID } from 'node:crypto'
 import { afterAll,beforeAll,beforeEach,describe,expect,it,vi } from 'vitest'
 import type { PoolClient } from 'pg'
 import type { MailInput } from '../../functions/api/mailMessage'
-import type { ServiceInput,ServiceMutation,ServiceSchedule } from '../../src/types/adminServices'
+import type { ServiceInput,ServiceMutation } from '../../src/types/adminServices'
 import { addInstantDays,scheduleFromRecord,serviceToDraft,draftToServiceInput,toBogotaInput,todayBogota } from '../../src/helpers/adminServices'
 
-vi.mock('@neon/functions',()=>({ attachDatabasePool:vi.fn(),waitUntil:vi.fn() }))
-const external=vi.hoisted(()=>({ mail:vi.fn(),calendar:vi.fn() }))
+vi.mock('@neon/functions',()=>({ attachDatabasePool:vi.fn<() => void>(),waitUntil:vi.fn<() => void>() }))
+const external=vi.hoisted(()=>({ mail:vi.fn<(input: MailInput) => Promise<string>>(),calendar:vi.fn<(input: import('../../functions/api/calendarClient').CalendarEventInput) => Promise<string>>() }))
 vi.mock('../../functions/api/google',()=>({ sendGmailMessage:external.mail,upsertCalendarEvent:external.calendar }))
 import { pool,transaction } from '../../functions/api/db'
 import { ApiError } from '../../functions/api/auth'
@@ -72,7 +72,7 @@ describe('administrator services · real PostgreSQL',()=>{
     expect(p.pago.tecnicoQueRecaudaId).toBeNull();expect(p.pago.tecnicoRecaudoPrevistoId).toBe(f.responsible)
     expect(p.productos[0]?.lote).toBe('CI-1')
     await pool.query('update public.sedes set valor_servicio=400000 where id=$1',[f.site])
-    expect((await getService(awaitClient(),p.id)).valorServicio).toBe(300000)
+    expect((await readService(p.id)).valorServicio).toBe(300000)
     expect(external.calendar).not.toHaveBeenCalled();expect(external.mail).not.toHaveBeenCalled()
     expect(Number((await pool.query("select count(*) from private.integration_jobs where payload->>'serviceId'=any($1::text[])",[[p.id,r.id]])).rows[0].count)).toBe(2)
   })
@@ -230,4 +230,4 @@ describe('administrator services · real PostgreSQL',()=>{
 
 // Queries under test use a transaction-owned PoolClient, just like the API.
 async function readService(id: string) { return transaction(client=>getService(client,id)) }
-function awaitClient(): PoolClient { return pool as unknown as PoolClient }
+

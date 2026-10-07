@@ -51,8 +51,10 @@ async function processCalendar(job: ServiceJob): Promise<void> {
       await client.query("update private.integration_jobs set status='PENDING',attempts=greatest(attempts-1,0),run_after=now()+interval '15 seconds',lease_until=null where id=$1",[job.id])
       return
     }
+    await client.query('begin isolation level repeatable read read only')
     const service = await getService(client,serviceId)
     const metadata = (await client.query<{ calendar_revision: string; calendar_event_id: string | null }>('select calendar_revision,calendar_event_id from public.servicios where id=$1',[serviceId])).rows[0]!
+    await client.query('commit')
     const revision = Number(metadata.calendar_revision)
     if (service.calendar.estado === 'SINCRONIZADO' && Number(job.payload.revision) <= revision) {
       await client.query('begin')

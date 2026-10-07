@@ -81,7 +81,7 @@ const responsibleName=computed(()=>technicians.value.find(person=>person.id===pr
         <h2>Resumen</h2>
         <dl>
           <div><dt>Cliente y sede</dt><dd>{{ selectedSite ? `${selectedSite.clienteNombre} · ${selectedSite.nombre}` : record ? `${record.clienteNombre} · ${record.sedeNombre}` : 'Sin seleccionar' }}</dd></div>
-          <div><dt>Principal</dt><dd>{{ formatServiceDate(scheduleFromDraft(modelValue.programacion).inicioProgramado) }} · {{ formatServiceDate(scheduleFromDraft(modelValue.programacion).inicioProgramado,true) }}</dd></div>
+          <div><dt>{{ reinforcement ? 'Refuerzo' : 'Principal' }}</dt><dd>{{ formatServiceDate(scheduleFromDraft(modelValue.programacion).inicioProgramado) }} · {{ formatServiceDate(scheduleFromDraft(modelValue.programacion).inicioProgramado,true) }}</dd></div>
           <div><dt>Equipo</dt><dd>{{ responsibleName }}<small v-if="modelValue.programacion.tecnicosColaboradoresIds.length" class="svc-muted"> + {{ modelValue.programacion.tecnicosColaboradoresIds.length }} colaboradores</small></dd></div>
           <div v-if="modelValue.refuerzo"><dt>Refuerzo gratuito</dt><dd>{{ formatServiceDate(scheduleFromDraft(modelValue.refuerzo).inicioProgramado) }} · {{ formatServiceDate(scheduleFromDraft(modelValue.refuerzo).inicioProgramado,true) }}</dd></div>
           <div><dt>Valor del servicio</dt><dd><strong class="svc-amount">{{ formatServiceMoney(amount) }}</strong></dd></div>

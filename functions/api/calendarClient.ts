@@ -25,7 +25,7 @@ async function eventJson(response: Response): Promise<ExistingEvent> {
 }
 
 /** One stable company event per service. PATCH preserves unrelated event fields. */
-export async function writeCalendarEvent(input: CalendarEventInput, accessToken: string): Promise<string> {
+export async function writeCalendarEvent(input: CalendarEventInput, accessToken: string, retry = 0): Promise<string> {
   const id = input.eventId || `sr${input.serviceId.replaceAll('-', '')}`
   const url = `${baseUrl}/${encodeURIComponent(id)}`
   const headers = { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
@@ -52,13 +52,13 @@ export async function writeCalendarEvent(input: CalendarEventInput, accessToken:
     end: { dateTime: input.end, timeZone: 'America/Bogota' },
     ...(attendees === undefined ? {} : { attendees }),
   }
-  let result = exists
+  const result = exists
     ? await request(`${url}?sendUpdates=all`, headers, { method: 'PATCH', headers: previous.etag ? { 'If-Match': previous.etag } : {}, body: JSON.stringify(event) })
     : await request(`${baseUrl}?sendUpdates=all`, headers, { method: 'POST', body: JSON.stringify({ id, ...event }) })
   // A timed-out creation can have succeeded remotely. Reusing the same event ID
   // makes its retry a read + patch, never a second appointment.
-  if (!exists && result.status === 409) {
-    return writeCalendarEvent({ ...input, eventId: id }, accessToken)
+  if (!exists && result.status === 409 && retry < 1) {
+    return writeCalendarEvent({ ...input, eventId: id }, accessToken, retry + 1)
   }
   if (result.status === 412) throw new ApiError(409, 'El evento cambió en Calendar. Se reintentará sin sobrescribir cambios concurrentes.', 'CALENDAR_VERSION_CONFLICT')
   if (!result.ok) throw new ApiError(502, 'No fue posible guardar el evento de Calendar.', 'CALENDAR_UNAVAILABLE')

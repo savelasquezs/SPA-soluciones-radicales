@@ -24,8 +24,8 @@ const reason=ref(''), payment=ref<ServicePaymentInput>({ metodoPago:props.record
 const { saving,errors,errorMessage,conflict,overlapOpen,overlaps,run,invalid,reset,clearValidation,acceptOverlap,cancelOverlap }=useServiceMutation()
 const loadingRecord=ref(false), discardOpen=ref(false), reloadOpen=ref(false)
 const serialize=()=>JSON.stringify({ schedule:schedule.value,child:child.value,reason:reason.value,payment:payment.value })
-let baseline=serialize()
-const dirty=computed(()=>serialize()!==baseline)
+const baseline=ref(serialize())
+const dirty=computed(()=>serialize()!==baseline.value)
 const { confirmOpen,cancelDiscard,confirmDiscard }=useUnsavedChanges(dirty,computed(()=>saving.value || loadingRecord.value))
 const title=computed(()=>({ schedule:original.value.tipoServicio==='REFUERZO' ? 'Reprogramar Refuerzo' : 'Reprogramar servicio',team:'Cambiar equipo',cancel:'Cancelar servicio',payment:'Registrar pago' })[props.mode])
 const technicians=computed(()=>{
@@ -37,6 +37,8 @@ const paymentReasonRequired=computed(()=>original.value.pago.estadoPago==='CONFI
 const primaryLabel=computed(()=>props.mode==='cancel' ? 'Cancelar servicio' : props.mode==='payment' && payment.value.estadoPago==='CONFIRMADO' ? 'Confirmar pago' : 'Guardar cambios')
 function close(): void { if(saving.value || loadingRecord.value) return; if(dirty.value) discardOpen.value=true; else emit('close') }
 async function save(): Promise<void> {
+  const invalidDate=document.querySelector<HTMLElement>('#service-quick-form .date-time-control input[aria-invalid="true"]')
+  if(invalidDate) { invalidDate.focus(); notifications.show('Revisa las fechas y horas antes de guardar.','error'); return }
   const fields: ServiceErrors={}
   if(props.mode==='schedule' || props.mode==='team') {
     Object.assign(fields,validateSchedule(scheduleFromDraft(schedule.value)).errors)
@@ -52,7 +54,7 @@ async function save(): Promise<void> {
     if(props.mode==='cancel') return cancelAdminService(original.value,requestId,reason.value)
     if(props.mode==='payment') return saveServicePayment(original.value,requestId,{ ...payment.value,tecnicoQueRecaudaId:payment.value.metodoPago==='EFECTIVO' ? payment.value.tecnicoQueRecaudaId : null })
     return reprogramAdminService(original.value,requestId,scheduleFromDraft(schedule.value),allowConflicts,child.value ? scheduleFromDraft(child.value) : undefined)
-  },result=>{ store.applyMutation(result); baseline=serialize(); emit('saved',result); emit('close') },props.mode==='cancel' ? 'Servicio cancelado; el historial se conserva.' : props.mode==='payment' ? 'Registro de pago actualizado.' : 'Cambios guardados. Calendar se actualizará en segundo plano.')
+  },result=>{ store.applyMutation(result); baseline.value=serialize(); emit('saved',result); emit('close') },props.mode==='cancel' ? 'Servicio cancelado; el historial se conserva.' : props.mode==='payment' ? 'Registro de pago actualizado.' : 'Cambios guardados. Calendar se actualizará en segundo plano.')
 }
 async function reload(): Promise<void> {
   reloadOpen.value=false; loadingRecord.value=true
@@ -61,7 +63,7 @@ async function reload(): Promise<void> {
     original.value=fresh; schedule.value=scheduleToDraft(scheduleFromRecord(fresh))
     child.value=props.mode==='schedule' && fresh.refuerzo?.estado==='PROGRAMADO' ? scheduleToDraft(scheduleFromRecord(fresh.refuerzo)) : null
     payment.value={ metodoPago:fresh.pago.metodoPago ?? 'EFECTIVO',estadoPago:'CONFIRMADO',tecnicoQueRecaudaId:fresh.pago.tecnicoQueRecaudaId ?? fresh.pago.tecnicoRecaudoPrevistoId,motivo:'' }
-    reason.value=''; baseline=serialize(); reset()
+    reason.value=''; baseline.value=serialize(); reset()
   } catch(failure) { notifications.show(failure instanceof Error ? failure.message : 'No fue posible cargar la versión actual.','error') }
   finally { loadingRecord.value=false }
 }
@@ -73,7 +75,7 @@ async function reload(): Promise<void> {
       <template v-if="mode==='schedule' || mode==='team'">
         <section class="svc-card"><h3 v-if="child">Principal · {{ original.solicitud }}</h3><ServiceScheduleFields :model-value="schedule" :technicians="technicians" :show-dates="mode==='schedule'" :disabled="saving || loadingRecord" :errors="errors" @update:model-value="schedule=$event; clearValidation()" /></section>
         <section v-if="child" class="svc-card"><h3>Refuerzo · {{ original.refuerzo?.solicitud }}</h3><ServiceScheduleFields :model-value="child" prefix="refuerzo" :technicians="technicians" :disabled="saving || loadingRecord" :errors="errors" @update:model-value="child=$event; clearValidation()" /></section>
-        <p class="svc-muted svc-small">{{ child ? 'Se guardarán ambas programaciones en una sola operación. La fecha del Refuerzo es independiente.' : mode==='team' ? 'Este cambio afecta únicamente al equipo de esta visita.' : 'Este cambio no modifica la programación del Principal.' }}</p>
+        <p class="svc-muted svc-small">{{ child ? 'Se guardarán ambas programaciones en una sola operación. La fecha del Refuerzo es independiente.' : mode==='team' ? 'Este cambio afecta únicamente al equipo de esta visita.' : original.tipoServicio==='REFUERZO' ? 'Este cambio no modifica la programación del Principal.' : 'Se actualizará la programación de esta visita.' }}</p>
       </template>
       <template v-else-if="mode==='cancel'">
         <p v-if="original.refuerzo?.estado==='PROGRAMADO'">También se cancelará {{ original.refuerzo.solicitud }}, el Refuerzo que continúa Programado.</p>

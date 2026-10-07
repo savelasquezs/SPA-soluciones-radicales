@@ -50,6 +50,6 @@ describe('administrator service contracts',()=>{
   it('bounds durations, collaborator counts and product counts',()=>{
     expect(validateSchedule({ ...schedule,duracionMinutos:NaN }).errors).toHaveProperty('programacion.duracionMinutos')
     expect(validateSchedule({ ...schedule,duracionMinutos:10_081 }).errors).toHaveProperty('programacion.duracionMinutos')
-    expect(validateServiceInput({ ...input(),productos:new Array(101).fill({}) }).errors.productos).toBeTruthy()
+    expect(validateServiceInput({ ...input(),productos:Array.from({ length:101 },()=>({})) }).errors.productos).toBeTruthy()
   })
 })

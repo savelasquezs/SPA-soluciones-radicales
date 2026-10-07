@@ -214,7 +214,7 @@ test('plagas: clasificación exclusiva, formulario reutilizado y búsqueda local
   const savedPest = records.pests.find(row => row.nombre === 'Plaga renombrada') as MipCatalogItem
   expect(savedPest.clasificacion).toBe('VOLADORES')
   expect(savedPest.categoriaProducto).toBe('INSECTOS_VOLADORES')
-  expect(calls.filter(call => call.method === 'GET' && /^\/api\/mip\/pests\//.test(call.path))).toHaveLength(0)
+  expect(calls.filter(call => call.method === 'GET' && call.path.startsWith('/api/mip/pests/'))).toHaveLength(0)
   await page.getByRole('searchbox', { name: 'Buscar plagas', exact: true }).fill('sin coincidencias')
   await expect(page.getByRole('heading', { name: 'No hay coincidencias' })).toBeVisible()
 })

@@ -24,8 +24,8 @@ const original=ref(props.record), form=ref<UpcomingPatch>({ estado:props.record.
 const email=ref<ConfirmationEmail | null>(null), recipient=ref(''), reviewed=ref(false), resend=ref(false)
 const loading=ref(false), loadError=ref(''), discardOpen=ref(false), reloadOpen=ref(false), declineOpen=ref(false)
 const { saving,errors,errorMessage,conflict,overlapOpen,overlaps,run,invalid,reset,acceptOverlap,cancelOverlap }=useServiceMutation()
-let baseline=JSON.stringify(form.value)
-const dirty=computed(()=>props.mode==='manage' && JSON.stringify(form.value)!==baseline)
+const baseline=ref(JSON.stringify(form.value))
+const dirty=computed(()=>props.mode==='manage' && JSON.stringify(form.value)!==baseline.value)
 const { confirmOpen,cancelDiscard,confirmDiscard }=useUnsavedChanges(dirty,computed(()=>saving.value || loading.value))
 const close=()=>{ if(saving.value || loading.value) return; if(dirty.value) discardOpen.value=true; else emit('close') }
 onMounted(()=>{ if(props.mode==='email') void loadEmail() })
@@ -43,7 +43,7 @@ async function save(confirmedDecline = false): Promise<void> {
     if(Object.keys(fields).length) { await invalid(fields); return }
     if(form.value.estado==='NO_DESEA' && !confirmedDecline) { declineOpen.value=true; return }
     declineOpen.value=false
-    await run(requestId=>saveUpcomingFollowUp(original.value,requestId,form.value),result=>{ store.applyUpcoming(result); baseline=JSON.stringify(form.value); emit('close') },'Seguimiento actualizado.')
+    await run(requestId=>saveUpcomingFollowUp(original.value,requestId,form.value),result=>{ store.applyUpcoming(result); baseline.value=JSON.stringify(form.value); emit('close') },'Seguimiento actualizado.')
   } else {
     if(!recipient.value) fields.recipient='Selecciona un destinatario registrado.'
     if(original.value.correoEstado==='INCIERTO' && !reviewed.value) fields.reviewed='Revisa Enviados en Gmail antes de iniciar otro envío.'
@@ -56,7 +56,7 @@ async function reload(): Promise<void> {
   reloadOpen.value=false; loading.value=true
   try {
     const fresh=await store.ensureUpcoming(original.value.id,true)
-    original.value=fresh; form.value={ estado:fresh.estado,fechaRecontacto:fresh.fechaRecontacto,nota:fresh.nota,contactoRealizado:null }; baseline=JSON.stringify(form.value); reset()
+    original.value=fresh; form.value={ estado:fresh.estado,fechaRecontacto:fresh.fechaRecontacto,nota:fresh.nota,contactoRealizado:null }; baseline.value=JSON.stringify(form.value); reset()
     if(props.mode==='email') await loadEmail()
   } catch(failure) { notifications.show(failure instanceof Error ? failure.message : 'No fue posible cargar la propuesta.','error') }
   finally { loading.value=false }
