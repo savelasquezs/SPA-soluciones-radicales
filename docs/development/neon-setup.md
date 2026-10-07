@@ -231,6 +231,13 @@ npm run r2:cors:check
 
 La política permite PUT con `Content-Type` desde `http://localhost:5173` y desde los Workers de la cuenta `solucionesradicales1.workers.dev`. Si se incorpora un dominio personalizado, añadir explícitamente ese origen antes de usar cargas desde navegador.
 
+Para `sr-service-media`, la política equivalente vive en `cloudflare/r2-service-media-cors.json`. El build de la rama `develop` la aplica antes del despliegue usando el token de Workers Builds; los builds locales, de `main` y de previews no modifican el bucket. La comprobación manual sigue disponible con:
+
+```bash
+npm run r2:service-cors:apply
+npm run r2:service-cors:check
+```
+
 ## 13. Producción
 
 Cuando el producto esté listo:

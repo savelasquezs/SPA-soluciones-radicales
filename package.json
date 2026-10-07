@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "run-p type-check \"build-only {@}\" --",
+    "postbuild": "node scripts/cloudflare/apply-develop-service-cors.mjs",
     "preview": "vite preview",
     "test:unit": "vitest",
     "test:unit:run": "vitest run",
@@ -25,7 +26,7 @@
     "cloudflare:deploy": "npm run build && npx wrangler deploy",
     "r2:cors:apply": "npx wrangler r2 bucket cors set sr-master-files --file cloudflare/r2-master-cors.json",
     "r2:cors:check": "npx wrangler r2 bucket cors list sr-master-files",
-    "r2:service-cors:apply": "npx wrangler r2 bucket cors set sr-service-media --file cloudflare/r2-service-media-cors.json",
+    "r2:service-cors:apply": "npx wrangler r2 bucket cors set sr-service-media --file cloudflare/r2-service-media-cors.json --force",
     "r2:service-cors:check": "npx wrangler r2 bucket cors list sr-service-media",
     "docs:record": "playwright test --config=playwright.docs.config.ts",
     "docs:tts": "node scripts/documentation/synthesize-tts.mjs",
