@@ -21,6 +21,8 @@ export interface TechnicianProduct {
   id: string
   nombre: string
   principioActivo: string
+  registroSanitario: string
+  dosisReferencia: string
   lote: string
   fechaFabricacion: string | null
   fechaVencimiento: string | null

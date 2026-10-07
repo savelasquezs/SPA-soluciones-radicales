@@ -90,12 +90,20 @@ describe('technician service execution · real PostgreSQL', () => {
     expect(session.package.areas.find(area => area.areaId === value.externalArea)?.criterios.some(item => item.criterioId === value.generalCriterion)).toBe(true)
     expect(session.package.areas.find(area => area.areaId === value.externalArea)?.criterios.some(item => item.criterioId === value.externalCriterion)).toBe(true)
     expect(session.package.areas.find(area => area.areaId === value.internalArea)?.dispositivos[0]?.numero).toBe('D-01')
-    expect(session.package.products[0]).toMatchObject({ lote: 'L-TECH', dosis: '5 mL/L', metodoAplicacion: `Aspersión ${value.methodCode}` })
+    expect(session.package.products[0]).toMatchObject({
+      registroSanitario: 'RS-1',
+      dosisReferencia: '5 mL/L',
+      lote: 'L-TECH',
+      dosis: '5 mL/L',
+      metodoAplicacion: `Aspersión ${value.methodCode}`,
+    })
     await pool.query('update public.productos set nombre=\'Producto renombrado\' where id=$1', [value.product])
+    await pool.query('update public.productos set registro_sanitario=\'RS-2\',dosis_aplicacion=\'10 mL/L\' where id=$1', [value.product])
     await pool.query('update public.criterios_mip set nombre=\'Criterio renombrado\' where id=$1', [value.generalCriterion])
     await pool.query('update public.dispositivos set numero=\'D-99\' where id=$1', [value.device])
     const frozen = await transaction(client => getTechnicianPackage(client, value.technician, value.service))
     expect(frozen.products[0]?.nombre).toContain('Producto inicial')
+    expect(frozen.products[0]).toMatchObject({ registroSanitario: 'RS-1', dosisReferencia: '5 mL/L' })
     expect(frozen.areas.flatMap(area => area.criterios).some(criterion => criterion.nombre === 'Criterio renombrado')).toBe(false)
     expect(frozen.areas.flatMap(area => area.dispositivos)[0]?.numero).toBe('D-01')
     expect((await pool.query('select aplicado from public.productos_aplicados where servicio_id=$1', [value.service])).rows[0].aplicado).toBe(true)

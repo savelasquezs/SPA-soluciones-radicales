@@ -62,6 +62,8 @@ async function products(client: PoolClient, serviceId: string, frozen: boolean):
   const { rows } = await client.query<{ record: TechnicianProduct }>(`select jsonb_build_object('id',pa.id,
     'nombre',${frozen ? 'coalesce(pa.producto_nombre_snapshot,p.nombre)' : 'p.nombre'},
     'principioActivo',${frozen ? 'coalesce(pa.principio_activo_snapshot,p.principio_activo_composicion)' : 'p.principio_activo_composicion'},
+    'registroSanitario',${frozen ? "coalesce(pa.registro_sanitario_snapshot,'')" : "coalesce(p.registro_sanitario,'')"},
+    'dosisReferencia',${frozen ? "coalesce(pa.dosis_referencia_snapshot,'')" : "coalesce(p.dosis_aplicacion,'')"},
     'lote',coalesce(pa.lote,''),'fechaFabricacion',pa.fecha_fabricacion,'fechaVencimiento',pa.fecha_vencimiento,
     'dosis',case when jsonb_typeof(pa.dosis)='string' then pa.dosis #>> '{}' else coalesce(pa.dosis::text,'') end,
     'metodoAplicacion',${frozen ? 'coalesce(pa.metodo_aplicacion_nombre_snapshot,c.nombre)' : 'c.nombre'}) as record
