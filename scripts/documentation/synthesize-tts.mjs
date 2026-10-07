@@ -77,9 +77,20 @@ for (const segment of content.segments) {
     throw new Error(`Google TTS no devolvió audio para ${segment.id}.`)
   }
 
+  const rawFile = resolve(segmentDir, `${segment.id}.raw.wav`)
   const file = resolve(segmentDir, `${segment.id}.wav`)
   mkdirSync(dirname(file), { recursive: true })
-  writeFileSync(file, Buffer.from(payload.audioContent, 'base64'))
+  writeFileSync(rawFile, Buffer.from(payload.audioContent, 'base64'))
+
+  execFileSync('ffmpeg', [
+    '-y',
+    '-i', rawFile,
+    '-af',
+    'silenceremove=start_periods=1:start_duration=0.03:start_threshold=-48dB,areverse,silenceremove=start_periods=1:start_duration=0.03:start_threshold=-48dB,areverse,apad=pad_dur=0.08',
+    '-ar', '48000',
+    '-ac', '1',
+    file,
+  ], { stdio: 'ignore' })
 
   result.segments[segment.id] = {
     text: segment.text,
