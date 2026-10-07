@@ -193,6 +193,7 @@ export async function assertUnused(client: PoolClient, kind: MipCatalogKind, rec
     used = (await client.query<{ used: boolean }>(`select exists (
       select 1 from public.dispositivos where tipo_dispositivo_codigo = $1
       union all select 1 from public.servicio_dispositivos where tipo_dispositivo_codigo_snapshot = $1
+      union all select 1 from public.servicio_tipos_dispositivo where tipo_dispositivo_codigo_snapshot = $1
       union all select 1 from public.revisiones_dispositivos where tipo_dispositivo_codigo = $1
     ) as used`, [(record as MipCatalogItem).clave])).rows[0]!.used
   } else if (kind === 'methods') {
@@ -201,6 +202,7 @@ export async function assertUnused(client: PoolClient, kind: MipCatalogKind, rec
     used = (await client.query<{ used: boolean }>(`select exists (
       select 1 from public.producto_plagas where plaga_id = $1
       union all select 1 from public.servicio_dispositivos where plagas_snapshot_json @> jsonb_build_array(jsonb_build_object('codigo', $2::text))
+      union all select 1 from public.servicio_tipos_dispositivo where plagas_snapshot_json @> jsonb_build_array(jsonb_build_object('codigo', $2::text))
       union all select 1 from public.revisiones_dispositivos where capturas_json @> jsonb_build_array(jsonb_build_object('plagaCodigo', $2::text))
     ) as used`, [record.id, (record as MipCatalogItem).clave])).rows[0]!.used
   }

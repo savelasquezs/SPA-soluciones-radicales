@@ -18,6 +18,7 @@ vi.mock('@/services/servicesService', () => ({
   saveTechnicianAreaOrder: vi.fn<typeof api.saveTechnicianAreaOrder>(),
   saveTechnicianCriterionEvaluation: vi.fn<typeof api.saveTechnicianCriterionEvaluation>(),
   saveTechnicianAreaAccess: vi.fn<typeof api.saveTechnicianAreaAccess>(),
+  createTechnicianDevice: vi.fn<typeof api.createTechnicianDevice>(),
   saveTechnicianDeviceReview: vi.fn<typeof api.saveTechnicianDeviceReview>(),
 }))
 vi.mock('@/services/technicianMediaService', () => ({
@@ -73,6 +74,7 @@ const servicePackage = (estado: TechnicianServiceSummary['estado'] = 'PROGRAMADO
   canStart: estado === 'PROGRAMADO',
   startAvailableAt: '2026-10-07T13:00:00Z',
   products: [],
+  deviceTypes: [{ codigo: 'TRAMPA', nombre: 'Trampa', clasificacion: 'RASTREROS', plagas: [{ codigo: 'CUCARACHA', nombre: 'Cucaracha' }] }],
   areas: [],
 })
 const cache = (): TechnicianPackageCache => ({
@@ -111,6 +113,7 @@ const executionCache = (): TechnicianPackageCache => ({
         clasificacion: 'RASTREROS',
         plagas: [{ codigo: 'CUCARACHA', nombre: 'Cucaracha' }],
         estadoAnterior: 'ACTIVO',
+        creadoDuranteServicio: false,
         revisado: false,
         revision: null,
       }],
@@ -276,6 +279,21 @@ describe('technician services state', () => {
     expect(mediaService.saveTechnicianMedia).toHaveBeenCalledWith(expect.objectContaining({ serviceId, areaId: areaIds[0], serviceDeviceId, file: photo }))
     expect(store.currentPackage?.areas[0]?.dispositivos[0]).toMatchObject({ revisado: true, revision: { estadoObservado: 'DANADO' } })
     expect(api.saveTechnicianDeviceReview).not.toHaveBeenCalled()
+  })
+
+  it('creates a permanent device locally while offline and queues it before its review', async () => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+    vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([executionCache()])
+    const store = useTechnicianServicesStore()
+    await store.ensurePackage(serviceId)
+    expect(await store.applyDeviceCreation(serviceId, areaIds[0]!, {
+      numero: 'D-02', tipoCodigo: 'TRAMPA', ubicacion: 'Junto a la puerta',
+    })).toBe('pending')
+    expect(mutationRecords[0]).toMatchObject({ kind: 'DEVICE_CREATE', areaId: areaIds[0], numero: 'D-02', status: 'PENDING' })
+    expect(store.currentPackage?.areas[0]?.dispositivos[1]).toMatchObject({
+      numero: 'D-02', tipoNombre: 'Trampa', creadoDuranteServicio: true, creacionPendiente: true,
+    })
+    expect(api.createTechnicianDevice).not.toHaveBeenCalled()
   })
 
   it('uploads and synchronizes a device condition photo before saving the review', async () => {

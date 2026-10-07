@@ -1,5 +1,5 @@
 import type { PoolClient } from 'pg'
-import type { MipEvaluation, TechnicianAreaAccessResult, TechnicianAreaAccessState, TechnicianAreaOrderResult, TechnicianAreaOrderVersion, TechnicianCriterion, TechnicianCriterionEvaluationResult, TechnicianDevice, TechnicianDeviceCapture, TechnicianDeviceReview, TechnicianDeviceReviewInput, TechnicianDeviceReviewResult, TechnicianExecutionLock, TechnicianExecutionSession } from '../../../src/types/technicianServices'
+import type { MipEvaluation, TechnicianAreaAccessResult, TechnicianAreaAccessState, TechnicianAreaOrderResult, TechnicianAreaOrderVersion, TechnicianCriterion, TechnicianCriterionEvaluationResult, TechnicianDevice, TechnicianDeviceCapture, TechnicianDeviceCreationInput, TechnicianDeviceCreationResult, TechnicianDeviceReview, TechnicianDeviceReviewInput, TechnicianDeviceReviewResult, TechnicianExecutionLock, TechnicianExecutionSession, TechnicianPestSnapshot } from '../../../src/types/technicianServices'
 import { technicianDevicePhotoRequired } from '../../../src/helpers/technicianServices'
 import { ApiError } from '../auth'
 import { assertVersion, audit } from '../services/commands'
@@ -213,6 +213,80 @@ type TechnicianDeviceReviewContext = Pick<TechnicianDevice, 'id' | 'dispositivoI
   revision: TechnicianDeviceReview | null
 }
 
+export async function createTechnicianDevice(
+  client: PoolClient,
+  userId: string,
+  serviceId: string,
+  phoneId: string,
+  lockToken: string,
+  areaId: string,
+  permanentDeviceId: string,
+  serviceDeviceId: string,
+  input: TechnicianDeviceCreationInput,
+): Promise<TechnicianDeviceCreationResult> {
+  const service = await assignedServiceState(client, userId, serviceId, true)
+  if (service.tipo_servicio !== 'PRINCIPAL' || service.estado !== 'EN_PROCESO') {
+    throw new ApiError(409, 'Los dispositivos solo se crean durante un servicio Principal En proceso.', 'SERVICE_NOT_IN_PROGRESS')
+  }
+  await assertExecutionLock(client, userId, serviceId, phoneId, lockToken)
+  const numero = input.numero.trim()
+  const ubicacion = input.ubicacion.trim()
+  const tipoCodigo = input.tipoCodigo.trim()
+  if (!numero || numero.length > 100) throw new ApiError(422, 'El número del dispositivo es obligatorio y no puede superar 100 caracteres.', 'VALIDATION')
+  if (!ubicacion || ubicacion.length > 500) throw new ApiError(422, 'La ubicación es obligatoria y no puede superar 500 caracteres.', 'VALIDATION')
+  if (!tipoCodigo || tipoCodigo.length > 160) throw new ApiError(422, 'Selecciona un tipo de dispositivo válido.', 'VALIDATION')
+  const context = (await client.query<{
+    source_area_id: string
+    site_id: string
+    area_without_access: boolean
+    type_name: string
+    classification: 'RASTREROS' | 'VOLADORES'
+    pests: TechnicianPestSnapshot[]
+  }>(`select sa.area_id as source_area_id,s.sede_id as site_id,sa.sin_acceso as area_without_access,
+    st.tipo_dispositivo_nombre_snapshot as type_name,st.clasificacion_snapshot as classification,
+    st.plagas_snapshot_json as pests
+    from public.servicio_areas sa join public.servicios s on s.id=sa.servicio_id
+    join public.servicio_tipos_dispositivo st on st.servicio_id=s.id and st.tipo_dispositivo_codigo_snapshot=$3
+    where sa.id=$2 and sa.servicio_id=$1 for update of sa`, [serviceId, areaId, tipoCodigo])).rows[0]
+  if (!context) throw new ApiError(422, 'El Área o el tipo de dispositivo no pertenece al paquete congelado del servicio.', 'DEVICE_TYPE_INVALID')
+  if (context.area_without_access) throw new ApiError(409, 'Habilita el acceso al Área antes de agregar un dispositivo.', 'AREA_WITHOUT_ACCESS')
+  await client.query('select pg_advisory_xact_lock(hashtextextended($1,0))', [`technician-device-number:${context.site_id}:${numero.toLocaleLowerCase('es')}`])
+  if ((await client.query('select 1 from public.dispositivos where sede_id=$1 and lower(btrim(numero))=lower(btrim($2)) limit 1',
+    [context.site_id, numero])).rowCount) {
+    throw new ApiError(409, 'Ya existe un dispositivo con ese número en la Sede.', 'DEVICE_NUMBER_CONFLICT')
+  }
+  await client.query(`insert into public.dispositivos(id,sede_id,area_id,numero,tipo_dispositivo_codigo,ubicacion,estado_actual)
+    values($1,$2,$3,$4,$5,$6,'ACTIVO')`, [permanentDeviceId, context.site_id, context.source_area_id, numero, tipoCodigo, ubicacion])
+  await client.query(`insert into public.servicio_dispositivos(id,servicio_id,servicio_area_id,dispositivo_id,numero_snapshot,
+    ubicacion_snapshot,tipo_dispositivo_codigo_snapshot,tipo_dispositivo_nombre_snapshot,clasificacion_snapshot,
+    plagas_snapshot_json,estado_anterior_snapshot,creado_durante_servicio)
+    values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,'ACTIVO',true)`,
+  [serviceDeviceId, serviceId, areaId, permanentDeviceId, numero, ubicacion, tipoCodigo, context.type_name,
+    context.classification, JSON.stringify(context.pests)])
+  const device: TechnicianDevice = {
+    id: serviceDeviceId,
+    dispositivoId: permanentDeviceId,
+    numero,
+    ubicacion,
+    tipoCodigo,
+    tipoNombre: context.type_name,
+    clasificacion: context.classification,
+    plagas: context.pests,
+    estadoAnterior: 'ACTIVO',
+    creadoDuranteServicio: true,
+    revisado: false,
+    revision: null,
+  }
+  await audit(client, userId, 'SERVICIO_DISPOSITIVO_CREADO', serviceId, {
+    areaId,
+    permanentDeviceId,
+    serviceDeviceId,
+    numero,
+    tipoCodigo,
+  })
+  return { device }
+}
+
 export async function authorizeTechnicianDeviceChange(
   client: PoolClient,
   userId: string,
@@ -372,6 +446,13 @@ export async function startTechnicianService(client: PoolClient, userId: string,
     select $1,sa.id,sa.area_id,c.id,c.nombre,c.solo_area_externa from public.servicio_areas sa
     cross join public.criterios_mip c where sa.servicio_id=$1 and c.id=any($2::uuid[]) and (not c.solo_area_externa or sa.es_externa_snapshot)
     order by sa.posicion_inicial,lower(btrim(c.nombre)),c.id`, [serviceId, sources.criterionIds])
+  await client.query(`insert into public.servicio_tipos_dispositivo(servicio_id,tipo_dispositivo_codigo_snapshot,
+    tipo_dispositivo_nombre_snapshot,clasificacion_snapshot,plagas_snapshot_json)
+    select $1,t.clave,t.nombre,t.clasificacion,
+      coalesce((select jsonb_agg(jsonb_build_object('codigo',c.clave,'nombre',c.nombre)
+        order by lower(btrim(c.nombre)),c.clave) from public.configuracion c
+        where c.categoria='PLAGA' and c.activo and c.clasificacion_mip=t.clasificacion),'[]'::jsonb)
+    from public.trampas t where t.activo order by lower(btrim(t.nombre)),t.clave`, [serviceId])
   await client.query(`insert into public.servicio_dispositivos(servicio_id,servicio_area_id,dispositivo_id,numero_snapshot,ubicacion_snapshot,
     tipo_dispositivo_codigo_snapshot,tipo_dispositivo_nombre_snapshot,clasificacion_snapshot,plagas_snapshot_json,estado_anterior_snapshot)
     select $1,sa.id,d.id,d.numero,d.ubicacion,d.tipo_dispositivo_codigo,t.nombre,t.clasificacion,

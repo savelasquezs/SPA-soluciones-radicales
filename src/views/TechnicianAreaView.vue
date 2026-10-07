@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { Check, ChevronRight, ClipboardCheck, ListOrdered, MonitorCheck } from 'lucide-vue-next'
+import { Check, ChevronRight, ClipboardCheck, ListOrdered, MonitorCheck, Plus } from 'lucide-vue-next'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseSelect from '@/components/base/BaseSelect.vue'
@@ -12,9 +12,10 @@ import ServicePage from '@/components/domain/services/ServicePage.vue'
 import TechnicianAreaAccessEditor from '@/components/domain/services/TechnicianAreaAccessEditor.vue'
 import TechnicianCriterionEditor from '@/components/domain/services/TechnicianCriterionEditor.vue'
 import TechnicianDeviceReviewEditor from '@/components/domain/services/TechnicianDeviceReviewEditor.vue'
+import TechnicianNewDeviceEditor from '@/components/domain/services/TechnicianNewDeviceEditor.vue'
 import { nextTechnicianArea, orderedTechnicianAreas, technicianAreaResolved } from '@/helpers/technicianServices'
 import { useTechnicianServicesStore } from '@/stores/technicianServices'
-import type { MipEvaluation, TechnicianAreaAccessMutation, TechnicianCriterionEvaluationMutation, TechnicianDeviceReviewInput, TechnicianDeviceReviewMutation } from '@/types/technicianServices'
+import type { MipEvaluation, TechnicianAreaAccessMutation, TechnicianCriterionEvaluationMutation, TechnicianDeviceCreationInput, TechnicianDeviceCreationMutation, TechnicianDeviceReviewInput, TechnicianDeviceReviewMutation } from '@/types/technicianServices'
 
 const route = useRoute()
 const router = useRouter()
@@ -28,6 +29,8 @@ const selectedAreaId = ref(routeAreaId.value)
 const loading = ref(true)
 const error = ref('')
 const saveError = ref('')
+const newDeviceOpen = ref(false)
+const newDeviceSaving = ref(false)
 const drafts = ref<Record<string, { evaluation: MipEvaluation | null; observation: string }>>({})
 const deviceDrafts = ref<Record<string, { input: TechnicianDeviceReviewInput; photo: File | null }>>({})
 const accessDraft = ref<{ areaId: string; withoutAccess: boolean; description: string; photo: File | null } | null>(null)
@@ -37,9 +40,12 @@ let accessSaveQueue: Promise<boolean> | null = null
 const canEditRoute = computed(() => packageValue.value?.service.estado === 'EN_PROCESO' && Boolean(currentCache.value?.lock))
 const next = computed(() => currentArea.value ? nextTechnicianArea(orderedAreas.value, currentArea.value.id) : { kind: 'PENDING' as const })
 const nextLabel = computed(() => next.value.kind === 'AREA' ? `Siguiente: ${next.value.area.nombre}` : next.value.kind === 'CLOSURE' ? 'Revisar cierre' : 'Revisar pendientes')
+const creationConflict = computed(() => currentMutations.value.find((item): item is TechnicianDeviceCreationMutation => item.kind === 'DEVICE_CREATE'
+  && item.areaId === currentArea.value?.id && item.status === 'CONFLICT') ?? null)
 
 onMounted(load)
-watch(routeAreaId, value => { selectedAreaId.value = value })
+watch(routeAreaId, value => { selectedAreaId.value = value; newDeviceOpen.value = false })
+watch(creationConflict, value => { if (value) newDeviceOpen.value = true })
 onBeforeRouteLeave(() => flushDrafts())
 onBeforeRouteUpdate(to => String(to.params.areaId ?? '') === routeAreaId.value || flushDrafts())
 
@@ -69,6 +75,41 @@ function accessMutation(): TechnicianAreaAccessMutation | null {
 
 function deviceMutation(serviceDeviceId: string): TechnicianDeviceReviewMutation | null {
   return currentMutations.value.find((item): item is TechnicianDeviceReviewMutation => item.kind === 'DEVICE_REVIEW' && item.serviceDeviceId === serviceDeviceId) ?? null
+}
+
+function creationMutation(serviceDeviceId: string): TechnicianDeviceCreationMutation | null {
+  return currentMutations.value.find((item): item is TechnicianDeviceCreationMutation => item.kind === 'DEVICE_CREATE'
+    && item.serviceDeviceId === serviceDeviceId) ?? null
+}
+
+async function saveNewDevice(input: TechnicianDeviceCreationInput): Promise<void> {
+  if (!currentArea.value) return
+  newDeviceSaving.value = true
+  saveError.value = ''
+  try {
+    const result = creationConflict.value
+      ? await services.retryDeviceCreationConflict(serviceId.value, creationConflict.value.serviceDeviceId, input)
+      : await services.applyDeviceCreation(serviceId.value, currentArea.value.id, input)
+    if (result !== 'conflict') newDeviceOpen.value = false
+  } catch (failure) {
+    saveError.value = failure instanceof Error ? failure.message : 'No fue posible agregar el dispositivo.'
+  } finally {
+    newDeviceSaving.value = false
+  }
+}
+
+async function discardNewDevice(): Promise<void> {
+  if (!creationConflict.value) return
+  newDeviceSaving.value = true
+  saveError.value = ''
+  try {
+    await services.discardDeviceCreationConflict(serviceId.value, creationConflict.value.serviceDeviceId)
+    newDeviceOpen.value = false
+  } catch (failure) {
+    saveError.value = failure instanceof Error ? failure.message : 'No fue posible descartar el alta del dispositivo.'
+  } finally {
+    newDeviceSaving.value = false
+  }
 }
 
 function trackAccessDraft(withoutAccess: boolean, description: string, photo: File | null): void {
@@ -269,9 +310,11 @@ function goNext(): void {
         <div v-else class="criteria-list"><TechnicianCriterionEditor v-for="criterion in currentArea.criterios" :key="criterion.id" :criterion="criterion" :mutation="criterionMutation(criterion.id)" :editable="canEditRoute" :syncing="syncing" @draft="(evaluation, observation) => trackCriterionDraft(criterion.id, evaluation, observation)" @save="(evaluation, observation) => saveCriterion(criterion.id, evaluation, observation)" @use-remote="useRemoteCriterion(criterion.id)" @retry="retryCriterion(criterion.id)" /></div>
       </section>
       <section v-if="!currentArea.sinAcceso" class="area-panel" aria-labelledby="area-devices-title">
-        <header><div><h2 id="area-devices-title">Dispositivos</h2><p>{{ currentArea.dispositivos.length }} puntos congelados</p></div></header>
+        <header><div><h2 id="area-devices-title">Dispositivos</h2><p>{{ currentArea.dispositivos.length }} puntos del servicio</p></div><BaseButton v-if="canEditRoute && packageValue?.deviceTypes?.length" size="compact" variant="secondary" :disabled="newDeviceSaving" @click="newDeviceOpen = true"><Plus :size="17" aria-hidden="true" />Agregar</BaseButton></header>
+        <TechnicianNewDeviceEditor v-if="newDeviceOpen" :device-types="packageValue?.deviceTypes ?? []" :conflict="creationConflict" :saving="newDeviceSaving" @save="saveNewDevice" @cancel="newDeviceOpen = false" @discard="discardNewDevice" />
+        <p v-else-if="canEditRoute && !packageValue?.deviceTypes?.length" class="area-empty">No hay tipos de dispositivo disponibles en el paquete del servicio.</p>
         <p v-if="!currentArea.dispositivos.length" class="area-empty">Esta Área no tiene Dispositivos asignados.</p>
-        <div v-else class="device-list"><TechnicianDeviceReviewEditor v-for="device in currentArea.dispositivos" :key="device.id" :device="device" :mutation="deviceMutation(device.id)" :editable="canEditRoute" :syncing="syncing" @draft="(input, photo) => trackDeviceDraft(device.id, input, photo)" @save="(input, photo) => saveDevice(device.id, input, photo)" @use-remote="useRemoteDevice(device.id)" @retry="retryDevice(device.id)" /></div>
+        <div v-else class="device-list"><TechnicianDeviceReviewEditor v-for="device in currentArea.dispositivos" :key="device.id" :device="device" :creation-mutation="creationMutation(device.id)" :mutation="deviceMutation(device.id)" :editable="canEditRoute" :syncing="syncing" @draft="(input, photo) => trackDeviceDraft(device.id, input, photo)" @save="(input, photo) => saveDevice(device.id, input, photo)" @use-remote="useRemoteDevice(device.id)" @retry="retryDevice(device.id)" /></div>
       </section>
       <BaseButton class="area-next" @click="goNext"><ClipboardCheck v-if="next.kind !== 'AREA'" :size="18" aria-hidden="true" /><ChevronRight v-else :size="18" aria-hidden="true" />{{ nextLabel }}</BaseButton>
     </template>

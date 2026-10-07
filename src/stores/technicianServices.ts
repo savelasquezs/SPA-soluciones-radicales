@@ -2,13 +2,13 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { isExactAreaPermutation, sortTechnicianServices, technicianDevicePhotoRequired } from '@/helpers/technicianServices'
 import { useAuthStore } from '@/stores/auth'
-import { claimTechnicianService, fetchTechnicianPackage, fetchTechnicianServices, saveTechnicianAreaAccess, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, startTechnicianService } from '@/services/servicesService'
+import { claimTechnicianService, createTechnicianDevice, fetchTechnicianPackage, fetchTechnicianServices, saveTechnicianAreaAccess, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, startTechnicianService } from '@/services/servicesService'
 import { ApiClientError } from '@/services/apiService'
 import { getTechnicianDeviceId, listTechnicianPackageCaches, loadTechnicianPackageCache, saveTechnicianPackageCache } from '@/services/technicianPackageService'
 import { deleteTechnicianMutation, listTechnicianMutations, saveTechnicianMutation } from '@/services/technicianMutationService'
 import { deleteTechnicianMedia, loadTechnicianMedia, saveTechnicianMedia } from '@/services/technicianMediaService'
 import { deleteTechnicianAreaPhoto, deleteTechnicianDevicePhoto, uploadTechnicianAreaPhoto, uploadTechnicianDevicePhoto } from '@/services/serviceMediaService'
-import type { MipEvaluation, TechnicianAreaAccessMutation, TechnicianAreaAccessState, TechnicianAreaOrderConflict, TechnicianAreaOrderMutation, TechnicianAreaOrderResult, TechnicianCriterion, TechnicianCriterionEvaluationMutation, TechnicianDevice, TechnicianDeviceReview, TechnicianDeviceReviewInput, TechnicianDeviceReviewMutation, TechnicianExecutionSession, TechnicianMutation, TechnicianPackageCache, TechnicianPendingOperation, TechnicianServicePackage, TechnicianServiceSummary } from '@/types/technicianServices'
+import type { MipEvaluation, TechnicianAreaAccessMutation, TechnicianAreaAccessState, TechnicianAreaOrderConflict, TechnicianAreaOrderMutation, TechnicianAreaOrderResult, TechnicianCriterion, TechnicianCriterionEvaluationMutation, TechnicianDevice, TechnicianDeviceCreationInput, TechnicianDeviceCreationMutation, TechnicianDeviceReview, TechnicianDeviceReviewInput, TechnicianDeviceReviewMutation, TechnicianExecutionSession, TechnicianMutation, TechnicianPackageCache, TechnicianPendingOperation, TechnicianServicePackage, TechnicianServiceSummary } from '@/types/technicianServices'
 
 function onlineNow(): boolean {
   return typeof navigator === 'undefined' || navigator.onLine
@@ -200,6 +200,32 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     await persistPackage({ ...cache.package, areas })
   }
 
+  async function persistDeviceCreation(serviceId: string, areaId: string, device: TechnicianDevice): Promise<void> {
+    const cache = caches.value[serviceId]
+    if (!cache) throw new Error('Prepara el servicio antes de agregar dispositivos.')
+    let found = false
+    const areas = cache.package.areas.map(area => {
+      if (area.id !== areaId) return area
+      found = true
+      const current = area.dispositivos.find(item => item.id === device.id)
+      const dispositivos = current
+        ? area.dispositivos.map(item => item.id === device.id ? device : item)
+        : [...area.dispositivos, device].sort((left, right) => left.numero.localeCompare(right.numero, 'es', { sensitivity: 'base', numeric: true }))
+      return { ...area, dispositivos }
+    })
+    if (!found) throw new Error('El Área no pertenece al servicio preparado.')
+    await persistPackage({ ...cache.package, areas })
+  }
+
+  async function removeLocalDevice(serviceId: string, areaId: string, serviceDeviceId: string): Promise<void> {
+    const cache = caches.value[serviceId]
+    if (!cache) return
+    const areas = cache.package.areas.map(area => area.id === areaId
+      ? { ...area, dispositivos: area.dispositivos.filter(device => device.id !== serviceDeviceId) }
+      : area)
+    await persistPackage({ ...cache.package, areas })
+  }
+
   function reviewFromMutation(device: TechnicianDevice, mutation: TechnicianDeviceReviewMutation, base?: TechnicianDeviceReview): TechnicianDeviceReview {
     const pestNames = new Map(device.plagas.map(pest => [pest.codigo, pest.nombre]))
     return {
@@ -325,6 +351,12 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
               ? { ...result.area, sinAcceso: latest.withoutAccess, sinAccesoDescripcion: latest.withoutAccess ? latest.description : null,
                   sinAccesoFotoStoragePath: latest.withoutAccess ? latest.photoStoragePath : null }
               : result.area, latest?.photoMediaId ?? null)
+          } else if (sending.kind === 'DEVICE_CREATE') {
+            const result = await createTechnicianDevice(serviceId, sending.areaId, sending.requestId, sending.deviceId, sending.lockToken,
+              sending.permanentDeviceId, sending.serviceDeviceId,
+              { numero: sending.numero, tipoCodigo: sending.tipoCodigo, ubicacion: sending.ubicacion })
+            await deleteTechnicianMutation(sending)
+            await persistDeviceCreation(serviceId, sending.areaId, { ...result.device, creacionPendiente: false })
           } else {
             let reviewOperation = sending as TechnicianDeviceReviewMutation
             const serviceDeviceId = reviewOperation.serviceDeviceId
@@ -380,6 +412,8 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
           } else if (sending.kind === 'AREA_ACCESS') {
             await saveTechnicianMutation({ ...sending, status: retryable ? 'SENDING' : 'CONFLICT',
               conflict: failure instanceof ApiClientError ? areaAccessConflictDetails(failure) : null, error, updatedAt: new Date().toISOString() })
+          } else if (sending.kind === 'DEVICE_CREATE') {
+            await saveTechnicianMutation({ ...sending, status: retryable ? 'SENDING' : 'CONFLICT', error, updatedAt: new Date().toISOString() })
           } else {
             await saveTechnicianMutation({ ...sending, status: retryable ? 'SENDING' : 'CONFLICT',
               conflict: failure instanceof ApiClientError ? deviceReviewConflictDetails(failure) : null, error, updatedAt: new Date().toISOString() })
@@ -632,6 +666,128 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     return syncPending(serviceId)
   }
 
+  function deviceCreationMutation(serviceDeviceId: string): TechnicianDeviceCreationMutation | null {
+    return currentMutations.value.find((item): item is TechnicianDeviceCreationMutation => item.kind === 'DEVICE_CREATE'
+      && item.serviceDeviceId === serviceDeviceId) ?? null
+  }
+
+  async function applyDeviceCreation(
+    serviceId: string,
+    areaId: string,
+    input: TechnicianDeviceCreationInput,
+  ): Promise<'synced' | 'pending' | 'conflict'> {
+    const cache = caches.value[serviceId]
+    if (!cache || cache.package.service.estado !== 'EN_PROCESO' || !cache.lock) throw new Error('Este celular no puede agregar dispositivos al servicio.')
+    const area = cache.package.areas.find(item => item.id === areaId)
+    if (!area) throw new Error('El Área no pertenece al servicio preparado.')
+    if (area.sinAcceso) throw new Error('Habilita el acceso al Área antes de agregar un dispositivo.')
+    const normalized = { numero: input.numero.trim(), tipoCodigo: input.tipoCodigo.trim(), ubicacion: input.ubicacion.trim() }
+    if (!normalized.numero || normalized.numero.length > 100) throw new Error('El número es obligatorio y no puede superar 100 caracteres.')
+    if (!normalized.ubicacion || normalized.ubicacion.length > 500) throw new Error('La ubicación es obligatoria y no puede superar 500 caracteres.')
+    const type = (cache.package.deviceTypes ?? []).find(item => item.codigo === normalized.tipoCodigo)
+    if (!type) throw new Error('Selecciona un tipo disponible en el paquete del servicio.')
+    if (cache.package.areas.some(item => item.dispositivos.some(device => device.numero.localeCompare(normalized.numero, 'es', { sensitivity: 'base' }) === 0))) {
+      throw new Error('Ya existe un dispositivo con ese número en la Sede.')
+    }
+    const now = new Date().toISOString()
+    const operation: TechnicianDeviceCreationMutation = {
+      schemaVersion: 1,
+      requestId: crypto.randomUUID(),
+      actorId: actorId(),
+      serviceId,
+      deviceId: cache.deviceId,
+      lockToken: cache.lock.token,
+      kind: 'DEVICE_CREATE',
+      areaId,
+      permanentDeviceId: crypto.randomUUID(),
+      serviceDeviceId: crypto.randomUUID(),
+      ...normalized,
+      status: 'PENDING',
+      createdAt: now,
+      updatedAt: now,
+      error: null,
+    }
+    await saveTechnicianMutation(operation)
+    await reloadMutations(serviceId)
+    await persistDeviceCreation(serviceId, areaId, {
+      id: operation.serviceDeviceId,
+      dispositivoId: operation.permanentDeviceId,
+      numero: operation.numero,
+      ubicacion: operation.ubicacion,
+      tipoCodigo: type.codigo,
+      tipoNombre: type.nombre,
+      clasificacion: type.clasificacion,
+      plagas: type.plagas,
+      estadoAnterior: 'ACTIVO',
+      creadoDuranteServicio: true,
+      creacionPendiente: true,
+      revisado: false,
+      revision: null,
+    })
+    return onlineNow() ? syncPending(serviceId) : 'pending'
+  }
+
+  async function discardDeviceCreationConflict(serviceId: string, serviceDeviceId: string): Promise<void> {
+    const pending = await reloadMutations(serviceId)
+    const creation = pending.find((item): item is TechnicianDeviceCreationMutation => item.kind === 'DEVICE_CREATE'
+      && item.serviceDeviceId === serviceDeviceId && item.status === 'CONFLICT')
+    if (!creation) throw new Error('No hay una creación en conflicto para descartar.')
+    for (const operation of pending.filter(item => (item.kind === 'DEVICE_CREATE' || item.kind === 'DEVICE_REVIEW')
+      && item.serviceDeviceId === serviceDeviceId)) {
+      await deleteTechnicianMutation(operation)
+      if (operation.kind === 'DEVICE_REVIEW' && operation.photoMediaId) await deleteTechnicianMedia(operation.actorId, operation.photoMediaId)
+    }
+    await reloadMutations(serviceId)
+    await removeLocalDevice(serviceId, creation.areaId, serviceDeviceId)
+  }
+
+  async function retryDeviceCreationConflict(
+    serviceId: string,
+    serviceDeviceId: string,
+    input: TechnicianDeviceCreationInput,
+  ): Promise<'synced' | 'pending' | 'conflict'> {
+    const cache = caches.value[serviceId]
+    const pending = await reloadMutations(serviceId)
+    const conflicted = pending.find((item): item is TechnicianDeviceCreationMutation => item.kind === 'DEVICE_CREATE'
+      && item.serviceDeviceId === serviceDeviceId && item.status === 'CONFLICT')
+    if (!cache?.lock || !conflicted) throw new Error('No es posible corregir la creación del dispositivo.')
+    const normalized = { numero: input.numero.trim(), tipoCodigo: input.tipoCodigo.trim(), ubicacion: input.ubicacion.trim() }
+    if (!normalized.numero || normalized.numero.length > 100 || !normalized.ubicacion || normalized.ubicacion.length > 500) {
+      throw new Error('Completa el número y la ubicación del dispositivo.')
+    }
+    const type = (cache.package.deviceTypes ?? []).find(item => item.codigo === normalized.tipoCodigo)
+    if (!type) throw new Error('Selecciona un tipo disponible en el paquete del servicio.')
+    if (cache.package.areas.some(area => area.dispositivos.some(device => device.id !== serviceDeviceId
+      && device.numero.localeCompare(normalized.numero, 'es', { sensitivity: 'base' }) === 0))) {
+      throw new Error('Ya existe un dispositivo con ese número en la Sede.')
+    }
+    for (const operation of pending.filter(item => (item.kind === 'DEVICE_CREATE' || item.kind === 'DEVICE_REVIEW')
+      && item.serviceDeviceId === serviceDeviceId)) {
+      await deleteTechnicianMutation(operation)
+      if (operation.kind === 'DEVICE_REVIEW' && operation.photoMediaId) await deleteTechnicianMedia(operation.actorId, operation.photoMediaId)
+    }
+    const now = new Date().toISOString()
+    await saveTechnicianMutation({ ...conflicted, ...normalized, requestId: crypto.randomUUID(), status: 'PENDING', error: null,
+      createdAt: now, updatedAt: now })
+    await reloadMutations(serviceId)
+    await persistDeviceCreation(serviceId, conflicted.areaId, {
+      id: conflicted.serviceDeviceId,
+      dispositivoId: conflicted.permanentDeviceId,
+      numero: normalized.numero,
+      ubicacion: normalized.ubicacion,
+      tipoCodigo: type.codigo,
+      tipoNombre: type.nombre,
+      clasificacion: type.clasificacion,
+      plagas: type.plagas,
+      estadoAnterior: 'ACTIVO',
+      creadoDuranteServicio: true,
+      creacionPendiente: true,
+      revisado: false,
+      revision: null,
+    })
+    return onlineNow() ? syncPending(serviceId) : 'pending'
+  }
+
   function deviceReviewMutation(serviceDeviceId: string): TechnicianDeviceReviewMutation | null {
     return currentMutations.value.find((item): item is TechnicianDeviceReviewMutation => item.kind === 'DEVICE_REVIEW'
       && item.serviceDeviceId === serviceDeviceId) ?? null
@@ -882,6 +1038,10 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     applyAreaAccess,
     discardAreaAccessConflict,
     retryAreaAccessConflict,
+    deviceCreationMutation,
+    applyDeviceCreation,
+    discardDeviceCreationConflict,
+    retryDeviceCreationConflict,
     deviceReviewMutation,
     applyDeviceReview,
     discardDeviceReviewConflict,
