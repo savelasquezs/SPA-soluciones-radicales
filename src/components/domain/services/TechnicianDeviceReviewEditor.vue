@@ -8,10 +8,11 @@ import BaseSelect from '@/components/base/BaseSelect.vue'
 import BaseTextarea from '@/components/base/BaseTextarea.vue'
 import StatusBadge from '@/components/base/StatusBadge.vue'
 import { technicianDevicePhotoRequired } from '@/helpers/technicianServices'
-import type { DeviceState, TechnicianDevice, TechnicianDeviceReviewInput, TechnicianDeviceReviewMutation } from '@/types/technicianServices'
+import type { DeviceState, TechnicianDevice, TechnicianDeviceCreationMutation, TechnicianDeviceReviewInput, TechnicianDeviceReviewMutation } from '@/types/technicianServices'
 
 const props = defineProps<{
   device: TechnicianDevice
+  creationMutation?: TechnicianDeviceCreationMutation | null
   mutation: TechnicianDeviceReviewMutation | null
   editable: boolean
   syncing: boolean
@@ -33,7 +34,7 @@ const observations = ref('')
 const photo = ref<File | null>(null)
 const captureError = ref('')
 const photoError = ref('')
-const disabled = computed(() => !props.editable || props.syncing || props.mutation?.status === 'CONFLICT')
+const disabled = computed(() => !props.editable || props.syncing || props.creationMutation?.status === 'CONFLICT' || props.mutation?.status === 'CONFLICT')
 const photoRequired = computed(() => technicianDevicePhotoRequired(props.device.estadoAnterior, state.value))
 const hasStoredPhoto = computed(() => Boolean(props.device.revision?.fotoStoragePath || props.device.revision?.fotoLocalId))
 
@@ -111,13 +112,15 @@ function save(): void {
   <article class="device-card">
     <button class="device-summary" type="button" :aria-expanded="expanded" :aria-controls="`device-review-${device.id}`" @click="expanded = !expanded">
       <span class="device-summary__copy"><strong>{{ device.numero }}</strong><small>{{ device.tipoNombre }} · {{ device.ubicacion }}</small></span>
-      <StatusBadge v-if="mutation?.status === 'CONFLICT'" tone="warning">Conflicto</StatusBadge>
+      <StatusBadge v-if="creationMutation?.status === 'CONFLICT'" tone="warning">Alta en conflicto</StatusBadge>
+      <StatusBadge v-else-if="creationMutation" tone="warning">{{ creationMutation.status === 'SENDING' ? 'Creando' : 'Creación local' }}</StatusBadge>
+      <StatusBadge v-else-if="mutation?.status === 'CONFLICT'" tone="warning">Conflicto</StatusBadge>
       <StatusBadge v-else-if="mutation" tone="warning">{{ mutation.status === 'SENDING' ? 'Sincronizando' : 'Guardado local' }}</StatusBadge>
       <StatusBadge v-else :tone="device.revisado ? 'success' : 'neutral'">{{ device.revisado ? 'Revisado' : 'Pendiente' }}</StatusBadge>
       <ChevronDown :size="18" aria-hidden="true" :class="{ 'device-summary__chevron--open': expanded }" />
     </button>
     <div v-if="expanded" :id="`device-review-${device.id}`" class="device-form">
-      <p class="device-context">Estado anterior: <strong>{{ device.estadoAnterior === 'ACTIVO' ? 'Activo' : device.estadoAnterior === 'DANADO' ? 'Dañado' : 'Fuera de uso' }}</strong><span v-if="device.clasificacion"> · {{ device.clasificacion === 'RASTREROS' ? 'Rastreros' : 'Voladores' }}</span></p>
+      <p class="device-context"><span v-if="device.creadoDuranteServicio">Creado en este servicio · </span>Estado anterior: <strong>{{ device.estadoAnterior === 'ACTIVO' ? 'Activo' : device.estadoAnterior === 'DANADO' ? 'Dañado' : 'Fuera de uso' }}</strong><span v-if="device.clasificacion"> · {{ device.clasificacion === 'RASTREROS' ? 'Rastreros' : 'Voladores' }}</span></p>
       <BaseSelect :model-value="state" :name="`device-state-${device.id}`" label="Estado observado" required :disabled="disabled" @update:model-value="changeState">
         <option value="ACTIVO">Activo</option>
         <option value="DANADO">Dañado</option>

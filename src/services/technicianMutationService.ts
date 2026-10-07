@@ -67,6 +67,12 @@ function validMutation(value: unknown, actorId?: string, serviceId?: string): va
       && typeof record.conflict?.sinAcceso === 'boolean'
       && typeof record.conflict?.version === 'number'
     ))
+  if (record.kind === 'DEVICE_CREATE') return isServiceId(record.areaId)
+    && isServiceId(record.permanentDeviceId)
+    && isServiceId(record.serviceDeviceId)
+    && typeof record.numero === 'string' && record.numero.trim().length > 0 && record.numero.length <= 100
+    && typeof record.tipoCodigo === 'string' && record.tipoCodigo.trim().length > 0 && record.tipoCodigo.length <= 160
+    && typeof record.ubicacion === 'string' && record.ubicacion.trim().length > 0 && record.ubicacion.length <= 500
   if (record.kind === 'DEVICE_REVIEW') return isServiceId(record.areaId)
     && isServiceId(record.serviceDeviceId)
     && isServiceId(record.reviewId)

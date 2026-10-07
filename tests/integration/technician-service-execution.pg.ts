@@ -5,7 +5,7 @@ import type { PoolClient } from 'pg'
 vi.mock('@neon/functions', () => ({ attachDatabasePool: vi.fn<() => void>(), waitUntil: vi.fn<() => void>() }))
 
 import { pool, transaction } from '../../functions/api/db'
-import { claimTechnicianService, releaseTechnicianServiceLock, saveTechnicianAreaAccess, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, startTechnicianService, technicianCommand } from '../../functions/api/technician-services/commands'
+import { claimTechnicianService, createTechnicianDevice, releaseTechnicianServiceLock, saveTechnicianAreaAccess, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, startTechnicianService, technicianCommand } from '../../functions/api/technician-services/commands'
 import type { DeviceState } from '../../src/types/technicianServices'
 import { getTechnicianPackage } from '../../functions/api/technician-services/queries'
 
@@ -201,6 +201,33 @@ describe('technician service execution · real PostgreSQL', () => {
     expect(saved.review).toMatchObject({ estadoObservado: 'DANADO', fotoStoragePath: null, version: 1 })
   })
 
+  it('creates a permanent device from the frozen catalog and adds it to the current service idempotently', async () => {
+    const value = await fixture(), phoneId = randomUUID(), requestId = randomUUID()
+    const permanentDeviceId = randomUUID(), serviceDeviceId = randomUUID()
+    const session = await transaction(client => startTechnicianService(client, value.technician, value.service, 1, phoneId))
+    const area = session.package.areas.find(item => item.areaId === value.internalArea)!
+    const type = session.package.deviceTypes[0]!
+    await expect(pool.query("delete from public.configuracion where categoria='PLAGA' and clave=$1", [value.pestCode]))
+      .rejects.toMatchObject({ code: '23503' })
+    const input = { numero: 'D-02', tipoCodigo: type.codigo, ubicacion: 'Junto a la puerta' }
+    const payload = { deviceId: phoneId, areaId: area.id, permanentDeviceId, serviceDeviceId, ...input }
+    const save = () => transaction(client => technicianCommand(client, value.technician, requestId, 'DEVICE_CREATE', value.service, null,
+      payload, () => createTechnicianDevice(client, value.technician, value.service, phoneId, session.lock.token,
+        area.id, permanentDeviceId, serviceDeviceId, input)))
+    const first = await save(), replay = await save()
+    expect(replay).toEqual(first)
+    expect(first.device).toMatchObject({
+      id: serviceDeviceId, dispositivoId: permanentDeviceId, numero: 'D-02', tipoCodigo: type.codigo,
+      creadoDuranteServicio: true, estadoAnterior: 'ACTIVO', revisado: false,
+    })
+    expect((await pool.query('select area_id,estado_actual from public.dispositivos where id=$1', [permanentDeviceId])).rows[0])
+      .toEqual({ area_id: value.internalArea, estado_actual: 'ACTIVO' })
+    expect((await pool.query('select creado_durante_servicio from public.servicio_dispositivos where id=$1', [serviceDeviceId])).rows[0]?.creado_durante_servicio).toBe(true)
+    await expect(transaction(client => createTechnicianDevice(client, value.technician, value.service, phoneId, session.lock.token,
+      area.id, randomUUID(), randomUUID(), { ...input, numero: 'D-01' }))).rejects.toMatchObject({ code: 'DEVICE_NUMBER_CONFLICT' })
+    expect(Number((await pool.query("select count(*) from public.auditoria where registro_id=$1 and accion='SERVICIO_DISPOSITIVO_CREADO'", [value.service])).rows[0].count)).toBe(1)
+  })
+
   it('keeps one persistent mobile editor until an administrator releases the service', async () => {
     const value = await fixture(), firstDevice = randomUUID(), secondDevice = randomUUID()
     await transaction(client => startTechnicianService(client, value.technician, value.service, 1, firstDevice))
@@ -230,8 +257,10 @@ describe('technician service execution · real PostgreSQL', () => {
     }
     expect(await asTechnician(value.technician, async client => (await client.query('select id from public.servicio_areas where servicio_id=$1', [value.service])).rows)).toHaveLength(2)
     expect(await asTechnician(value.technician, async client => (await client.query('select id from public.revisiones_dispositivos where servicio_id=$1', [value.service])).rows)).toHaveLength(1)
+    expect(await asTechnician(value.technician, async client => (await client.query('select id from public.servicio_tipos_dispositivo where servicio_id=$1', [value.service])).rows)).not.toHaveLength(0)
     expect(await asTechnician(value.unrelated, async client => (await client.query('select id from public.servicio_areas where servicio_id=$1', [value.service])).rows)).toEqual([])
     expect(await asTechnician(value.unrelated, async client => (await client.query('select id from public.revisiones_dispositivos where servicio_id=$1', [value.service])).rows)).toEqual([])
+    expect(await asTechnician(value.unrelated, async client => (await client.query('select id from public.servicio_tipos_dispositivo where servicio_id=$1', [value.service])).rows)).toEqual([])
     await expect(asTechnician(value.technician, client => client.query('update public.servicio_areas set posicion_recorrido=0 where servicio_id=$1', [value.service]))).rejects.toMatchObject({ code: '42501' })
   })
 })

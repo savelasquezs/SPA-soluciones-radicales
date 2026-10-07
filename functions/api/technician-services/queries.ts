@@ -3,6 +3,7 @@ import type {
   TechnicianArea,
   TechnicianCriterion,
   TechnicianDevice,
+  TechnicianDeviceTypeSnapshot,
   TechnicianProduct,
   TechnicianServicePackage,
   TechnicianServiceSummary,
@@ -85,7 +86,8 @@ async function frozenAreas(client: PoolClient, serviceId: string): Promise<Techn
   const devices = (await client.query<(TechnicianDevice & { servicioAreaId: string })>(`select sd.id,sd.servicio_area_id as "servicioAreaId",sd.dispositivo_id as "dispositivoId",
     sd.numero_snapshot as numero,sd.ubicacion_snapshot as ubicacion,sd.tipo_dispositivo_codigo_snapshot as "tipoCodigo",
     sd.tipo_dispositivo_nombre_snapshot as "tipoNombre",sd.clasificacion_snapshot as clasificacion,
-    sd.plagas_snapshot_json as plagas,sd.estado_anterior_snapshot as "estadoAnterior",r.id is not null as revisado,
+    sd.plagas_snapshot_json as plagas,sd.estado_anterior_snapshot as "estadoAnterior",
+    sd.creado_durante_servicio as "creadoDuranteServicio",r.id is not null as revisado,
     case when r.id is null then null else jsonb_build_object(
       'id',r.id,'estadoObservado',r.estado_observado,'capturas',r.capturas_json,
       'consumo',case when r.consumo is null then '' when jsonb_typeof(r.consumo)='string' then r.consumo #>> '{}' else r.consumo::text end,
@@ -97,7 +99,7 @@ async function frozenAreas(client: PoolClient, serviceId: string): Promise<Techn
     where sd.servicio_id=$1 order by sd.servicio_area_id,lower(sd.numero_snapshot),sd.id`, [serviceId])).rows
   return areas.map(area => ({ ...area,
     criterios: criteria.filter(item => item.servicioAreaId === area.id).map(item => ({ id:item.id,criterioId:item.criterioId,nombre:item.nombre,soloAreaExterna:item.soloAreaExterna,evaluacion:item.evaluacion,observacion:item.observacion,evidenciasStoragePaths:item.evidenciasStoragePaths,version:item.version })),
-    dispositivos: devices.filter(item => item.servicioAreaId === area.id).map(item => ({ id:item.id,dispositivoId:item.dispositivoId,numero:item.numero,ubicacion:item.ubicacion,tipoCodigo:item.tipoCodigo,tipoNombre:item.tipoNombre,clasificacion:item.clasificacion,plagas:item.plagas,estadoAnterior:item.estadoAnterior,revisado:item.revisado,revision:item.revision })) }))
+    dispositivos: devices.filter(item => item.servicioAreaId === area.id).map(item => ({ id:item.id,dispositivoId:item.dispositivoId,numero:item.numero,ubicacion:item.ubicacion,tipoCodigo:item.tipoCodigo,tipoNombre:item.tipoNombre,clasificacion:item.clasificacion,plagas:item.plagas,estadoAnterior:item.estadoAnterior,creadoDuranteServicio:item.creadoDuranteServicio,revisado:item.revisado,revision:item.revision })) }))
 }
 
 async function liveAreas(client: PoolClient, serviceId: string): Promise<TechnicianArea[]> {
@@ -113,7 +115,7 @@ async function liveAreas(client: PoolClient, serviceId: string): Promise<Technic
     order by a.id,lower(btrim(c.nombre)),c.id`, [serviceId])).rows
   const devices = (await client.query<(TechnicianDevice & { areaId: string })>(`select d.id,d.id as "dispositivoId",d.area_id as "areaId",d.numero,
     d.ubicacion,d.tipo_dispositivo_codigo as "tipoCodigo",coalesce(t.nombre,d.tipo_dispositivo_codigo) as "tipoNombre",
-    t.clasificacion,coalesce(pests.items,'[]'::jsonb) as plagas,d.estado_actual as "estadoAnterior",false as revisado,null::jsonb as revision
+    t.clasificacion,coalesce(pests.items,'[]'::jsonb) as plagas,d.estado_actual as "estadoAnterior",false as "creadoDuranteServicio",false as revisado,null::jsonb as revision
     from public.servicios s join public.dispositivos d on d.sede_id=s.sede_id and d.activo
     join public.areas a on a.id=d.area_id and a.activo left join public.trampas t on t.clave=d.tipo_dispositivo_codigo
     left join lateral (select jsonb_agg(jsonb_build_object('codigo',c.clave,'nombre',c.nombre)
@@ -122,11 +124,26 @@ async function liveAreas(client: PoolClient, serviceId: string): Promise<Technic
     where s.id=$1 order by d.area_id,lower(btrim(d.numero)),d.id`, [serviceId])).rows
   return areas.map(area => ({ ...area,
     criterios: criteria.filter(item => item.areaId === area.areaId).map(item => ({ id:item.id,criterioId:item.criterioId,nombre:item.nombre,soloAreaExterna:item.soloAreaExterna,evaluacion:item.evaluacion,observacion:item.observacion,evidenciasStoragePaths:item.evidenciasStoragePaths,version:item.version })),
-    dispositivos: devices.filter(item => item.areaId === area.areaId).map(item => ({ id:item.id,dispositivoId:item.dispositivoId,numero:item.numero,ubicacion:item.ubicacion,tipoCodigo:item.tipoCodigo,tipoNombre:item.tipoNombre,clasificacion:item.clasificacion,plagas:item.plagas,estadoAnterior:item.estadoAnterior,revisado:item.revisado,revision:item.revision })) }))
+    dispositivos: devices.filter(item => item.areaId === area.areaId).map(item => ({ id:item.id,dispositivoId:item.dispositivoId,numero:item.numero,ubicacion:item.ubicacion,tipoCodigo:item.tipoCodigo,tipoNombre:item.tipoNombre,clasificacion:item.clasificacion,plagas:item.plagas,estadoAnterior:item.estadoAnterior,creadoDuranteServicio:item.creadoDuranteServicio,revisado:item.revisado,revision:item.revision })) }))
+}
+
+async function deviceTypes(client: PoolClient, serviceId: string, frozen: boolean): Promise<TechnicianDeviceTypeSnapshot[]> {
+  if (frozen) {
+    return (await client.query<TechnicianDeviceTypeSnapshot>(`select tipo_dispositivo_codigo_snapshot as codigo,
+      tipo_dispositivo_nombre_snapshot as nombre,clasificacion_snapshot as clasificacion,plagas_snapshot_json as plagas
+      from public.servicio_tipos_dispositivo where servicio_id=$1
+      order by lower(btrim(tipo_dispositivo_nombre_snapshot)),tipo_dispositivo_codigo_snapshot`, [serviceId])).rows
+  }
+  return (await client.query<TechnicianDeviceTypeSnapshot>(`select t.clave as codigo,t.nombre,t.clasificacion,
+    coalesce((select jsonb_agg(jsonb_build_object('codigo',c.clave,'nombre',c.nombre)
+      order by lower(btrim(c.nombre)),c.clave) from public.configuracion c
+      where c.categoria='PLAGA' and c.activo and c.clasificacion_mip=t.clasificacion),'[]'::jsonb) as plagas
+    from public.trampas t where t.activo order by lower(btrim(t.nombre)),t.clave`)).rows
 }
 
 export async function getTechnicianPackage(client: PoolClient, userId: string, serviceId: string): Promise<TechnicianServicePackage> {
   const header = await serviceHeader(client, userId, serviceId)
   const frozen = header.service.estado === 'EN_PROCESO' || header.service.estado === 'FINALIZADO'
-  return { ...header, frozen, products: await products(client, serviceId, frozen), areas: frozen ? await frozenAreas(client, serviceId) : await liveAreas(client, serviceId) }
+  return { ...header, frozen, products: await products(client, serviceId, frozen), deviceTypes: await deviceTypes(client, serviceId, frozen),
+    areas: frozen ? await frozenAreas(client, serviceId) : await liveAreas(client, serviceId) }
 }

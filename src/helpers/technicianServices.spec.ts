@@ -65,7 +65,7 @@ describe('technician area route', () => {
 
   it('uses criteria, device reviews and the complete no-access exception', () => {
     expect(technicianAreaResolved(area('a', 0, true))).toBe(true)
-    expect(technicianAreaResolved({ ...area('a', 0, true), dispositivos: [{ id: 'd', dispositivoId: 'd', numero: '1', ubicacion: 'x', tipoCodigo: 'TRAMPA', tipoNombre: 'Trampa', clasificacion: 'RASTREROS', plagas: [], estadoAnterior: 'ACTIVO', revisado: false, revision: null }] })).toBe(false)
+    expect(technicianAreaResolved({ ...area('a', 0, true), dispositivos: [{ id: 'd', dispositivoId: 'd', numero: '1', ubicacion: 'x', tipoCodigo: 'TRAMPA', tipoNombre: 'Trampa', clasificacion: 'RASTREROS', plagas: [], estadoAnterior: 'ACTIVO', creadoDuranteServicio: false, revisado: false, revision: null }] })).toBe(false)
     expect(technicianAreaResolved({ ...area('a', 0), sinAcceso: true, sinAccesoDescripcion: 'Cerrada', sinAccesoFotoStoragePath: 'services/photo.jpg' })).toBe(true)
     expect(technicianAreaResolved({ ...area('a', 0), sinAcceso: true, sinAccesoDescripcion: 'Cerrada', sinAccesoFotoLocalId: 'local-photo' })).toBe(true)
   })

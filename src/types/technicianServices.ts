@@ -52,6 +52,8 @@ export interface TechnicianDevice {
   clasificacion: PestGroup | null
   plagas: TechnicianPestSnapshot[]
   estadoAnterior: DeviceState
+  creadoDuranteServicio: boolean
+  creacionPendiente?: boolean
   revisado: boolean
   revision: TechnicianDeviceReview | null
 }
@@ -59,6 +61,19 @@ export interface TechnicianDevice {
 export interface TechnicianPestSnapshot {
   codigo: string
   nombre: string
+}
+
+export interface TechnicianDeviceTypeSnapshot {
+  codigo: string
+  nombre: string
+  clasificacion: PestGroup
+  plagas: TechnicianPestSnapshot[]
+}
+
+export interface TechnicianDeviceCreationInput {
+  numero: string
+  tipoCodigo: string
+  ubicacion: string
 }
 
 export interface TechnicianDeviceCapture {
@@ -112,6 +127,7 @@ export interface TechnicianServicePackage {
   canStart: boolean
   startAvailableAt: string
   products: TechnicianProduct[]
+  deviceTypes: TechnicianDeviceTypeSnapshot[]
   areas: TechnicianArea[]
 }
 
@@ -218,6 +234,17 @@ export interface TechnicianDeviceReviewResult {
   review: TechnicianDeviceReview
 }
 
+export interface TechnicianDeviceCreationResult {
+  device: TechnicianDevice
+}
+
+export interface TechnicianDeviceCreationMutation extends TechnicianMutationBase, TechnicianDeviceCreationInput {
+  kind: 'DEVICE_CREATE'
+  areaId: string
+  permanentDeviceId: string
+  serviceDeviceId: string
+}
+
 export interface TechnicianDeviceReviewMutation extends TechnicianMutationBase, TechnicianDeviceReviewInput {
   kind: 'DEVICE_REVIEW'
   areaId: string
@@ -244,4 +271,4 @@ export interface TechnicianMediaDraft {
   savedAt: string
 }
 
-export type TechnicianMutation = TechnicianAreaOrderMutation | TechnicianCriterionEvaluationMutation | TechnicianAreaAccessMutation | TechnicianDeviceReviewMutation
+export type TechnicianMutation = TechnicianAreaOrderMutation | TechnicianCriterionEvaluationMutation | TechnicianAreaAccessMutation | TechnicianDeviceCreationMutation | TechnicianDeviceReviewMutation

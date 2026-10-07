@@ -1,5 +1,5 @@
 import { apiRequest } from '@/services/apiService'
-import type { MipEvaluation, TechnicianAreaAccessResult, TechnicianAreaOrderResult, TechnicianAreaOrderVersion, TechnicianCriterionEvaluationResult, TechnicianDeviceReviewInput, TechnicianDeviceReviewResult, TechnicianExecutionSession, TechnicianServicePackage, TechnicianServiceSummary } from '@/types/technicianServices'
+import type { MipEvaluation, TechnicianAreaAccessResult, TechnicianAreaOrderResult, TechnicianAreaOrderVersion, TechnicianCriterionEvaluationResult, TechnicianDeviceCreationInput, TechnicianDeviceCreationResult, TechnicianDeviceReviewInput, TechnicianDeviceReviewResult, TechnicianExecutionSession, TechnicianServicePackage, TechnicianServiceSummary } from '@/types/technicianServices'
 
 const base = 'api/technician/services'
 const json = (value: unknown): RequestInit => ({ method: 'POST', body: JSON.stringify(value) })
@@ -16,5 +16,9 @@ export const saveTechnicianCriterionEvaluation = (serviceId: string, requestId: 
   apiRequest<TechnicianCriterionEvaluationResult>(`${base}/${serviceId}/criteria/${criterionId}`, json({ requestId, deviceId, lockToken, version, evaluation, observation }))
 export const saveTechnicianAreaAccess = (serviceId: string, areaId: string, requestId: string, deviceId: string, lockToken: string, version: number, withoutAccess: boolean, description: string, photoStoragePath: string | null) =>
   apiRequest<TechnicianAreaAccessResult>(`${base}/${serviceId}/areas/${areaId}/access`, json({ requestId, deviceId, lockToken, version, withoutAccess, description, photoStoragePath }))
+export const createTechnicianDevice = (serviceId: string, areaId: string, requestId: string, deviceId: string, lockToken: string,
+  permanentDeviceId: string, serviceDeviceId: string, input: TechnicianDeviceCreationInput) =>
+  apiRequest<TechnicianDeviceCreationResult>(`${base}/${serviceId}/areas/${areaId}/devices`,
+    json({ requestId, deviceId, lockToken, permanentDeviceId, serviceDeviceId, ...input }))
 export const saveTechnicianDeviceReview = (serviceId: string, serviceDeviceId: string, requestId: string, deviceId: string, lockToken: string, reviewId: string, version: number, input: TechnicianDeviceReviewInput, photoStoragePath: string | null) =>
   apiRequest<TechnicianDeviceReviewResult>(`${base}/${serviceId}/devices/${serviceDeviceId}/review`, json({ requestId, deviceId, lockToken, reviewId, version, ...input, photoStoragePath }))

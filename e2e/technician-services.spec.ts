@@ -34,6 +34,7 @@ const servicePackage = (state: TechnicianServiceSummary['estado'] = 'PROGRAMADO'
     dosis: '1 gota/m²',
     metodoAplicacion: 'Aplicación de gel',
   }],
+  deviceTypes: [{ codigo: 'TRAMPA_ADHESIVA', nombre: 'Trampa adhesiva', clasificacion: 'RASTREROS', plagas: [{ codigo: 'CUCARACHA', nombre: 'Cucaracha' }] }],
   areas: [{
     id: ids.area,
     areaId: ids.area,
@@ -49,7 +50,7 @@ const servicePackage = (state: TechnicianServiceSummary['estado'] = 'PROGRAMADO'
     dispositivos: [{
       id: ids.device, dispositivoId: ids.device, numero: 'D-01', ubicacion: 'Bajo mesón', tipoCodigo: 'TRAMPA_ADHESIVA',
       tipoNombre: 'Trampa adhesiva', clasificacion: 'RASTREROS', plagas: [{ codigo: 'CUCARACHA', nombre: 'Cucaracha' }],
-      estadoAnterior: 'ACTIVO', revisado: false, revision: null,
+      estadoAnterior: 'ACTIVO', creadoDuranteServicio: false, revisado: false, revision: null,
     }],
   }, {
     id: ids.area2,
@@ -73,6 +74,7 @@ async function setup(page: Page) {
   const starts: Array<Record<string, unknown>> = []
   const orders: Array<Record<string, unknown>> = []
   const evaluations: Array<Record<string, unknown>> = []
+  const deviceCreations: Array<Record<string, unknown>> = []
   await page.route('**/get-session', route => route.fulfill({ json: {
     session: { id: 'session', userId: 'auth-tech', token: 'e2e-token', expiresAt: '2099-01-01T00:00:00.000Z', createdAt: '2026-10-04T00:00:00.000Z', updatedAt: '2026-10-04T00:00:00.000Z' },
     user: { id: 'auth-tech', name: 'Técnico de prueba', email: 'santyvan974@gmail.com', emailVerified: true, createdAt: '2026-10-04T00:00:00.000Z', updatedAt: '2026-10-04T00:00:00.000Z' },
@@ -112,9 +114,24 @@ async function setup(page: Page) {
       await json(route, { criterion })
       return
     }
+    if (path === `/api/technician/services/${ids.service}/areas/${ids.area}/devices`) {
+      const body = request.postDataJSON() as Record<string, string>
+      deviceCreations.push(body)
+      const type = current.deviceTypes.find(item => item.codigo === body.tipoCodigo)!
+      const device = {
+        id: body.serviceDeviceId!, dispositivoId: body.permanentDeviceId!, numero: body.numero!, ubicacion: body.ubicacion!,
+        tipoCodigo: type.codigo, tipoNombre: type.nombre, clasificacion: type.clasificacion, plagas: type.plagas,
+        estadoAnterior: 'ACTIVO' as const, creadoDuranteServicio: true, revisado: false, revision: null,
+      }
+      current = { ...current, areas: current.areas.map(item => item.id === ids.area
+        ? { ...item, dispositivos: [...item.dispositivos, device] }
+        : item) }
+      await json(route, { device })
+      return
+    }
     await json(route, { error: `Unexpected technician endpoint: ${path}` }, 404)
   })
-  return { starts, orders, evaluations, get packageReads() { return packageReads } }
+  return { starts, orders, evaluations, deviceCreations, get packageReads() { return packageReads } }
 }
 
 test('technician prepares and starts the service from a mobile-first read-only surface', async ({ page }) => {
@@ -258,6 +275,28 @@ test('a device review and its condition photo survive an offline reload', async 
   await expect(page.getByLabel('Cucaracha')).toHaveValue('4')
   await expect(page.getByText('Ya existe una fotografía guardada.')).toBeVisible()
   await expect(page.getByText('Guardado local', { exact: true })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})
+
+test('a new permanent device survives an offline reload before synchronization', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const api = await setup(page)
+  await page.goto(`/servicios/${ids.service}/trabajo`)
+  await page.getByRole('button', { name: 'Iniciar servicio' }).click()
+  await page.getByRole('button', { name: 'Abrir Área Cocina' }).click()
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false })
+    window.dispatchEvent(new Event('offline'))
+  })
+  await page.getByRole('button', { name: 'Agregar', exact: true }).click()
+  await page.getByLabel('Número').fill('D-02')
+  await page.getByLabel('Ubicación').fill('Junto a la puerta')
+  await page.getByRole('button', { name: 'Agregar dispositivo' }).click()
+  await expect(page.getByRole('button', { name: /D-02/ })).toContainText('Creación local')
+  await page.addInitScript(() => Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }))
+  await page.reload()
+  await expect(page.getByRole('button', { name: /D-02/ })).toContainText('Creación local')
+  expect(api.deviceCreations).toHaveLength(0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 })
 

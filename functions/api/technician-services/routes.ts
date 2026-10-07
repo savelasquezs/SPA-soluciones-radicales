@@ -6,7 +6,7 @@ import { isServiceId } from '../../../src/helpers/adminServices'
 import { ApiError, requireTechnician, type DomainProfile, type Identity } from '../auth'
 import { transaction } from '../db'
 import { assertAreaNoAccessStoragePath, assertDeviceReviewStoragePath, createAreaNoAccessUploadUrl, createDeviceReviewUploadUrl, deleteAreaNoAccessObject, deleteDeviceReviewObject, deviceReviewMediaObjectExists, serviceMediaObjectExists } from '../r2'
-import { authorizeTechnicianAreaChange, authorizeTechnicianDeviceChange, claimTechnicianService, saveTechnicianAreaAccess, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, startTechnicianService, technicianCommand } from './commands'
+import { authorizeTechnicianAreaChange, authorizeTechnicianDeviceChange, claimTechnicianService, createTechnicianDevice, saveTechnicianAreaAccess, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, startTechnicianService, technicianCommand } from './commands'
 import { getTechnicianPackage, listTechnicianServices } from './queries'
 
 type Environment = { Variables: { identity: Identity } }
@@ -145,6 +145,26 @@ technicianServiceRoutes.post('/:id/criteria/:criterionId', async context => {
   const input = { deviceId, criterionId, version: expected, evaluation, observation: payload.observation }
   return context.json(await read(context, (client, technician) => technicianCommand(client, technician.id, requestId, 'CRITERION_EVALUATION', serviceId, expected,
     input, () => saveTechnicianCriterionEvaluation(client, technician.id, serviceId, deviceId, lockToken, criterionId, expected, evaluation, payload.observation as string))))
+})
+
+technicianServiceRoutes.post('/:id/areas/:areaId/devices', async context => {
+  const payload = await body(context.req.raw)
+  const serviceId = id(context.req.param('id'))
+  const areaId = id(context.req.param('areaId'))
+  const requestId = id(payload.requestId)
+  const deviceId = id(payload.deviceId)
+  const lockToken = id(payload.lockToken)
+  const permanentDeviceId = id(payload.permanentDeviceId)
+  const serviceDeviceId = id(payload.serviceDeviceId)
+  const input = {
+    numero: requiredString(payload.numero, 'El número del dispositivo es obligatorio.', 100),
+    tipoCodigo: requiredString(payload.tipoCodigo, 'Selecciona un tipo de dispositivo.', 160),
+    ubicacion: requiredString(payload.ubicacion, 'La ubicación del dispositivo es obligatoria.', 500),
+  }
+  const commandPayload = { deviceId, areaId, permanentDeviceId, serviceDeviceId, ...input }
+  return context.json(await read(context, (client, technician) => technicianCommand(client, technician.id, requestId, 'DEVICE_CREATE', serviceId, null,
+    commandPayload, () => createTechnicianDevice(client, technician.id, serviceId, deviceId, lockToken, areaId,
+      permanentDeviceId, serviceDeviceId, input))))
 })
 
 technicianServiceRoutes.post('/:id/devices/:serviceDeviceId/media/upload-url', async context => {

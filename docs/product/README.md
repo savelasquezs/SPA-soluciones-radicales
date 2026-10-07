@@ -48,6 +48,7 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 | `trampas` | Catálogo administrable de tipos de Dispositivo y su clasificación de monitoreo |
 | `dispositivos` | Identidad permanente de trampas y dispositivos por Sede y Área |
 | `servicio_dispositivos` | Identidad y estado congelados de los Dispositivos al iniciar el Servicio |
+| `servicio_tipos_dispositivo` | Tipos, clasificación y Plagas disponibles congelados para altas técnicas durante el Servicio |
 | `revisiones_dispositivos` | Estado, capturas y evidencia observada durante un Servicio |
 | `hallazgos` | No conformidades, seguimiento y cierre posterior |
 | `vehiculos` | Vehículos asociados a Sedes habilitadas |

@@ -13,6 +13,7 @@ const device: TechnicianDevice = {
   clasificacion: 'RASTREROS',
   plagas: [{ codigo: 'CUCARACHA', nombre: 'Cucaracha' }],
   estadoAnterior: 'ACTIVO',
+  creadoDuranteServicio: false,
   revisado: false,
   revision: null,
 }
