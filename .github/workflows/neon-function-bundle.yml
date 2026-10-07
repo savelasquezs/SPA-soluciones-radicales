@@ -6,7 +6,7 @@ on:
       - neon.ts
       - .github/workflows/neon-function-bundle.yml
 permissions:
-  contents: read
+  contents: write
 jobs:
   bundle:
     runs-on: ubuntu-latest
@@ -34,3 +34,13 @@ jobs:
           name: neon-function-bundle
           path: neon-function.zip
           retention-days: 1
+      - name: Publish temporary deployment payload
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -C ci/neon-api-bundle
+          mkdir -p .deploy
+          base64 -w0 neon-function.zip > .deploy/neon-function.b64
+          git add .deploy/neon-function.b64
+          git commit -m 'ci: temporary Neon API deployment payload'
+          git push --force origin HEAD:refs/heads/ci/neon-api-bundle
