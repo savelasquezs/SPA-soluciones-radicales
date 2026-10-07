@@ -26,7 +26,10 @@ describe('technician finding editors', () => {
   it('keeps multiple selected evidence files and allows removing one', async () => {
     const wrapper = mount(TechnicianEvidencePicker, { props: { modelValue: [], name: 'evidence', label: 'Evidencias' } })
     const files = [new File(['one'], 'one.jpg', { type: 'image/jpeg' }), new File(['two'], 'two.png', { type: 'image/png' })]
-    const input = wrapper.get('input[type="file"]')
+    const inputs = wrapper.findAll('input[type="file"]')
+    expect(inputs[0]!.attributes('capture')).toBe('environment')
+    expect(inputs[1]!.attributes('capture')).toBeUndefined()
+    const input = inputs[1]!
     Object.defineProperty(input.element, 'files', { configurable: true, value: files })
     await input.trigger('change')
     expect(wrapper.emitted('update:modelValue')?.[0]?.[0]).toEqual(files)

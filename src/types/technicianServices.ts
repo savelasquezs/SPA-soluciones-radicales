@@ -17,6 +17,7 @@ export interface TechnicianServiceSummary {
   clienteNombre: string
   sedeNombre: string
   direccion: string
+  autoPrepareEligible: boolean
 }
 
 export interface TechnicianProduct {
@@ -40,6 +41,7 @@ export interface TechnicianCriterion {
   evaluacion: MipEvaluation | null
   observacion: string | null
   evidenciasStoragePaths: string[]
+  evidenciasLocalIds?: string[]
   version: number
 }
 
@@ -239,6 +241,7 @@ export interface TechnicianAreaOrderMutation extends TechnicianMutationBase {
 
 export interface TechnicianCriterionEvaluationResult {
   criterion: TechnicianCriterion
+  removedEvidenceStoragePaths: string[]
 }
 
 export interface TechnicianCriterionEvaluationMutation extends TechnicianMutationBase {
@@ -247,8 +250,15 @@ export interface TechnicianCriterionEvaluationMutation extends TechnicianMutatio
   criterionId: string
   evaluation: MipEvaluation
   observation: string
+  evidences: TechnicianCriterionEvidenceMutation[]
+  retainedEvidenceStoragePaths: string[]
   version: number
   conflict: TechnicianCriterion | null
+}
+
+export interface TechnicianCriterionEvidenceMutation {
+  mediaId: string
+  storagePath: string | null
 }
 
 export interface TechnicianAreaAccessState {
@@ -340,6 +350,7 @@ export interface TechnicianMediaDraft {
   actorId: string
   serviceId: string
   areaId?: string
+  criterionId?: string
   serviceDeviceId?: string
   fileName: string
   contentType: string

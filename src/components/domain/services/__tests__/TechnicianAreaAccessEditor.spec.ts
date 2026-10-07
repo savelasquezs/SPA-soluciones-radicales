@@ -22,8 +22,8 @@ const area: TechnicianArea = {
 describe('TechnicianAreaAccessEditor', () => {
   it('requires a description and a photo before saving a no-access exception', async () => {
     const wrapper = mount(TechnicianAreaAccessEditor, { props: { area, mutation: null, editable: true, syncing: false } })
-    await wrapper.get('input[type="checkbox"]').setValue(true)
-    await wrapper.get('button.base-button').trigger('click')
+    await wrapper.get('button.base-button--danger').trigger('click')
+    await wrapper.get('.access-form-actions button').trigger('click')
     expect(wrapper.text()).toContain('Describe por qué no fue posible ingresar.')
     expect(wrapper.text()).toContain('Adjunta una fotografía del Área.')
     expect(wrapper.emitted('save')).toBeUndefined()
@@ -48,7 +48,7 @@ describe('TechnicianAreaAccessEditor', () => {
       error: 'El estado cambió.',
     }
     const wrapper = mount(TechnicianAreaAccessEditor, { props: { area: { ...area, sinAcceso: true, sinAccesoDescripcion: 'Local', sinAccesoFotoStoragePath: mutation.photoStoragePath }, mutation, editable: true, syncing: false } })
-    expect(wrapper.get('input[type="checkbox"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('textarea').attributes('disabled')).toBeDefined()
     const actions = wrapper.findAll('.access-actions button')
     await actions[0]!.trigger('click')
     await actions[1]!.trigger('click')

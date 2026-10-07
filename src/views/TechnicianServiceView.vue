@@ -8,10 +8,9 @@ import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import StatusBadge from '@/components/base/StatusBadge.vue'
 import StatusPanel from '@/components/base/StatusPanel.vue'
 import ServicePage from '@/components/domain/services/ServicePage.vue'
-import TechnicianAreasPreview from '@/components/domain/services/TechnicianAreasPreview.vue'
 import TechnicianProductsList from '@/components/domain/services/TechnicianProductsList.vue'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
-import { formatTechnicianDateTime, orderedTechnicianAreas, technicianServiceStateLabel, technicianServiceStateTone } from '@/helpers/technicianServices'
+import { formatTechnicianDateTime, orderedTechnicianAreas, technicianAreaResolved, technicianServiceStateLabel, technicianServiceStateTone } from '@/helpers/technicianServices'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useTechnicianServicesStore } from '@/stores/technicianServices'
 
@@ -25,7 +24,6 @@ const viewError = ref('')
 const serviceId = computed(() => String(route.params.id ?? ''))
 const localLock = computed(() => currentCache.value?.lock ?? null)
 const orderedAreas = computed(() => orderedTechnicianAreas(packageValue.value?.areas ?? []))
-const canEditRoute = computed(() => packageValue.value?.service.estado === 'EN_PROCESO' && Boolean(localLock.value))
 const startMessage = computed(() => {
   if (!packageValue.value || packageValue.value.service.estado !== 'PROGRAMADO') return ''
   if (!online.value) return 'Conéctate a internet para iniciar.'
@@ -44,7 +42,10 @@ watch(online, async value => {
 
 async function load(): Promise<void> {
   viewError.value = ''
-  try { await services.loadPackage(serviceId.value) }
+  try {
+    await services.loadPackage(serviceId.value)
+    if (packageValue.value?.service.estado === 'EN_PROCESO' && localLock.value) await enterRoute()
+  }
   catch (failure) { viewError.value = failure instanceof Error ? failure.message : 'No fue posible cargar el servicio.' }
 }
 
@@ -53,6 +54,7 @@ async function start(): Promise<void> {
   try {
     await services.start(serviceId.value)
     notifications.show('Servicio iniciado y preparado para continuar en este celular.', 'success')
+    await enterRoute()
   } catch (failure) {
     viewError.value = failure instanceof Error ? failure.message : 'No fue posible iniciar el servicio.'
     notifications.show(viewError.value, 'error')
@@ -64,18 +66,18 @@ async function claim(): Promise<void> {
   try {
     await services.claim(serviceId.value)
     notifications.show('Servicio habilitado en este celular.', 'success')
+    await enterRoute()
   } catch (failure) {
     viewError.value = failure instanceof Error ? failure.message : 'No fue posible habilitar el servicio.'
     notifications.show(viewError.value, 'error')
   }
 }
 
-function openArea(areaId: string): void {
-  void router.push({ name: 'technician-service-area', params: { id: serviceId.value, areaId } })
-}
-
-function orderAreas(): void {
-  void router.push({ name: 'technician-service-area-order', params: { id: serviceId.value } })
+async function enterRoute(): Promise<void> {
+  const pending = orderedAreas.value.find(area => !technicianAreaResolved(area))
+  await router.replace(pending
+    ? { name: 'technician-service-area', params: { id: serviceId.value, areaId: pending.id } }
+    : { name: 'technician-service-review', params: { id: serviceId.value } })
 }
 </script>
 
@@ -103,8 +105,7 @@ function orderAreas(): void {
           <BaseButton v-if="!localLock" :loading="action === 'CLAIM'" :disabled="!online" @click="claim">Activar en este celular</BaseButton>
         </div>
       </section>
-      <TechnicianProductsList :products="packageValue.products" />
-      <TechnicianAreasPreview :areas="orderedAreas" :can-edit="canEditRoute" :pending-sync="pendingSyncCount" @open="openArea" @order="orderAreas" />
+      <details v-if="packageValue.service.estado === 'PROGRAMADO'" class="technician-summary"><summary>Productos previstos ({{ packageValue.products.length }})</summary><TechnicianProductsList :products="packageValue.products" /></details>
     </template>
   </ServicePage>
 </template>
@@ -125,5 +126,7 @@ dd { overflow-wrap:anywhere; font-size:0.9375rem; }
 .technician-service-hero__saved { display:flex; align-items:center; gap:0.5rem; border-radius:var(--radius); background:var(--success-subtle); padding:0.7rem 0.8rem; color:var(--success); font-size:0.8125rem; font-weight:600; }
 .technician-start { display:grid; gap:0.75rem; border-top:1px solid var(--border); padding-top:1rem; }
 .technician-start p { color:var(--text-secondary); font-size:0.875rem; }
+.technician-summary { border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--surface); padding:0.8rem; }
+.technician-summary summary { min-height:44px; cursor:pointer; font-weight:700; }
 @media (min-width:760px) { .technician-service-hero { padding:1.25rem; } .technician-service-hero dl { grid-template-columns:repeat(2,minmax(0,1fr)); } .technician-start { grid-template-columns:minmax(0,1fr) auto; align-items:center; } }
 </style>

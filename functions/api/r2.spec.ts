@@ -8,7 +8,7 @@ vi.mock('./auth', () => ({
   },
 }))
 
-import { assertAreaNoAccessStoragePath, assertDeviceReviewStoragePath, assertFindingEvidenceStoragePath, assertServiceSignatureStoragePath, createAreaNoAccessUploadUrl, createDeviceReviewUploadUrl, createFindingEvidenceUploadUrl, createMasterReadUrl, createMasterUploadUrl, createServiceSignatureUploadUrl } from './r2'
+import { assertAreaNoAccessStoragePath, assertCriterionEvidenceStoragePath, assertDeviceReviewStoragePath, assertFindingEvidenceStoragePath, assertServiceSignatureStoragePath, createAreaNoAccessUploadUrl, createCriterionEvidenceUploadUrl, createDeviceReviewUploadUrl, createFindingEvidenceUploadUrl, createMasterReadUrl, createMasterUploadUrl, createServiceSignatureUploadUrl } from './r2'
 
 const original = {
   accountId: process.env.R2_ACCOUNT_ID,
@@ -95,6 +95,14 @@ describe('Cloudflare R2 presigned URLs', () => {
     expect(signed.storagePath).toMatch(new RegExp(`^services/${serviceId}/devices/${serviceDeviceId}/review/[0-9a-f-]+-Dano-puesto\\.webp$`))
     expect(url.pathname).toContain(`/sr-service-media/services/${serviceId}/devices/${serviceDeviceId}/review/`)
     expect(() => assertDeviceReviewStoragePath(signed.storagePath, serviceId, '10000000-0000-4000-8000-000000000005')).toThrow('ruta de la fotografía')
+  })
+
+  it('aísla las evidencias por Servicio y criterio congelado', () => {
+    const serviceId = '10000000-0000-4000-8000-000000000001'
+    const criterionId = '10000000-0000-4000-8000-000000000009'
+    const signed = createCriterionEvidenceUploadUrl({ serviceId, criterionId, fileName: 'Orden.jpg', contentType: 'image/jpeg', size: 4_096 })
+    expect(signed.storagePath).toMatch(new RegExp(`^services/${serviceId}/criteria/${criterionId}/evidence/[0-9a-f-]+-Orden\\.jpg$`))
+    expect(() => assertCriterionEvidenceStoragePath(signed.storagePath, serviceId, '10000000-0000-4000-8000-000000000010')).toThrow('ruta de la fotografía')
   })
 
   it('aísla las evidencias de apertura y cierre por Servicio y Hallazgo', () => {

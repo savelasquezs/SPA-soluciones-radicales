@@ -7,7 +7,7 @@ import { ApiClientError } from '@/services/apiService'
 import { getTechnicianDeviceId, listTechnicianPackageCaches, loadTechnicianPackageCache, saveTechnicianPackageCache } from '@/services/technicianPackageService'
 import { deleteTechnicianMutation, listTechnicianMutations, saveTechnicianMutation } from '@/services/technicianMutationService'
 import { deleteTechnicianMedia, loadTechnicianMedia, saveTechnicianMedia } from '@/services/technicianMediaService'
-import { deleteTechnicianAreaPhoto, deleteTechnicianDevicePhoto, deleteTechnicianFindingEvidence, uploadTechnicianAreaPhoto, uploadTechnicianDevicePhoto, uploadTechnicianFindingEvidence, uploadTechnicianSignature } from '@/services/serviceMediaService'
+import { deleteTechnicianAreaPhoto, deleteTechnicianCriterionEvidence, deleteTechnicianDevicePhoto, deleteTechnicianFindingEvidence, uploadTechnicianAreaPhoto, uploadTechnicianCriterionEvidence, uploadTechnicianDevicePhoto, uploadTechnicianFindingEvidence, uploadTechnicianSignature } from '@/services/serviceMediaService'
 import type { MipEvaluation, TechnicianAreaAccessMutation, TechnicianAreaAccessState, TechnicianAreaOrderConflict, TechnicianAreaOrderMutation, TechnicianAreaOrderResult, TechnicianCriterion, TechnicianCriterionEvaluationMutation, TechnicianDevice, TechnicianDeviceCreationInput, TechnicianDeviceCreationMutation, TechnicianDeviceReview, TechnicianDeviceReviewInput, TechnicianDeviceReviewMutation, TechnicianExecutionSession, TechnicianFinding, TechnicianFindingCreateInput, TechnicianFindingCreateMutation, TechnicianFindingStatusInput, TechnicianFindingStatusMutation, TechnicianMutation, TechnicianPackageCache, TechnicianPendingOperation, TechnicianServiceFinalizeMutation, TechnicianServicePackage, TechnicianServiceSummary } from '@/types/technicianServices'
 
 function onlineNow(): boolean {
@@ -342,6 +342,23 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     return current
   }
 
+  async function uploadCriterionMutationEvidences(operation: TechnicianCriterionEvaluationMutation): Promise<TechnicianCriterionEvaluationMutation> {
+    let current = operation
+    for (const evidence of current.evidences) {
+      if (evidence.storagePath) continue
+      const media = await loadTechnicianMedia(current.actorId, evidence.mediaId)
+      if (!media) throw new Error('Una evidencia local del criterio no está disponible.')
+      const storagePath = await uploadTechnicianCriterionEvidence(current.serviceId, current.criterionId,
+        current.deviceId, current.lockToken, media.file)
+      current = { ...current,
+        evidences: current.evidences.map(item => item.mediaId === evidence.mediaId ? { ...item, storagePath } : item),
+        updatedAt: new Date().toISOString() }
+      await saveTechnicianMutation(current)
+      await reloadMutations(current.serviceId)
+    }
+    return current
+  }
+
   async function syncPending(serviceId: string): Promise<'synced' | 'pending' | 'conflict'> {
     if (!onlineNow()) return 'pending'
     if (syncing.value) return currentMutations.value.some(item => item.status === 'CONFLICT') ? 'conflict' : 'pending'
@@ -371,10 +388,16 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
             const latest = [...remaining].reverse().find((item): item is TechnicianAreaOrderMutation => item.kind === 'AREA_ORDER' && item.status !== 'CONFLICT')
             await persistAreaOrder(serviceId, latest?.areaIds ?? result.areas.map(area => area.id), result)
           } else if (sending.kind === 'CRITERION_EVALUATION') {
-            const criterionId = sending.criterionId
-            const result = await saveTechnicianCriterionEvaluation(serviceId, sending.requestId, sending.deviceId, sending.lockToken,
-              criterionId, sending.version, sending.evaluation, sending.observation)
-            await deleteTechnicianMutation(sending)
+            const criterionOperation = await uploadCriterionMutationEvidences(sending)
+            sending = criterionOperation
+            const criterionId = criterionOperation.criterionId
+            const evidenceStoragePaths = [...criterionOperation.retainedEvidenceStoragePaths,
+              ...criterionOperation.evidences.flatMap(evidence => evidence.storagePath ? [evidence.storagePath] : [])]
+            const result = await saveTechnicianCriterionEvaluation(serviceId, criterionOperation.requestId, criterionOperation.deviceId,
+              criterionOperation.lockToken, criterionId, criterionOperation.version, criterionOperation.evaluation,
+              criterionOperation.observation, evidenceStoragePaths)
+            await deleteTechnicianMutation(criterionOperation)
+            for (const evidence of criterionOperation.evidences) await deleteTechnicianMedia(criterionOperation.actorId, evidence.mediaId)
             const remaining = await listTechnicianMutations(actorId(), serviceId)
             const sameCriterion = remaining.filter((item): item is TechnicianCriterionEvaluationMutation => item.kind === 'CRITERION_EVALUATION'
               && item.criterionId === criterionId && item.status !== 'CONFLICT')
@@ -383,9 +406,11 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
             }
             const latest = sameCriterion[sameCriterion.length - 1]
             const criterion = latest
-              ? { ...result.criterion, evaluacion: latest.evaluation, observacion: latest.observation || null }
+              ? { ...result.criterion, evaluacion: latest.evaluation, observacion: latest.observation || null,
+                  evidenciasStoragePaths: latest.retainedEvidenceStoragePaths,
+                  evidenciasLocalIds: latest.evidences.map(evidence => evidence.mediaId) }
               : result.criterion
-            await persistCriterionEvaluation(serviceId, sending.areaId, criterion)
+            await persistCriterionEvaluation(serviceId, criterionOperation.areaId, criterion)
           } else if (sending.kind === 'AREA_ACCESS') {
             const areaId = sending.areaId
             let photoStoragePath = sending.photoStoragePath
@@ -523,6 +548,15 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
             await reloadMutations(serviceId)
             return 'pending'
           }
+          if (sending.kind === 'CRITERION_EVALUATION' && failure instanceof ApiClientError && failure.code === 'PHOTO_NOT_FOUND') {
+            const missingPath = typeof failure.details?.storagePath === 'string' ? failure.details.storagePath : null
+            await saveTechnicianMutation({ ...sending,
+              evidences: sending.evidences.map(evidence => !missingPath || evidence.storagePath === missingPath
+                ? { ...evidence, storagePath: null }
+                : evidence), status: 'PENDING', error: failure.message, updatedAt: new Date().toISOString() })
+            await reloadMutations(serviceId)
+            return 'pending'
+          }
           if ((sending.kind === 'FINDING_CREATE' || sending.kind === 'FINDING_STATUS') && failure instanceof ApiClientError
             && failure.code === 'PHOTO_NOT_FOUND') {
             const missingPath = typeof failure.details?.storagePath === 'string' ? failure.details.storagePath : null
@@ -640,7 +674,8 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
       && item.criterionId === criterionId && item.status === 'CONFLICT') ?? null
   }
 
-  async function applyCriterionEvaluation(serviceId: string, areaId: string, criterionId: string, evaluation: MipEvaluation, observation: string): Promise<'synced' | 'pending' | 'conflict'> {
+  async function applyCriterionEvaluation(serviceId: string, areaId: string, criterionId: string, evaluation: MipEvaluation, observation: string,
+    files: File[] = [], retainedEvidenceStoragePaths?: string[]): Promise<'synced' | 'pending' | 'conflict'> {
     const cache = caches.value[serviceId]
     if (!cache || cache.package.service.estado !== 'EN_PROCESO' || !cache.lock) throw new Error('Este celular no puede evaluar el servicio.')
     const area = cache.package.areas.find(item => item.id === areaId)
@@ -649,13 +684,22 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     if (area.sinAcceso) throw new Error('Habilita la evaluación del Área antes de cambiar sus criterios.')
     const normalizedObservation = observation.trim()
     if (normalizedObservation.length > 2_000) throw new Error('La observación no puede superar 2000 caracteres.')
+    const retained = [...(retainedEvidenceStoragePaths ?? criterion.evidenciasStoragePaths)]
+    if (retained.length + files.length > 5 || new Set(retained).size !== retained.length) throw new Error('Puedes guardar hasta cinco fotografías por criterio.')
     const existing = await reloadMutations(serviceId)
     if (existing.some(item => item.kind === 'CRITERION_EVALUATION' && item.criterionId === criterionId && item.status === 'CONFLICT')) return 'conflict'
     const reusable = [...existing].reverse().find((item): item is TechnicianCriterionEvaluationMutation => item.kind === 'CRITERION_EVALUATION'
       && item.criterionId === criterionId && item.status === 'PENDING')
+    if ((reusable?.evidences.length ?? 0) + retained.length + files.length > 5) throw new Error('Puedes guardar hasta cinco fotografías por criterio.')
+    const newEvidences = files.map(file => ({ mediaId: crypto.randomUUID(), storagePath: null, file }))
+    for (const evidence of newEvidences) {
+      await saveTechnicianMedia({ schemaVersion: 1, id: evidence.mediaId, actorId: actorId(), serviceId, areaId, criterionId,
+        file: evidence.file, savedAt: new Date().toISOString() })
+    }
     const now = new Date().toISOString()
     const operation: TechnicianCriterionEvaluationMutation = reusable
-      ? { ...reusable, evaluation, observation: normalizedObservation, updatedAt: now }
+      ? { ...reusable, evaluation, observation: normalizedObservation, retainedEvidenceStoragePaths: retained,
+          evidences: [...reusable.evidences, ...newEvidences.map(({ mediaId, storagePath }) => ({ mediaId, storagePath }))], updatedAt: now }
       : {
           schemaVersion: 1,
           requestId: crypto.randomUUID(),
@@ -668,6 +712,8 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
           criterionId,
           evaluation,
           observation: normalizedObservation,
+          evidences: newEvidences.map(({ mediaId, storagePath }) => ({ mediaId, storagePath })),
+          retainedEvidenceStoragePaths: retained,
           version: criterion.version,
           status: 'PENDING',
           createdAt: now,
@@ -675,9 +721,14 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
           conflict: null,
           error: null,
         }
-    await saveTechnicianMutation(operation)
+    try { await saveTechnicianMutation(operation) }
+    catch (failure) {
+      for (const evidence of newEvidences) await deleteTechnicianMedia(actorId(), evidence.mediaId)
+      throw failure
+    }
     await reloadMutations(serviceId)
-    await persistCriterionEvaluation(serviceId, areaId, { ...criterion, evaluacion: evaluation, observacion: normalizedObservation || null })
+    await persistCriterionEvaluation(serviceId, areaId, { ...criterion, evaluacion: evaluation, observacion: normalizedObservation || null,
+      evidenciasStoragePaths: retained, evidenciasLocalIds: operation.evidences.map(evidence => evidence.mediaId) })
     return onlineNow() ? syncPending(serviceId) : 'pending'
   }
 
@@ -686,7 +737,15 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     const conflicted = pending.find((item): item is TechnicianCriterionEvaluationMutation => item.kind === 'CRITERION_EVALUATION'
       && item.criterionId === criterionId && item.status === 'CONFLICT' && Boolean(item.conflict))
     if (!conflicted?.conflict) throw new Error('No hay una respuesta sincronizada disponible.')
-    for (const operation of pending.filter(item => item.kind === 'CRITERION_EVALUATION' && item.criterionId === criterionId)) await deleteTechnicianMutation(operation)
+    for (const operation of pending.filter((item): item is TechnicianCriterionEvaluationMutation => item.kind === 'CRITERION_EVALUATION' && item.criterionId === criterionId)) {
+      for (const evidence of operation.evidences) {
+        if (evidence.storagePath && !conflicted.conflict.evidenciasStoragePaths.includes(evidence.storagePath)) {
+          await deleteTechnicianCriterionEvidence(serviceId, criterionId, operation.deviceId, operation.lockToken, evidence.storagePath)
+        }
+        await deleteTechnicianMedia(operation.actorId, evidence.mediaId)
+      }
+      await deleteTechnicianMutation(operation)
+    }
     await reloadMutations(serviceId)
     await persistCriterionEvaluation(serviceId, conflicted.areaId, conflicted.conflict)
   }
@@ -702,6 +761,7 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     for (const operation of pending.filter(item => item.kind === 'CRITERION_EVALUATION' && item.criterionId === criterionId)) await deleteTechnicianMutation(operation)
     const now = new Date().toISOString()
     await saveTechnicianMutation({ ...conflicted, requestId: crypto.randomUUID(), evaluation: local.evaluacion, observation: local.observacion ?? '',
+      retainedEvidenceStoragePaths: local.evidenciasStoragePaths,
       version: conflicted.conflict.version, status: 'PENDING', conflict: null, error: null, createdAt: now, updatedAt: now })
     await reloadMutations(serviceId)
     return syncPending(serviceId)

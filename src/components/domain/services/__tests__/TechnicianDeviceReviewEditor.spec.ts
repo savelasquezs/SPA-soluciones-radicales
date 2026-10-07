@@ -24,14 +24,14 @@ describe('TechnicianDeviceReviewEditor', () => {
     await wrapper.get('.device-summary').trigger('click')
     await wrapper.get('select').setValue('DANADO')
     await wrapper.get('input[type="number"]').setValue('3')
-    await wrapper.get('button.base-button').trigger('click')
+    await wrapper.findAll('button').find(button => button.text() === 'Guardar revisión')!.trigger('click')
     expect(wrapper.text()).toContain('Adjunta una fotografía del cambio de estado.')
     expect(wrapper.emitted('save')).toBeUndefined()
 
     const photo = new File(['photo'], 'dano.jpg', { type: 'image/jpeg' })
     Object.defineProperty(wrapper.get('input[type="file"]').element, 'files', { configurable: true, value: [photo] })
     await wrapper.get('input[type="file"]').trigger('change')
-    await wrapper.get('button.base-button').trigger('click')
+    await wrapper.findAll('button').find(button => button.text() === 'Guardar revisión')!.trigger('click')
     expect(wrapper.emitted('save')?.[0]).toEqual([expect.objectContaining({
       estadoObservado: 'DANADO',
       capturas: [{ plagaCodigo: 'CUCARACHA', cantidad: 3 }],
@@ -44,7 +44,7 @@ describe('TechnicianDeviceReviewEditor', () => {
     } })
     await wrapper.get('.device-summary').trigger('click')
     expect(wrapper.find('input[type="file"]').exists()).toBe(false)
-    await wrapper.get('button.base-button').trigger('click')
+    await wrapper.findAll('button').find(button => button.text() === 'Guardar revisión')!.trigger('click')
     expect(wrapper.emitted('save')?.[0]?.[0]).toMatchObject({ estadoObservado: 'DANADO' })
   })
 })

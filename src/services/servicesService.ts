@@ -12,8 +12,8 @@ export const claimTechnicianService = (serviceId: string, requestId: string, dev
   apiRequest<TechnicianExecutionSession>(`${base}/${serviceId}/claim`, json({ requestId, deviceId }))
 export const saveTechnicianAreaOrder = (serviceId: string, requestId: string, deviceId: string, lockToken: string, areaIds: string[], versions: TechnicianAreaOrderVersion[]) =>
   apiRequest<TechnicianAreaOrderResult>(`${base}/${serviceId}/areas/order`, json({ requestId, deviceId, lockToken, areaIds, versions }))
-export const saveTechnicianCriterionEvaluation = (serviceId: string, requestId: string, deviceId: string, lockToken: string, criterionId: string, version: number, evaluation: MipEvaluation, observation: string) =>
-  apiRequest<TechnicianCriterionEvaluationResult>(`${base}/${serviceId}/criteria/${criterionId}`, json({ requestId, deviceId, lockToken, version, evaluation, observation }))
+export const saveTechnicianCriterionEvaluation = (serviceId: string, requestId: string, deviceId: string, lockToken: string, criterionId: string, version: number, evaluation: MipEvaluation, observation: string, evidenceStoragePaths: string[]) =>
+  apiRequest<TechnicianCriterionEvaluationResult>(`${base}/${serviceId}/criteria/${criterionId}`, json({ requestId, deviceId, lockToken, version, evaluation, observation, evidenceStoragePaths }))
 export const saveTechnicianAreaAccess = (serviceId: string, areaId: string, requestId: string, deviceId: string, lockToken: string, version: number, withoutAccess: boolean, description: string, photoStoragePath: string | null) =>
   apiRequest<TechnicianAreaAccessResult>(`${base}/${serviceId}/areas/${areaId}/access`, json({ requestId, deviceId, lockToken, version, withoutAccess, description, photoStoragePath }))
 export const createTechnicianDevice = (serviceId: string, areaId: string, requestId: string, deviceId: string, lockToken: string,

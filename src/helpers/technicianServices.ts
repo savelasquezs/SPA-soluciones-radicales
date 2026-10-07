@@ -1,4 +1,4 @@
-import type { DeviceState, TechnicianArea, TechnicianServiceSummary } from '../types/technicianServices'
+import type { DeviceState, TechnicianArea, TechnicianPackageCache, TechnicianServiceSummary } from '../types/technicianServices'
 
 export function technicianServiceStateLabel(state: TechnicianServiceSummary['estado']): string {
   return ({ PROGRAMADO: 'Programado', EN_PROCESO: 'En proceso', FINALIZADO: 'Finalizado', CANCELADO: 'Cancelado' } as const)[state] ?? state
@@ -25,6 +25,15 @@ export function sortTechnicianServices(records: TechnicianServiceSummary[]): Tec
     const direction = left.estado === 'FINALIZADO' ? -1 : 1
     return direction * (new Date(left.inicioProgramado).getTime() - new Date(right.inicioProgramado).getTime())
   })
+}
+
+export function technicianServicesToAutoPrepare(
+  records: TechnicianServiceSummary[],
+  caches: Record<string, TechnicianPackageCache>,
+  preparingIds: string[],
+): TechnicianServiceSummary[] {
+  const preparing = new Set(preparingIds)
+  return records.filter(record => record.autoPrepareEligible && !caches[record.id] && !preparing.has(record.id))
 }
 
 export function orderedTechnicianAreas(areas: TechnicianArea[]): TechnicianArea[] {
