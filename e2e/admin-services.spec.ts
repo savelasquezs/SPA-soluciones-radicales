@@ -1,6 +1,7 @@
 import { test, expect, type Page, type Route } from '@playwright/test'
 import type { AdminService, ServiceInput, ServiceLink, ServiceMutation, ServiceSchedule, ServiceTechnician, ServiceWorkspace, UpcomingService } from '../src/types/adminServices'
 import { addDateDays, addInstantDays, fromBogotaInput, scheduleEnd, suggestReinforcement, todayBogota, toBogotaInput } from '../src/helpers/adminServices'
+import { serviceDateShortcutRange } from '../src/helpers/serviceDateRanges'
 
 const uid=(n: number)=>`10000000-0000-4000-8000-${String(n).padStart(12,'0')}`
 const ids={ admin:uid(1),tech:uid(2),other:uid(3),third:uid(4),site:uid(5),client:uid(6),product:uid(7),principal:uid(8),refuerzo:uid(9),upcoming:uid(10) }
@@ -286,6 +287,20 @@ test('lost creation response is recovered from the scoped draft without creating
   await expect(page).toHaveURL(/\/servicios\/[0-9a-f-]{36}$/)
   expect(api.records).toHaveLength(4)
   expect(api.calls.filter(call=>call.method==='POST' && call.path==='/api/admin/services')).toHaveLength(1)
+})
+
+test('quick date ranges update the URL and expose the active selection',async({ page })=>{
+  await setup(page);await page.goto('/servicios')
+  const today=todayBogota()
+  const cases=[
+    ['Ayer','yesterday'],['Hoy','today'],['Mañana','tomorrow'],['Esta semana','week'],['Este mes','month'],
+  ] as const
+  for(const [label,id] of cases) {
+    await page.getByRole('button',{ name:label,exact:true }).click()
+    const expected=serviceDateShortcutRange(id,today)
+    await expect(page).toHaveURL(url=>url.pathname==='/servicios' && url.searchParams.get('from')===expected.from && url.searchParams.get('to')===expected.to)
+    await expect(page.getByRole('button',{ name:label,exact:true })).toHaveAttribute('aria-pressed','true')
+  }
 })
 
 test('weekly calendar expands its time grid and reveals operational detail on hover',async({ page })=>{
