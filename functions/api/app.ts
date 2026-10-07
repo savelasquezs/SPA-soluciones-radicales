@@ -1294,9 +1294,6 @@ function stringArray(value: unknown): string[] {
   return value.map((entry) => entry.trim()).filter(Boolean)
 }
 
-function uniqueStrings(value: unknown): string[] {
-  return [...new Set(stringArray(value))]
-}
 
 function emailArray(value: unknown): string[] {
   const emails = [...new Set(stringArray(value).map((email) => email.toLowerCase()))]
