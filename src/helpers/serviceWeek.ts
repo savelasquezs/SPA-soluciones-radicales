@@ -15,7 +15,9 @@ export interface ServiceWeekEventLayout {
 
 function minuteOfDay(value: string): number {
   const local=toBogotaInput(value)
-  const [hour,minute]=local.slice(11,16).split(':').map(Number)
+  const parts=local.slice(11,16).split(':')
+  const hour=Number(parts[0] ?? 0)
+  const minute=Number(parts[1] ?? 0)
   return hour*60+minute
 }
 function localDate(value: string): string { return toBogotaInput(value).slice(0,10) }
