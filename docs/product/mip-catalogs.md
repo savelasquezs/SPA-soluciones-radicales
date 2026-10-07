@@ -57,7 +57,7 @@ Los criterios iniciales derivados de FO-PS-02 son:
 
 Desactivar o renombrar un criterio solo afecta Servicios que todavía no hayan iniciado. Al iniciar un Servicio se conserva un snapshot suficiente de los criterios aplicables para que el histórico y los informes no cambien al modificar posteriormente el catálogo.
 
-La implementación de este catálogo requiere una migración nueva; no se reutiliza el antiguo motor de `formularios` como almacenamiento de criterios.
+El futuro catálogo de Criterios requerirá su propia migración; no reutiliza el motor de formularios eliminado por la migración 011.
 
 ## Persistencia e historial
 
@@ -85,7 +85,7 @@ Antes de activar este ajuste en Neon, confirmar la rama autorizada y aplicar `20
 
 ## Fuera de esta entrega
 
-La edición documental de Criterios no modifica todavía esquema, API ni interfaz. Quedan para la implementación del primer Servicio: catálogo persistente de criterios, snapshots de evaluación por Área, puestos permanentes por Sede/Área, composición con trampas/productos, revisiones y operación técnica. La futura revisión conserva las plagas y criterios aplicables al iniciar el Servicio; no se reinterpretan contra catálogos vivos.
+Quedan para la implementación del primer Servicio: catálogo persistente de criterios, snapshots de evaluación por Área, puestos permanentes por Sede/Área, composición con trampas/productos, revisiones y operación técnica. La futura revisión conserva las plagas y criterios aplicables al iniciar el Servicio; no se reinterpretan contra catálogos vivos.
 
 ## Referencia visual y pruebas
 
