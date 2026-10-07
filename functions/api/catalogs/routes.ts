@@ -1,10 +1,10 @@
 import { Hono } from 'hono'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
 
-import { isCatalogId, validateCatalogItem, validateProductInput } from '../../../src/helpers/mipCatalogs'
+import { isCatalogId, validateCatalogItem, validateCriterionInput, validateProductInput } from '../../../src/helpers/mipCatalogs'
 import { ApiError, requireAdmin, type Identity } from '../auth'
 import { transaction } from '../db'
-import { auditCatalog, catalogKind, getCatalogRecord, listCatalog, removeCatalogRecord, saveItem, saveProduct, setCatalogActive } from './repository'
+import { auditCatalog, catalogKind, getCatalogRecord, listCatalog, removeCatalogRecord, saveCriterion, saveItem, saveProduct, setCatalogActive } from './repository'
 
 export const mipCatalogRoutes = new Hono<{ Variables: { identity: Identity } }>()
 
@@ -56,11 +56,17 @@ mipCatalogRoutes.post('/:kind', async context => {
   const kind = catalogKind(context.req.param('kind')), input = await body(context.req.raw)
   const result = await transaction(async client => {
     const admin = await requireAdmin(client, context.get('identity'))
-    const parsed = kind === 'products' ? validateProductInput(input) : validateCatalogItem(kind, input)
+    const parsed = kind === 'products'
+      ? validateProductInput(input)
+      : kind === 'criteria'
+        ? validateCriterionInput(input)
+        : validateCatalogItem(kind, input)
     if (Object.keys(parsed.errors).length) throw new ApiError(422, 'Revisa los campos marcados.', 'VALIDATION', { fields: parsed.errors })
     const record = kind === 'products'
       ? await saveProduct(client, validateProductInput(input).value)
-      : await saveItem(client, kind, validateCatalogItem(kind, input).value)
+      : kind === 'criteria'
+        ? await saveCriterion(client, validateCriterionInput(input).value)
+        : await saveItem(client, kind, validateCatalogItem(kind, input).value)
     await auditCatalog(client, admin.id, kind, 'CREADO', record)
     return record
   })
@@ -69,14 +75,20 @@ mipCatalogRoutes.post('/:kind', async context => {
 
 mipCatalogRoutes.patch('/:kind/:id', async context => {
   const kind = catalogKind(context.req.param('kind')), recordId = id(context.req.param('id')), input = await body(context.req.raw)
-  const expected = version(input.version)
+  const expected = kind === 'criteria' ? undefined : version(input.version)
   const result = await transaction(async client => {
     const admin = await requireAdmin(client, context.get('identity'))
-    const parsed = kind === 'products' ? validateProductInput(input) : validateCatalogItem(kind, input)
+    const parsed = kind === 'products'
+      ? validateProductInput(input)
+      : kind === 'criteria'
+        ? validateCriterionInput(input)
+        : validateCatalogItem(kind, input)
     if (Object.keys(parsed.errors).length) throw new ApiError(422, 'Revisa los campos marcados.', 'VALIDATION', { fields: parsed.errors })
     const record = kind === 'products'
       ? await saveProduct(client, validateProductInput(input).value, recordId, expected)
-      : await saveItem(client, kind, validateCatalogItem(kind, input).value, recordId, expected)
+      : kind === 'criteria'
+        ? await saveCriterion(client, validateCriterionInput(input).value, recordId)
+        : await saveItem(client, kind, validateCatalogItem(kind, input).value, recordId, expected)
     await auditCatalog(client, admin.id, kind, 'ACTUALIZADO', record)
     return record
   })
@@ -85,7 +97,7 @@ mipCatalogRoutes.patch('/:kind/:id', async context => {
 
 mipCatalogRoutes.patch('/:kind/:id/state', async context => {
   const kind = catalogKind(context.req.param('kind')), recordId = id(context.req.param('id')), input = await body(context.req.raw)
-  const expected = version(input.version)
+  const expected = kind === 'criteria' ? undefined : version(input.version)
   if (typeof input.activo !== 'boolean') throw new ApiError(422, 'El estado no es válido')
   const active = input.activo
   const result = await transaction(async client => {
@@ -99,7 +111,7 @@ mipCatalogRoutes.patch('/:kind/:id/state', async context => {
 
 mipCatalogRoutes.delete('/:kind/:id', async context => {
   const kind = catalogKind(context.req.param('kind')), recordId = id(context.req.param('id')), input = await body(context.req.raw)
-  const expected = version(input.version)
+  const expected = kind === 'criteria' ? undefined : version(input.version)
   await transaction(async client => {
     const admin = await requireAdmin(client, context.get('identity'))
     const record = await removeCatalogRecord(client, kind, recordId, expected)

@@ -6,6 +6,7 @@ import {
   normalizeCatalogSearch,
   productToInput,
   validateCatalogItem,
+  validateCriterionInput,
   validateProductInput,
 } from '../mipCatalogs'
 import type { MipCatalogItem, MipProduct } from '../../types/mipCatalogs'
@@ -82,6 +83,17 @@ describe('contratos de catálogos MIP', () => {
     expect(validateCatalogItem('methods', { nombre: 'Punteo' }).value).toMatchObject({
       clasificacion: null,
       categoriaProducto: null,
+    })
+  })
+
+  it('valida criterios con nombre y alcance booleano sin clave, orden ni versión', () => {
+    expect(validateCriterionInput({ nombre: 'Mantenimiento higiénico', soloAreaExterna: false })).toEqual({
+      value: { nombre: 'Mantenimiento higiénico', soloAreaExterna: false },
+      errors: {},
+    })
+    expect(validateCriterionInput({ nombre: '', soloAreaExterna: 'no' }).errors).toMatchObject({
+      nombre: expect.any(String),
+      soloAreaExterna: expect.any(String),
     })
   })
 

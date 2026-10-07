@@ -37,13 +37,14 @@ Los Servicios de Refuerzo y los Servicios residenciales conservan sus reglas sim
 
 Los criterios son un catálogo administrable independiente.
 
-Cada criterio requiere conceptualmente:
+Cada criterio conserva:
 
-- identidad estable;
+- identidad UUID;
 - nombre visible;
-- orden;
 - estado activo/inactivo;
 - indicador de si aplica únicamente a Áreas externas/perimetrales.
+
+El catálogo no administra clave, orden ni versión. Los Criterios se presentan alfabéticamente.
 
 Los criterios generales aplican a todas las Áreas activas. Un Área con `es_externa = true` recibe además los criterios exclusivos de exterior.
 
@@ -72,13 +73,12 @@ Para cada criterio evaluado debe conservarse suficiente información para recons
 
 - referencia al criterio original cuando continúe existiendo;
 - nombre del criterio observado al iniciar;
-- orden observado;
 - condición de aplicabilidad relevante;
 - evaluación `C/CP/NC/NA`;
 - observación cuando exista;
 - referencias a evidencia cuando correspondan.
 
-Renombrar, reordenar, desactivar o crear criterios después de iniciado un Servicio no modifica ese Servicio ni sus informes.
+Renombrar, desactivar o crear criterios después de iniciado un Servicio no modifica ese Servicio ni sus informes.
 
 La representación física puede resolverse con filas o JSONB durante la implementación. La regla funcional es que el histórico sea autosuficiente y no requiera reconstruir una versión de formulario.
 

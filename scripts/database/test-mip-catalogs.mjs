@@ -10,10 +10,17 @@ try {
   assert.ok((await pool.query("select to_regclass('public.trampas') as name")).rows[0].name, 'Migration 009 must already be applied in CI')
   assert.equal((await pool.query("select count(*)::integer as n from information_schema.columns where table_schema='public' and table_name='configuracion' and column_name='categoria_producto'")).rows[0].n, 1, 'Migration 010 must already be applied in CI')
   const bootstrap = await readFile('database/bootstrap/002_mip_catalogs.sql', 'utf8')
+  const criteriaBootstrap = await readFile('database/bootstrap/003_mip_criteria.sql', 'utf8')
   await pool.query(bootstrap)
+  await pool.query(criteriaBootstrap)
   const count = (await pool.query("select count(*)::integer as n from public.configuracion where categoria in ('PLAGA','METODO_APLICACION')")).rows[0].n
+  const criteriaCount = (await pool.query('select count(*)::integer as n from public.criterios_mip')).rows[0].n
+  assert.equal(criteriaCount, 5, 'Bootstrap must load the five approved MIP criteria')
+  assert.equal((await pool.query("select solo_area_externa from public.criterios_mip where nombre = 'Mantenimiento de zonas verdes'")).rows[0].solo_area_externa, true)
   await pool.query(bootstrap)
+  await pool.query(criteriaBootstrap)
   assert.equal((await pool.query("select count(*)::integer as n from public.configuracion where categoria in ('PLAGA','METODO_APLICACION')")).rows[0].n, count)
+  assert.equal((await pool.query('select count(*)::integer as n from public.criterios_mip')).rows[0].n, criteriaCount)
   const { rows: [method] } = await pool.query("select id from public.configuracion where categoria = 'METODO_APLICACION' and clave = 'ASPERSION'")
   const { rows: [pest] } = await pool.query("select id, categoria_producto from public.configuracion where categoria = 'PLAGA' and clave = 'CUCARACHA'")
   const { rows: [rodent] } = await pool.query("select id, clasificacion_mip, categoria_producto from public.configuracion where categoria = 'PLAGA' and clave = 'ROEDOR'")
@@ -42,6 +49,12 @@ try {
   await assert.rejects(pool.query("insert into public.configuracion(categoria,clave,nombre) values ('PLAGA','CI_BAD','Bad')"), { code: '23514' })
   await assert.rejects(pool.query("insert into public.configuracion(categoria,clave,nombre,clasificacion_mip,categoria_producto) values ('PLAGA','CI_BAD_COMBO','Bad combo','VOLADORES','ROEDORES')"), { code: '23514' })
   await assert.rejects(pool.query("insert into public.producto_categorias_plaga(producto_id,categoria_producto) values ($1,'RASTREROS')", [product.id]), { code: '23514' })
+  const { rows: [criterion] } = await pool.query("insert into public.criterios_mip(nombre, solo_area_externa) values ('CI criterio', false) returning id, nombre, solo_area_externa, activo")
+  assert.equal(criterion.solo_area_externa, false)
+  await pool.query("update public.criterios_mip set nombre = 'CI criterio actualizado', solo_area_externa = true where id = $1", [criterion.id])
+  const updatedCriterion = (await pool.query('select nombre, solo_area_externa from public.criterios_mip where id = $1', [criterion.id])).rows[0]
+  assert.deepEqual([updatedCriterion.nombre, updatedCriterion.solo_area_externa], ['CI criterio actualizado', true])
+  await assert.rejects(pool.query("insert into public.criterios_mip(nombre) values ('  ci CRITERIO actualizado  ')"), { code: '23505' })
   const writes = await Promise.all([1, 2].map(i => pool.query('update public.productos set nombre = $2 where id = $1 and version = 1 returning version::integer', [product.id, `CI synthetic product ${i}`])))
   assert.equal(writes.reduce((sum, result) => sum + result.rowCount, 0), 1, 'Only one writer may save the same observed version')
   assert.equal((await pool.query('select version::integer from public.productos where id=$1', [product.id])).rows[0].version, 2)
@@ -49,11 +62,13 @@ try {
   try {
     await actor.query('set role anonymous')
     await assert.rejects(actor.query('select * from public.trampas'), { code: '42501' })
+    await assert.rejects(actor.query('select * from public.criterios_mip'), { code: '42501' })
     await actor.query('reset role')
     await actor.query('set role authenticated')
     assert.equal((await actor.query('select * from public.trampas')).rowCount, 0, 'No active admin session means no catalog access')
+    assert.equal((await actor.query('select * from public.criterios_mip')).rowCount, 0, 'No active admin session means no criteria access')
     await assert.rejects(actor.query("insert into public.trampas(clave,nombre,clasificacion) values ('BAD_AUTH','Unauthorized','RASTREROS')"), { code: '42501' })
     await actor.query('reset role')
   } finally { actor.release() }
-  console.log('MIP SQL passed: product-vs-monitoring categories, bootstrap idempotency, typed relations, future category coverage, history protection, optimistic concurrency, RLS and anonymous denial')
+  console.log('MIP SQL passed: catalogs, five seeded criteria, criterion scope/uniqueness, bootstrap idempotency, typed relations, history protection, RLS and anonymous denial')
 } finally { await pool.end() }

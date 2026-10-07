@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { reactive } from 'vue'
-import type { MipCatalogItem, MipOptions } from '@/types/mipCatalogs'
+import type { MipCatalogItem, MipCriterion, MipOptions } from '@/types/mipCatalogs'
 import type * as Service from '@/services/mipCatalogsService'
 
 const api = vi.hoisted(() => ({
@@ -17,6 +17,7 @@ import { useMipCatalogsStore } from '../mipCatalogs'
 const trap: MipCatalogItem = { id: '10000000-0000-4000-8000-000000000001', clave: 'TRAMPA', nombre: 'Trampa adhesiva', clasificacion: 'RASTREROS', categoriaProducto: null, activo: true, version: 1 }
 const lamp: MipCatalogItem = { ...trap, id: '10000000-0000-4000-8000-000000000002', clave: 'UV', nombre: 'Lámpara UV', clasificacion: 'VOLADORES' }
 const method: MipCatalogItem = { ...trap, id: '20000000-0000-4000-8000-000000000001', clave: 'ASPERSION', nombre: 'Aspersión', clasificacion: null, categoriaProducto: null }
+const criterion: MipCriterion = { id: '30000000-0000-4000-8000-000000000001', nombre: 'Mantenimiento higiénico', soloAreaExterna: false, activo: true }
 function deferred<T>() {
   let resolve!: (value: T) => void
   const promise = new Promise<T>(finish => { resolve = finish })
@@ -42,6 +43,19 @@ describe('caché ligero de catálogos', () => {
     expect(store.list('traps', true)[0]?.nombre).toBe('Adhesiva actualizada')
     expect(api.listMipCatalog).toHaveBeenCalledTimes(1)
   })
+  it('criterios sin versión reutilizan caché, edición y cambio de estado', async () => {
+    api.listMipCatalog.mockResolvedValue([criterion])
+    const store = useMipCatalogsStore()
+    await store.load('criteria', true)
+    expect(store.list('criteria', true)).toEqual([criterion])
+    store.upsert('criteria', { ...criterion, nombre: 'Mantenimiento higiénico actualizado' })
+    expect(store.list('criteria', true)[0]?.nombre).toBe('Mantenimiento higiénico actualizado')
+    store.upsert('criteria', { ...criterion, activo: false })
+    expect(store.list('criteria', true)).toHaveLength(0)
+    expect(store.list('criteria', false)).toHaveLength(1)
+    expect(api.getMipRecord).not.toHaveBeenCalled()
+  })
+
   it('mueve registros entre activos/inactivos y elimina localmente', async () => {
     const store = useMipCatalogsStore()
     await store.load('traps', true)

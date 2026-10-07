@@ -2,11 +2,12 @@ import { randomUUID } from 'node:crypto'
 import type { PoolClient } from 'pg'
 
 import { canonicalCoverage, productToInput, validateProductInput } from '../../../src/helpers/mipCatalogs'
-import type { MipCatalogItem, MipCatalogKind, MipItemInput, MipItemKind, MipProduct, MipProductInput, MipRecord } from '../../../src/types/mipCatalogs'
+import type { MipCatalogItem, MipCatalogKind, MipCriterion, MipCriterionInput, MipItemInput, MipItemKind, MipProduct, MipProductInput, MipRecord } from '../../../src/types/mipCatalogs'
 import { ApiError } from '../auth'
 
 const ITEM_FIELDS = `id, clave, nombre, clasificacion_mip as clasificacion, categoria_producto as "categoriaProducto", activo, version::integer`
 const TRAP_FIELDS = `id, clave, nombre, clasificacion, null::text as "categoriaProducto", activo, version::integer`
+const CRITERION_FIELDS = `id, nombre, solo_area_externa as "soloAreaExterna", activo`
 const CATEGORY: Record<Exclude<MipItemKind, 'traps'>, string> = { methods: 'METODO_APLICACION', pests: 'PLAGA' }
 const PRODUCT_SELECT = `select p.id, p.nombre, p.principio_activo_composicion as "principioActivo",
   p.dosis_aplicacion as "dosisAplicacion", p.registro_sanitario as "registroSanitario",
@@ -25,7 +26,7 @@ const PRODUCT_SELECT = `select p.id, p.nombre, p.principio_activo_composicion as
   from public.productos p`
 
 export function catalogKind(value: string): MipCatalogKind {
-  if (value === 'products' || value === 'traps' || value === 'pests' || value === 'methods') return value
+  if (value === 'products' || value === 'traps' || value === 'pests' || value === 'methods' || value === 'criteria') return value
   throw new ApiError(404, 'El catálogo no existe')
 }
 
@@ -35,6 +36,8 @@ export async function listCatalog(client: PoolClient, kind: MipCatalogKind, acti
     rows = (await client.query<MipProduct>(`${PRODUCT_SELECT} where ($1::boolean is null or p.activo = $1) order by lower(p.nombre), p.id limit 1001`, [active])).rows
   } else if (kind === 'traps') {
     rows = (await client.query<MipCatalogItem>(`select ${TRAP_FIELDS} from public.trampas where ($1::boolean is null or activo = $1) order by lower(nombre), id limit 1001`, [active])).rows
+  } else if (kind === 'criteria') {
+    rows = (await client.query<MipCriterion>(`select ${CRITERION_FIELDS} from public.criterios_mip where ($1::boolean is null or activo = $1) order by lower(nombre), id limit 1001`, [active])).rows
   } else {
     rows = (await client.query<MipCatalogItem>(`select ${ITEM_FIELDS} from public.configuracion where categoria = $1 and ($2::boolean is null or activo = $2) order by orden nulls last, lower(nombre), id limit 1001`, [CATEGORY[kind], active])).rows
   }
@@ -47,7 +50,9 @@ export async function getCatalogRecord(client: PoolClient, kind: MipCatalogKind,
     ? (await client.query<MipProduct>(`${PRODUCT_SELECT} where p.id = $1`, [id])).rows
     : kind === 'traps'
       ? (await client.query<MipCatalogItem>(`select ${TRAP_FIELDS} from public.trampas where id = $1`, [id])).rows
-      : (await client.query<MipCatalogItem>(`select ${ITEM_FIELDS} from public.configuracion where id = $1 and categoria = $2`, [id, CATEGORY[kind]])).rows
+      : kind === 'criteria'
+        ? (await client.query<MipCriterion>(`select ${CRITERION_FIELDS} from public.criterios_mip where id = $1`, [id])).rows
+        : (await client.query<MipCatalogItem>(`select ${ITEM_FIELDS} from public.configuracion where id = $1 and categoria = $2`, [id, CATEGORY[kind]])).rows
   const record = rows[0]
   if (!record) throw new ApiError(404, 'El registro ya no existe')
   return record
@@ -135,8 +140,36 @@ export async function saveItem(client: PoolClient, kind: MipItemKind, input: Mip
   return getCatalogRecord(client, kind, itemId) as Promise<MipCatalogItem>
 }
 
-export async function setCatalogActive(client: PoolClient, kind: MipCatalogKind, id: string, version: number, active: boolean): Promise<MipRecord> {
-  const current = await lockRecord(client, kind, id, version)
+export async function saveCriterion(
+  client: PoolClient,
+  input: MipCriterionInput,
+  id?: string,
+): Promise<MipCriterion> {
+  const criterionId = id ?? randomUUID()
+  if (id) {
+    const exists = (await client.query('select 1 from public.criterios_mip where id = $1 for update', [id])).rowCount
+    if (!exists) throw new ApiError(404, 'El registro ya no existe')
+    await client.query(
+      'update public.criterios_mip set nombre = $2, solo_area_externa = $3 where id = $1',
+      [id, input.nombre, input.soloAreaExterna],
+    )
+  } else {
+    await client.query(
+      'insert into public.criterios_mip (id, nombre, solo_area_externa) values ($1, $2, $3)',
+      [criterionId, input.nombre, input.soloAreaExterna],
+    )
+  }
+  return getCatalogRecord(client, 'criteria', criterionId) as Promise<MipCriterion>
+}
+
+export async function setCatalogActive(client: PoolClient, kind: MipCatalogKind, id: string, version: number | undefined, active: boolean): Promise<MipRecord> {
+  if (kind === 'criteria') {
+    const current = await getCatalogRecord(client, kind, id)
+    const updated = await client.query('update public.criterios_mip set activo = $2 where id = $1 returning id', [id, active])
+    if (!updated.rowCount) throw new ApiError(404, 'El registro ya no existe')
+    return { ...current, activo: active } as MipCriterion
+  }
+  const current = await lockRecord(client, kind, id, version!)
   if (active && kind === 'products') {
     const { errors } = validateProductInput(productToInput(current as MipProduct))
     if (Object.keys(errors).length) throw new ApiError(422, 'Completa los datos del producto antes de activarlo.', 'VALIDATION', { fields: errors })
@@ -150,7 +183,10 @@ export async function setCatalogActive(client: PoolClient, kind: MipCatalogKind,
 
 export async function assertUnused(client: PoolClient, kind: MipCatalogKind, record: MipRecord): Promise<void> {
   let used = false
-  if (kind === 'products') {
+  if (kind === 'criteria') {
+    // Historical service references will be added with the execution module.
+    used = false
+  } else if (kind === 'products') {
     used = (await client.query<{ used: boolean }>('select exists (select 1 from public.productos_aplicados where producto_id = $1) as used', [record.id])).rows[0]!.used
   } else if (kind === 'traps') {
     // Compatibility check only: do not migrate physical posts/types in this catalog task.
@@ -163,8 +199,15 @@ export async function assertUnused(client: PoolClient, kind: MipCatalogKind, rec
   if (used) throw new ApiError(409, 'El registro tiene referencias o historial. Puedes desactivarlo; no se eliminarán sus datos.', 'DEPENDENCIES')
 }
 
-export async function removeCatalogRecord(client: PoolClient, kind: MipCatalogKind, id: string, version: number): Promise<MipRecord> {
-  const current = await lockRecord(client, kind, id, version)
+export async function removeCatalogRecord(client: PoolClient, kind: MipCatalogKind, id: string, version?: number): Promise<MipRecord> {
+  if (kind === 'criteria') {
+    const current = await getCatalogRecord(client, kind, id)
+    await assertUnused(client, kind, current)
+    const deleted = await client.query('delete from public.criterios_mip where id = $1', [id])
+    if (!deleted.rowCount) throw new ApiError(404, 'El registro ya no existe')
+    return current
+  }
+  const current = await lockRecord(client, kind, id, version!)
   await assertUnused(client, kind, current)
   const table = kind === 'products' ? 'productos' : kind === 'traps' ? 'trampas' : 'configuracion'
   await client.query(`delete from public.${table} where id = $1`, [id])

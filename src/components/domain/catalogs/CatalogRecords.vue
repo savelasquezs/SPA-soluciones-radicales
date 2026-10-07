@@ -4,11 +4,12 @@ import ResponsiveTable from '@/components/base/ResponsiveTable.vue'
 import CatalogActions from './CatalogActions.vue'
 import CatalogStatus from './CatalogStatus.vue'
 import { coverageSummary, PEST_GROUP_LABELS, PRODUCT_PEST_CATEGORY_LABELS } from '@/helpers/mipCatalogs'
-import type { MipCatalogItem, MipCatalogKind, MipProduct, MipRecord, PestGroup, ProductPestCategory } from '@/types/mipCatalogs'
+import type { MipCatalogItem, MipCatalogKind, MipCriterion, MipProduct, MipRecord, PestGroup, ProductPestCategory } from '@/types/mipCatalogs'
 
 defineProps<{ kind: MipCatalogKind; rows: MipRecord[]; busy?: boolean }>()
 const emit = defineEmits<{ detail: [record: MipRecord]; edit: [record: MipRecord]; state: [record: MipRecord]; delete: [record: MipRecord] }>()
 const product = (row: MipRecord): MipProduct => row as MipProduct
+const criterion = (row: MipRecord): MipCriterion => row as MipCriterion
 const group = (row: MipRecord): PestGroup | null => 'clasificacion' in row ? row.clasificacion : null
 const productCategory = (row: MipRecord): ProductPestCategory | null => 'categoriaProducto' in row ? (row as MipCatalogItem).categoriaProducto : null
 </script>
@@ -16,11 +17,12 @@ const productCategory = (row: MipRecord): ProductPestCategory | null => 'categor
 <template>
   <ResponsiveTable>
     <template #table>
-      <div class="catalog-table" tabindex="0" role="region" :aria-label="`Lista de ${kind === 'products' ? 'productos' : kind === 'traps' ? 'trampas' : kind === 'pests' ? 'plagas' : 'métodos'}`">
+      <div class="catalog-table" tabindex="0" role="region" :aria-label="`Lista de ${kind === 'products' ? 'productos' : kind === 'traps' ? 'trampas' : kind === 'pests' ? 'plagas' : kind === 'criteria' ? 'criterios' : 'métodos'}`">
         <table>
           <thead><tr>
-            <th scope="col">{{ kind === 'products' ? 'Producto' : kind === 'traps' ? 'Trampa' : kind === 'pests' ? 'Plaga' : 'Método' }}</th>
+            <th scope="col">{{ kind === 'products' ? 'Producto' : kind === 'traps' ? 'Trampa' : kind === 'pests' ? 'Plaga' : kind === 'criteria' ? 'Criterio' : 'Método' }}</th>
             <template v-if="kind === 'products'"><th scope="col">Principio activo</th><th scope="col">Dosis</th><th scope="col">Métodos</th><th scope="col">Controla</th></template>
+            <th v-else-if="kind === 'criteria'" scope="col">Aplicación</th>
             <th v-else-if="kind !== 'methods'" scope="col">Monitoreo</th>
             <th v-if="kind === 'pests'" scope="col">Productos</th>
             <th scope="col">Estado</th><th scope="col">Acciones</th>
@@ -32,6 +34,7 @@ const productCategory = (row: MipRecord): ProductPestCategory | null => 'categor
               <td>{{ product(row).metodos.map(m => m.nombre).join(' · ') || 'Sin definir' }}</td>
               <td>{{ coverageSummary(product(row).categorias, product(row).plagas) }}</td>
             </template>
+            <td v-else-if="kind === 'criteria'"><span class="classification">{{ criterion(row).soloAreaExterna ? 'Solo exterior / perímetro' : 'Todas las áreas' }}</span></td>
             <td v-else-if="kind !== 'methods'"><span v-if="group(row)" class="classification"><Bug v-if="group(row) === 'RASTREROS'" :size="15" aria-hidden="true" /><Feather v-else :size="15" aria-hidden="true" />{{ PEST_GROUP_LABELS[group(row)!] }}</span><span v-else class="classification--missing">Completar clasificación</span></td>
             <td v-if="kind === 'pests'"><span v-if="productCategory(row)" class="classification">{{ PRODUCT_PEST_CATEGORY_LABELS[productCategory(row)!] }}</span><span v-else class="classification--missing">Completar categoría</span></td>
             <td><CatalogStatus :active="row.activo" :feminine="kind === 'pests' || kind === 'traps'" /></td>
@@ -49,6 +52,9 @@ const productCategory = (row: MipRecord): ProductPestCategory | null => 'categor
           <div><dt>Métodos</dt><dd>{{ product(row).metodos.map(m => m.nombre).join(' · ') || 'Sin definir' }}</dd></div>
           <div><dt>Controla</dt><dd>{{ coverageSummary(product(row).categorias, product(row).plagas) }}</dd></div>
         </dl>
+        <div v-else-if="kind === 'criteria'" class="catalog-card__classifications">
+          <p class="classification">{{ criterion(row).soloAreaExterna ? 'Solo exterior / perímetro' : 'Todas las áreas' }}</p>
+        </div>
         <div v-else-if="kind !== 'methods'" class="catalog-card__classifications">
           <p class="classification">{{ group(row) ? PEST_GROUP_LABELS[group(row)!] : 'Completar clasificación' }}</p>
           <p v-if="kind === 'pests'" class="classification">{{ productCategory(row) ? PRODUCT_PEST_CATEGORY_LABELS[productCategory(row)!] : 'Completar categoría para productos' }}</p>

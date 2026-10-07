@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   getCatalogRecord: vi.fn<typeof Repository.getCatalogRecord>(),
   saveProduct: vi.fn<typeof Repository.saveProduct>(),
   saveItem: vi.fn<typeof Repository.saveItem>(),
+  saveCriterion: vi.fn<typeof Repository.saveCriterion>(),
   auditCatalog: vi.fn<typeof Repository.auditCatalog>(),
   setCatalogActive: vi.fn<typeof Repository.setCatalogActive>(),
   removeCatalogRecord: vi.fn<typeof Repository.removeCatalogRecord>(),
@@ -21,7 +22,7 @@ vi.mock('../auth', () => ({
 }))
 vi.mock('./repository', async () => {
   const { ApiError } = await import('../auth')
-  return { ...mocks, catalogKind: (kind: string) => { if (!['products', 'traps', 'pests', 'methods'].includes(kind)) throw new ApiError(404, 'El catálogo no existe'); return kind } }
+  return { ...mocks, catalogKind: (kind: string) => { if (!['products', 'traps', 'pests', 'methods', 'criteria'].includes(kind)) throw new ApiError(404, 'El catálogo no existe'); return kind } }
 })
 import { ApiError } from '../auth'
 import { mipCatalogRoutes } from './routes'
@@ -36,6 +37,7 @@ beforeEach(() => {
   mocks.requireAdmin.mockResolvedValue({ id })
   mocks.listCatalog.mockResolvedValue([])
   mocks.saveItem.mockResolvedValue({ id, clave: 'TRAMPA', nombre: 'Trampa', clasificacion: 'RASTREROS', categoriaProducto: null, activo: true, version: 1 })
+  mocks.saveCriterion.mockResolvedValue({ id, nombre: 'Mantenimiento higiénico', soloAreaExterna: false, activo: true })
 })
 
 describe('API administrativa de catálogos', () => {
@@ -67,6 +69,21 @@ describe('API administrativa de catálogos', () => {
     const response = await request(`traps/${id}`, { nombre: 'Trampa', clasificacion: 'RASTREROS', version: 1 }, 'PATCH')
     expect(response.status).toBe(409)
     expect(await response.json()).toMatchObject({ code: 'VERSION_CONFLICT' })
+  })
+  it('criterios reutilizan CRUD sin exigir versión', async () => {
+    const created = await request('criteria', { nombre: 'Mantenimiento higiénico', soloAreaExterna: false })
+    expect(created.status).toBe(201)
+    expect(mocks.saveCriterion).toHaveBeenCalledWith({}, { nombre: 'Mantenimiento higiénico', soloAreaExterna: false })
+
+    const edited = await request(`criteria/${id}`, { nombre: 'Mantenimiento higiénico actualizado', soloAreaExterna: true }, 'PATCH')
+    expect(edited.status).toBe(200)
+    expect(mocks.saveCriterion).toHaveBeenLastCalledWith({}, { nombre: 'Mantenimiento higiénico actualizado', soloAreaExterna: true }, id)
+
+    mocks.setCatalogActive.mockResolvedValue({ id, nombre: 'Mantenimiento higiénico actualizado', soloAreaExterna: true, activo: false })
+    expect((await request(`criteria/${id}/state`, { activo: false }, 'PATCH')).status).toBe(200)
+
+    mocks.removeCatalogRecord.mockResolvedValue({ id, nombre: 'Mantenimiento higiénico actualizado', soloAreaExterna: true, activo: false })
+    expect((await request(`criteria/${id}`, {}, 'DELETE')).status).toBe(204)
   })
   it('no filtra nombres SQL ni constraints en errores', async () => {
     mocks.saveItem.mockRejectedValue(Object.assign(new Error('secret SQL constraint'), { code: '23505' }))

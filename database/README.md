@@ -64,7 +64,7 @@ Para Data API, los roles esperados son `authenticated` y `anonymous`, y la ident
 
 ADR-019 eliminó el motor genérico de formularios del modelo objetivo. La ejecución se compone desde Áreas, Criterios MIP, Productos, Dispositivos, Plagas, Hallazgos, Evidencias y Firmas, con snapshots históricos al iniciar el Servicio.
 
-La migración `20261006_011_remove_legacy_mip_forms.sql` retira `formularios`, `respuestas_formulario`, `sedes.formularios_aplicables_json` y `servicios.formularios_versiones_json`. No deben reintroducirse.
+La migración `20261006_011_remove_legacy_mip_forms.sql` retira `formularios`, `respuestas_formulario`, `sedes.formularios_aplicables_json` y `servicios.formularios_versiones_json`. No deben reintroducirse. La migración `20261006_012_mip_criteria.sql` añade el catálogo independiente `criterios_mip` sin clave, orden ni versión.
 
 La especificación funcional vigente está en `docs/product/service-execution.md`.
 

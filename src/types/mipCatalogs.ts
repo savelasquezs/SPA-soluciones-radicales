@@ -4,8 +4,8 @@ export type PestGroup = typeof PEST_GROUPS[number]
 export const PRODUCT_PEST_CATEGORIES = ['INSECTOS_RASTREROS', 'INSECTOS_VOLADORES', 'ROEDORES'] as const
 export type ProductPestCategory = typeof PRODUCT_PEST_CATEGORIES[number]
 
-export type MipCatalogKind = 'products' | 'traps' | 'pests' | 'methods'
-export type MipItemKind = Exclude<MipCatalogKind, 'products'>
+export type MipCatalogKind = 'products' | 'traps' | 'pests' | 'methods' | 'criteria'
+export type MipItemKind = 'traps' | 'pests' | 'methods'
 
 export type MipCatalogItem = {
   id: string
@@ -39,6 +39,18 @@ export type MipProductInput = {
   plagaIds: string[]
 }
 
+export type MipCriterion = {
+  id: string
+  nombre: string
+  soloAreaExterna: boolean
+  activo: boolean
+}
+
+export type MipCriterionInput = {
+  nombre: string
+  soloAreaExterna: boolean
+}
+
 export type MipProduct = Omit<MipProductInput, 'metodoIds' | 'plagaIds' | 'dosisAplicacion'> & {
   id: string
   activo: boolean
@@ -48,13 +60,14 @@ export type MipProduct = Omit<MipProductInput, 'metodoIds' | 'plagaIds' | 'dosis
   plagas: MipCatalogItem[]
 }
 
-export type MipRecord = MipProduct | MipCatalogItem
+export type MipRecord = MipProduct | MipCatalogItem | MipCriterion
 export type MipRecordByKind = {
   products: MipProduct
   traps: MipCatalogItem
   pests: MipCatalogItem
   methods: MipCatalogItem
+  criteria: MipCriterion
 }
 export type MipOptions = { pests: MipCatalogItem[]; methods: MipCatalogItem[] }
-export type CatalogErrors = Partial<Record<keyof MipProductInput | keyof MipItemInput, string>>
+export type CatalogErrors = Partial<Record<keyof MipProductInput | keyof MipItemInput | keyof MipCriterionInput, string>>
 export type CatalogValidation<T> = { value: T; errors: CatalogErrors }
