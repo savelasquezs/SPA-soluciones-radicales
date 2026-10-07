@@ -1,14 +1,14 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { isExactAreaPermutation, sortTechnicianServices, technicianDevicePhotoRequired } from '@/helpers/technicianServices'
+import { isExactAreaPermutation, sortTechnicianServices, technicianAreaResolved, technicianDevicePhotoRequired } from '@/helpers/technicianServices'
 import { useAuthStore } from '@/stores/auth'
-import { claimTechnicianService, createTechnicianDevice, createTechnicianFinding, fetchTechnicianPackage, fetchTechnicianServices, saveTechnicianAreaAccess, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, saveTechnicianFindingStatus, startTechnicianService } from '@/services/servicesService'
+import { claimTechnicianService, createTechnicianDevice, createTechnicianFinding, fetchTechnicianPackage, fetchTechnicianServices, finalizeTechnicianService, saveTechnicianAreaAccess, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, saveTechnicianFindingStatus, startTechnicianService } from '@/services/servicesService'
 import { ApiClientError } from '@/services/apiService'
 import { getTechnicianDeviceId, listTechnicianPackageCaches, loadTechnicianPackageCache, saveTechnicianPackageCache } from '@/services/technicianPackageService'
 import { deleteTechnicianMutation, listTechnicianMutations, saveTechnicianMutation } from '@/services/technicianMutationService'
 import { deleteTechnicianMedia, loadTechnicianMedia, saveTechnicianMedia } from '@/services/technicianMediaService'
-import { deleteTechnicianAreaPhoto, deleteTechnicianDevicePhoto, deleteTechnicianFindingEvidence, uploadTechnicianAreaPhoto, uploadTechnicianDevicePhoto, uploadTechnicianFindingEvidence } from '@/services/serviceMediaService'
-import type { MipEvaluation, TechnicianAreaAccessMutation, TechnicianAreaAccessState, TechnicianAreaOrderConflict, TechnicianAreaOrderMutation, TechnicianAreaOrderResult, TechnicianCriterion, TechnicianCriterionEvaluationMutation, TechnicianDevice, TechnicianDeviceCreationInput, TechnicianDeviceCreationMutation, TechnicianDeviceReview, TechnicianDeviceReviewInput, TechnicianDeviceReviewMutation, TechnicianExecutionSession, TechnicianFinding, TechnicianFindingCreateInput, TechnicianFindingCreateMutation, TechnicianFindingStatusInput, TechnicianFindingStatusMutation, TechnicianMutation, TechnicianPackageCache, TechnicianPendingOperation, TechnicianServicePackage, TechnicianServiceSummary } from '@/types/technicianServices'
+import { deleteTechnicianAreaPhoto, deleteTechnicianDevicePhoto, deleteTechnicianFindingEvidence, uploadTechnicianAreaPhoto, uploadTechnicianDevicePhoto, uploadTechnicianFindingEvidence, uploadTechnicianSignature } from '@/services/serviceMediaService'
+import type { MipEvaluation, TechnicianAreaAccessMutation, TechnicianAreaAccessState, TechnicianAreaOrderConflict, TechnicianAreaOrderMutation, TechnicianAreaOrderResult, TechnicianCriterion, TechnicianCriterionEvaluationMutation, TechnicianDevice, TechnicianDeviceCreationInput, TechnicianDeviceCreationMutation, TechnicianDeviceReview, TechnicianDeviceReviewInput, TechnicianDeviceReviewMutation, TechnicianExecutionSession, TechnicianFinding, TechnicianFindingCreateInput, TechnicianFindingCreateMutation, TechnicianFindingStatusInput, TechnicianFindingStatusMutation, TechnicianMutation, TechnicianPackageCache, TechnicianPendingOperation, TechnicianServiceFinalizeMutation, TechnicianServicePackage, TechnicianServiceSummary } from '@/types/technicianServices'
 
 function onlineNow(): boolean {
   return typeof navigator === 'undefined' || navigator.onLine
@@ -128,6 +128,16 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     await saveTechnicianPackageCache(next)
     caches.value = { ...caches.value, [next.serviceId]: next }
     return next
+  }
+
+  async function persistLocalSignature(serviceId: string, role: 'TECHNICIAN' | 'CLIENT', mediaId: string): Promise<void> {
+    const cache = caches.value[serviceId]
+    if (!cache) throw new Error('Prepara el servicio antes de firmar.')
+    const current = cache.package.signatures ?? { technicianStoragePath: null, technicianUserId: null, clientStoragePath: null, clientName: null, clientSignedAt: null }
+    const signatures = role === 'TECHNICIAN'
+      ? { ...current, technicianLocalId: mediaId }
+      : { ...current, clientLocalId: mediaId }
+    await persistPackage({ ...cache.package, signatures })
   }
 
   async function prepare(serviceId: string): Promise<TechnicianServicePackage> {
@@ -437,6 +447,38 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
             await deleteTechnicianMutation(findingOperation)
             for (const evidence of findingOperation.evidences) await deleteTechnicianMedia(findingOperation.actorId, evidence.mediaId)
             await persistFinding(serviceId, findingOperation.areaId, result.finding)
+          } else if (sending.kind === 'SERVICE_FINALIZE') {
+            let finalization = sending
+            if (!finalization.technicianStoragePath) {
+              const media = await loadTechnicianMedia(finalization.actorId, finalization.technicianMediaId)
+              if (!media) throw new Error('La firma local del Técnico no está disponible.')
+              finalization = { ...finalization, technicianStoragePath: await uploadTechnicianSignature(serviceId, 'TECHNICIAN',
+                finalization.deviceId, finalization.lockToken, media.file), updatedAt: new Date().toISOString() }
+              sending = finalization
+              await saveTechnicianMutation(finalization)
+              await reloadMutations(serviceId)
+            }
+            if (!finalization.clientStoragePath) {
+              const media = await loadTechnicianMedia(finalization.actorId, finalization.clientMediaId)
+              if (!media) throw new Error('La firma local del cliente no está disponible.')
+              finalization = { ...finalization, clientStoragePath: await uploadTechnicianSignature(serviceId, 'CLIENT',
+                finalization.deviceId, finalization.lockToken, media.file), updatedAt: new Date().toISOString() }
+              sending = finalization
+              await saveTechnicianMutation(finalization)
+              await reloadMutations(serviceId)
+            }
+            const technicianStoragePath = finalization.technicianStoragePath
+            const clientStoragePath = finalization.clientStoragePath
+            if (!technicianStoragePath || !clientStoragePath) throw new Error('Las firmas no están listas para sincronizar.')
+            const result = await finalizeTechnicianService(serviceId, finalization.requestId, finalization.deviceId,
+              finalization.lockToken, technicianStoragePath, clientStoragePath, finalization.clientName)
+            await deleteTechnicianMutation(finalization)
+            await Promise.all([
+              deleteTechnicianMedia(finalization.actorId, finalization.technicianMediaId),
+              deleteTechnicianMedia(finalization.actorId, finalization.clientMediaId),
+            ])
+            await persistPackage(result.package, { lock: null })
+            records.value = sortTechnicianServices(records.value.map(record => record.id === serviceId ? result.package.service : record))
           } else {
             let reviewOperation = sending as TechnicianDeviceReviewMutation
             const serviceDeviceId = reviewOperation.serviceDeviceId
@@ -492,6 +534,12 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
             await reloadMutations(serviceId)
             return 'pending'
           }
+          if (sending.kind === 'SERVICE_FINALIZE' && failure instanceof ApiClientError && failure.code === 'SIGNATURE_NOT_FOUND') {
+            await saveTechnicianMutation({ ...sending, technicianStoragePath: null, clientStoragePath: null,
+              status: 'PENDING', error: failure.message, updatedAt: new Date().toISOString() })
+            await reloadMutations(serviceId)
+            return 'pending'
+          }
           const retryable = !(failure instanceof ApiClientError) || failure.status >= 500 || failure.status === 408 || failure.status === 429
           const error = failure instanceof Error ? failure.message : 'No fue posible sincronizar el cambio.'
           if (sending.kind === 'AREA_ORDER') {
@@ -511,6 +559,8 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
             await saveTechnicianMutation({ ...sending, status: retryable ? 'SENDING' : 'CONFLICT',
               conflict: failure instanceof ApiClientError ? findingConflictDetails(failure) : null,
               error, updatedAt: new Date().toISOString() })
+          } else if (sending.kind === 'SERVICE_FINALIZE') {
+            await saveTechnicianMutation({ ...sending, status: retryable ? 'SENDING' : 'CONFLICT', error, updatedAt: new Date().toISOString() })
           } else {
             await saveTechnicianMutation({ ...sending, status: retryable ? 'SENDING' : 'CONFLICT',
               conflict: failure instanceof ApiClientError ? deviceReviewConflictDetails(failure) : null, error, updatedAt: new Date().toISOString() })
@@ -1162,6 +1212,50 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     return syncPending(serviceId)
   }
 
+  async function saveSignature(serviceId: string, role: 'TECHNICIAN' | 'CLIENT', file: File): Promise<void> {
+    const cache = caches.value[serviceId]
+    if (!cache || cache.package.service.estado !== 'EN_PROCESO' || !cache.lock) throw new Error('Este celular no puede firmar el servicio.')
+    if (!(file instanceof File) || !file.size) throw new Error('La firma no es válida.')
+    const previousId = role === 'TECHNICIAN'
+      ? cache.package.signatures?.technicianLocalId
+      : cache.package.signatures?.clientLocalId
+    const mediaId = crypto.randomUUID()
+    await saveTechnicianMedia({ schemaVersion: 1, id: mediaId, actorId: actorId(), serviceId, file, savedAt: new Date().toISOString() })
+    await persistLocalSignature(serviceId, role, mediaId)
+    if (previousId) await deleteTechnicianMedia(actorId(), previousId)
+  }
+
+  async function finalizeService(serviceId: string, clientName: string): Promise<'synced' | 'pending' | 'conflict'> {
+    const cache = caches.value[serviceId]
+    if (!cache || cache.package.service.estado !== 'EN_PROCESO' || !cache.lock) throw new Error('Este celular no puede finalizar el servicio.')
+    if (!cache.package.areas.every(technicianAreaResolved)) throw new Error('Completa todas las Áreas antes de finalizar.')
+    const signatures = cache.package.signatures
+    const technicianMediaId = signatures?.technicianLocalId
+    const clientMediaId = signatures?.clientLocalId
+    if (!technicianMediaId || !clientMediaId) throw new Error('Acepta las dos firmas antes de finalizar.')
+    const normalizedName = clientName.trim()
+    if (!normalizedName || normalizedName.length > 200) throw new Error('Indica el nombre de quien firma por el cliente.')
+    const existing = await reloadMutations(serviceId)
+    const queued = existing.find((item): item is TechnicianServiceFinalizeMutation => item.kind === 'SERVICE_FINALIZE')
+    if (queued) return queued.status === 'CONFLICT' ? 'conflict' : onlineNow() ? syncPending(serviceId) : 'pending'
+    const now = new Date().toISOString()
+    await saveTechnicianMutation({
+      schemaVersion: 1, kind: 'SERVICE_FINALIZE', requestId: crypto.randomUUID(), actorId: actorId(), serviceId,
+      deviceId: cache.deviceId, lockToken: cache.lock.token, status: 'PENDING', createdAt: now, updatedAt: now, error: null,
+      technicianMediaId, clientMediaId, technicianStoragePath: null, clientStoragePath: null, clientName: normalizedName,
+    })
+    await reloadMutations(serviceId)
+    return onlineNow() ? syncPending(serviceId) : 'pending'
+  }
+
+  async function retryFinalize(serviceId: string): Promise<'synced' | 'pending' | 'conflict'> {
+    const operation = (await reloadMutations(serviceId)).find((item): item is TechnicianServiceFinalizeMutation => item.kind === 'SERVICE_FINALIZE')
+    if (!operation) return 'synced'
+    await saveTechnicianMutation({ ...operation, status: 'PENDING', error: null, updatedAt: new Date().toISOString() })
+    await reloadMutations(serviceId)
+    return syncPending(serviceId)
+  }
+
   async function loadPackage(serviceId: string): Promise<TechnicianServicePackage> {
     const request = ++packageRequest
     currentServiceId.value = serviceId
@@ -1298,5 +1392,8 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     applyDeviceReview,
     discardDeviceReviewConflict,
     retryDeviceReviewConflict,
+    saveSignature,
+    finalizeService,
+    retryFinalize,
   }
 })

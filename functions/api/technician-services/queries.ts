@@ -168,6 +168,10 @@ async function deviceTypes(client: PoolClient, serviceId: string, frozen: boolea
 export async function getTechnicianPackage(client: PoolClient, userId: string, serviceId: string): Promise<TechnicianServicePackage> {
   const header = await serviceHeader(client, userId, serviceId)
   const frozen = header.service.estado === 'EN_PROCESO' || header.service.estado === 'FINALIZADO'
+  const signatures = (await client.query<{ technicianStoragePath: string | null; technicianUserId: string | null; clientStoragePath: string | null; clientName: string | null; clientSignedAt: string | null }>(`select
+    firma_tecnico_storage_path as "technicianStoragePath",firma_tecnico_usuario_id as "technicianUserId",
+    firma_cliente_storage_path as "clientStoragePath",firma_cliente_nombre as "clientName",firma_cliente_at as "clientSignedAt"
+    from public.servicios where id=$1`, [serviceId])).rows[0]!
   return { ...header, frozen, products: await products(client, serviceId, frozen), deviceTypes: await deviceTypes(client, serviceId, frozen),
-    areas: frozen ? await frozenAreas(client, serviceId) : await liveAreas(client, serviceId) }
+    areas: frozen ? await frozenAreas(client, serviceId) : await liveAreas(client, serviceId), signatures }
 }

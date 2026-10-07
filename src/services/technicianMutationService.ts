@@ -96,6 +96,11 @@ function validMutation(value: unknown, actorId?: string, serviceId?: string): va
     && validFindingEvidences(record.evidences)
     && (record.conflict === null || (Boolean(record.conflict) && isServiceId(record.conflict?.id)
       && typeof record.conflict?.version === 'number'))
+  if (record.kind === 'SERVICE_FINALIZE') return isServiceId(record.technicianMediaId)
+    && isServiceId(record.clientMediaId)
+    && (record.technicianStoragePath === null || typeof record.technicianStoragePath === 'string')
+    && (record.clientStoragePath === null || typeof record.clientStoragePath === 'string')
+    && typeof record.clientName === 'string' && record.clientName.trim().length > 0 && record.clientName.length <= 200
   if (record.kind === 'DEVICE_REVIEW') return isServiceId(record.areaId)
     && isServiceId(record.serviceDeviceId)
     && isServiceId(record.reviewId)

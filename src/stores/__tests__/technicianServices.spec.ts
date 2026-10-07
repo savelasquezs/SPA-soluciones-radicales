@@ -22,6 +22,7 @@ vi.mock('@/services/servicesService', () => ({
   saveTechnicianDeviceReview: vi.fn<typeof api.saveTechnicianDeviceReview>(),
   createTechnicianFinding: vi.fn<typeof api.createTechnicianFinding>(),
   saveTechnicianFindingStatus: vi.fn<typeof api.saveTechnicianFindingStatus>(),
+  finalizeTechnicianService: vi.fn<typeof api.finalizeTechnicianService>(),
 }))
 vi.mock('@/services/technicianMediaService', () => ({
   saveTechnicianMedia: vi.fn<typeof mediaService.saveTechnicianMedia>(),
@@ -35,6 +36,7 @@ vi.mock('@/services/serviceMediaService', () => ({
   deleteTechnicianDevicePhoto: vi.fn<typeof serviceMedia.deleteTechnicianDevicePhoto>(),
   uploadTechnicianFindingEvidence: vi.fn<typeof serviceMedia.uploadTechnicianFindingEvidence>(),
   deleteTechnicianFindingEvidence: vi.fn<typeof serviceMedia.deleteTechnicianFindingEvidence>(),
+  uploadTechnicianSignature: vi.fn<typeof serviceMedia.uploadTechnicianSignature>(),
 }))
 vi.mock('@/services/technicianPackageService', () => ({
   getTechnicianDeviceId: vi.fn<typeof cacheService.getTechnicianDeviceId>(),
@@ -80,6 +82,7 @@ const servicePackage = (estado: TechnicianServiceSummary['estado'] = 'PROGRAMADO
   products: [],
   deviceTypes: [{ codigo: 'TRAMPA', nombre: 'Trampa', clasificacion: 'RASTREROS', plagas: [{ codigo: 'CUCARACHA', nombre: 'Cucaracha' }] }],
   areas: [],
+  signatures: { technicianStoragePath: null, technicianUserId: null, clientStoragePath: null, clientName: null, clientSignedAt: null },
 })
 const cache = (): TechnicianPackageCache => ({
   schemaVersion: 1,
@@ -370,6 +373,55 @@ describe('technician services state', () => {
       expect.any(String), 0, expect.objectContaining({ estadoObservado: 'DANADO' }), storagePath)
     expect(store.currentPackage?.areas[0]?.dispositivos[0]?.revision).toMatchObject({ fotoStoragePath: storagePath, version: 1 })
     expect(store.pendingSyncCount).toBe(0)
+  })
+
+  it('keeps both accepted signatures and the closure intention while offline', async () => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+    const prepared = executionCache()
+    for (const area of prepared.package.areas) {
+      if (!area.criterios.length) area.criterios.push({ id: crypto.randomUUID(), criterioId: crypto.randomUUID(), nombre: 'Criterio', soloAreaExterna: false, evaluacion: 'C', observacion: null, evidenciasStoragePaths: [], version: 1 })
+      for (const criterion of area.criterios) criterion.evaluacion = 'C'
+      for (const device of area.dispositivos) device.revisado = true
+    }
+    vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([prepared])
+    const store = useTechnicianServicesStore()
+    await store.ensurePackage(serviceId)
+    await store.saveSignature(serviceId, 'TECHNICIAN', new File(['tech'], 'firma.png', { type: 'image/png' }))
+    await store.saveSignature(serviceId, 'CLIENT', new File(['client'], 'firma.png', { type: 'image/png' }))
+    expect(await store.finalizeService(serviceId, 'Responsable local')).toBe('pending')
+    expect(mutationRecords[0]).toMatchObject({ kind: 'SERVICE_FINALIZE', clientName: 'Responsable local', status: 'PENDING' })
+    expect(store.currentPackage?.service.estado).toBe('EN_PROCESO')
+  })
+
+  it('uploads both signatures before the server confirms finalization', async () => {
+    const prepared = executionCache()
+    for (const area of prepared.package.areas) {
+      if (!area.criterios.length) area.criterios.push({ id: crypto.randomUUID(), criterioId: crypto.randomUUID(), nombre: 'Criterio', soloAreaExterna: false, evaluacion: 'C', observacion: null, evidenciasStoragePaths: [], version: 1 })
+      for (const criterion of area.criterios) criterion.evaluacion = 'C'
+      for (const device of area.dispositivos) device.revisado = true
+    }
+    vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([prepared])
+    const file = new File(['signature'], 'firma.png', { type: 'image/png' })
+    vi.mocked(mediaService.loadTechnicianMedia).mockImplementation(async (_actor, mediaId) => ({
+      schemaVersion: 1, id: mediaId, actorId, serviceId, fileName: file.name, contentType: file.type,
+      size: file.size, lastModified: file.lastModified, file, savedAt: '2026-10-07T13:30:00Z',
+    }))
+    vi.mocked(serviceMedia.uploadTechnicianSignature)
+      .mockResolvedValueOnce(`services/${serviceId}/signatures/technician/tech.png`)
+      .mockResolvedValueOnce(`services/${serviceId}/signatures/client/client.png`)
+    const finalized = servicePackage('FINALIZADO')
+    finalized.signatures = { technicianStoragePath: 'tech.png', technicianUserId: actorId,
+      clientStoragePath: 'client.png', clientName: 'Responsable', clientSignedAt: '2026-10-07T15:00:00Z' }
+    vi.mocked(api.finalizeTechnicianService).mockResolvedValue({ package: finalized })
+    const store = useTechnicianServicesStore()
+    await store.ensurePackage(serviceId)
+    await store.saveSignature(serviceId, 'TECHNICIAN', file)
+    await store.saveSignature(serviceId, 'CLIENT', file)
+    expect(await store.finalizeService(serviceId, 'Responsable')).toBe('synced')
+    expect(serviceMedia.uploadTechnicianSignature).toHaveBeenCalledTimes(2)
+    expect(api.finalizeTechnicianService).toHaveBeenCalledWith(serviceId, expect.any(String), deviceId, lockToken,
+      expect.stringContaining('/technician/'), expect.stringContaining('/client/'), 'Responsable')
+    expect(store.currentPackage?.service.estado).toBe('FINALIZADO')
   })
 
   it('keeps a local criterion answer until the technician resolves a version conflict', async () => {

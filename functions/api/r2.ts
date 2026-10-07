@@ -15,7 +15,9 @@ type UploadInput = { kind: MasterFileKind; fileName: string; contentType: string
 type ServicePhotoUploadInput = { serviceId: string; areaId: string; fileName: string; contentType: string; size: number }
 type DeviceReviewPhotoUploadInput = { serviceId: string; serviceDeviceId: string; fileName: string; contentType: string; size: number }
 type FindingEvidenceUploadInput = { serviceId: string; findingId: string; phase: FindingEvidencePhase; fileName: string; contentType: string; size: number }
+type ServiceSignatureUploadInput = { serviceId: string; role: ServiceSignatureRole; fileName: string; contentType: string; size: number }
 export type FindingEvidencePhase = 'OPENING' | 'CLOSURE'
+export type ServiceSignatureRole = 'TECHNICIAN' | 'CLIENT'
 export type UploadAuthorization = { url: string; storagePath: string; contentType: string; expiresIn: number }
 const PRESIGNED_TTL_SECONDS = 300
 const USER_CERTIFICATE_MAX_BYTES = 10 * 1024 * 1024
@@ -82,6 +84,10 @@ export function createFindingEvidenceUploadUrl(input: FindingEvidenceUploadInput
   return createServicePhotoUploadUrl(input, `services/${input.serviceId}/findings/${input.findingId}/${folder}`)
 }
 
+export function createServiceSignatureUploadUrl(input: ServiceSignatureUploadInput): UploadAuthorization {
+  return createServicePhotoUploadUrl(input, `services/${input.serviceId}/signatures/${input.role.toLowerCase()}`)
+}
+
 function createServicePhotoUploadUrl(input: Pick<ServicePhotoUploadInput, 'fileName' | 'contentType' | 'size'>, prefix: string): UploadAuthorization {
   const extension = extensionOf(input.fileName)
   if (!SERVICE_PHOTO_EXTENSIONS.has(extension)) throw new ApiError(422, 'La evidencia debe ser una imagen JPG, PNG o WebP')
@@ -109,6 +115,10 @@ export function assertFindingEvidenceStoragePath(storagePath: string, serviceId:
   assertServiceMediaStoragePath(storagePath, `services/${serviceId}/findings/${findingId}/${folder}/`)
 }
 
+export function assertServiceSignatureStoragePath(storagePath: string, serviceId: string, role: ServiceSignatureRole): void {
+  assertServiceMediaStoragePath(storagePath, `services/${serviceId}/signatures/${role.toLowerCase()}/`)
+}
+
 function assertServiceMediaStoragePath(storagePath: string, prefix: string): void {
   const normalized = storagePath.trim()
   if (!normalized.startsWith(prefix) || normalized.length <= prefix.length || normalized.includes('..') || normalized.startsWith('/')) {
@@ -128,6 +138,11 @@ export async function deviceReviewMediaObjectExists(storagePath: string, service
 
 export async function findingEvidenceObjectExists(storagePath: string, serviceId: string, findingId: string, phase: FindingEvidencePhase): Promise<boolean> {
   assertFindingEvidenceStoragePath(storagePath, serviceId, findingId, phase)
+  return privateServiceMediaObjectExists(storagePath)
+}
+
+export async function serviceSignatureObjectExists(storagePath: string, serviceId: string, role: ServiceSignatureRole): Promise<boolean> {
+  assertServiceSignatureStoragePath(storagePath, serviceId, role)
   return privateServiceMediaObjectExists(storagePath)
 }
 

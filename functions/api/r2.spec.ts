@@ -8,7 +8,7 @@ vi.mock('./auth', () => ({
   },
 }))
 
-import { assertAreaNoAccessStoragePath, assertDeviceReviewStoragePath, assertFindingEvidenceStoragePath, createAreaNoAccessUploadUrl, createDeviceReviewUploadUrl, createFindingEvidenceUploadUrl, createMasterReadUrl, createMasterUploadUrl } from './r2'
+import { assertAreaNoAccessStoragePath, assertDeviceReviewStoragePath, assertFindingEvidenceStoragePath, assertServiceSignatureStoragePath, createAreaNoAccessUploadUrl, createDeviceReviewUploadUrl, createFindingEvidenceUploadUrl, createMasterReadUrl, createMasterUploadUrl, createServiceSignatureUploadUrl } from './r2'
 
 const original = {
   accountId: process.env.R2_ACCOUNT_ID,
@@ -106,5 +106,12 @@ describe('Cloudflare R2 presigned URLs', () => {
     expect(closure.storagePath).toMatch(new RegExp(`^services/${serviceId}/findings/${findingId}/closure/[0-9a-f-]+-Cierre\\.webp$`))
     expect(() => assertFindingEvidenceStoragePath(opening.storagePath, serviceId, findingId, 'CLOSURE')).toThrow('ruta de la fotografía')
     expect(new URL(closure.url).pathname).toContain(`/sr-service-media/services/${serviceId}/findings/${findingId}/closure/`)
+  })
+
+  it('aísla cada firma dentro del Servicio', () => {
+    const serviceId = '10000000-0000-4000-8000-000000000001'
+    const signed = createServiceSignatureUploadUrl({ serviceId, role: 'CLIENT', fileName: 'firma.png', contentType: 'image/png', size: 2_048 })
+    expect(signed.storagePath).toMatch(new RegExp(`^services/${serviceId}/signatures/client/[0-9a-f-]+-firma.png$`))
+    expect(() => assertServiceSignatureStoragePath(signed.storagePath, serviceId, 'TECHNICIAN')).toThrow('ruta de la fotografía')
   })
 })

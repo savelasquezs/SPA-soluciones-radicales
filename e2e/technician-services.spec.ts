@@ -73,6 +73,7 @@ const servicePackage = (state: TechnicianServiceSummary['estado'] = 'PROGRAMADO'
     dispositivos: [],
     hallazgos: [],
   }],
+  signatures: { technicianStoragePath: null, technicianUserId: null, clientStoragePath: null, clientName: null, clientSignedAt: null },
 })
 
 async function setup(page: Page, withPriorFinding = false) {
@@ -112,13 +113,25 @@ async function setup(page: Page, withPriorFinding = false) {
       await json(route, { areas: current.areas.map(area => ({ id: area.id, posicionRecorrido: area.posicionRecorrido, version: area.version })) })
       return
     }
-    if (path === `/api/technician/services/${ids.service}/criteria/${ids.criterion}`) {
+    if ([ids.criterion, ids.criterion2].some(criterionId => path === `/api/technician/services/${ids.service}/criteria/${criterionId}`)) {
       const body = request.postDataJSON() as { evaluation: 'C' | 'CP' | 'NC' | 'NA'; observation: string }
       evaluations.push(body)
-      const area = current.areas.find(item => item.id === ids.area)!
+      const selectedCriterionId = path.endsWith(ids.criterion2) ? ids.criterion2 : ids.criterion
+      const selectedAreaId = selectedCriterionId === ids.criterion2 ? ids.area2 : ids.area
+      const area = current.areas.find(item => item.id === selectedAreaId)!
       const criterion = { ...area.criterios[0]!, evaluacion: body.evaluation, observacion: body.observation || null, version: area.criterios[0]!.version + 1 }
-      current = { ...current, areas: current.areas.map(item => item.id === ids.area ? { ...item, criterios: [criterion] } : item) }
+      current = { ...current, areas: current.areas.map(item => item.id === selectedAreaId ? { ...item, criterios: [criterion] } : item) }
       await json(route, { criterion })
+      return
+    }
+    if (path === `/api/technician/services/${ids.service}/devices/${ids.device}/review`) {
+      const body = request.postDataJSON() as Record<string, unknown>
+      const review = { id: body.reviewId as string, estadoObservado: body.estadoObservado as 'ACTIVO', capturas: [],
+        consumo: '', productoQuimico: '', antidoto: '', observaciones: '', fotoStoragePath: null, version: 1 }
+      current = { ...current, areas: current.areas.map(item => item.id === ids.area
+        ? { ...item, dispositivos: item.dispositivos.map(device => device.id === ids.device ? { ...device, revisado: true, revision: review } : device) }
+        : item) }
+      await json(route, { review })
       return
     }
     if (path === `/api/technician/services/${ids.service}/areas/${ids.area}/devices`) {
@@ -378,5 +391,45 @@ test('prepared package survives reload and remains available without connection'
   await expect(page.getByText('Gel insecticida')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Iniciar servicio' })).toBeDisabled()
   expect(api.packageReads).toBe(readsBeforeReload)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})
+
+test('both full-screen signatures and the closure intention survive offline reload', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await setup(page)
+  await page.goto(`/servicios/${ids.service}/trabajo`)
+  await page.getByRole('button', { name: 'Iniciar servicio' }).click()
+  await page.getByRole('button', { name: 'Abrir Área Cocina' }).click()
+  await page.getByRole('button', { name: 'C Cumple', exact: true }).click()
+  await page.getByRole('button', { name: /D-01/ }).click()
+  await page.getByRole('button', { name: 'Guardar revisión' }).click()
+  await page.getByRole('button', { name: 'Siguiente: Bodega' }).click()
+  await page.getByRole('button', { name: 'C Cumple', exact: true }).click()
+  await page.getByRole('button', { name: 'Revisar cierre' }).click()
+  for (const label of ['Técnico', 'Responsable del cliente']) {
+    await page.getByRole('article').filter({ hasText: label }).getByRole('button', { name: 'Firmar', exact: true }).click()
+    await expect(page.getByRole('dialog', { name: `Firma del ${label}` })).toBeVisible()
+    const canvas = page.getByLabel('Lienzo para firma')
+    const box = await canvas.boundingBox()
+    expect(box).not.toBeNull()
+    const rect = box!
+    await page.mouse.move(rect.x + 30, rect.y + 60)
+    await page.mouse.down()
+    await page.mouse.move(rect.x + rect.width - 40, rect.y + rect.height - 60, { steps: 5 })
+    await page.mouse.up()
+    await page.getByRole('button', { name: 'Aceptar' }).click()
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+  }
+  await page.getByLabel('Nombre de quien firma por el cliente').fill('Responsable local')
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false })
+    window.dispatchEvent(new Event('offline'))
+  })
+  await page.getByRole('button', { name: 'Finalizar servicio' }).click()
+  await expect(page.getByText('Cierre guardado. Se finalizará al recuperar conexión.')).toBeVisible()
+  await page.addInitScript(() => Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }))
+  await page.reload()
+  await expect(page.getByText('Firma guardada')).toHaveCount(2)
+  await expect(page.getByRole('button', { name: 'Cierre pendiente' })).toBeDisabled()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 })
