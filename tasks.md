@@ -65,7 +65,10 @@
 
 - [x] Implementar agenda/historial, detalle, formulario compartido, productos previstos, cobro separado de recaudo real, cancelación auditada y recuperación de borradores por usuario.
 - [x] Integrar Calendar/Gmail mediante outbox con revisiones, control de duplicados y entrega incierta; retirar escrituras administrativas legacy.
-- [ ] Activar el módulo en la rama Neon autorizada: revisar diff, aplicar `20261007_001_admin_services.sql`, desplegar API/trigger y frontend. No se ha desplegado desde este PR.
-- [ ] Validar en desarrollo OAuth, invitaciones/cambios/cancelaciones de Calendar, correo explícitamente autorizado y recuperación por trigger real. Las pruebas de CI usan datos sintéticos y proveedores simulados.
+- [x] Revisar e integrar PR #23 en `develop`, conservando los cambios recientes de documentación y marca. Merge: `3b6fd56cf5e060da4024d00a215c36880bac42d1` (2026-10-07).
+- [x] Aplicar `20261007_001_admin_services.sql` en Neon `desarrollo` (`br-nameless-violet-b7y48a5v`), base `neondb`, a las 12:24:41 UTC del 2026-10-07. DDL y registro en `app_meta.schema_migrations` guardados en una transacción; SHA-256 `d567c9e2df9b5f241b3a03db3655796ddd67f3b8bd0abdb21bf798940b6d855e`. Verificados 13 registros de migración, cuatro nuevos triggers de Servicios, RLS/permisos de preagenda y los cuerpos de las funciones aplicadas. Los dos Servicios y cuatro jobs existentes se conservaron; no se generaron nuevos jobs externos.
+- [x] Conservar respaldo previo sin compute: `backup-pre-pr23-servicios-20261007` (`br-tiny-block-b7plkedn`). No eliminarlo automáticamente.
+- [ ] Desplegar la nueva API y el trigger `services-outbox` en Neon `desarrollo`, conservando las variables privadas existentes. El merge y la migración no sustituyen este despliegue. Verificar también la publicación del frontend de `develop`.
+- [ ] Santiago realizará las pruebas de funcionamiento en desarrollo: OAuth, invitaciones/cambios/cancelaciones de Calendar, correo explícitamente autorizado y recuperación por trigger real. En la revisión y migración no se enviaron correos ni invitaciones de prueba.
 
 Detalle técnico y comandos de verificación: `docs/architecture/admin-services.md`.
