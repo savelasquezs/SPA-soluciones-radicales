@@ -13,6 +13,7 @@ La documentación versionada es la referencia viva de Soluciones Radicales MIP.
 | Arquitectura y decisiones | `docs/architecture/` |
 | Base de datos y migraciones | `database/README.md` |
 | Proceso de implementación | `docs/development/workflow.md` |
+| Producción de videos de usuario | `docs/development/documentation-videos.md` y `docs/development/user-manual-video-standard.md` |
 | Estado de implementación | `tasks.md`, código y pruebas |
 | Comportamiento implementado | Código y pruebas |
 
@@ -34,7 +35,9 @@ docs/
 │   └── overview.md
 ├── development/
 │   ├── cloudflare-workers.md
+│   ├── documentation-videos.md
 │   ├── neon-setup.md
+│   ├── user-manual-video-standard.md
 │   └── workflow.md
 ├── frontend/
 │   └── reuse.md
@@ -45,6 +48,8 @@ docs/
     └── service-execution.md
 ```
 
+Los storyboards ejecutables de cada video viven junto a sus pruebas en `e2e/documentation/`.
+
 ## Gobierno de cambios
 
 - Una regla funcional cambia en `docs/product/` junto con su implementación.
@@ -53,6 +58,8 @@ docs/
 - Un patrón reutilizable cambia en `docs/frontend/reuse.md`.
 - Un criterio transversal de interacción cambia en `docs/ux-guidelines.md`.
 - Un token o componente visual cambia en `docs/design-system.md`.
+- Una regla editorial de videos cambia en `docs/development/user-manual-video-standard.md`.
+- El alcance y orden de un video cambia en su `e2e/documentation/*.storyboard.md`.
 - Una mejora aprobada fuera de alcance se registra en `tasks.md`.
 - No duplicar la misma regla en varios documentos; enlazar su fuente principal.
 

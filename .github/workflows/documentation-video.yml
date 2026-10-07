@@ -1,33 +1,66 @@
-name: Documentation video
+name: Documentation video · bootstrap V4
 
 on:
-  workflow_dispatch:
-    inputs:
-      voice:
-        description: 'Voz femenina Chirp 3 HD'
-        required: false
-        default: 'es-US-Chirp3-HD-Kore'
-        type: string
+  push:
+    branches:
+      - codex/documentation-video-products-v4
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
 
 concurrency:
-  group: documentation-video
+  group: documentation-video-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   record:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     env:
       GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
       TTS_LANGUAGE_CODE: es-US
-      TTS_VOICE: ${{ inputs.voice || vars.GOOGLE_TTS_VOICE || 'es-US-Chirp3-HD-Kore' }}
+      TTS_VOICE: ${{ vars.GOOGLE_TTS_VOICE || 'es-US-Chirp3-HD-Kore' }}
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Materialize V4 sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import gzip
+          import pathlib
+          import shutil
+
+          mapping = {
+              '.video-v4-bootstrap/mip-catalogs.docs.spec.ts.gz': 'e2e/documentation/mip-catalogs.docs.spec.ts',
+              '.video-v4-bootstrap/mip-catalogs.narration.json.gz': 'e2e/documentation/mip-catalogs.narration.json',
+              '.video-v4-bootstrap/mip-catalogs.storyboard.md.gz': 'e2e/documentation/mip-catalogs.storyboard.md',
+              '.video-v4-bootstrap/playwright.docs.config.ts.gz': 'playwright.docs.config.ts',
+              '.video-v4-bootstrap/render-video.mjs.gz': 'scripts/documentation/render-video.mjs',
+              '.video-v4-bootstrap/documentation-video.final.yml.gz': '.github/workflows/documentation-video.yml',
+          }
+
+          for source_name, target_name in mapping.items():
+              source = pathlib.Path(source_name)
+              target = pathlib.Path(target_name)
+              if not source.is_file():
+                  raise SystemExit(f'Falta el archivo de bootstrap: {source}')
+              target.parent.mkdir(parents=True, exist_ok=True)
+              target.write_bytes(gzip.decompress(source.read_bytes()))
+
+          shutil.rmtree('.video-v4-bootstrap')
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --all
+          git commit -m "docs: rebuild product management video v4"
+          git push origin HEAD:${GITHUB_REF_NAME}
 
       - uses: actions/setup-node@v4
         with:
@@ -65,26 +98,26 @@ jobs:
             sudo apt-get install -y ffmpeg
           fi
 
-      - name: Generate female Chirp 3 narration
+      - name: Generate Chirp 3 narration
         run: npm run docs:tts
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Record interface
+      - name: Record 1080p interface flow
         run: npm run docs:record
 
-      - name: Render final video
+      - name: Render and validate final video
         run: npm run docs:render
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: documentation-video-mip-catalogs
+          name: documentation-video-mip-gestion-productos-v4
           path: |
             docs-media/final/
             docs-media/audio/
             docs-media/timeline.json
             docs-media/playwright/
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 30
