@@ -179,7 +179,7 @@ export async function saveTechnicianCriterionEvaluation(
   expectedVersion: number,
   evaluation: MipEvaluation,
   observation: string,
-  evidenceStoragePaths: string[],
+  evidenceStoragePaths: string[] = [],
 ): Promise<TechnicianCriterionEvaluationResult> {
   const service = await assignedServiceState(client, userId, serviceId, true)
   if (service.tipo_servicio !== 'PRINCIPAL' || service.estado !== 'EN_PROCESO') {
