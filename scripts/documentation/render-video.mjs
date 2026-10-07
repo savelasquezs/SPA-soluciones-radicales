@@ -130,7 +130,7 @@ if (voiceLabels.length) {
   filters.push(`[music]alimiter=limit=0.94,atrim=0:${videoDuration.toFixed(3)}[aout]`)
 }
 
-const mp4 = resolve(finalDir, 'mip-catalogos-crear-producto-v2.mp4')
+const mp4 = resolve(finalDir, 'mip-catalogos-crear-producto.mp4')
 args.push(
   '-filter_complex', filters.join(';'),
   '-map', '0:v:0',
