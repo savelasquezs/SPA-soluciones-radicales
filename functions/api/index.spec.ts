@@ -301,7 +301,7 @@ describe('Clients, Sites and Areas API', () => {
       body: JSON.stringify({
         nombre: 'Principal', direccion: 'Calle 1', correos: [], heredaCorreosCliente: true,
         contactoPrincipalNombre: 'Ana', contactoPrincipalCorreo: null, contactoPrincipalCelular: '12',
-        valorServicio: 100000, periodicidadMeses: 1, manejaRefuerzo: false, formulariosAplicablesIds: [],
+        valorServicio: 100000, periodicidadMeses: 1, manejaRefuerzo: false,
         planoStoragePath: null, manejaVehiculos: false, generaCertificadoVehiculo: false,
         vigenciaCertificadoVehiculoMeses: null,
         duracionServicioMinutos: 120, activo: true,
