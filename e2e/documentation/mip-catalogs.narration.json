@@ -28,7 +28,7 @@
     },
     {
       "id": "coverage-specific",
-      "text": "También puedes agregar una plaga concreta de otra categoría, como Mosca doméstica, sin seleccionar todos los insectos voladores."
+      "text": "También puedes agregar una plaga concreta de otra categoría, como Mosca doméstica, sin seleccionar todos los insectos voladores. Puedes combinar categorías completas y plagas específicas según el producto. Cuando termines, presiona Listo para volver al formulario."
     },
     {
       "id": "methods",
@@ -36,11 +36,11 @@
     },
     {
       "id": "technical-sheet",
-      "text": "La ficha técnica es opcional. Puedes adjuntar un PDF o una imagen para conservarla junto al producto."
+      "text": "La ficha técnica es opcional. Puedes adjuntar un PDF o una imagen para conservarla junto al producto. Al seleccionarla, verás su nombre en el formulario y el archivo se cargará cuando guardes."
     },
     {
       "id": "save",
-      "text": "Revisa la información y crea el producto."
+      "text": "Revisa la información y crea el producto. El sistema prepara la ficha técnica y guarda todos los datos; espera a que finalice antes de cerrar. Cuando termine, el formulario se cerrará automáticamente."
     },
     {
       "id": "done",
