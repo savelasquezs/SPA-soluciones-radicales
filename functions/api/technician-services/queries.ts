@@ -23,7 +23,8 @@ type ServiceStateRow = {
 const assignment = `(s.tecnico_responsable_id=$1::uuid or coalesce(s.tecnicos_colaboradores_ids_json,'[]'::jsonb) ? $1::text)`
 const summaryJson = `jsonb_build_object('id',s.id,'solicitud',s.solicitud,'tipoServicio',s.tipo_servicio,'estado',s.estado,
   'version',s.version,'inicioProgramado',s.inicio_programado,'finProgramado',s.fin_programado,'inicioReal',s.inicio_real,
-  'clienteNombre',n.nombre,'sedeNombre',se.nombre,'direccion',se.direccion)`
+  'clienteNombre',n.nombre,'sedeNombre',se.nombre,'direccion',se.direccion,
+  'autoPrepareEligible',(s.estado='EN_PROCESO' or (s.estado='PROGRAMADO' and s.tipo_servicio='PRINCIPAL' and se.tipo_sede='NEGOCIO' and now() >= s.inicio_programado-interval '1 hour')))`
 
 export async function listTechnicianServices(client: PoolClient, userId: string): Promise<TechnicianServiceSummary[]> {
   const { rows } = await client.query<{ record: TechnicianServiceSummary }>(`select ${summaryJson} as record

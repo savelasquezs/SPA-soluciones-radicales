@@ -2,11 +2,11 @@
 import { computed, ref, watch } from 'vue'
 import { ChevronDown } from 'lucide-vue-next'
 import BaseButton from '@/components/base/BaseButton.vue'
-import BaseFileUpload from '@/components/base/BaseFileUpload.vue'
 import BaseInput from '@/components/base/BaseInput.vue'
 import BaseSelect from '@/components/base/BaseSelect.vue'
 import BaseTextarea from '@/components/base/BaseTextarea.vue'
 import StatusBadge from '@/components/base/StatusBadge.vue'
+import TechnicianEvidencePicker from './TechnicianEvidencePicker.vue'
 import { technicianDevicePhotoRequired } from '@/helpers/technicianServices'
 import type { DeviceState, TechnicianDevice, TechnicianDeviceCreationMutation, TechnicianDeviceReviewInput, TechnicianDeviceReviewMutation } from '@/types/technicianServices'
 
@@ -86,8 +86,8 @@ function changeQuantity(code: string, value: string): void {
   changed()
 }
 
-function changePhoto(value: File | null): void {
-  photo.value = value
+function changePhoto(value: File[]): void {
+  photo.value = value[0] ?? null
   changed()
 }
 
@@ -138,7 +138,11 @@ function save(): void {
         <BaseInput :model-value="antidote" :name="`device-antidote-${device.id}`" label="Antídoto" maxlength="500" :disabled="disabled" @update:model-value="antidote = $event; changed()" />
       </div>
       <BaseTextarea :model-value="observations" :name="`device-observations-${device.id}`" label="Observaciones del dispositivo" :rows="3" maxlength="2000" :disabled="disabled" @update:model-value="observations = $event; changed()" />
-      <BaseFileUpload v-if="photoRequired" :model-value="photo" :name="`device-photo-${device.id}`" :label="hasStoredPhoto ? 'Reemplazar fotografía del cambio' : 'Fotografía del cambio de estado'" required :disabled="disabled" accept=".jpg,.jpeg,.png,.webp" :error="photoError || undefined" :hint="hasStoredPhoto ? 'Ya existe una fotografía guardada.' : 'JPG, PNG o WebP · hasta 10 MB'" @update:model-value="changePhoto" />
+      <div v-if="photoRequired" class="device-photo">
+        <span>{{ hasStoredPhoto ? 'Reemplazar fotografía del cambio' : 'Fotografía del cambio de estado' }}</span>
+        <TechnicianEvidencePicker :model-value="photo ? [photo] : []" :name="`device-photo-${device.id}`" label="Fotografía" :max="1" :disabled="disabled" @update:model-value="changePhoto" />
+        <p v-if="photoError" role="alert">{{ photoError }}</p>
+      </div>
       <BaseButton :disabled="disabled" @click="save">Guardar revisión</BaseButton>
       <div v-if="mutation?.status === 'CONFLICT'" class="device-conflict">
         <p>{{ mutation.error ?? 'La revisión cambió. Elige cuál versión conservar.' }}</p>
@@ -160,6 +164,9 @@ function save(): void {
 .captures legend { padding:0 0.3rem; font-size:0.875rem; font-weight:700; }
 .captures > p { margin:0; color:var(--danger); font-size:0.8rem; }
 .device-fields { display:grid; gap:0.75rem; }
+.device-photo { display:grid; gap:0.5rem; }
+.device-photo > span { font-size:0.875rem; font-weight:650; }
+.device-photo > p { margin:0; color:var(--danger); font-size:0.8rem; }
 .device-conflict { display:grid; gap:0.65rem; border-radius:var(--radius); background:var(--warning-subtle); padding:0.75rem; color:var(--warning); }
 .device-actions { display:flex; flex-wrap:wrap; gap:0.55rem; }
 @media (min-width:760px) { .device-fields { grid-template-columns:repeat(3,minmax(0,1fr)); } }

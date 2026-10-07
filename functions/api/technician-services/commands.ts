@@ -179,6 +179,7 @@ export async function saveTechnicianCriterionEvaluation(
   expectedVersion: number,
   evaluation: MipEvaluation,
   observation: string,
+  evidenceStoragePaths: string[] = [],
 ): Promise<TechnicianCriterionEvaluationResult> {
   const service = await assignedServiceState(client, userId, serviceId, true)
   if (service.tipo_servicio !== 'PRINCIPAL' || service.estado !== 'EN_PROCESO') {
@@ -200,18 +201,21 @@ export async function saveTechnicianCriterionEvaluation(
     throw new ApiError(409, 'El criterio cambió. Conservamos tu respuesta para que decidas cómo continuar.', 'VERSION_CONFLICT', { remote: current })
   }
   const normalizedObservation = observation.trim()
+  const removedEvidenceStoragePaths = current.evidenciasStoragePaths.filter(path => !evidenceStoragePaths.includes(path))
   const { rows } = await client.query<TechnicianCriterion>(`update public.evaluaciones_mip_area set evaluacion=$3,observacion=$4
+    ,evidencias_storage_paths=$5::jsonb
     where id=$2 and servicio_id=$1 returning id,criterio_id as "criterioId",criterio_nombre_snapshot as nombre,
     solo_area_externa_snapshot as "soloAreaExterna",evaluacion,observacion,
     evidencias_storage_paths as "evidenciasStoragePaths",version::integer`,
-  [serviceId, criterionId, evaluation, normalizedObservation || null])
+  [serviceId, criterionId, evaluation, normalizedObservation || null, JSON.stringify(evidenceStoragePaths)])
   await audit(client, userId, 'SERVICIO_CRITERIO_EVALUADO', serviceId, {
     areaId: current.areaId,
     criterionId,
     evaluation,
     hasObservation: Boolean(normalizedObservation),
+    evidenceCount: evidenceStoragePaths.length,
   })
-  return { criterion: rows[0]! }
+  return { criterion: rows[0]!, removedEvidenceStoragePaths }
 }
 
 type TechnicianDeviceReviewContext = Pick<TechnicianDevice, 'id' | 'dispositivoId' | 'numero' | 'ubicacion' | 'tipoCodigo' | 'estadoAnterior' | 'plagas'> & {

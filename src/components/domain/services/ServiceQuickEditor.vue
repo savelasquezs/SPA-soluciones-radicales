@@ -35,7 +35,7 @@ const technicians=computed(()=>{
   return [...people.values()]
 })
 const cashReceivers=computed(()=>{
-  const result=[...technicians.value.map(person=>({ id:person.id,label:person.nombreCompleto }))]
+  const result=technicians.value.map(person=>({ id:person.id,label:person.nombreCompleto }))
   const admin=auth.profile
   if(admin) {
     const existing=result.find(person=>person.id===admin.id)

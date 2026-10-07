@@ -17,9 +17,10 @@ const criterion: TechnicianCriterion = {
 describe('TechnicianCriterionEditor', () => {
   it('saves the selected fixed evaluation with the current observation', async () => {
     const wrapper = mount(TechnicianCriterionEditor, { props: { criterion, mutation: null, editable: true, syncing: false } })
+    await wrapper.findAll('.criterion-tools button')[0]!.trigger('click')
     await wrapper.get('textarea').setValue('Limpieza parcial')
-    await wrapper.get('button[aria-pressed="false"]:nth-of-type(2)').trigger('click')
-    expect(wrapper.emitted('save')?.[0]).toEqual(['CP', 'Limpieza parcial'])
+    await wrapper.get('button[aria-label="Cumple parcialmente"]').trigger('click')
+    expect(wrapper.emitted('save')?.[0]).toEqual(['CP', 'Limpieza parcial', [], []])
   })
 
   it('blocks editing during a conflict and exposes explicit resolution actions', async () => {
@@ -35,6 +36,8 @@ describe('TechnicianCriterionEditor', () => {
       criterionId: criterion.id,
       evaluation: 'NC',
       observation: 'Respuesta local',
+      evidences: [],
+      retainedEvidenceStoragePaths: [],
       version: 1,
       status: 'CONFLICT',
       createdAt: '2026-10-07T13:00:00Z',
@@ -43,9 +46,10 @@ describe('TechnicianCriterionEditor', () => {
       error: 'La respuesta cambió.',
     }
     const wrapper = mount(TechnicianCriterionEditor, { props: { criterion: { ...criterion, evaluacion: 'NC' }, mutation, editable: true, syncing: false } })
-    expect(wrapper.get('textarea').attributes('disabled')).toBeDefined()
-    await wrapper.findAll('button')[4]!.trigger('click')
-    await wrapper.findAll('button')[5]!.trigger('click')
+    expect(wrapper.get('button[aria-label="Cumple"]').attributes('disabled')).toBeDefined()
+    const actions = wrapper.findAll('.criterion-actions button')
+    await actions[0]!.trigger('click')
+    await actions[1]!.trigger('click')
     expect(wrapper.emitted('useRemote')).toHaveLength(1)
     expect(wrapper.emitted('retry')).toHaveLength(1)
   })

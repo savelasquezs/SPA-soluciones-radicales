@@ -5,7 +5,7 @@ import type { PoolClient } from 'pg'
 import { isServiceId } from '../../../src/helpers/adminServices'
 import { ApiError, requireTechnician, type DomainProfile, type Identity } from '../auth'
 import { transaction } from '../db'
-import { assertAreaNoAccessStoragePath, assertDeviceReviewStoragePath, assertFindingEvidenceStoragePath, assertServiceSignatureStoragePath, createAreaNoAccessUploadUrl, createDeviceReviewUploadUrl, createFindingEvidenceUploadUrl, createServiceSignatureUploadUrl, deleteAreaNoAccessObject, deleteDeviceReviewObject, deleteFindingEvidenceObject, deviceReviewMediaObjectExists, findingEvidenceObjectExists, serviceMediaObjectExists, serviceSignatureObjectExists, type FindingEvidencePhase, type ServiceSignatureRole } from '../r2'
+import { assertAreaNoAccessStoragePath, assertCriterionEvidenceStoragePath, assertDeviceReviewStoragePath, assertFindingEvidenceStoragePath, assertServiceSignatureStoragePath, createAreaNoAccessUploadUrl, createCriterionEvidenceUploadUrl, createDeviceReviewUploadUrl, createFindingEvidenceUploadUrl, createServiceSignatureUploadUrl, criterionEvidenceObjectExists, deleteAreaNoAccessObject, deleteCriterionEvidenceObject, deleteDeviceReviewObject, deleteFindingEvidenceObject, deviceReviewMediaObjectExists, findingEvidenceObjectExists, serviceMediaObjectExists, serviceSignatureObjectExists, type FindingEvidencePhase, type ServiceSignatureRole } from '../r2'
 import { authorizeTechnicianAreaChange, authorizeTechnicianDeviceChange, authorizeTechnicianFindingChange, authorizeTechnicianServiceChange, claimTechnicianService, createTechnicianDevice, createTechnicianFinding, finalizeTechnicianService, saveTechnicianAreaAccess, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, saveTechnicianFindingStatus, startTechnicianService, technicianCommand } from './commands'
 import { getTechnicianPackage, listTechnicianServices } from './queries'
 
@@ -37,6 +37,12 @@ function findingEvidencePaths(value: unknown): string[] {
   if (!Array.isArray(value) || value.length > 10) throw new ApiError(422, 'Las evidencias del Hallazgo no son válidas.', 'VALIDATION')
   const paths = value.map(item => requiredString(item, 'La ruta de evidencia no es válida.', 1_000))
   if (new Set(paths).size !== paths.length) throw new ApiError(422, 'Las evidencias del Hallazgo no son válidas.', 'VALIDATION')
+  return paths
+}
+function criterionEvidencePaths(value: unknown): string[] {
+  if (!Array.isArray(value) || value.length > 5) throw new ApiError(422, 'Las evidencias del criterio no son válidas.', 'VALIDATION')
+  const paths = value.map(item => requiredString(item, 'La ruta de evidencia no es válida.', 1_000))
+  if (new Set(paths).size !== paths.length) throw new ApiError(422, 'Las evidencias del criterio no son válidas.', 'VALIDATION')
   return paths
 }
 function findingPhase(value: unknown): FindingEvidencePhase {
@@ -192,9 +198,61 @@ technicianServiceRoutes.post('/:id/criteria/:criterionId', async context => {
     throw new ApiError(422, 'La observación no puede superar 2000 caracteres.', 'VALIDATION')
   }
   const evaluation = payload.evaluation as 'C' | 'CP' | 'NC' | 'NA'
-  const input = { deviceId, criterionId, version: expected, evaluation, observation: payload.observation }
-  return context.json(await read(context, (client, technician) => technicianCommand(client, technician.id, requestId, 'CRITERION_EVALUATION', serviceId, expected,
-    input, () => saveTechnicianCriterionEvaluation(client, technician.id, serviceId, deviceId, lockToken, criterionId, expected, evaluation, payload.observation as string))))
+  const evidenceStoragePaths = criterionEvidencePaths(payload.evidenceStoragePaths)
+  if (evidenceStoragePaths.length) {
+    await read(context, async (client, technician) => {
+      await authorizeTechnicianServiceChange(client, technician.id, serviceId, deviceId, lockToken)
+      const found = (await client.query('select 1 from public.evaluaciones_mip_area where servicio_id=$1 and id=$2', [serviceId, criterionId])).rowCount
+      if (!found) throw new ApiError(404, 'El criterio no pertenece a este servicio.', 'CRITERION_NOT_FOUND')
+    })
+  }
+  for (const storagePath of evidenceStoragePaths) {
+    assertCriterionEvidenceStoragePath(storagePath, serviceId, criterionId)
+    if (!await criterionEvidenceObjectExists(storagePath, serviceId, criterionId)) {
+      throw new ApiError(422, 'Una fotografía todavía no está disponible. Vuelve a cargarla.', 'PHOTO_NOT_FOUND', { storagePath })
+    }
+  }
+  const input = { deviceId, criterionId, version: expected, evaluation, observation: payload.observation, evidenceStoragePaths }
+  const saved = await read(context, (client, technician) => technicianCommand(client, technician.id, requestId, 'CRITERION_EVALUATION', serviceId, expected,
+    input, () => saveTechnicianCriterionEvaluation(client, technician.id, serviceId, deviceId, lockToken, criterionId, expected, evaluation, payload.observation as string, evidenceStoragePaths)))
+  for (const storagePath of saved.removedEvidenceStoragePaths) await deleteCriterionEvidenceObject(storagePath, serviceId, criterionId)
+  return context.json(saved)
+})
+
+technicianServiceRoutes.post('/:id/criteria/:criterionId/media/upload-url', async context => {
+  const payload = await body(context.req.raw)
+  const serviceId = id(context.req.param('id'))
+  const criterionId = id(context.req.param('criterionId'))
+  const deviceId = id(payload.deviceId)
+  const lockToken = id(payload.lockToken)
+  const fileName = requiredString(payload.fileName, 'El nombre de la fotografía es obligatorio.', 255)
+  const contentType = typeof payload.contentType === 'string' ? payload.contentType : ''
+  const size = payload.size
+  if (typeof size !== 'number' || !Number.isSafeInteger(size) || size < 1) throw new ApiError(422, 'El tamaño de la fotografía no es válido.', 'VALIDATION')
+  await read(context, async (client, technician) => {
+    await authorizeTechnicianServiceChange(client, technician.id, serviceId, deviceId, lockToken)
+    const found = (await client.query('select 1 from public.evaluaciones_mip_area where servicio_id=$1 and id=$2', [serviceId, criterionId])).rowCount
+    if (!found) throw new ApiError(404, 'El criterio no pertenece a este servicio.', 'CRITERION_NOT_FOUND')
+  })
+  return context.json(createCriterionEvidenceUploadUrl({ serviceId, criterionId, fileName, contentType, size }))
+})
+
+technicianServiceRoutes.post('/:id/criteria/:criterionId/media/delete', async context => {
+  const payload = await body(context.req.raw)
+  const serviceId = id(context.req.param('id'))
+  const criterionId = id(context.req.param('criterionId'))
+  const deviceId = id(payload.deviceId)
+  const lockToken = id(payload.lockToken)
+  const storagePath = requiredString(payload.storagePath, 'La ruta de la fotografía es obligatoria.', 1_000)
+  assertCriterionEvidenceStoragePath(storagePath, serviceId, criterionId)
+  await read(context, async (client, technician) => {
+    await authorizeTechnicianServiceChange(client, technician.id, serviceId, deviceId, lockToken)
+    const referenced = (await client.query<{ found: boolean }>(`select exists(select 1 from public.evaluaciones_mip_area
+      where servicio_id=$1 and id=$2 and evidencias_storage_paths ? $3) as found`, [serviceId, criterionId, storagePath])).rows[0]?.found
+    if (referenced) throw new ApiError(409, 'La fotografía está asociada al servicio y no puede eliminarse.', 'FILE_IN_USE')
+  })
+  await deleteCriterionEvidenceObject(storagePath, serviceId, criterionId)
+  return context.body(null, 204)
 })
 
 technicianServiceRoutes.post('/:id/areas/:areaId/devices', async context => {

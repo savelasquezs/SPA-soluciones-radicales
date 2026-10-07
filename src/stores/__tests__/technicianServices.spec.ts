@@ -30,6 +30,8 @@ vi.mock('@/services/technicianMediaService', () => ({
   deleteTechnicianMedia: vi.fn<typeof mediaService.deleteTechnicianMedia>(),
 }))
 vi.mock('@/services/serviceMediaService', () => ({
+  uploadTechnicianCriterionEvidence: vi.fn<typeof serviceMedia.uploadTechnicianCriterionEvidence>(),
+  deleteTechnicianCriterionEvidence: vi.fn<typeof serviceMedia.deleteTechnicianCriterionEvidence>(),
   uploadTechnicianAreaPhoto: vi.fn<typeof serviceMedia.uploadTechnicianAreaPhoto>(),
   deleteTechnicianAreaPhoto: vi.fn<typeof serviceMedia.deleteTechnicianAreaPhoto>(),
   uploadTechnicianDevicePhoto: vi.fn<typeof serviceMedia.uploadTechnicianDevicePhoto>(),
@@ -72,6 +74,7 @@ const summary = (estado: TechnicianServiceSummary['estado'] = 'PROGRAMADO'): Tec
   clienteNombre: 'Cliente de prueba',
   sedeNombre: 'Sede de prueba',
   direccion: 'Dirección sintética',
+  autoPrepareEligible: estado === 'EN_PROCESO',
 })
 const servicePackage = (estado: TechnicianServiceSummary['estado'] = 'PROGRAMADO'): TechnicianServicePackage => ({
   service: summary(estado),
@@ -151,6 +154,7 @@ beforeEach(() => {
   vi.mocked(mediaService.loadTechnicianMedia).mockResolvedValue(null)
   vi.mocked(mediaService.deleteTechnicianMedia).mockResolvedValue()
   vi.mocked(serviceMedia.deleteTechnicianAreaPhoto).mockResolvedValue()
+  vi.mocked(serviceMedia.deleteTechnicianCriterionEvidence).mockResolvedValue()
   vi.mocked(serviceMedia.deleteTechnicianDevicePhoto).mockResolvedValue()
   vi.mocked(serviceMedia.deleteTechnicianFindingEvidence).mockResolvedValue()
 })
@@ -218,13 +222,13 @@ describe('technician services state', () => {
     vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([executionCache()])
     vi.mocked(api.saveTechnicianCriterionEvaluation).mockResolvedValue({ criterion: {
       id: criterionId, criterioId: criterionId, nombre: 'Orden y aseo', soloAreaExterna: false, evaluacion: 'CP', observacion: 'Mejora pendiente', evidenciasStoragePaths: [], version: 2,
-    } })
+    }, removedEvidenceStoragePaths: [] })
     const store = useTechnicianServicesStore()
     await store.ensurePackage(serviceId)
     expect(await store.applyCriterionEvaluation(serviceId, areaIds[0]!, criterionId, 'CP', 'Mejora pendiente')).toBe('synced')
     expect(store.currentPackage?.areas[0]?.criterios[0]).toMatchObject({ evaluacion: 'CP', observacion: 'Mejora pendiente', version: 2 })
     expect(store.pendingSyncCount).toBe(0)
-    expect(api.saveTechnicianCriterionEvaluation).toHaveBeenCalledWith(serviceId, expect.any(String), deviceId, lockToken, criterionId, 1, 'CP', 'Mejora pendiente')
+    expect(api.saveTechnicianCriterionEvaluation).toHaveBeenCalledWith(serviceId, expect.any(String), deviceId, lockToken, criterionId, 1, 'CP', 'Mejora pendiente', [])
   })
 
   it('keeps a criterion response in the shared queue while offline', async () => {
@@ -236,6 +240,35 @@ describe('technician services state', () => {
     expect(store.currentPackage?.areas[0]?.criterios[0]).toMatchObject({ evaluacion: 'NC', observacion: 'Limpieza requerida' })
     expect(mutationRecords[0]).toMatchObject({ kind: 'CRITERION_EVALUATION', criterionId, status: 'PENDING' })
     expect(api.saveTechnicianCriterionEvaluation).not.toHaveBeenCalled()
+  })
+
+  it('keeps criterion evidence offline and uploads it when connection returns', async () => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+    vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([executionCache()])
+    const photo = new File(['photo'], 'criterio.jpg', { type: 'image/jpeg' })
+    const store = useTechnicianServicesStore()
+    await store.ensurePackage(serviceId)
+    expect(await store.applyCriterionEvaluation(serviceId, areaIds[0]!, criterionId, 'NC', 'Evidencia', [photo])).toBe('pending')
+    expect(mediaService.saveTechnicianMedia).toHaveBeenCalledWith(expect.objectContaining({ serviceId, areaId: areaIds[0], criterionId, file: photo }))
+    expect(mutationRecords[0]).toMatchObject({ kind: 'CRITERION_EVALUATION', evidences: [{ storagePath: null }] })
+
+    const mediaId = (mutationRecords[0] as Extract<TechnicianMutation, { kind: 'CRITERION_EVALUATION' }>).evidences[0]!.mediaId
+    vi.mocked(mediaService.loadTechnicianMedia).mockResolvedValue({
+      schemaVersion: 1, id: mediaId, actorId, serviceId, areaId: areaIds[0], criterionId,
+      fileName: photo.name, contentType: photo.type, size: photo.size, lastModified: photo.lastModified, file: photo, savedAt: '2026-10-07T13:30:00Z',
+    })
+    const storagePath = `services/${serviceId}/criteria/${criterionId}/evidence/photo.jpg`
+    vi.mocked(serviceMedia.uploadTechnicianCriterionEvidence).mockResolvedValue(storagePath)
+    vi.mocked(api.saveTechnicianCriterionEvaluation).mockResolvedValue({ criterion: {
+      id: criterionId, criterioId: criterionId, nombre: 'Orden y aseo', soloAreaExterna: false, evaluacion: 'NC', observacion: 'Evidencia', evidenciasStoragePaths: [storagePath], version: 2,
+    }, removedEvidenceStoragePaths: [] })
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: true })
+
+    expect(await store.syncPending(serviceId)).toBe('synced')
+    expect(serviceMedia.uploadTechnicianCriterionEvidence).toHaveBeenCalledWith(serviceId, criterionId, deviceId, lockToken, photo)
+    expect(api.saveTechnicianCriterionEvaluation).toHaveBeenCalledWith(serviceId, expect.any(String), deviceId, lockToken, criterionId, 1, 'NC', 'Evidencia', [storagePath])
+    expect(mediaService.deleteTechnicianMedia).toHaveBeenCalledWith(actorId, mediaId)
+    expect(store.currentPackage?.areas[0]?.criterios[0]?.evidenciasStoragePaths).toEqual([storagePath])
   })
 
   it('preserves an area access exception and its photo while offline', async () => {

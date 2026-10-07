@@ -15,6 +15,7 @@ import TechnicianDeviceReviewEditor from '@/components/domain/services/Technicia
 import TechnicianFindingCard from '@/components/domain/services/TechnicianFindingCard.vue'
 import TechnicianFindingCreateEditor from '@/components/domain/services/TechnicianFindingCreateEditor.vue'
 import TechnicianNewDeviceEditor from '@/components/domain/services/TechnicianNewDeviceEditor.vue'
+import TechnicianProductsList from '@/components/domain/services/TechnicianProductsList.vue'
 import { nextTechnicianArea, orderedTechnicianAreas, technicianAreaResolved } from '@/helpers/technicianServices'
 import { useTechnicianServicesStore } from '@/stores/technicianServices'
 import type { MipEvaluation, TechnicianAreaAccessMutation, TechnicianCriterionEvaluationMutation, TechnicianDeviceCreationInput, TechnicianDeviceCreationMutation, TechnicianDeviceReviewInput, TechnicianDeviceReviewMutation, TechnicianFindingCreateInput, TechnicianFindingCreateMutation, TechnicianFindingStatusInput, TechnicianFindingStatusMutation } from '@/types/technicianServices'
@@ -209,7 +210,7 @@ function clearCriterionDraft(criterionId: string, expected?: { evaluation: MipEv
   drafts.value = next
 }
 
-async function saveCriterion(criterionId: string, evaluation: MipEvaluation, observation: string): Promise<boolean> {
+async function saveCriterion(criterionId: string, evaluation: MipEvaluation, observation: string, files: File[] = [], retainedEvidenceStoragePaths?: string[]): Promise<boolean> {
   if (!currentArea.value) return false
   const areaId = currentArea.value.id
   const expected = { evaluation, observation: observation.trim() }
@@ -217,7 +218,7 @@ async function saveCriterion(criterionId: string, evaluation: MipEvaluation, obs
   const task = previous.then(async () => {
     saveError.value = ''
     try {
-      const result = await services.applyCriterionEvaluation(serviceId.value, areaId, criterionId, expected.evaluation, expected.observation)
+      const result = await services.applyCriterionEvaluation(serviceId.value, areaId, criterionId, expected.evaluation, expected.observation, files, retainedEvidenceStoragePaths)
       if (result === 'conflict') return false
       clearCriterionDraft(criterionId, expected)
       return true
@@ -350,37 +351,48 @@ function goNext(): void {
     <StatusPanel v-else-if="error" title="No fue posible abrir el Área" :message="error" tone="danger"><BaseButton @click="load">Reintentar</BaseButton></StatusPanel>
     <StatusPanel v-else-if="!currentArea" title="Área no disponible" message="El Área no pertenece al recorrido preparado de este servicio." tone="warning"><BaseButton variant="secondary" @click="router.push({ name: 'technician-service-work', params: { id: serviceId } })">Volver al servicio</BaseButton></StatusPanel>
     <template v-else>
-      <section class="area-selector"><BaseSelect :model-value="selectedAreaId" name="technician-area-selector" label="Área del recorrido" @update:model-value="selectArea"><option v-for="(area, index) in orderedAreas" :key="area.id" :value="area.id">{{ index + 1 }}. {{ area.nombre }} · {{ technicianAreaResolved(area) ? 'Resuelta' : 'Pendiente' }}</option></BaseSelect><p>Mismo orden aplicado para la lista y la navegación siguiente.</p></section>
+      <section class="area-selector"><BaseSelect :model-value="selectedAreaId" name="technician-area-selector" label="Área" @update:model-value="selectArea"><option v-for="(area, index) in orderedAreas" :key="area.id" :value="area.id">{{ index + 1 }}. {{ area.nombre }} · {{ technicianAreaResolved(area) ? 'Resuelta' : 'Pendiente' }}</option></BaseSelect></section>
+      <details class="service-summary"><summary>Datos del servicio y productos</summary><dl><div><dt>Cliente</dt><dd>{{ packageValue?.service.clienteNombre }}</dd></div><div><dt>Sede</dt><dd>{{ packageValue?.service.sedeNombre }}</dd></div><div><dt>Dirección</dt><dd>{{ packageValue?.service.direccion }}</dd></div></dl><TechnicianProductsList :products="packageValue?.products ?? []" /></details>
       <section class="area-panel" aria-labelledby="area-criteria-title">
         <header><div><h2 id="area-criteria-title">Condiciones del Área</h2><p>{{ currentArea.criterios.length }} criterios aplicables · guardado automático</p></div><StatusBadge :tone="technicianAreaResolved(currentArea) ? 'success' : 'neutral'"><Check v-if="technicianAreaResolved(currentArea)" :size="15" aria-hidden="true" /><MonitorCheck v-else :size="15" aria-hidden="true" />{{ technicianAreaResolved(currentArea) ? 'Resuelta' : 'Pendiente' }}</StatusBadge></header>
         <StatusPanel v-if="saveError" title="No fue posible guardar" :message="saveError" tone="danger" />
         <TechnicianAreaAccessEditor :area="currentArea" :mutation="accessMutation()" :editable="canEditRoute" :syncing="syncing" @draft="trackAccessDraft" @save="saveAccess" @use-remote="useRemoteAccess" @retry="retryAccess" />
         <p v-if="currentArea.sinAcceso" class="area-no-access">Los criterios, dispositivos y cambios en Hallazgos quedan exceptuados porque no fue posible acceder al Área.</p>
-        <div v-else class="criteria-list"><TechnicianCriterionEditor v-for="criterion in currentArea.criterios" :key="criterion.id" :criterion="criterion" :mutation="criterionMutation(criterion.id)" :editable="canEditRoute" :syncing="syncing" @draft="(evaluation, observation) => trackCriterionDraft(criterion.id, evaluation, observation)" @save="(evaluation, observation) => saveCriterion(criterion.id, evaluation, observation)" @use-remote="useRemoteCriterion(criterion.id)" @retry="retryCriterion(criterion.id)" /></div>
+        <div v-else class="criteria-list"><TechnicianCriterionEditor v-for="criterion in currentArea.criterios" :key="criterion.id" :criterion="criterion" :mutation="criterionMutation(criterion.id)" :editable="canEditRoute" :syncing="syncing" @draft="(evaluation, observation) => trackCriterionDraft(criterion.id, evaluation, observation)" @save="(evaluation, observation, files, retainedPaths) => saveCriterion(criterion.id, evaluation, observation, files, retainedPaths)" @use-remote="useRemoteCriterion(criterion.id)" @retry="retryCriterion(criterion.id)" /></div>
       </section>
-      <section v-if="!currentArea.sinAcceso" class="area-panel" aria-labelledby="area-devices-title">
-        <header><div><h2 id="area-devices-title">Dispositivos</h2><p>{{ currentArea.dispositivos.length }} puntos del servicio</p></div><BaseButton v-if="canEditRoute && packageValue?.deviceTypes?.length" size="compact" variant="secondary" :disabled="newDeviceSaving" @click="newDeviceOpen = true"><Plus :size="17" aria-hidden="true" />Agregar</BaseButton></header>
+      <details v-if="!currentArea.sinAcceso" class="area-panel area-collapsible">
+        <summary><span><strong>Dispositivos</strong><small>{{ currentArea.dispositivos.length }} puntos del servicio</small></span></summary>
+        <BaseButton v-if="canEditRoute && packageValue?.deviceTypes?.length" size="compact" variant="secondary" :disabled="newDeviceSaving" @click="newDeviceOpen = true"><Plus :size="17" aria-hidden="true" />Agregar dispositivo</BaseButton>
         <TechnicianNewDeviceEditor v-if="newDeviceOpen" :device-types="packageValue?.deviceTypes ?? []" :conflict="creationConflict" :saving="newDeviceSaving" @save="saveNewDevice" @cancel="newDeviceOpen = false" @discard="discardNewDevice" />
         <p v-else-if="canEditRoute && !packageValue?.deviceTypes?.length" class="area-empty">No hay tipos de dispositivo disponibles en el paquete del servicio.</p>
         <p v-if="!currentArea.dispositivos.length" class="area-empty">Esta Área no tiene Dispositivos asignados.</p>
         <div v-else class="device-list"><TechnicianDeviceReviewEditor v-for="device in currentArea.dispositivos" :key="device.id" :device="device" :creation-mutation="creationMutation(device.id)" :mutation="deviceMutation(device.id)" :editable="canEditRoute" :syncing="syncing" @draft="(input, photo) => trackDeviceDraft(device.id, input, photo)" @save="(input, photo) => saveDevice(device.id, input, photo)" @use-remote="useRemoteDevice(device.id)" @retry="retryDevice(device.id)" /></div>
-      </section>
-      <section class="area-panel" aria-labelledby="area-findings-title">
-        <header><div><h2 id="area-findings-title">Hallazgos</h2><p>{{ findings.length }} registrados · {{ findings.filter(item => item.estado !== 'CERRADO').length }} pendientes</p></div><BaseButton v-if="canEditRoute && !currentArea.sinAcceso" size="compact" variant="secondary" :disabled="findingSavingId === 'new'" @click="newFindingOpen = true"><Plus :size="17" aria-hidden="true" />Agregar</BaseButton></header>
+      </details>
+      <details class="area-panel area-collapsible">
+        <summary><span><strong>Hallazgos</strong><small>{{ findings.length }} registrados · {{ findings.filter(item => item.estado !== 'CERRADO').length }} pendientes</small></span></summary>
+        <BaseButton v-if="canEditRoute && !currentArea.sinAcceso" size="compact" variant="secondary" :disabled="findingSavingId === 'new'" @click="newFindingOpen = true"><Plus :size="17" aria-hidden="true" />Agregar hallazgo</BaseButton>
         <p v-if="currentArea.sinAcceso" class="area-empty">Los Hallazgos anteriores siguen visibles, pero no pueden cambiarse mientras el Área esté sin acceso.</p>
         <TechnicianFindingCreateEditor v-if="newFindingOpen" :saving="findingSavingId === 'new'" @save="saveNewFinding" @cancel="newFindingOpen = false" />
         <p v-if="!findings.length" class="area-empty">No hay Hallazgos registrados para esta Área.</p>
         <div v-else class="finding-list"><TechnicianFindingCard v-for="finding in findings" :key="finding.id" :finding="finding" :current-service-id="serviceId" :mutation="findingMutation(finding.id)" :editable="canEditRoute && !currentArea.sinAcceso" :saving="findingSavingId === finding.id" @status="(input, files) => saveFindingStatus(finding.id, input, files)" @use-remote="useRemoteFinding(finding.id)" @retry="retryFinding(finding.id)" /></div>
-      </section>
+      </details>
       <BaseButton class="area-next" @click="goNext"><ClipboardCheck v-if="next.kind !== 'AREA'" :size="18" aria-hidden="true" /><ChevronRight v-else :size="18" aria-hidden="true" />{{ nextLabel }}</BaseButton>
     </template>
   </ServicePage>
 </template>
 
 <style scoped>
-.area-selector, .area-panel { display:grid; gap:0.85rem; border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--surface); padding:1rem; }
+.area-selector { padding:0; }
+.area-panel, .service-summary { display:grid; gap:0.75rem; border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--surface); padding:0.8rem; }
+.service-summary summary { min-height:44px; cursor:pointer; font-weight:700; }
+.service-summary dl { display:grid; gap:0.5rem; margin:0; }
+.service-summary dt { color:var(--text-secondary); font-size:0.75rem; }
+.service-summary dd { margin:0; overflow-wrap:anywhere; }
 .area-selector > p, header p, .area-empty { margin:0; color:var(--text-secondary); font-size:0.8125rem; }
 .area-panel > header { display:flex; align-items:flex-start; justify-content:space-between; gap:0.75rem; }
+.area-collapsible summary { display:flex; min-height:44px; align-items:center; cursor:pointer; }
+.area-collapsible summary span { display:grid; gap:0.1rem; }
+.area-collapsible summary small { color:var(--text-secondary); font-weight:400; }
 h2, p, ul { margin:0; }
 h2 { font-size:1rem; }
 .area-list, .device-list, .finding-list { display:grid; gap:0.6rem; padding:0; list-style:none; }
@@ -390,5 +402,5 @@ h2 { font-size:1rem; }
 .area-list small { color:var(--text-secondary); }
 .area-no-access { border-radius:var(--radius); background:var(--warning-subtle); padding:0.75rem; color:var(--warning); }
 .area-next { width:100%; }
-@media (min-width:760px) { .area-selector, .area-panel { padding:1.25rem; } .area-next { justify-self:end; width:auto; } }
+@media (min-width:760px) { .area-panel, .service-summary { padding:1rem; } .area-next { justify-self:end; width:auto; } }
 </style>

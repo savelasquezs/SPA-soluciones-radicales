@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatTechnicianDateTime, isExactAreaPermutation, moveTechnicianArea, nextTechnicianArea, orderedTechnicianAreas, sortTechnicianServices, technicianAreaResolved, technicianDevicePhotoRequired, technicianServiceStateLabel } from '@/helpers/technicianServices'
+import { formatTechnicianDateTime, isExactAreaPermutation, moveTechnicianArea, nextTechnicianArea, orderedTechnicianAreas, sortTechnicianServices, technicianAreaResolved, technicianDevicePhotoRequired, technicianServicesToAutoPrepare, technicianServiceStateLabel } from '@/helpers/technicianServices'
 import type { TechnicianArea, TechnicianServiceSummary } from '@/types/technicianServices'
 
 const record = (id: string, estado: TechnicianServiceSummary['estado'], inicioProgramado: string): TechnicianServiceSummary => ({
@@ -14,6 +14,7 @@ const record = (id: string, estado: TechnicianServiceSummary['estado'], inicioPr
   clienteNombre: 'Cliente',
   sedeNombre: 'Sede',
   direccion: 'Dirección',
+  autoPrepareEligible: false,
 })
 
 describe('technician service presentation', () => {
@@ -25,6 +26,13 @@ describe('technician service presentation', () => {
       record('final-new', 'FINALIZADO', '2026-10-06T14:00:00Z'),
     ])
     expect(result.map(item => item.id)).toEqual(['progress', 'planned', 'final-new', 'final-old'])
+  })
+
+  it('selects only server-authorized services without a local or active download', () => {
+    const eligible = { ...record('eligible', 'PROGRAMADO', '2026-10-08T14:00:00Z'), autoPrepareEligible: true }
+    const busy = { ...record('busy', 'EN_PROCESO', '2026-10-07T14:00:00Z'), autoPrepareEligible: true }
+    const early = record('early', 'PROGRAMADO', '2026-10-09T14:00:00Z')
+    expect(technicianServicesToAutoPrepare([eligible, busy, early], {}, ['busy']).map(item => item.id)).toEqual(['eligible'])
   })
 
   it('formats domain states and Bogotá dates for the field UI', () => {

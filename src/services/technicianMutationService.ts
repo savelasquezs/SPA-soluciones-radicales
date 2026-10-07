@@ -22,6 +22,14 @@ function validFindingEvidences(value: unknown): boolean {
       && (item.storagePath === null || typeof item.storagePath === 'string'))
 }
 
+function validCriterionEvidences(value: unknown): boolean {
+  return Array.isArray(value)
+    && value.length <= 5
+    && new Set(value.map(item => item?.mediaId)).size === value.length
+    && value.every(item => item && typeof item === 'object' && isServiceId(item.mediaId)
+      && (item.storagePath === null || typeof item.storagePath === 'string'))
+}
+
 function validMutation(value: unknown, actorId?: string, serviceId?: string): value is TechnicianMutation {
   if (!value || typeof value !== 'object') return false
   const record = value as Partial<TechnicianMutation>
@@ -54,6 +62,13 @@ function validMutation(value: unknown, actorId?: string, serviceId?: string): va
     && ['C', 'CP', 'NC', 'NA'].includes(record.evaluation ?? '')
     && typeof record.observation === 'string'
     && record.observation.length <= 2_000
+    && Array.isArray(record.evidences)
+    && validCriterionEvidences(record.evidences)
+    && Array.isArray(record.retainedEvidenceStoragePaths)
+    && record.retainedEvidenceStoragePaths.length <= 5
+    && record.retainedEvidenceStoragePaths.length + record.evidences.length <= 5
+    && new Set(record.retainedEvidenceStoragePaths).size === record.retainedEvidenceStoragePaths.length
+    && record.retainedEvidenceStoragePaths.every(path => typeof path === 'string')
     && Number.isSafeInteger(record.version)
     && Number(record.version) > 0
     && (record.conflict === null || (

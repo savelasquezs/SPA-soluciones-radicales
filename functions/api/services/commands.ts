@@ -213,9 +213,14 @@ export async function cancelService(client: PoolClient, actorId: string, id: str
   const ids=await lockFamily(client,id), before=await getService(client,id)
   assertVersion(before.version,expected)
   if (!['PROGRAMADO','EN_PROCESO'].includes(before.estado)) throw new ApiError(409,'El servicio ya terminó o fue cancelado.','SERVICE_TERMINAL')
+  const deactivatedDevices=(await client.query<{ id: string }>(`select distinct device.id
+    from public.dispositivos device
+    join public.servicio_dispositivos snapshot on snapshot.dispositivo_id=device.id
+    where snapshot.servicio_id=any($1::uuid[]) and snapshot.creado_durante_servicio and device.activo
+    order by device.id`,[ids])).rows.map(row=>row.id)
   await client.query("update public.servicios set estado='CANCELADO',motivo_cancelacion=$2,cancelado_at=now() where id=$1",[id,reason])
   const result=await mutation(client,ids)
-  await audit(client,actorId,'SERVICIO_CANCELADO',id,{ motivo:reason, before, afectados:result.services.filter(row=>row.estado==='CANCELADO').map(row=>row.id) })
+  await audit(client,actorId,'SERVICIO_CANCELADO',id,{ motivo:reason, before, afectados:result.services.filter(row=>row.estado==='CANCELADO').map(row=>row.id), dispositivosDesactivados:deactivatedDevices })
   return result
 }
 export async function savePayment(client: PoolClient, actorId: string, id: string, expected: number, input: ServicePaymentInput): Promise<ServiceMutation> {

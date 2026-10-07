@@ -9,6 +9,27 @@ type UploadAuthorization = {
 type FindingEvidencePhase = 'OPENING' | 'CLOSURE'
 type ServiceSignatureRole = 'TECHNICIAN' | 'CLIENT'
 
+async function uploadServicePhoto(endpoint: string, failureMessage: string, deviceId: string, lockToken: string, original: File): Promise<string> {
+  const file = await optimizeFileForStorage('SERVICE_PHOTO', original)
+  const authorization = await apiRequest<UploadAuthorization>(endpoint, {
+    method: 'POST',
+    body: JSON.stringify({ deviceId, lockToken, fileName: file.name, contentType: file.type, size: file.size }),
+  })
+  const response = await fetch(authorization.url, { method: 'PUT', headers: { 'Content-Type': authorization.contentType }, body: file })
+  if (!response.ok) throw new ApiClientError(failureMessage, response.status)
+  return authorization.storagePath
+}
+
+export function uploadTechnicianCriterionEvidence(serviceId: string, criterionId: string, deviceId: string, lockToken: string, original: File): Promise<string> {
+  return uploadServicePhoto(`api/technician/services/${serviceId}/criteria/${criterionId}/media/upload-url`, 'No fue posible subir la evidencia del criterio.', deviceId, lockToken, original)
+}
+
+export async function deleteTechnicianCriterionEvidence(serviceId: string, criterionId: string, deviceId: string, lockToken: string, storagePath: string): Promise<void> {
+  await apiRequest<void>(`api/technician/services/${serviceId}/criteria/${criterionId}/media/delete`, {
+    method: 'POST', body: JSON.stringify({ deviceId, lockToken, storagePath }),
+  })
+}
+
 export async function uploadTechnicianAreaPhoto(
   serviceId: string,
   areaId: string,
