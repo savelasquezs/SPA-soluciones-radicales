@@ -35,7 +35,7 @@
 - [x] Retirar por completo el motor legacy de formularios MIP de BD, API y frontend mediante la migración 011.
 - [x] Definir la implementación mínima necesaria para ejecutar y finalizar el primer Servicio Principal según `docs/product/service-execution.md`.
 - [x] Implementar la fundación de ejecución: inicio online desde una hora antes, snapshots, Productos administrativos de solo lectura, bloqueo persistente por celular, liberación administrativa, idempotencia y RLS.
-- [ ] Implementar la superficie mobile-first del Técnico y preparación durable del paquete por usuario/Servicio.
+- [x] Implementar la superficie mobile-first del Técnico y preparación durable del paquete por usuario/Servicio.
 - [ ] Implementar autosave/outbox offline, recorrido, evaluaciones, revisiones de Dispositivos, Hallazgos y evidencias sobre la fundación autoritativa.
 - [ ] Implementar firmas a pantalla completa, revisión de pendientes y finalización idempotente con confirmación del servidor.
 - [x] Diseñar en Figma el orden editable del recorrido por Servicio, en claro/oscuro, con Subir/Bajar, Aplicar/Cancelar, restablecimiento y navegación a la siguiente Área pendiente; documentar en `docs/product/service-area-route.md`.

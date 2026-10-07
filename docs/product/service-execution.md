@@ -43,6 +43,10 @@ El Servicio sigue visible antes de la visita, pero la ejecución solo puede inic
 
 Iniciar requiere conexión. La preparación previa permite consultar y almacenar el paquete, pero no habilita edición técnica ni sustituye el inicio confirmado por el servidor. Una vez iniciado y congelado el paquete, el Técnico puede continuar sin conexión y sincronizar posteriormente las mutaciones idempotentes.
 
+La preparación se conserva en IndexedDB por usuario y Servicio. El paquete local incluye la copia recibida del servidor, la fecha de guardado, la identidad estable del celular, el bloqueo de ejecución cuando exista y cualquier identificador de inicio cuya respuesta esté pendiente. Una recarga conserva el paquete; otra cuenta no lo reutiliza. Sin conexión, la lista y el detalle muestran únicamente Servicios preparados en ese celular e identifican que se está leyendo una copia local.
+
+La superficie inicial del Técnico es mobile-first: lista sus Servicios Principales asignados, permite preparar y abrir el detalle, presenta contexto, programación, Productos de solo lectura y la vista del recorrido por Áreas. Carga, vacío, error, reintento, conexión y copia local son estados explícitos. Iniciar y recuperar un Servicio continúan siendo operaciones online; ante una respuesta incierta se reutiliza el mismo identificador idempotente.
+
 Al iniciar, el servidor vuelve a cargar la configuración vigente, congela Áreas, criterios aplicables, identidad/estado de Dispositivos y Productos previstos, registra `inicio_real` y cambia el Servicio a `EN_PROCESO` en una sola transacción. No se mezclan datos de una preparación antigua con catálogos nuevos.
 
 Solo un celular puede editar un Servicio `EN_PROCESO`. El bloqueo dura toda la ejecución y se identifica por usuario, Servicio y dispositivo; cerrar el navegador no lo libera. Un Administrador puede liberarlo de forma auditada para permitir recuperación en otro celular. La primera versión no admite edición técnica simultánea ni mezcla automática de dos dispositivos.
@@ -190,4 +194,4 @@ API y frontend también dejan de exponer selección, conteo o validación de for
 
 ## Entrega incremental
 
-La fundación de ejecución implementa el inicio online autoritativo, snapshots de Áreas/Criterios/Dispositivos/Productos, bloqueo persistente por dispositivo, liberación administrativa e idempotencia. Las entregas siguientes ensamblan sobre esta base la superficie móvil, recorrido/autosave offline, revisiones y evidencias, y finalmente firmas/cierre; ninguna etapa reintroduce formularios legacy.
+La fundación de ejecución implementa el inicio online autoritativo, snapshots de Áreas/Criterios/Dispositivos/Productos, bloqueo persistente por dispositivo, liberación administrativa e idempotencia. La segunda entrega incorpora la superficie móvil y la preparación durable por usuario/Servicio. Las entregas siguientes ensamblan recorrido/autosave offline, revisiones y evidencias, y finalmente firmas/cierre; ninguna etapa reintroduce formularios legacy.
