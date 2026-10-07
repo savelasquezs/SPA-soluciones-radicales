@@ -15,6 +15,10 @@
 - [ ] Convertirlos en seeds reproducibles exclusivos para desarrollo y pruebas.
 - [ ] Verificar que los seeds no incluyan credenciales, tokens ni información real no autorizada.
 
+## Preparación de BD para datos reales
+
+- [ ] Al retirar los registros actuales de prueba, cargar los datos definitivos requeridos por Clientes/Sedes y validar los constraints pendientes de la migración `20261005_006_clientes_sedes_areas.sql`: `negocios_certificado_tipo_check` y `sedes_contacto_celular_check` mediante `VALIDATE CONSTRAINT`. No inventar celulares, plantillas ni configuraciones para conservar datos de prueba; ejecutar esta tarea antes de empezar a almacenar datos reales.
+
 ## Archivos privados
 
 - [x] Implementar backend autorizado y URLs firmadas para certificados de usuarios en Cloudflare R2 sin exponer credenciales a la SPA.
