@@ -44,12 +44,15 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           def replace(path, old, new):
-              p=Path(path); value=p.read_text()
-              if new and new in value:
-                  return
-              if old in value:
-                  p.write_text(value.replace(old,new))
-              elif new:
+              p=Path(path); value=p.read_text(); sentinel='__ALREADY_APPLIED_REVIEWED_CHANGE__'
+              # Protect a replacement containing its original, but never skip an
+              # original merely because the shorter replacement is a substring.
+              shielded=bool(new and old in new)
+              source=value.replace(new,sentinel) if shielded else value
+              if old in source:
+                  result=source.replace(old,new)
+                  p.write_text(result.replace(sentinel,new) if shielded else result)
+              elif new and new not in value:
                   raise RuntimeError('Unexpected source in '+path)
           replace('functions/api/services/commands.ts', '],ids,accepted)', '],[id,...(child ? [child.id] : [])],accepted)')
           replace('functions/api/services/commands.ts', "s.tipo_sede='NEGOCIO' and s.valor_servicio is not null`, [id]", "s.tipo_sede='NEGOCIO' and s.valor_servicio is not null and s.periodicidad_meses > 0 and s.duracion_servicio_minutos > 0`, [id]")
@@ -77,9 +80,11 @@ jobs:
           replace('src/components/domain/services/ServiceQuickEditor.vue', '  const fields: ServiceErrors={}', "  const invalidDate=document.querySelector<HTMLElement>('#service-quick-form .date-time-control input[aria-invalid=\"true\"]')\n  if(invalidDate) { invalidDate.focus(); notifications.show('Revisa las fechas y horas antes de guardar.','error'); return }\n  const fields: ServiceErrors={}")
           PY
       - run: npm ci
+        id: install
       - run: npm run lint
+        id: lint
       - name: Record reviewed corrections and formatting
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feature/admin-services-complete' && github.event.pull_request.head.repo.full_name == github.repository
+        if: steps.lint.outcome == 'success' && github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feature/admin-services-complete' && github.event.pull_request.head.repo.full_name == github.repository
         run: |
           git add src functions/api tests e2e
           if ! git diff --cached --quiet; then
@@ -89,28 +94,35 @@ jobs:
             git push origin HEAD:feature/admin-services-complete
           fi
       - run: npm run test:unit:run
+        if: always() && steps.install.outcome == 'success'
       - run: npm run build
+        if: always() && steps.install.outcome == 'success'
       - run: npm run db:check
+        if: always() && steps.install.outcome == 'success'
       - name: Apply all migrations in isolated PostgreSQL
         id: database
+        if: always() && steps.install.outcome == 'success'
         run: node scripts/database/test-certificates.mjs
       - name: Real service commands, outbox and RLS integration tests
-        id: integration
+        if: always() && steps.database.outcome == 'success'
         run: npx vitest run --config vitest.services.config.ts
       - run: npx playwright install --with-deps chromium
-        if: always() && steps.database.outcome == 'success'
+        if: always() && steps.install.outcome == 'success'
       - name: Administrator service flows and responsive review
-        if: always() && steps.database.outcome == 'success'
+        if: always() && steps.install.outcome == 'success'
         run: npx playwright test e2e/admin-services.spec.ts --project=chromium
       - name: Source snapshot for review
         if: always()
-        run: git archive --format=zip HEAD -o /tmp/admin-services-source.zip
+        run: |
+          git archive --format=zip HEAD -o /tmp/admin-services-source.zip
+          if [ -d node_modules ]; then tar -czf /tmp/admin-services-dependencies.tgz node_modules; fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: admin-services-review
           path: |
             /tmp/admin-services-source.zip
+            /tmp/admin-services-dependencies.tgz
             playwright-report
             test-results
           retention-days: 7
