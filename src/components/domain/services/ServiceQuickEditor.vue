@@ -10,6 +10,7 @@ import ServiceSaveFeedback from './ServiceSaveFeedback.vue'
 import { useServiceMutation } from '@/composables/useServiceMutation'
 import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
 import { useAdminServicesStore } from '@/stores/adminServices'
+import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
 import { cancelAdminService, reprogramAdminService, saveServicePayment } from '@/services/adminServicesService'
 import { formatServiceMoney, scheduleFromDraft, scheduleFromRecord, scheduleToDraft, validateSchedule } from '@/helpers/adminServices'
@@ -17,10 +18,10 @@ import type { AdminService, ServiceErrors, ServiceMutation, ServicePaymentInput 
 
 const props=defineProps<{ record: AdminService; mode: 'schedule' | 'team' | 'cancel' | 'payment' }>()
 const emit=defineEmits<{ close: []; saved: [result: ServiceMutation] }>()
-const store=useAdminServicesStore(), notifications=useNotificationsStore()
+const store=useAdminServicesStore(), auth=useAuthStore(), notifications=useNotificationsStore()
 const original=ref(props.record), schedule=ref(scheduleToDraft(scheduleFromRecord(props.record)))
 const child=ref(props.mode==='schedule' && props.record.refuerzo?.estado==='PROGRAMADO' ? scheduleToDraft(scheduleFromRecord(props.record.refuerzo)) : null)
-const reason=ref(''), payment=ref<ServicePaymentInput>({ metodoPago:props.record.pago.metodoPago ?? 'EFECTIVO',estadoPago:'CONFIRMADO',tecnicoQueRecaudaId:props.record.pago.tecnicoQueRecaudaId ?? props.record.pago.tecnicoRecaudoPrevistoId,motivo:'' })
+const reason=ref(''), payment=ref<ServicePaymentInput>({ metodoPago:props.record.pago.metodoPago ?? 'EFECTIVO',estadoPago:'CONFIRMADO',recaudadoPorId:props.record.pago.recaudadoPorId ?? props.record.pago.tecnicoRecaudoPrevistoId,motivo:'' })
 const { saving,errors,errorMessage,conflict,overlapOpen,overlaps,run,invalid,reset,clearValidation,acceptOverlap,cancelOverlap }=useServiceMutation()
 const loadingRecord=ref(false), discardOpen=ref(false), reloadOpen=ref(false)
 const serialize=()=>JSON.stringify({ schedule:schedule.value,child:child.value,reason:reason.value,payment:payment.value })
@@ -32,6 +33,18 @@ const technicians=computed(()=>{
   const people=new Map((store.options?.tecnicos ?? []).map(person=>[person.id,person]))
   for(const person of [original.value.responsable,...original.value.colaboradores]) if(!people.has(person.id)) people.set(person.id,person)
   return [...people.values()]
+})
+const cashReceivers=computed(()=>{
+  const result=[...technicians.value.map(person=>({ id:person.id,label:person.nombreCompleto }))]
+  const admin=auth.profile
+  if(admin) {
+    const existing=result.find(person=>person.id===admin.id)
+    if(existing) existing.label=`Yo · ${admin.nombreCompleto} · Administrador`
+    else result.unshift({ id:admin.id,label:`Yo · ${admin.nombreCompleto} · Administrador` })
+  }
+  const previous=original.value.pago.recaudadoPorId
+  if(previous && !result.some(person=>person.id===previous)) result.push({ id:previous,label:`${original.value.pago.recaudadoPorNombre ?? 'Usuario registrado'} · Histórico` })
+  return result
 })
 const paymentReasonRequired=computed(()=>original.value.pago.estadoPago==='CONFIRMADO' || payment.value.estadoPago==='RECHAZADO')
 const primaryLabel=computed(()=>props.mode==='cancel' ? 'Cancelar servicio' : props.mode==='payment' && payment.value.estadoPago==='CONFIRMADO' ? 'Confirmar pago' : 'Guardar cambios')
@@ -47,12 +60,12 @@ async function save(): Promise<void> {
   if(props.mode==='cancel' && !reason.value.trim()) fields.reason='Indica el motivo de cancelación.'
   if(props.mode==='payment') {
     if(paymentReasonRequired.value && !payment.value.motivo.trim()) fields.motivo='Indica el motivo de la corrección o rechazo.'
-    if(payment.value.metodoPago==='EFECTIVO' && payment.value.estadoPago==='CONFIRMADO' && !payment.value.tecnicoQueRecaudaId) fields.tecnicoQueRecaudaId='Selecciona quién recibió el efectivo.'
+    if(payment.value.metodoPago==='EFECTIVO' && payment.value.estadoPago==='CONFIRMADO' && !payment.value.recaudadoPorId) fields.recaudadoPorId='Selecciona quién recibió el efectivo.'
   }
   if(Object.keys(fields).length) { await invalid(fields); return }
   await run((requestId,allowConflicts)=>{
     if(props.mode==='cancel') return cancelAdminService(original.value,requestId,reason.value)
-    if(props.mode==='payment') return saveServicePayment(original.value,requestId,{ ...payment.value,tecnicoQueRecaudaId:payment.value.metodoPago==='EFECTIVO' ? payment.value.tecnicoQueRecaudaId : null })
+    if(props.mode==='payment') return saveServicePayment(original.value,requestId,{ ...payment.value,recaudadoPorId:payment.value.metodoPago==='EFECTIVO' ? payment.value.recaudadoPorId : null })
     return reprogramAdminService(original.value,requestId,scheduleFromDraft(schedule.value),allowConflicts,child.value ? scheduleFromDraft(child.value) : undefined)
   },result=>{ store.applyMutation(result); baseline.value=serialize(); emit('saved',result); emit('close') },props.mode==='cancel' ? 'Servicio cancelado; el historial se conserva.' : props.mode==='payment' ? 'Registro de pago actualizado.' : 'Cambios guardados. Calendar se actualizará en segundo plano.')
 }
@@ -62,7 +75,7 @@ async function reload(): Promise<void> {
     const fresh=await store.ensureService(original.value.id,true)
     original.value=fresh; schedule.value=scheduleToDraft(scheduleFromRecord(fresh))
     child.value=props.mode==='schedule' && fresh.refuerzo?.estado==='PROGRAMADO' ? scheduleToDraft(scheduleFromRecord(fresh.refuerzo)) : null
-    payment.value={ metodoPago:fresh.pago.metodoPago ?? 'EFECTIVO',estadoPago:'CONFIRMADO',tecnicoQueRecaudaId:fresh.pago.tecnicoQueRecaudaId ?? fresh.pago.tecnicoRecaudoPrevistoId,motivo:'' }
+    payment.value={ metodoPago:fresh.pago.metodoPago ?? 'EFECTIVO',estadoPago:'CONFIRMADO',recaudadoPorId:fresh.pago.recaudadoPorId ?? fresh.pago.tecnicoRecaudoPrevistoId,motivo:'' }
     reason.value=''; baseline.value=serialize(); reset()
   } catch(failure) { notifications.show(failure instanceof Error ? failure.message : 'No fue posible cargar la versión actual.','error') }
   finally { loadingRecord.value=false }
@@ -87,10 +100,10 @@ async function reload(): Promise<void> {
         <div class="svc-form-grid">
           <BaseSelect v-model="payment.metodoPago" name="payment-method" label="Método de pago" required :disabled="saving || loadingRecord"><option value="EFECTIVO">Efectivo</option><option value="TRANSFERENCIA">Transferencia</option></BaseSelect>
           <BaseSelect v-model="payment.estadoPago" name="payment-state" label="Estado del pago" required :disabled="saving || loadingRecord"><option value="CONFIRMADO">Confirmado</option><option value="PENDIENTE">Pendiente</option><option value="RECHAZADO">Rechazado</option></BaseSelect>
-          <BaseSelect v-if="payment.metodoPago==='EFECTIVO' && payment.estadoPago==='CONFIRMADO'" :model-value="payment.tecnicoQueRecaudaId ?? ''" class="svc-full" name="payment-collected-by" label="Quién recibió el efectivo" required :disabled="saving || loadingRecord" :error="errors.tecnicoQueRecaudaId" @update:model-value="payment.tecnicoQueRecaudaId=$event || null"><option value="">Selecciona un técnico</option><option v-for="person in technicians" :key="person.id" :value="person.id">{{ person.nombreCompleto }}</option><option v-if="original.pago.tecnicoQueRecaudaId && !technicians.some(person=>person.id===original.pago.tecnicoQueRecaudaId)" :value="original.pago.tecnicoQueRecaudaId">{{ original.pago.tecnicoQueRecaudaNombre }} · Histórico</option></BaseSelect>
+          <BaseSelect v-if="payment.metodoPago==='EFECTIVO' && payment.estadoPago==='CONFIRMADO'" :model-value="payment.recaudadoPorId ?? ''" class="svc-full" name="payment-collected-by" label="Quién recibió el efectivo" required :disabled="saving || loadingRecord" :error="errors.recaudadoPorId" @update:model-value="payment.recaudadoPorId=$event || null"><option value="">Selecciona quién recibió el efectivo</option><option v-for="person in cashReceivers" :key="person.id" :value="person.id">{{ person.label }}</option></BaseSelect>
           <BaseTextarea v-model="payment.motivo" class="svc-full" name="payment-reason" label="Observación" :required="paymentReasonRequired" :rows="3" maxlength="5000" :disabled="saving || loadingRecord" :error="errors.motivo" />
         </div>
-        <p v-if="payment.estadoPago==='CONFIRMADO'" class="svc-muted svc-small">Al confirmar registras que el dinero fue recibido. Esto no registra una entrega de caja del técnico al administrador.</p>
+        <p v-if="payment.estadoPago==='CONFIRMADO'" class="svc-muted svc-small">Al confirmar registras quién recibió el efectivo. Si lo recibió el administrador, no queda como dinero pendiente del técnico. La entrega de caja entre técnico y administrador se controla por separado.</p>
       </template>
     </form>
     <template #footer><div class="svc-dialog-actions"><BaseButton variant="secondary" size="compact" :disabled="saving || loadingRecord" @click="close">Volver</BaseButton><BaseButton form="service-quick-form" type="submit" size="compact" :variant="mode==='cancel' ? 'danger' : 'primary'" :loading="saving || loadingRecord" :disabled="conflict">{{ primaryLabel }}</BaseButton></div></template>

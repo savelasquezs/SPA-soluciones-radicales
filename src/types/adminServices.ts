@@ -91,8 +91,8 @@ export interface ServicePayment {
   metodoPago: PaymentMethod | null
   estadoPago: PaymentState
   tecnicoRecaudoPrevistoId: string | null
-  tecnicoQueRecaudaId: string | null
-  tecnicoQueRecaudaNombre: string | null
+  recaudadoPorId: string | null
+  recaudadoPorNombre: string | null
   pagoFecha: string | null
   confirmadoAt: string | null
   confirmadoPor: string | null
@@ -202,7 +202,7 @@ export interface UpcomingPatch {
 export interface ServicePaymentInput {
   metodoPago: PaymentMethod
   estadoPago: Exclude<PaymentState, 'SIN_REGISTRAR'>
-  tecnicoQueRecaudaId: string | null
+  recaudadoPorId: string | null
   motivo: string
 }
 export interface ConfirmationEmail {

@@ -71,4 +71,6 @@
 - [x] Desplegar la nueva API en Neon `desarrollo` (deployment 21) conservando las variables privadas existentes y activar `services-outbox` sobre `/jobs/services`. Cron definitivo: `0 13-23 * * *` UTC, equivalente a una ejecución por hora de 8:00 a. m. a 6:00 p. m. en Colombia. El trigger queda como respaldo del procesamiento inmediato posterior al guardado.
 - [ ] Santiago realizará las pruebas de funcionamiento en desarrollo: OAuth, invitaciones/cambios/cancelaciones de Calendar, correo explícitamente autorizado y recuperación por trigger real. En la revisión y migración no se enviaron correos ni invitaciones de prueba.
 
+- [x] Refinar UX administrativa de Servicios: receptor de efectivo Administrador/Técnico, breadcrumb navegable, filtros compactos en desktop y agenda semanal horaria. Los nuevos rangos rápidos de fecha quedan fuera de este cambio mientras evoluciona el componente de calendario.
+
 Detalle técnico y comandos de verificación: `docs/architecture/admin-services.md`.

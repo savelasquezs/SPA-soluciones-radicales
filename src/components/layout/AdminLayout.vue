@@ -30,7 +30,16 @@ const groups: NavigationGroup[] = [
   ] },
 ]
 const visibleGroups = computed(() => groups.map(group => ({ ...group, items: group.items.filter(item => !item.admin || auth.isAdmin) })).filter(group => group.items.length))
-const breadcrumb = computed(() => route.meta.breadcrumb ?? '')
+type BreadcrumbItem = { label: string; to?: string }
+const breadcrumbItems = computed<BreadcrumbItem[]>(() => {
+  const raw=route.meta.breadcrumb
+  if(Array.isArray(raw)) return raw.flatMap(item=>{
+    if(typeof item==='string' && item.trim()) return [{ label:item.trim() }]
+    if(item && typeof item==='object' && typeof (item as BreadcrumbItem).label==='string') return [{ label:(item as BreadcrumbItem).label,to:typeof (item as BreadcrumbItem).to==='string' ? (item as BreadcrumbItem).to : undefined }]
+    return []
+  })
+  return typeof raw==='string' && raw.trim() ? [{ label:raw.trim() }] : []
+})
 function isActive(to: string): boolean { return route.path === to || (to !== '/' && route.path.startsWith(`${to}/`)) }
 watch(() => route.fullPath, () => { navigationOpen.value = false })
 async function logout(): Promise<void> {
@@ -70,7 +79,7 @@ function setTheme(event: Event): void { app.setTheme((event.target as HTMLSelect
         <nav aria-label="Navegación principal"><section v-for="group in visibleGroups" :key="group.label"><h2>{{ group.label }}</h2><RouterLink v-for="item in group.items" :key="item.to" :to="item.to" :class="{ 'nav-active': isActive(item.to) }" @click="navigationOpen = false"><component :is="item.icon" :size="17" aria-hidden="true" />{{ item.label }}</RouterLink></section></nav>
         <div class="sidebar__footer"><div><span>Tu espacio de trabajo</span><strong>Soluciones Radicales</strong></div><a href="https://github.com/savelasquezs/SPA-soluciones-radicales/tree/main/docs" target="_blank" rel="noreferrer"><CircleHelp :size="17" aria-hidden="true" />Ayuda y documentación</a></div>
       </aside>
-      <main class="content"><p v-if="breadcrumb" class="breadcrumb"><template v-if="route.path.startsWith('/configuracion/')"><RouterLink to="/configuracion">Configuración</RouterLink> / {{ String(breadcrumb).split(' / ').slice(1).join(' / ') }}</template><template v-else>{{ breadcrumb }}</template></p><RouterView /></main>
+      <main class="content"><nav v-if="breadcrumbItems.length" class="breadcrumb" aria-label="Ruta de navegación"><template v-for="(item,index) in breadcrumbItems" :key="`${item.label}-${index}`"><RouterLink v-if="item.to" :to="item.to">{{ item.label }}</RouterLink><span v-else :aria-current="index===breadcrumbItems.length-1 ? 'page' : undefined">{{ item.label }}</span><span v-if="index<breadcrumbItems.length-1" class="breadcrumb__separator" aria-hidden="true">/</span></template></nav><RouterView /></main>
     </div>
   </div>
 </template>
@@ -112,8 +121,10 @@ function setTheme(event: Event): void { app.setTheme((event.target as HTMLSelect
 .sidebar__footer strong { font-size: 0.8125rem; font-weight: 500; }
 .sidebar__footer a { display: flex; min-height: 44px; align-items: center; gap: 0.5rem; color: var(--text-secondary); font-size: 0.8125rem; text-decoration: none; }
 .content { width: 100%; max-width: 1184px; min-width: 0; margin: 0 auto; padding: 1.75rem 2rem 3rem; }
-.breadcrumb { margin: 0 0 1rem; color: var(--text-secondary); font-size: 0.75rem; }
-.breadcrumb a { color: inherit; text-decoration: none; }.breadcrumb a:hover { text-decoration: underline; }
+.breadcrumb { display:flex; align-items:center; gap:0.35rem; margin:0 0 1rem; color:var(--text-secondary); font-size:0.75rem; }
+.breadcrumb a { color:inherit; text-decoration:none; }
+.breadcrumb a:hover, .breadcrumb a:focus-visible { color:var(--text); text-decoration:underline; text-underline-offset:2px; }
+.breadcrumb__separator { color:var(--text-muted); }
 .drawer-backdrop { display: none; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 @media (max-width: 1024px) {
