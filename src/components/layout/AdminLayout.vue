@@ -77,7 +77,7 @@ function setTheme(event: Event): void { app.setTheme((event.target as HTMLSelect
       <button v-if="navigationOpen" type="button" class="drawer-backdrop" aria-label="Cerrar navegación" @click="navigationOpen = false"></button>
       <aside id="admin-navigation" class="sidebar" :class="{ 'sidebar--open': navigationOpen }">
         <nav aria-label="Navegación principal"><section v-for="group in visibleGroups" :key="group.label"><h2>{{ group.label }}</h2><RouterLink v-for="item in group.items" :key="item.to" :to="item.to" :class="{ 'nav-active': isActive(item.to) }" @click="navigationOpen = false"><component :is="item.icon" :size="17" aria-hidden="true" />{{ item.label }}</RouterLink></section></nav>
-        <div class="sidebar__footer"><div><span>Tu espacio de trabajo</span><strong>Soluciones Radicales</strong></div><a href="https://github.com/savelasquezs/SPA-soluciones-radicales/tree/main/docs" target="_blank" rel="noreferrer"><CircleHelp :size="17" aria-hidden="true" />Ayuda y documentación</a></div>
+        <div class="sidebar__footer"><div><span>Tu espacio de trabajo</span><strong>Soluciones Radicales</strong></div><a href="https://github.com/savelasquezs/SPA-soluciones-radicales/tree/main/docs" target="_blank" rel="noreferrer"><CircleHelp :size="17" aria-hidden="true" />Ayuda y documentación</a><BaseButton class="sidebar__logout" variant="ghost" @click="logout"><LogOut :size="17" aria-hidden="true" />Cerrar sesión</BaseButton></div>
       </aside>
       <main class="content"><nav v-if="breadcrumbItems.length" class="breadcrumb" aria-label="Ruta de navegación"><template v-for="(item,index) in breadcrumbItems" :key="`${item.label}-${index}`"><RouterLink v-if="item.to" :to="item.to">{{ item.label }}</RouterLink><span v-else :aria-current="index===breadcrumbItems.length-1 ? 'page' : undefined">{{ item.label }}</span><span v-if="index<breadcrumbItems.length-1" class="breadcrumb__separator" aria-hidden="true">/</span></template></nav><RouterView /></main>
     </div>
@@ -121,6 +121,8 @@ function setTheme(event: Event): void { app.setTheme((event.target as HTMLSelect
 .sidebar__footer span { color: var(--text-secondary); font-size: 0.8125rem; }
 .sidebar__footer strong { font-size: 0.8125rem; font-weight: 500; }
 .sidebar__footer a { display: flex; min-height: 44px; align-items: center; gap: 0.5rem; color: var(--text-secondary); font-size: 0.8125rem; text-decoration: none; }
+.sidebar__footer :deep(.sidebar__logout) { width: 100%; justify-content: flex-start; min-height: 44px; padding: 0.75rem; font-size: 0.8125rem; font-weight: 500; }
+.sidebar__footer :deep(.sidebar__logout:hover:not(:disabled)) { background: var(--hover); color: var(--text); transform: none; }
 .content { width: 100%; max-width: 1184px; min-width: 0; margin: 0 auto; padding: 1.75rem 2rem 3rem; }
 .breadcrumb { display:flex; align-items:center; gap:0.35rem; margin:0 0 1rem; color:var(--text-secondary); font-size:0.75rem; }
 .breadcrumb a { color:inherit; text-decoration:none; }
