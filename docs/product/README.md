@@ -38,6 +38,7 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 | `areas` | Espacios de una Sede utilizados en evaluación MIP y monitoreo |
 | `plantillas_areas` | Conjuntos reutilizables de Áreas globales o privadas |
 | `servicios` | Programación, ejecución, pago, firmas, informe y publicación |
+| Próximos por confirmar | Preagenda derivada de periodicidad para contacto y confirmación antes de crear un Servicio |
 | `criterios_mip` | Catálogo administrable de criterios de inspección aplicables a Áreas |
 | `evaluaciones_mip_area` | Histórico de criterios evaluados por Servicio y Área, independiente del catálogo vivo |
 | `productos` | Catálogo de productos utilizados |
@@ -90,10 +91,15 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 - Un Técnico solo accede a Servicios donde está asignado.
 - La edición técnica usa un lease exclusivo renovable.
 - El valor del Servicio Principal se deriva de la Sede.
-- El Refuerzo pertenece a un Principal de la misma Sede, es gratuito, existe máximo uno y se programa exactamente 20 días después.
+- Si la Sede maneja Refuerzo, al confirmar un Principal se crea máximo un Refuerzo asociado, gratuito y de la misma Sede.
+- La fecha inicial del Refuerzo se propone 21 días después del Principal para conservar el mismo día de la semana y la misma hora; es un valor predeterminado editable, no una restricción permanente.
+- Principal y Refuerzo pueden reprogramarse. Al reprogramar conjuntamente un Principal y su Refuerzo, los cambios internos se guardan de forma transaccional y ambas fechas permanecen editables.
 - El Refuerzo no ejecuta la evaluación MIP por Áreas ni genera informe MIP completo.
+- La periodicidad de la Sede genera seguimiento en Próximos por confirmar, no Servicios futuros automáticos en la Agenda.
+- Un próximo por confirmar pasa a Servicio únicamente cuando el cliente confirma y el Administrador completa la acción Agendar.
 - Una Sede residencial no exige evaluación MIP por Áreas ni informe completo.
 - Finalizar exige tiempos reales, datos técnicos requeridos y firmas aplicables.
+- El flujo completo de programación, Refuerzos y Próximos por confirmar está definido en [service-scheduling.md](service-scheduling.md).
 
 ### Ejecución MIP
 
