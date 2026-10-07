@@ -112,7 +112,7 @@ Este archivo registra decisiones permanentes. Las tareas pendientes se mantienen
 - **Estado:** Supersedida por ADR-019
 - **Fecha:** 2026-10-04
 - **Decisión original:** Se reemplazaba el modelo de una fila por campo de `respuestas_mip` por una fila por Servicio + Formulario + Versión + Área, con las respuestas de campos agrupadas en JSONB.
-- **Consecuencia histórica:** El baseline conserva temporalmente `formularios` y `respuestas_formulario`, pero ya no representan el modelo objetivo de ejecución MIP.
+- **Consecuencia histórica:** El baseline original creó `formularios` y `respuestas_formulario`; ADR-019 y la migración 011 retiraron ese modelo.
 
 ## ADR-017 · Migraciones independientes del proveedor
 
@@ -141,5 +141,5 @@ Este archivo registra decisiones permanentes. Las tareas pendientes se mantienen
 - **Criterios:** Los criterios son un catálogo administrable independiente. Conservan identidad estable, nombre, orden, estado y aplicabilidad exclusiva a Áreas externas/perimetrales cuando corresponda. `C/CP/NC/NA` y sus reglas de cálculo son constantes del dominio.
 - **Histórico:** Al iniciar un Servicio se congelan los datos necesarios para interpretar posteriormente la evaluación y las revisiones, sin depender del nombre, orden, estado o composición futura de los catálogos.
 - **Monitoreo:** Los dispositivos permanecen como entidades de Sede/Área y cada Servicio crea revisiones; no se modelan como campos de formulario.
-- **Transición:** Las tablas y columnas actuales relacionadas con `formularios`, `respuestas_formulario`, `formularios_aplicables_json` y `formularios_versiones_json` son estructura transitoria del baseline. No se amplían para nuevas funcionalidades. Su sustitución o eliminación se realizará mediante una migración nueva después de definir la implementación mínima del primer Servicio; las migraciones aplicadas no se modifican.
+- **Transición completada:** `20261006_011_remove_legacy_mip_forms.sql` elimina `formularios`, `respuestas_formulario`, `formularios_aplicables_json` y `formularios_versiones_json` sin modificar migraciones ya aplicadas.
 - **Referencia:** La composición funcional se especifica en `docs/product/service-execution.md`.
