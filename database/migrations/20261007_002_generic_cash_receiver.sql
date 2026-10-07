@@ -5,9 +5,13 @@
 alter table public.servicios
   add column recaudado_por_id uuid references public.usuarios(id) on delete restrict;
 
+-- Backfill compatibility data without pretending that an administrator edited
+-- the historical Service. Other domain triggers remain active.
+alter table public.servicios disable trigger servicios_touch;
 update public.servicios
 set recaudado_por_id = tecnico_que_recauda_id
 where recaudado_por_id is null and tecnico_que_recauda_id is not null;
+alter table public.servicios enable trigger servicios_touch;
 
 create index servicios_recaudado_por_idx on public.servicios(recaudado_por_id)
   where recaudado_por_id is not null;
