@@ -194,4 +194,4 @@ API y frontend también dejan de exponer selección, conteo o validación de for
 
 ## Entrega incremental
 
-La fundación de ejecución implementa el inicio online autoritativo, snapshots de Áreas/Criterios/Dispositivos/Productos, bloqueo persistente por dispositivo, liberación administrativa e idempotencia. La segunda entrega incorpora la superficie móvil y la preparación durable por usuario/Servicio. Las entregas siguientes ensamblan recorrido/autosave offline, revisiones y evidencias, y finalmente firmas/cierre; ninguna etapa reintroduce formularios legacy.
+La fundación de ejecución implementa el inicio online autoritativo, snapshots de Áreas/Criterios/Dispositivos/Productos, bloqueo persistente por dispositivo, liberación administrativa e idempotencia. La segunda entrega incorpora la superficie móvil y la preparación durable por usuario/Servicio. La tercera implementa el recorrido editable, navegación a la siguiente Área y la base durable de mutaciones offline por usuario/Servicio. Las entregas siguientes amplían esa cola compartida con evaluaciones, revisiones y evidencias, y finalmente firmas/cierre; ninguna etapa reintroduce formularios legacy.

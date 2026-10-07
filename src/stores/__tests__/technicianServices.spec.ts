@@ -2,15 +2,18 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as api from '@/services/servicesService'
 import * as cacheService from '@/services/technicianPackageService'
+import * as mutationService from '@/services/technicianMutationService'
+import { ApiClientError } from '@/services/apiService'
 import { useAuthStore } from '@/stores/auth'
 import { useTechnicianServicesStore } from '@/stores/technicianServices'
-import type { TechnicianExecutionSession, TechnicianPackageCache, TechnicianServicePackage, TechnicianServiceSummary } from '@/types/technicianServices'
+import type { TechnicianAreaOrderMutation, TechnicianExecutionSession, TechnicianPackageCache, TechnicianServicePackage, TechnicianServiceSummary } from '@/types/technicianServices'
 
 vi.mock('@/services/servicesService', () => ({
   fetchTechnicianServices: vi.fn<typeof api.fetchTechnicianServices>(),
   fetchTechnicianPackage: vi.fn<typeof api.fetchTechnicianPackage>(),
   startTechnicianService: vi.fn<typeof api.startTechnicianService>(),
   claimTechnicianService: vi.fn<typeof api.claimTechnicianService>(),
+  saveTechnicianAreaOrder: vi.fn<typeof api.saveTechnicianAreaOrder>(),
 }))
 vi.mock('@/services/technicianPackageService', () => ({
   getTechnicianDeviceId: vi.fn<typeof cacheService.getTechnicianDeviceId>(),
@@ -18,10 +21,19 @@ vi.mock('@/services/technicianPackageService', () => ({
   loadTechnicianPackageCache: vi.fn<typeof cacheService.loadTechnicianPackageCache>(),
   saveTechnicianPackageCache: vi.fn<typeof cacheService.saveTechnicianPackageCache>(),
 }))
+vi.mock('@/services/technicianMutationService', () => ({
+  listTechnicianMutations: vi.fn<typeof mutationService.listTechnicianMutations>(),
+  saveTechnicianMutation: vi.fn<typeof mutationService.saveTechnicianMutation>(),
+  deleteTechnicianMutation: vi.fn<typeof mutationService.deleteTechnicianMutation>(),
+}))
+
+let mutationRecords: TechnicianAreaOrderMutation[] = []
 
 const actorId = '10000000-0000-4000-8000-000000000001'
 const serviceId = '10000000-0000-4000-8000-000000000002'
 const deviceId = '10000000-0000-4000-8000-000000000003'
+const lockToken = '10000000-0000-4000-8000-000000000004'
+const areaIds = ['10000000-0000-4000-8000-000000000005', '10000000-0000-4000-8000-000000000006']
 const summary = (estado: TechnicianServiceSummary['estado'] = 'PROGRAMADO'): TechnicianServiceSummary => ({
   id: serviceId,
   solicitud: 'SR-0101',
@@ -54,6 +66,27 @@ const cache = (): TechnicianPackageCache => ({
   lock: null,
   pendingOperation: null,
 })
+const executionCache = (): TechnicianPackageCache => ({
+  ...cache(),
+  package: {
+    ...servicePackage('EN_PROCESO'),
+    areas: areaIds.map((id, position) => ({
+      id,
+      areaId: id,
+      nombre: position ? 'Bodega' : 'Cocina',
+      esExterna: false,
+      posicionInicial: position,
+      posicionRecorrido: position,
+      sinAcceso: false,
+      sinAccesoDescripcion: null,
+      sinAccesoFotoStoragePath: null,
+      version: 1,
+      criterios: [],
+      dispositivos: [],
+    })),
+  },
+  lock: { token: lockToken, deviceId, acquiredAt: '2026-10-07T13:30:00Z' },
+})
 
 beforeEach(() => {
   setActivePinia(createPinia())
@@ -64,6 +97,14 @@ beforeEach(() => {
   vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([])
   vi.mocked(cacheService.loadTechnicianPackageCache).mockResolvedValue(null)
   vi.mocked(cacheService.saveTechnicianPackageCache).mockResolvedValue()
+  mutationRecords = []
+  vi.mocked(mutationService.listTechnicianMutations).mockImplementation(async (_actorId, selectedServiceId) => mutationRecords.filter(item => !selectedServiceId || item.serviceId === selectedServiceId))
+  vi.mocked(mutationService.saveTechnicianMutation).mockImplementation(async value => {
+    mutationRecords = [...mutationRecords.filter(item => item.requestId !== value.requestId), structuredClone(value)]
+  })
+  vi.mocked(mutationService.deleteTechnicianMutation).mockImplementation(async value => {
+    mutationRecords = mutationRecords.filter(item => item.requestId !== value.requestId)
+  })
 })
 
 describe('technician services state', () => {
@@ -99,5 +140,61 @@ describe('technician services state', () => {
     expect(saved.some(item => item.pendingOperation?.kind === 'START')).toBe(true)
     expect(saved[saved.length - 1]).toMatchObject({ lock: session.lock, pendingOperation: null })
     expect(store.currentPackage?.service.estado).toBe('EN_PROCESO')
+  })
+
+  it('applies an offline area order durably without calling the API', async () => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+    vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([executionCache()])
+    const store = useTechnicianServicesStore()
+    await store.ensurePackage(serviceId)
+    expect(await store.applyAreaOrder(serviceId, [...areaIds].reverse())).toBe('pending')
+    expect(store.currentPackage?.areas.map(area => area.id)).toEqual([...areaIds].reverse())
+    expect(store.pendingSyncCount).toBe(1)
+    expect(api.saveTechnicianAreaOrder).not.toHaveBeenCalled()
+  })
+
+  it('synchronizes the queued order and applies definitive versions', async () => {
+    vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([executionCache()])
+    vi.mocked(api.saveTechnicianAreaOrder).mockResolvedValue({ areas: [
+      { id: areaIds[1]!, posicionRecorrido: 0, version: 2 },
+      { id: areaIds[0]!, posicionRecorrido: 1, version: 2 },
+    ] })
+    const store = useTechnicianServicesStore()
+    await store.ensurePackage(serviceId)
+    expect(await store.applyAreaOrder(serviceId, [...areaIds].reverse())).toBe('synced')
+    expect(store.pendingSyncCount).toBe(0)
+    expect(store.currentPackage?.areas.map(area => [area.id, area.version])).toEqual([[areaIds[1], 2], [areaIds[0], 2]])
+  })
+
+  it('keeps the local proposal until the technician resolves a version conflict', async () => {
+    vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([executionCache()])
+    vi.mocked(api.saveTechnicianAreaOrder).mockRejectedValue(new ApiClientError(
+      'El recorrido cambió.',
+      409,
+      'VERSION_CONFLICT',
+      { remote: { areaIds, versions: areaIds.map(id => ({ id, version: 2 })) } },
+    ))
+    const store = useTechnicianServicesStore()
+    await store.ensurePackage(serviceId)
+    expect(await store.applyAreaOrder(serviceId, [...areaIds].reverse())).toBe('conflict')
+    expect(store.currentPackage?.areas.map(area => area.id)).toEqual([...areaIds].reverse())
+    expect(store.currentConflict?.conflict?.areaIds).toEqual(areaIds)
+    await store.discardAreaOrderConflict(serviceId)
+    expect(store.currentPackage?.areas.map(area => area.id)).toEqual(areaIds)
+    expect(store.currentConflict).toBeNull()
+  })
+
+  it('does not reuse an idempotency key after an uncertain network response', async () => {
+    vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([executionCache()])
+    vi.mocked(api.saveTechnicianAreaOrder).mockRejectedValueOnce(new TypeError('Network error'))
+    const store = useTechnicianServicesStore()
+    await store.ensurePackage(serviceId)
+    expect(await store.applyAreaOrder(serviceId, [...areaIds].reverse())).toBe('pending')
+    expect(mutationRecords).toHaveLength(1)
+    expect(mutationRecords[0]?.status).toBe('SENDING')
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+    expect(await store.applyAreaOrder(serviceId, areaIds)).toBe('pending')
+    expect(mutationRecords).toHaveLength(2)
+    expect(new Set(mutationRecords.map(item => item.requestId)).size).toBe(2)
   })
 })
