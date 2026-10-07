@@ -1,4 +1,5 @@
 import type { ServiceKind, ServiceState } from './adminServices'
+import type { PestGroup } from './mipCatalogs'
 
 export type DeviceState = 'ACTIVO' | 'FUERA_DE_USO' | 'DANADO'
 export type MipEvaluation = 'C' | 'CP' | 'NC' | 'NA'
@@ -47,8 +48,45 @@ export interface TechnicianDevice {
   numero: string
   ubicacion: string
   tipoCodigo: string
+  tipoNombre: string
+  clasificacion: PestGroup | null
+  plagas: TechnicianPestSnapshot[]
   estadoAnterior: DeviceState
   revisado: boolean
+  revision: TechnicianDeviceReview | null
+}
+
+export interface TechnicianPestSnapshot {
+  codigo: string
+  nombre: string
+}
+
+export interface TechnicianDeviceCapture {
+  plagaCodigo: string
+  plagaNombreSnapshot: string
+  cantidad: number
+}
+
+export interface TechnicianDeviceReview {
+  id: string
+  estadoObservado: DeviceState
+  capturas: TechnicianDeviceCapture[]
+  consumo: string
+  productoQuimico: string
+  antidoto: string
+  observaciones: string
+  fotoStoragePath: string | null
+  fotoLocalId?: string | null
+  version: number
+}
+
+export interface TechnicianDeviceReviewInput {
+  estadoObservado: DeviceState
+  capturas: Array<{ plagaCodigo: string; cantidad: number }>
+  consumo: string
+  productoQuimico: string
+  antidoto: string
+  observaciones: string
 }
 
 export interface TechnicianArea {
@@ -176,12 +214,28 @@ export interface TechnicianAreaAccessMutation extends TechnicianMutationBase {
   conflict: TechnicianAreaAccessState | null
 }
 
+export interface TechnicianDeviceReviewResult {
+  review: TechnicianDeviceReview
+}
+
+export interface TechnicianDeviceReviewMutation extends TechnicianMutationBase, TechnicianDeviceReviewInput {
+  kind: 'DEVICE_REVIEW'
+  areaId: string
+  serviceDeviceId: string
+  reviewId: string
+  photoMediaId: string | null
+  photoStoragePath: string | null
+  version: number
+  conflict: TechnicianDeviceReview | null
+}
+
 export interface TechnicianMediaDraft {
   schemaVersion: 1
   id: string
   actorId: string
   serviceId: string
   areaId: string
+  serviceDeviceId?: string
   fileName: string
   contentType: string
   size: number
@@ -190,4 +244,4 @@ export interface TechnicianMediaDraft {
   savedAt: string
 }
 
-export type TechnicianMutation = TechnicianAreaOrderMutation | TechnicianCriterionEvaluationMutation | TechnicianAreaAccessMutation
+export type TechnicianMutation = TechnicianAreaOrderMutation | TechnicianCriterionEvaluationMutation | TechnicianAreaAccessMutation | TechnicianDeviceReviewMutation

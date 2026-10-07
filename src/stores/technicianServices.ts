@@ -1,14 +1,14 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { isExactAreaPermutation, sortTechnicianServices } from '@/helpers/technicianServices'
+import { isExactAreaPermutation, sortTechnicianServices, technicianDevicePhotoRequired } from '@/helpers/technicianServices'
 import { useAuthStore } from '@/stores/auth'
-import { claimTechnicianService, fetchTechnicianPackage, fetchTechnicianServices, saveTechnicianAreaAccess, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, startTechnicianService } from '@/services/servicesService'
+import { claimTechnicianService, fetchTechnicianPackage, fetchTechnicianServices, saveTechnicianAreaAccess, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, startTechnicianService } from '@/services/servicesService'
 import { ApiClientError } from '@/services/apiService'
 import { getTechnicianDeviceId, listTechnicianPackageCaches, loadTechnicianPackageCache, saveTechnicianPackageCache } from '@/services/technicianPackageService'
 import { deleteTechnicianMutation, listTechnicianMutations, saveTechnicianMutation } from '@/services/technicianMutationService'
 import { deleteTechnicianMedia, loadTechnicianMedia, saveTechnicianMedia } from '@/services/technicianMediaService'
-import { deleteTechnicianAreaPhoto, uploadTechnicianAreaPhoto } from '@/services/serviceMediaService'
-import type { MipEvaluation, TechnicianAreaAccessMutation, TechnicianAreaAccessState, TechnicianAreaOrderConflict, TechnicianAreaOrderMutation, TechnicianAreaOrderResult, TechnicianCriterion, TechnicianCriterionEvaluationMutation, TechnicianExecutionSession, TechnicianMutation, TechnicianPackageCache, TechnicianPendingOperation, TechnicianServicePackage, TechnicianServiceSummary } from '@/types/technicianServices'
+import { deleteTechnicianAreaPhoto, deleteTechnicianDevicePhoto, uploadTechnicianAreaPhoto, uploadTechnicianDevicePhoto } from '@/services/serviceMediaService'
+import type { MipEvaluation, TechnicianAreaAccessMutation, TechnicianAreaAccessState, TechnicianAreaOrderConflict, TechnicianAreaOrderMutation, TechnicianAreaOrderResult, TechnicianCriterion, TechnicianCriterionEvaluationMutation, TechnicianDevice, TechnicianDeviceReview, TechnicianDeviceReviewInput, TechnicianDeviceReviewMutation, TechnicianExecutionSession, TechnicianMutation, TechnicianPackageCache, TechnicianPendingOperation, TechnicianServicePackage, TechnicianServiceSummary } from '@/types/technicianServices'
 
 function onlineNow(): boolean {
   return typeof navigator === 'undefined' || navigator.onLine
@@ -183,6 +183,39 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     await persistPackage({ ...cache.package, areas })
   }
 
+  async function persistDeviceReview(serviceId: string, areaId: string, serviceDeviceId: string, review: TechnicianDeviceReview): Promise<void> {
+    const cache = caches.value[serviceId]
+    if (!cache) throw new Error('Prepara el servicio antes de revisar sus dispositivos.')
+    let found = false
+    const areas = cache.package.areas.map(area => {
+      if (area.id !== areaId) return area
+      const dispositivos = area.dispositivos.map(device => {
+        if (device.id !== serviceDeviceId) return device
+        found = true
+        return { ...device, revisado: true, revision: review }
+      })
+      return { ...area, dispositivos }
+    })
+    if (!found) throw new Error('El dispositivo no pertenece al Área seleccionada.')
+    await persistPackage({ ...cache.package, areas })
+  }
+
+  function reviewFromMutation(device: TechnicianDevice, mutation: TechnicianDeviceReviewMutation, base?: TechnicianDeviceReview): TechnicianDeviceReview {
+    const pestNames = new Map(device.plagas.map(pest => [pest.codigo, pest.nombre]))
+    return {
+      id: mutation.reviewId,
+      estadoObservado: mutation.estadoObservado,
+      capturas: mutation.capturas.map(capture => ({ ...capture, plagaNombreSnapshot: pestNames.get(capture.plagaCodigo) ?? capture.plagaCodigo })),
+      consumo: mutation.consumo,
+      productoQuimico: mutation.productoQuimico,
+      antidoto: mutation.antidoto,
+      observaciones: mutation.observaciones,
+      fotoStoragePath: mutation.photoStoragePath ?? base?.fotoStoragePath ?? null,
+      fotoLocalId: mutation.photoMediaId,
+      version: base?.version ?? mutation.version,
+    }
+  }
+
   function conflictDetails(failure: ApiClientError): TechnicianAreaOrderConflict | null {
     const remote = failure.details?.remote
     if (!remote || typeof remote !== 'object' || Array.isArray(remote)) return null
@@ -205,6 +238,15 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     const record = remote as Partial<TechnicianAreaAccessState>
     if (!record.id || typeof record.sinAcceso !== 'boolean' || !Number.isSafeInteger(record.version)) return null
     return record as TechnicianAreaAccessState
+  }
+
+  function deviceReviewConflictDetails(failure: ApiClientError): TechnicianDeviceReview | null {
+    const remote = failure.details?.remote
+    if (!remote || typeof remote !== 'object' || Array.isArray(remote)) return null
+    const record = remote as Partial<TechnicianDeviceReview>
+    if (!record.id || !['ACTIVO', 'DANADO', 'FUERA_DE_USO'].includes(record.estadoObservado ?? '')
+      || !Array.isArray(record.capturas) || !Number.isSafeInteger(record.version)) return null
+    return record as TechnicianDeviceReview
   }
 
   async function syncPending(serviceId: string): Promise<'synced' | 'pending' | 'conflict'> {
@@ -251,7 +293,7 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
               ? { ...result.criterion, evaluacion: latest.evaluation, observacion: latest.observation || null }
               : result.criterion
             await persistCriterionEvaluation(serviceId, sending.areaId, criterion)
-          } else {
+          } else if (sending.kind === 'AREA_ACCESS') {
             const areaId = sending.areaId
             let photoStoragePath = sending.photoStoragePath
             if (sending.withoutAccess && !photoStoragePath) {
@@ -283,9 +325,46 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
               ? { ...result.area, sinAcceso: latest.withoutAccess, sinAccesoDescripcion: latest.withoutAccess ? latest.description : null,
                   sinAccesoFotoStoragePath: latest.withoutAccess ? latest.photoStoragePath : null }
               : result.area, latest?.photoMediaId ?? null)
+          } else {
+            let reviewOperation = sending as TechnicianDeviceReviewMutation
+            const serviceDeviceId = reviewOperation.serviceDeviceId
+            let photoStoragePath = reviewOperation.photoStoragePath
+            if (reviewOperation.photoMediaId && !photoStoragePath) {
+              const media = await loadTechnicianMedia(reviewOperation.actorId, reviewOperation.photoMediaId)
+              if (!media) throw new Error('La fotografía local del dispositivo no está disponible.')
+              photoStoragePath = await uploadTechnicianDevicePhoto(serviceId, serviceDeviceId, reviewOperation.deviceId, reviewOperation.lockToken, media.file)
+              reviewOperation = { ...reviewOperation, photoStoragePath, updatedAt: new Date().toISOString() }
+              sending = reviewOperation
+              await saveTechnicianMutation(reviewOperation)
+              await reloadMutations(serviceId)
+            }
+            const input: TechnicianDeviceReviewInput = {
+              estadoObservado: reviewOperation.estadoObservado,
+              capturas: reviewOperation.capturas,
+              consumo: reviewOperation.consumo,
+              productoQuimico: reviewOperation.productoQuimico,
+              antidoto: reviewOperation.antidoto,
+              observaciones: reviewOperation.observaciones,
+            }
+            const result = await saveTechnicianDeviceReview(serviceId, serviceDeviceId, reviewOperation.requestId, reviewOperation.deviceId,
+              reviewOperation.lockToken, reviewOperation.reviewId, reviewOperation.version, input, photoStoragePath)
+            await deleteTechnicianMutation(reviewOperation)
+            if (reviewOperation.photoMediaId) await deleteTechnicianMedia(reviewOperation.actorId, reviewOperation.photoMediaId)
+            const remaining = await listTechnicianMutations(actorId(), serviceId)
+            const sameDevice = remaining.filter((item): item is TechnicianDeviceReviewMutation => item.kind === 'DEVICE_REVIEW'
+              && item.serviceDeviceId === serviceDeviceId && item.status !== 'CONFLICT')
+            for (const queued of sameDevice) {
+              await saveTechnicianMutation({ ...queued, version: result.review.version, updatedAt: new Date().toISOString() })
+            }
+            const latest = sameDevice[sameDevice.length - 1]
+            const area = caches.value[serviceId]?.package.areas.find(item => item.id === reviewOperation.areaId)
+            const device = area?.dispositivos.find(item => item.id === serviceDeviceId)
+            const review = latest && device ? reviewFromMutation(device, latest, result.review) : result.review
+            await persistDeviceReview(serviceId, reviewOperation.areaId, serviceDeviceId, review)
           }
         } catch (failure) {
-          if (sending.kind === 'AREA_ACCESS' && failure instanceof ApiClientError && failure.code === 'PHOTO_NOT_FOUND' && sending.photoMediaId) {
+          if ((sending.kind === 'AREA_ACCESS' || sending.kind === 'DEVICE_REVIEW') && failure instanceof ApiClientError
+            && failure.code === 'PHOTO_NOT_FOUND' && sending.photoMediaId) {
             await saveTechnicianMutation({ ...sending, photoStoragePath: null, status: 'PENDING', error: failure.message, updatedAt: new Date().toISOString() })
             await reloadMutations(serviceId)
             return 'pending'
@@ -298,9 +377,12 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
           } else if (sending.kind === 'CRITERION_EVALUATION') {
             await saveTechnicianMutation({ ...sending, status: retryable ? 'SENDING' : 'CONFLICT',
               conflict: failure instanceof ApiClientError ? criterionConflictDetails(failure) : null, error, updatedAt: new Date().toISOString() })
-          } else {
+          } else if (sending.kind === 'AREA_ACCESS') {
             await saveTechnicianMutation({ ...sending, status: retryable ? 'SENDING' : 'CONFLICT',
               conflict: failure instanceof ApiClientError ? areaAccessConflictDetails(failure) : null, error, updatedAt: new Date().toISOString() })
+          } else {
+            await saveTechnicianMutation({ ...sending, status: retryable ? 'SENDING' : 'CONFLICT',
+              conflict: failure instanceof ApiClientError ? deviceReviewConflictDetails(failure) : null, error, updatedAt: new Date().toISOString() })
           }
           await reloadMutations(serviceId)
           return retryable ? 'pending' : 'conflict'
@@ -550,6 +632,133 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     return syncPending(serviceId)
   }
 
+  function deviceReviewMutation(serviceDeviceId: string): TechnicianDeviceReviewMutation | null {
+    return currentMutations.value.find((item): item is TechnicianDeviceReviewMutation => item.kind === 'DEVICE_REVIEW'
+      && item.serviceDeviceId === serviceDeviceId) ?? null
+  }
+
+  async function applyDeviceReview(
+    serviceId: string,
+    areaId: string,
+    serviceDeviceId: string,
+    input: TechnicianDeviceReviewInput,
+    photo: File | null,
+  ): Promise<'synced' | 'pending' | 'conflict'> {
+    const cache = caches.value[serviceId]
+    if (!cache || cache.package.service.estado !== 'EN_PROCESO' || !cache.lock) throw new Error('Este celular no puede revisar los dispositivos del servicio.')
+    const area = cache.package.areas.find(item => item.id === areaId)
+    const device = area?.dispositivos.find(item => item.id === serviceDeviceId)
+    if (!area || !device) throw new Error('El dispositivo no pertenece al Área seleccionada.')
+    if (area.sinAcceso) throw new Error('Habilita el acceso al Área antes de revisar sus dispositivos.')
+    if (!['ACTIVO', 'DANADO', 'FUERA_DE_USO'].includes(input.estadoObservado)) throw new Error('Selecciona un estado válido para el dispositivo.')
+    const pestCodes = new Set(device.plagas.map(pest => pest.codigo))
+    const seen = new Set<string>()
+    const captures = input.capturas.map(capture => {
+      if (!pestCodes.has(capture.plagaCodigo) || seen.has(capture.plagaCodigo)
+        || !Number.isSafeInteger(capture.cantidad) || capture.cantidad < 1 || capture.cantidad > 1_000_000) {
+        throw new Error('Las capturas registradas no son válidas.')
+      }
+      seen.add(capture.plagaCodigo)
+      return capture
+    })
+    const normalized: TechnicianDeviceReviewInput = {
+      estadoObservado: input.estadoObservado,
+      capturas: captures,
+      consumo: input.consumo.trim(),
+      productoQuimico: input.productoQuimico.trim(),
+      antidoto: input.antidoto.trim(),
+      observaciones: input.observaciones.trim(),
+    }
+    if (normalized.consumo.length > 500 || normalized.productoQuimico.length > 500
+      || normalized.antidoto.length > 500 || normalized.observaciones.length > 2_000) {
+      throw new Error('La información de la revisión supera el tamaño permitido.')
+    }
+    const existing = await reloadMutations(serviceId)
+    if (existing.some(item => item.kind === 'DEVICE_REVIEW' && item.serviceDeviceId === serviceDeviceId && item.status === 'CONFLICT')) return 'conflict'
+    if (existing.some(item => item.kind === 'DEVICE_REVIEW' && item.serviceDeviceId === serviceDeviceId && item.status === 'SENDING')) {
+      throw new Error('Espera a que termine la sincronización del dispositivo antes de cambiarlo.')
+    }
+    const reusable = [...existing].reverse().find((item): item is TechnicianDeviceReviewMutation => item.kind === 'DEVICE_REVIEW'
+      && item.serviceDeviceId === serviceDeviceId && item.status === 'PENDING')
+    const requiresPhoto = technicianDevicePhotoRequired(device.estadoAnterior, normalized.estadoObservado)
+    const newMediaId = photo && requiresPhoto ? crypto.randomUUID() : null
+    const photoMediaId = requiresPhoto ? newMediaId ?? reusable?.photoMediaId ?? device.revision?.fotoLocalId ?? null : null
+    const photoStoragePath = requiresPhoto && !newMediaId ? reusable?.photoStoragePath ?? device.revision?.fotoStoragePath ?? null : null
+    if (requiresPhoto && !photoMediaId && !photoStoragePath) {
+      throw new Error('Adjunta una fotografía del cambio de estado del dispositivo.')
+    }
+    if (photo && newMediaId) {
+      await saveTechnicianMedia({ schemaVersion: 1, id: newMediaId, actorId: actorId(), serviceId, areaId,
+        serviceDeviceId, file: photo, savedAt: new Date().toISOString() })
+    }
+    const now = new Date().toISOString()
+    const operation: TechnicianDeviceReviewMutation = reusable
+      ? { ...reusable, ...normalized, photoMediaId, photoStoragePath, updatedAt: now, error: null }
+      : {
+          schemaVersion: 1,
+          requestId: crypto.randomUUID(),
+          actorId: actorId(),
+          serviceId,
+          deviceId: cache.deviceId,
+          lockToken: cache.lock.token,
+          kind: 'DEVICE_REVIEW',
+          areaId,
+          serviceDeviceId,
+          reviewId: device.revision?.id ?? crypto.randomUUID(),
+          ...normalized,
+          photoMediaId,
+          photoStoragePath,
+          version: device.revision?.version ?? 0,
+          status: 'PENDING',
+          createdAt: now,
+          updatedAt: now,
+          conflict: null,
+          error: null,
+        }
+    try {
+      await saveTechnicianMutation(operation)
+    } catch (failure) {
+      if (newMediaId) await deleteTechnicianMedia(actorId(), newMediaId)
+      throw failure
+    }
+    if (reusable?.photoMediaId && reusable.photoMediaId !== photoMediaId) await deleteTechnicianMedia(actorId(), reusable.photoMediaId)
+    await reloadMutations(serviceId)
+    await persistDeviceReview(serviceId, areaId, serviceDeviceId, reviewFromMutation(device, operation, device.revision ?? undefined))
+    return onlineNow() ? syncPending(serviceId) : 'pending'
+  }
+
+  async function discardDeviceReviewConflict(serviceId: string, serviceDeviceId: string): Promise<void> {
+    const pending = await reloadMutations(serviceId)
+    const conflicted = pending.find((item): item is TechnicianDeviceReviewMutation => item.kind === 'DEVICE_REVIEW'
+      && item.serviceDeviceId === serviceDeviceId && item.status === 'CONFLICT' && Boolean(item.conflict))
+    if (!conflicted?.conflict) throw new Error('No hay una revisión sincronizada disponible para el dispositivo.')
+    const affected = pending.filter((item): item is TechnicianDeviceReviewMutation => item.kind === 'DEVICE_REVIEW' && item.serviceDeviceId === serviceDeviceId)
+    for (const operation of affected) {
+      if (operation.photoStoragePath && operation.photoStoragePath !== conflicted.conflict.fotoStoragePath) {
+        await deleteTechnicianDevicePhoto(serviceId, serviceDeviceId, operation.deviceId, operation.lockToken, operation.photoStoragePath)
+      }
+      await deleteTechnicianMutation(operation)
+      if (operation.photoMediaId) await deleteTechnicianMedia(operation.actorId, operation.photoMediaId)
+    }
+    await reloadMutations(serviceId)
+    await persistDeviceReview(serviceId, conflicted.areaId, serviceDeviceId, conflicted.conflict)
+  }
+
+  async function retryDeviceReviewConflict(serviceId: string, serviceDeviceId: string): Promise<'synced' | 'pending' | 'conflict'> {
+    const pending = await reloadMutations(serviceId)
+    const conflicted = pending.find((item): item is TechnicianDeviceReviewMutation => item.kind === 'DEVICE_REVIEW'
+      && item.serviceDeviceId === serviceDeviceId && item.status === 'CONFLICT' && Boolean(item.conflict))
+    if (!conflicted?.conflict) throw new Error('No es posible reintentar la revisión del dispositivo.')
+    for (const operation of pending.filter(item => item.kind === 'DEVICE_REVIEW' && item.serviceDeviceId === serviceDeviceId)) {
+      await deleteTechnicianMutation(operation)
+    }
+    const now = new Date().toISOString()
+    await saveTechnicianMutation({ ...conflicted, requestId: crypto.randomUUID(), reviewId: conflicted.conflict.id,
+      version: conflicted.conflict.version, status: 'PENDING', conflict: null, error: null, createdAt: now, updatedAt: now })
+    await reloadMutations(serviceId)
+    return syncPending(serviceId)
+  }
+
   async function loadPackage(serviceId: string): Promise<TechnicianServicePackage> {
     const request = ++packageRequest
     currentServiceId.value = serviceId
@@ -673,5 +882,9 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     applyAreaAccess,
     discardAreaAccessConflict,
     retryAreaAccessConflict,
+    deviceReviewMutation,
+    applyDeviceReview,
+    discardDeviceReviewConflict,
+    retryDeviceReviewConflict,
   }
 })

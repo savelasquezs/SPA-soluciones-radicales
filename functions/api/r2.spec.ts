@@ -8,7 +8,7 @@ vi.mock('./auth', () => ({
   },
 }))
 
-import { assertAreaNoAccessStoragePath, createAreaNoAccessUploadUrl, createMasterReadUrl, createMasterUploadUrl } from './r2'
+import { assertAreaNoAccessStoragePath, assertDeviceReviewStoragePath, createAreaNoAccessUploadUrl, createDeviceReviewUploadUrl, createMasterReadUrl, createMasterUploadUrl } from './r2'
 
 const original = {
   accountId: process.env.R2_ACCOUNT_ID,
@@ -85,5 +85,15 @@ describe('Cloudflare R2 presigned URLs', () => {
     const input = { serviceId: '10000000-0000-4000-8000-000000000001', areaId: '10000000-0000-4000-8000-000000000002' }
     expect(() => createAreaNoAccessUploadUrl({ ...input, fileName: 'foto.jpg', contentType: 'image/jpeg', size: 10 * 1024 * 1024 + 1 })).toThrow('10 MB')
     expect(() => createAreaNoAccessUploadUrl({ ...input, fileName: 'foto.pdf', contentType: 'application/pdf', size: 1_000 })).toThrow('JPG, PNG o WebP')
+  })
+
+  it('aísla la fotografía de revisión por Servicio y dispositivo congelado', () => {
+    const serviceId = '10000000-0000-4000-8000-000000000001'
+    const serviceDeviceId = '10000000-0000-4000-8000-000000000004'
+    const signed = createDeviceReviewUploadUrl({ serviceId, serviceDeviceId, fileName: 'Daño puesto.webp', contentType: 'image/webp', size: 4_096 })
+    const url = new URL(signed.url)
+    expect(signed.storagePath).toMatch(new RegExp(`^services/${serviceId}/devices/${serviceDeviceId}/review/[0-9a-f-]+-Dano-puesto\\.webp$`))
+    expect(url.pathname).toContain(`/sr-service-media/services/${serviceId}/devices/${serviceDeviceId}/review/`)
+    expect(() => assertDeviceReviewStoragePath(signed.storagePath, serviceId, '10000000-0000-4000-8000-000000000005')).toThrow('ruta de la fotografía')
   })
 })

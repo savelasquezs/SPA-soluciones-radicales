@@ -82,14 +82,22 @@ async function frozenAreas(client: PoolClient, serviceId: string): Promise<Techn
     criterio_nombre_snapshot as nombre,solo_area_externa_snapshot as "soloAreaExterna",evaluacion,observacion,
     evidencias_storage_paths as "evidenciasStoragePaths",version::integer from public.evaluaciones_mip_area
     where servicio_id=$1 order by servicio_area_id,lower(criterio_nombre_snapshot),id`, [serviceId])).rows
-  const devices = (await client.query<(TechnicianDevice & { servicioAreaId: string })>(`select id,servicio_area_id as "servicioAreaId",dispositivo_id as "dispositivoId",
-    numero_snapshot as numero,ubicacion_snapshot as ubicacion,tipo_dispositivo_codigo_snapshot as "tipoCodigo",
-    estado_anterior_snapshot as "estadoAnterior",exists(select 1 from public.revisiones_dispositivos revision
-      where revision.servicio_id=servicio_dispositivos.servicio_id and revision.dispositivo_id=servicio_dispositivos.dispositivo_id) as revisado from public.servicio_dispositivos
-    where servicio_id=$1 order by servicio_area_id,lower(numero_snapshot),id`, [serviceId])).rows
+  const devices = (await client.query<(TechnicianDevice & { servicioAreaId: string })>(`select sd.id,sd.servicio_area_id as "servicioAreaId",sd.dispositivo_id as "dispositivoId",
+    sd.numero_snapshot as numero,sd.ubicacion_snapshot as ubicacion,sd.tipo_dispositivo_codigo_snapshot as "tipoCodigo",
+    sd.tipo_dispositivo_nombre_snapshot as "tipoNombre",sd.clasificacion_snapshot as clasificacion,
+    sd.plagas_snapshot_json as plagas,sd.estado_anterior_snapshot as "estadoAnterior",r.id is not null as revisado,
+    case when r.id is null then null else jsonb_build_object(
+      'id',r.id,'estadoObservado',r.estado_observado,'capturas',r.capturas_json,
+      'consumo',case when r.consumo is null then '' when jsonb_typeof(r.consumo)='string' then r.consumo #>> '{}' else r.consumo::text end,
+      'productoQuimico',coalesce(r.producto_quimico,''),'antidoto',coalesce(r.antidoto,''),
+      'observaciones',coalesce(r.observaciones,''),'fotoStoragePath',r.foto_storage_path,'version',r.version::integer
+    ) end as revision
+    from public.servicio_dispositivos sd
+    left join public.revisiones_dispositivos r on r.servicio_dispositivo_id=sd.id
+    where sd.servicio_id=$1 order by sd.servicio_area_id,lower(sd.numero_snapshot),sd.id`, [serviceId])).rows
   return areas.map(area => ({ ...area,
     criterios: criteria.filter(item => item.servicioAreaId === area.id).map(item => ({ id:item.id,criterioId:item.criterioId,nombre:item.nombre,soloAreaExterna:item.soloAreaExterna,evaluacion:item.evaluacion,observacion:item.observacion,evidenciasStoragePaths:item.evidenciasStoragePaths,version:item.version })),
-    dispositivos: devices.filter(item => item.servicioAreaId === area.id).map(item => ({ id:item.id,dispositivoId:item.dispositivoId,numero:item.numero,ubicacion:item.ubicacion,tipoCodigo:item.tipoCodigo,estadoAnterior:item.estadoAnterior,revisado:item.revisado })) }))
+    dispositivos: devices.filter(item => item.servicioAreaId === area.id).map(item => ({ id:item.id,dispositivoId:item.dispositivoId,numero:item.numero,ubicacion:item.ubicacion,tipoCodigo:item.tipoCodigo,tipoNombre:item.tipoNombre,clasificacion:item.clasificacion,plagas:item.plagas,estadoAnterior:item.estadoAnterior,revisado:item.revisado,revision:item.revision })) }))
 }
 
 async function liveAreas(client: PoolClient, serviceId: string): Promise<TechnicianArea[]> {
@@ -104,12 +112,17 @@ async function liveAreas(client: PoolClient, serviceId: string): Promise<Technic
     cross join public.criterios_mip c where s.id=$1 and c.activo and (not c.solo_area_externa or a.es_externa)
     order by a.id,lower(btrim(c.nombre)),c.id`, [serviceId])).rows
   const devices = (await client.query<(TechnicianDevice & { areaId: string })>(`select d.id,d.id as "dispositivoId",d.area_id as "areaId",d.numero,
-    d.ubicacion,d.tipo_dispositivo_codigo as "tipoCodigo",d.estado_actual as "estadoAnterior",false as revisado
+    d.ubicacion,d.tipo_dispositivo_codigo as "tipoCodigo",coalesce(t.nombre,d.tipo_dispositivo_codigo) as "tipoNombre",
+    t.clasificacion,coalesce(pests.items,'[]'::jsonb) as plagas,d.estado_actual as "estadoAnterior",false as revisado,null::jsonb as revision
     from public.servicios s join public.dispositivos d on d.sede_id=s.sede_id and d.activo
-    join public.areas a on a.id=d.area_id and a.activo where s.id=$1 order by d.area_id,lower(btrim(d.numero)),d.id`, [serviceId])).rows
+    join public.areas a on a.id=d.area_id and a.activo left join public.trampas t on t.clave=d.tipo_dispositivo_codigo
+    left join lateral (select jsonb_agg(jsonb_build_object('codigo',c.clave,'nombre',c.nombre)
+      order by lower(btrim(c.nombre)),c.clave) as items from public.configuracion c
+      where c.categoria='PLAGA' and c.activo and c.clasificacion_mip=t.clasificacion) pests on true
+    where s.id=$1 order by d.area_id,lower(btrim(d.numero)),d.id`, [serviceId])).rows
   return areas.map(area => ({ ...area,
     criterios: criteria.filter(item => item.areaId === area.areaId).map(item => ({ id:item.id,criterioId:item.criterioId,nombre:item.nombre,soloAreaExterna:item.soloAreaExterna,evaluacion:item.evaluacion,observacion:item.observacion,evidenciasStoragePaths:item.evidenciasStoragePaths,version:item.version })),
-    dispositivos: devices.filter(item => item.areaId === area.areaId).map(item => ({ id:item.id,dispositivoId:item.dispositivoId,numero:item.numero,ubicacion:item.ubicacion,tipoCodigo:item.tipoCodigo,estadoAnterior:item.estadoAnterior,revisado:item.revisado })) }))
+    dispositivos: devices.filter(item => item.areaId === area.areaId).map(item => ({ id:item.id,dispositivoId:item.dispositivoId,numero:item.numero,ubicacion:item.ubicacion,tipoCodigo:item.tipoCodigo,tipoNombre:item.tipoNombre,clasificacion:item.clasificacion,plagas:item.plagas,estadoAnterior:item.estadoAnterior,revisado:item.revisado,revision:item.revision })) }))
 }
 
 export async function getTechnicianPackage(client: PoolClient, userId: string, serviceId: string): Promise<TechnicianServicePackage> {

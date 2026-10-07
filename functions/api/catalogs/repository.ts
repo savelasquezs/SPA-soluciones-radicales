@@ -190,11 +190,19 @@ export async function assertUnused(client: PoolClient, kind: MipCatalogKind, rec
     used = (await client.query<{ used: boolean }>('select exists (select 1 from public.productos_aplicados where producto_id = $1) as used', [record.id])).rows[0]!.used
   } else if (kind === 'traps') {
     // Compatibility check only: do not migrate physical posts/types in this catalog task.
-    used = (await client.query<{ used: boolean }>(`select exists (select 1 from public.dispositivos where tipo_dispositivo_codigo = $1 union all select 1 from public.revisiones_dispositivos where tipo_dispositivo_codigo = $1) as used`, [(record as MipCatalogItem).clave])).rows[0]!.used
+    used = (await client.query<{ used: boolean }>(`select exists (
+      select 1 from public.dispositivos where tipo_dispositivo_codigo = $1
+      union all select 1 from public.servicio_dispositivos where tipo_dispositivo_codigo_snapshot = $1
+      union all select 1 from public.revisiones_dispositivos where tipo_dispositivo_codigo = $1
+    ) as used`, [(record as MipCatalogItem).clave])).rows[0]!.used
   } else if (kind === 'methods') {
     used = (await client.query<{ used: boolean }>(`select exists (select 1 from public.producto_metodos where metodo_id = $1 union all select 1 from public.productos_aplicados where metodo_aplicacion_codigo = $2) as used`, [record.id, (record as MipCatalogItem).clave])).rows[0]!.used
   } else {
-    used = (await client.query<{ used: boolean }>(`select exists (select 1 from public.producto_plagas where plaga_id = $1 union all select 1 from public.revisiones_dispositivos where capturas_json @> jsonb_build_array(jsonb_build_object('plagaCodigo', $2::text))) as used`, [record.id, (record as MipCatalogItem).clave])).rows[0]!.used
+    used = (await client.query<{ used: boolean }>(`select exists (
+      select 1 from public.producto_plagas where plaga_id = $1
+      union all select 1 from public.servicio_dispositivos where plagas_snapshot_json @> jsonb_build_array(jsonb_build_object('codigo', $2::text))
+      union all select 1 from public.revisiones_dispositivos where capturas_json @> jsonb_build_array(jsonb_build_object('plagaCodigo', $2::text))
+    ) as used`, [record.id, (record as MipCatalogItem).clave])).rows[0]!.used
   }
   if (used) throw new ApiError(409, 'El registro tiene referencias o historial. Puedes desactivarlo; no se eliminarán sus datos.', 'DEPENDENCIES')
 }

@@ -44,7 +44,8 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 | `evaluaciones_mip_area` | Histórico de criterios evaluados por Servicio y Área, independiente del catálogo vivo |
 | `productos` | Catálogo de productos utilizados |
 | `productos_aplicados` | Planeación y aplicación de productos por Servicio |
-| `configuracion` | Métodos, plagas, tipos de dispositivo y parámetros globales |
+| `configuracion` | Métodos, plagas y parámetros globales |
+| `trampas` | Catálogo administrable de tipos de Dispositivo y su clasificación de monitoreo |
 | `dispositivos` | Identidad permanente de trampas y dispositivos por Sede y Área |
 | `servicio_dispositivos` | Identidad y estado congelados de los Dispositivos al iniciar el Servicio |
 | `revisiones_dispositivos` | Estado, capturas y evidencia observada durante un Servicio |

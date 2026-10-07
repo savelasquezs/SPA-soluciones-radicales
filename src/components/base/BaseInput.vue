@@ -14,6 +14,7 @@ withDefaults(
     min?: string
     max?: string
     step?: string
+    maxlength?: number | string
     autocomplete?: string
     error?: string
     hint?: string
@@ -27,6 +28,7 @@ withDefaults(
     min: undefined,
     max: undefined,
     step: undefined,
+    maxlength: undefined,
     autocomplete: undefined,
     error: undefined,
     hint: undefined,
@@ -58,6 +60,7 @@ const emit = defineEmits<{ 'update:modelValue': [value: string]; blur: [] }>()
       :min="min"
       :max="max"
       :step="step"
+      :maxlength="maxlength"
       :autocomplete="autocomplete"
       :aria-invalid="Boolean(error)"
       :aria-describedby="describedBy"

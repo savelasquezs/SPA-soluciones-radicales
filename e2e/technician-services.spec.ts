@@ -46,7 +46,11 @@ const servicePackage = (state: TechnicianServiceSummary['estado'] = 'PROGRAMADO'
     sinAccesoFotoStoragePath: null,
     version: 1,
     criterios: [{ id: ids.criterion, criterioId: ids.criterion, nombre: 'Mantenimiento higiénico', soloAreaExterna: false, evaluacion: null, observacion: null, evidenciasStoragePaths: [], version: 1 }],
-    dispositivos: [{ id: ids.device, dispositivoId: ids.device, numero: 'D-01', ubicacion: 'Bajo mesón', tipoCodigo: 'TRAMPA_ADHESIVA', estadoAnterior: 'ACTIVO', revisado: false }],
+    dispositivos: [{
+      id: ids.device, dispositivoId: ids.device, numero: 'D-01', ubicacion: 'Bajo mesón', tipoCodigo: 'TRAMPA_ADHESIVA',
+      tipoNombre: 'Trampa adhesiva', clasificacion: 'RASTREROS', plagas: [{ codigo: 'CUCARACHA', nombre: 'Cucaracha' }],
+      estadoAnterior: 'ACTIVO', revisado: false, revision: null,
+    }],
   }, {
     id: ids.area2,
     areaId: ids.area2,
@@ -225,6 +229,33 @@ test('a no-access Area and its required photo survive an offline reload', async 
   await page.reload()
   await expect(page.getByRole('checkbox', { name: 'No fue posible acceder a esta Área' })).toBeChecked()
   await expect(page.getByLabel('Descripción')).toHaveValue('Puerta cerrada por el cliente')
+  await expect(page.getByText('Ya existe una fotografía guardada.')).toBeVisible()
+  await expect(page.getByText('Guardado local', { exact: true })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})
+
+test('a device review and its condition photo survive an offline reload', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await setup(page)
+  await page.goto(`/servicios/${ids.service}/trabajo`)
+  await page.getByRole('button', { name: 'Iniciar servicio' }).click()
+  await page.getByRole('button', { name: 'Abrir Área Cocina' }).click()
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false })
+    window.dispatchEvent(new Event('offline'))
+  })
+  await page.getByRole('button', { name: /D-01/ }).click()
+  await page.getByLabel('Estado observado').selectOption('DANADO')
+  await page.getByLabel('Cucaracha').fill('4')
+  await page.getByLabel('Observaciones del dispositivo').fill('Base desprendida')
+  await page.locator('input[type="file"]').setInputFiles({ name: 'dispositivo-danado.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('synthetic-device-photo') })
+  await page.getByRole('button', { name: 'Guardar revisión' }).click()
+  await expect(page.getByText('Guardado local', { exact: true })).toBeVisible()
+  await page.addInitScript(() => Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }))
+  await page.reload()
+  await page.getByRole('button', { name: /D-01/ }).click()
+  await expect(page.getByLabel('Estado observado')).toHaveValue('DANADO')
+  await expect(page.getByLabel('Cucaracha')).toHaveValue('4')
   await expect(page.getByText('Ya existe una fotografía guardada.')).toBeVisible()
   await expect(page.getByText('Guardado local', { exact: true })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)

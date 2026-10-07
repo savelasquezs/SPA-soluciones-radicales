@@ -5,8 +5,8 @@ import type { PoolClient } from 'pg'
 import { isServiceId } from '../../../src/helpers/adminServices'
 import { ApiError, requireTechnician, type DomainProfile, type Identity } from '../auth'
 import { transaction } from '../db'
-import { assertAreaNoAccessStoragePath, createAreaNoAccessUploadUrl, deleteAreaNoAccessObject, serviceMediaObjectExists } from '../r2'
-import { authorizeTechnicianAreaChange, claimTechnicianService, saveTechnicianAreaAccess, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, startTechnicianService, technicianCommand } from './commands'
+import { assertAreaNoAccessStoragePath, assertDeviceReviewStoragePath, createAreaNoAccessUploadUrl, createDeviceReviewUploadUrl, deleteAreaNoAccessObject, deleteDeviceReviewObject, deviceReviewMediaObjectExists, serviceMediaObjectExists } from '../r2'
+import { authorizeTechnicianAreaChange, authorizeTechnicianDeviceChange, claimTechnicianService, saveTechnicianAreaAccess, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, startTechnicianService, technicianCommand } from './commands'
 import { getTechnicianPackage, listTechnicianServices } from './queries'
 
 type Environment = { Variables: { identity: Identity } }
@@ -19,6 +19,10 @@ function id(value: unknown): string {
 }
 function version(value: unknown): number {
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1) throw new ApiError(422, 'Carga la versión actual del servicio.', 'VALIDATION')
+  return value
+}
+function reviewVersion(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) throw new ApiError(422, 'Carga la versión actual de la revisión.', 'VALIDATION')
   return value
 }
 function requiredString(value: unknown, message: string, max = 2_000): string {
@@ -141,6 +145,83 @@ technicianServiceRoutes.post('/:id/criteria/:criterionId', async context => {
   const input = { deviceId, criterionId, version: expected, evaluation, observation: payload.observation }
   return context.json(await read(context, (client, technician) => technicianCommand(client, technician.id, requestId, 'CRITERION_EVALUATION', serviceId, expected,
     input, () => saveTechnicianCriterionEvaluation(client, technician.id, serviceId, deviceId, lockToken, criterionId, expected, evaluation, payload.observation as string))))
+})
+
+technicianServiceRoutes.post('/:id/devices/:serviceDeviceId/media/upload-url', async context => {
+  const payload = await body(context.req.raw)
+  const serviceId = id(context.req.param('id'))
+  const serviceDeviceId = id(context.req.param('serviceDeviceId'))
+  const deviceId = id(payload.deviceId)
+  const lockToken = id(payload.lockToken)
+  const fileName = requiredString(payload.fileName, 'El nombre de la fotografía es obligatorio.', 255)
+  const contentType = typeof payload.contentType === 'string' ? payload.contentType : ''
+  const size = payload.size
+  if (typeof size !== 'number' || !Number.isSafeInteger(size) || size < 1) throw new ApiError(422, 'El tamaño de la fotografía no es válido.', 'VALIDATION')
+  await read(context, (client, technician) => authorizeTechnicianDeviceChange(client, technician.id, serviceId, deviceId, lockToken, serviceDeviceId))
+  return context.json(createDeviceReviewUploadUrl({ serviceId, serviceDeviceId, fileName, contentType, size }))
+})
+
+technicianServiceRoutes.post('/:id/devices/:serviceDeviceId/review', async context => {
+  const payload = await body(context.req.raw)
+  const serviceId = id(context.req.param('id'))
+  const serviceDeviceId = id(context.req.param('serviceDeviceId'))
+  const requestId = id(payload.requestId)
+  const deviceId = id(payload.deviceId)
+  const lockToken = id(payload.lockToken)
+  const reviewId = id(payload.reviewId)
+  const expected = reviewVersion(payload.version)
+  if (typeof payload.estadoObservado !== 'string' || !['ACTIVO', 'DANADO', 'FUERA_DE_USO'].includes(payload.estadoObservado)) {
+    throw new ApiError(422, 'Selecciona un estado válido para el dispositivo.', 'VALIDATION')
+  }
+  if (!Array.isArray(payload.capturas) || payload.capturas.length > 200) throw new ApiError(422, 'Las capturas registradas no son válidas.', 'VALIDATION')
+  const captures = payload.capturas.map(value => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new ApiError(422, 'Las capturas registradas no son válidas.', 'VALIDATION')
+    const capture = value as Record<string, unknown>
+    const plagaCodigo = requiredString(capture.plagaCodigo, 'Selecciona una plaga válida.', 160)
+    if (typeof capture.cantidad !== 'number' || !Number.isSafeInteger(capture.cantidad) || capture.cantidad < 1 || capture.cantidad > 1_000_000) {
+      throw new ApiError(422, 'La cantidad capturada no es válida.', 'VALIDATION')
+    }
+    return { plagaCodigo, cantidad: capture.cantidad }
+  })
+  const input = {
+    estadoObservado: payload.estadoObservado as 'ACTIVO' | 'DANADO' | 'FUERA_DE_USO',
+    capturas: captures,
+    consumo: optionalString(payload.consumo, 500),
+    productoQuimico: optionalString(payload.productoQuimico, 500),
+    antidoto: optionalString(payload.antidoto, 500),
+    observaciones: optionalString(payload.observaciones),
+  }
+  const photoStoragePath = payload.photoStoragePath === null ? null : requiredString(payload.photoStoragePath, 'Adjunta una fotografía válida.', 1_000)
+  if (photoStoragePath) {
+    assertDeviceReviewStoragePath(photoStoragePath, serviceId, serviceDeviceId)
+    await read(context, (client, technician) => authorizeTechnicianDeviceChange(client, technician.id, serviceId, deviceId, lockToken, serviceDeviceId))
+    if (!await deviceReviewMediaObjectExists(photoStoragePath, serviceId, serviceDeviceId)) {
+      throw new ApiError(422, 'La fotografía todavía no está disponible. Vuelve a cargarla.', 'PHOTO_NOT_FOUND')
+    }
+  }
+  const commandPayload = { deviceId, serviceDeviceId, reviewId, version: expected, ...input, photoStoragePath }
+  const saved = await read(context, (client, technician) => technicianCommand(client, technician.id, requestId, 'DEVICE_REVIEW', serviceId, expected,
+    commandPayload, () => saveTechnicianDeviceReview(client, technician.id, serviceId, deviceId, lockToken, serviceDeviceId, reviewId, expected, input, photoStoragePath)))
+  if (saved.replacedPhotoPath) await deleteDeviceReviewObject(saved.replacedPhotoPath, serviceId, serviceDeviceId)
+  return context.json({ review: saved.review })
+})
+
+technicianServiceRoutes.post('/:id/devices/:serviceDeviceId/media/delete', async context => {
+  const payload = await body(context.req.raw)
+  const serviceId = id(context.req.param('id'))
+  const serviceDeviceId = id(context.req.param('serviceDeviceId'))
+  const deviceId = id(payload.deviceId)
+  const lockToken = id(payload.lockToken)
+  const storagePath = requiredString(payload.storagePath, 'La ruta de la fotografía es obligatoria.', 1_000)
+  assertDeviceReviewStoragePath(storagePath, serviceId, serviceDeviceId)
+  await read(context, async (client, technician) => {
+    await authorizeTechnicianDeviceChange(client, technician.id, serviceId, deviceId, lockToken, serviceDeviceId)
+    const referenced = (await client.query<{ found: boolean }>(`select exists(select 1 from public.revisiones_dispositivos
+      where servicio_id=$1 and servicio_dispositivo_id=$2 and foto_storage_path=$3) as found`, [serviceId, serviceDeviceId, storagePath])).rows[0]?.found
+    if (referenced) throw new ApiError(409, 'La fotografía está asociada al servicio y no puede eliminarse.', 'FILE_IN_USE')
+  })
+  await deleteDeviceReviewObject(storagePath, serviceId, serviceDeviceId)
+  return context.body(null, 204)
 })
 
 technicianServiceRoutes.onError((error, context) => {

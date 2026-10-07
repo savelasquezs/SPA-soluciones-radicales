@@ -1,5 +1,6 @@
 import type { PoolClient } from 'pg'
-import type { MipEvaluation, TechnicianAreaAccessResult, TechnicianAreaAccessState, TechnicianAreaOrderResult, TechnicianAreaOrderVersion, TechnicianCriterion, TechnicianCriterionEvaluationResult, TechnicianExecutionLock, TechnicianExecutionSession } from '../../../src/types/technicianServices'
+import type { MipEvaluation, TechnicianAreaAccessResult, TechnicianAreaAccessState, TechnicianAreaOrderResult, TechnicianAreaOrderVersion, TechnicianCriterion, TechnicianCriterionEvaluationResult, TechnicianDevice, TechnicianDeviceCapture, TechnicianDeviceReview, TechnicianDeviceReviewInput, TechnicianDeviceReviewResult, TechnicianExecutionLock, TechnicianExecutionSession } from '../../../src/types/technicianServices'
+import { technicianDevicePhotoRequired } from '../../../src/helpers/technicianServices'
 import { ApiError } from '../auth'
 import { assertVersion, audit } from '../services/commands'
 import { assignedServiceState, getTechnicianPackage } from './queries'
@@ -205,12 +206,142 @@ export async function saveTechnicianCriterionEvaluation(
   return { criterion: rows[0]! }
 }
 
+type TechnicianDeviceReviewContext = Pick<TechnicianDevice, 'id' | 'dispositivoId' | 'numero' | 'ubicacion' | 'tipoCodigo' | 'estadoAnterior' | 'plagas'> & {
+  areaId: string
+  sourceAreaId: string
+  areaWithoutAccess: boolean
+  revision: TechnicianDeviceReview | null
+}
+
+export async function authorizeTechnicianDeviceChange(
+  client: PoolClient,
+  userId: string,
+  serviceId: string,
+  deviceId: string,
+  lockToken: string,
+  serviceDeviceId: string,
+  lockReview = false,
+): Promise<TechnicianDeviceReviewContext> {
+  const service = await assignedServiceState(client, userId, serviceId, true)
+  if (service.tipo_servicio !== 'PRINCIPAL' || service.estado !== 'EN_PROCESO') {
+    throw new ApiError(409, 'Los dispositivos solo se revisan durante un servicio Principal En proceso.', 'SERVICE_NOT_IN_PROGRESS')
+  }
+  await assertExecutionLock(client, userId, serviceId, deviceId, lockToken)
+  if (lockReview) await client.query('select pg_advisory_xact_lock(hashtextextended($1,0))', [`technician-device-review:${serviceDeviceId}`])
+  const context = (await client.query<TechnicianDeviceReviewContext>(`select sd.id,sd.dispositivo_id as "dispositivoId",
+    sd.numero_snapshot as numero,sd.ubicacion_snapshot as ubicacion,sd.tipo_dispositivo_codigo_snapshot as "tipoCodigo",
+    sd.estado_anterior_snapshot as "estadoAnterior",sd.plagas_snapshot_json as plagas,sa.id as "areaId",sa.area_id as "sourceAreaId",
+    sa.sin_acceso as "areaWithoutAccess",case when r.id is null then null else jsonb_build_object(
+      'id',r.id,'estadoObservado',r.estado_observado,'capturas',r.capturas_json,
+      'consumo',case when r.consumo is null then '' when jsonb_typeof(r.consumo)='string' then r.consumo #>> '{}' else r.consumo::text end,
+      'productoQuimico',coalesce(r.producto_quimico,''),'antidoto',coalesce(r.antidoto,''),
+      'observaciones',coalesce(r.observaciones,''),'fotoStoragePath',r.foto_storage_path,'version',r.version::integer
+    ) end as revision
+    from public.servicio_dispositivos sd
+    join public.servicio_areas sa on sa.id=sd.servicio_area_id
+    left join public.revisiones_dispositivos r on r.servicio_dispositivo_id=sd.id
+    where sd.id=$2 and sd.servicio_id=$1`, [serviceId, serviceDeviceId])).rows[0]
+  if (!context) throw new ApiError(404, 'El dispositivo no pertenece a este servicio.', 'DEVICE_NOT_FOUND')
+  if (context.areaWithoutAccess) throw new ApiError(409, 'El Área está registrada sin acceso. Habilita el ingreso antes de revisar sus dispositivos.', 'AREA_WITHOUT_ACCESS')
+  return context
+}
+
+export async function saveTechnicianDeviceReview(
+  client: PoolClient,
+  userId: string,
+  serviceId: string,
+  deviceId: string,
+  lockToken: string,
+  serviceDeviceId: string,
+  reviewId: string,
+  expectedVersion: number,
+  input: TechnicianDeviceReviewInput,
+  photoStoragePath: string | null,
+): Promise<TechnicianDeviceReviewResult & { replacedPhotoPath: string | null }> {
+  const context = await authorizeTechnicianDeviceChange(client, userId, serviceId, deviceId, lockToken, serviceDeviceId, true)
+  const currentVersion = context.revision?.version ?? 0
+  if (currentVersion !== expectedVersion) {
+    throw new ApiError(409, 'La revisión del dispositivo cambió. Conservamos tus datos para que decidas cómo continuar.', 'VERSION_CONFLICT', { remote: context.revision })
+  }
+  if (context.revision && context.revision.id !== reviewId) throw new ApiError(409, 'La revisión del dispositivo cambió.', 'VERSION_CONFLICT', { remote: context.revision })
+  if (!['ACTIVO', 'DANADO', 'FUERA_DE_USO'].includes(input.estadoObservado)) throw new ApiError(422, 'Selecciona un estado válido para el dispositivo.', 'VALIDATION')
+  if (!Array.isArray(input.capturas) || input.capturas.length > 200) throw new ApiError(422, 'Las capturas registradas no son válidas.', 'VALIDATION')
+  const pestNames = new Map(context.plagas.map(pest => [pest.codigo, pest.nombre]))
+  const seen = new Set<string>()
+  const captures: TechnicianDeviceCapture[] = input.capturas.map(capture => {
+    const name = pestNames.get(capture.plagaCodigo)
+    if (!name || seen.has(capture.plagaCodigo) || !Number.isSafeInteger(capture.cantidad) || capture.cantidad < 1 || capture.cantidad > 1_000_000) {
+      throw new ApiError(422, 'Las capturas registradas no son válidas.', 'VALIDATION')
+    }
+    seen.add(capture.plagaCodigo)
+    return { plagaCodigo: capture.plagaCodigo, plagaNombreSnapshot: name, cantidad: capture.cantidad }
+  })
+  const consumo = input.consumo.trim()
+  const productoQuimico = input.productoQuimico.trim()
+  const antidoto = input.antidoto.trim()
+  const observaciones = input.observaciones.trim()
+  if (consumo.length > 500 || productoQuimico.length > 500 || antidoto.length > 500 || observaciones.length > 2_000) {
+    throw new ApiError(422, 'La información de la revisión supera el tamaño permitido.', 'VALIDATION')
+  }
+  if (technicianDevicePhotoRequired(context.estadoAnterior, input.estadoObservado) && !photoStoragePath) {
+    throw new ApiError(422, 'Adjunta una fotografía del cambio de estado del dispositivo.', 'VALIDATION')
+  }
+  const values = [
+    serviceId, serviceDeviceId, context.dispositivoId, context.sourceAreaId, context.numero, context.ubicacion, context.tipoCodigo,
+    input.estadoObservado, JSON.stringify(captures), consumo || null, productoQuimico || null, antidoto || null,
+    observaciones || null, photoStoragePath,
+  ]
+  const query = context.revision
+    ? `update public.revisiones_dispositivos set estado_observado=$8,capturas_json=$9::jsonb,
+        consumo=case when $10::text is null then null else to_jsonb($10::text) end,producto_quimico=$11,antidoto=$12,
+        observaciones=$13,foto_storage_path=$14 where id=$15 and servicio_dispositivo_id=$2
+      returning id,estado_observado as "estadoObservado",capturas_json as capturas,
+        case when consumo is null then '' when jsonb_typeof(consumo)='string' then consumo #>> '{}' else consumo::text end as consumo,
+        coalesce(producto_quimico,'') as "productoQuimico",coalesce(antidoto,'') as antidoto,
+        coalesce(observaciones,'') as observaciones,foto_storage_path as "fotoStoragePath",version::integer`
+    : `insert into public.revisiones_dispositivos(id,servicio_id,servicio_dispositivo_id,dispositivo_id,area_id,
+        numero_snapshot,ubicacion_snapshot,tipo_dispositivo_codigo,estado_observado,capturas_json,consumo,
+        producto_quimico,antidoto,observaciones,foto_storage_path)
+      values($15,$1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,case when $10::text is null then null else to_jsonb($10::text) end,$11,$12,$13,$14)
+      returning id,estado_observado as "estadoObservado",capturas_json as capturas,
+        case when consumo is null then '' when jsonb_typeof(consumo)='string' then consumo #>> '{}' else consumo::text end as consumo,
+        coalesce(producto_quimico,'') as "productoQuimico",coalesce(antidoto,'') as antidoto,
+        coalesce(observaciones,'') as observaciones,foto_storage_path as "fotoStoragePath",version::integer`
+  const review = (await client.query<TechnicianDeviceReview>(query, [...values, context.revision?.id ?? reviewId])).rows[0]!
+  await client.query('update public.dispositivos set estado_actual=$2 where id=$1 and estado_actual<>$2', [context.dispositivoId, input.estadoObservado])
+  await audit(client, userId, 'SERVICIO_DISPOSITIVO_REVISADO', serviceId, {
+    serviceDeviceId,
+    deviceId: context.dispositivoId,
+    previousState: context.estadoAnterior,
+    observedState: input.estadoObservado,
+    captures: captures.length,
+    hasPhoto: Boolean(photoStoragePath),
+  })
+  return {
+    review,
+    replacedPhotoPath: context.revision?.fotoStoragePath && context.revision.fotoStoragePath !== review.fotoStoragePath
+      ? context.revision.fotoStoragePath
+      : null,
+  }
+}
+
 async function lockSnapshotSources(client: PoolClient, serviceId: string): Promise<{ areaIds: string[]; criterionIds: string[]; deviceIds: string[] }> {
   const areaIds = (await client.query<{ id: string }>(`select a.id from public.servicios s join public.areas a on a.sede_id=s.sede_id
     where s.id=$1 and a.activo order by a.id for share of a`, [serviceId])).rows.map(row => row.id)
   const criterionIds = (await client.query<{ id: string }>('select id from public.criterios_mip where activo order by id for share', [])).rows.map(row => row.id)
   const deviceIds = areaIds.length ? (await client.query<{ id: string }>(`select id from public.dispositivos
     where area_id=any($1::uuid[]) and activo order by id for share`, [areaIds])).rows.map(row => row.id) : []
+  const invalidDevice = deviceIds.length ? (await client.query<{ numero: string }>(`select d.numero from public.dispositivos d
+    left join public.trampas t on t.clave=d.tipo_dispositivo_codigo
+    where d.id=any($1::uuid[]) and t.id is null order by lower(btrim(d.numero)),d.id limit 1`, [deviceIds])).rows[0] : undefined
+  if (invalidDevice) throw new ApiError(422, `El dispositivo ${invalidDevice.numero} no tiene un tipo vigente en el catálogo MIP.`, 'DEVICE_TYPE_INVALID')
+  if (deviceIds.length) {
+    await client.query(`select t.id from public.dispositivos d join public.trampas t on t.clave=d.tipo_dispositivo_codigo
+      where d.id=any($1::uuid[]) order by t.id for share of t`, [deviceIds])
+    await client.query(`select c.id from public.dispositivos d join public.trampas t on t.clave=d.tipo_dispositivo_codigo
+      join public.configuracion c on c.categoria='PLAGA' and c.activo and c.clasificacion_mip=t.clasificacion
+      where d.id=any($1::uuid[]) order by c.id for share of c`, [deviceIds])
+  }
   await client.query(`select p.id from public.productos_aplicados pa join public.productos p on p.id=pa.producto_id
     where pa.servicio_id=$1 order by p.id for share of pa,p`, [serviceId])
   await client.query(`select c.id from public.productos_aplicados pa join public.configuracion c
@@ -241,9 +372,14 @@ export async function startTechnicianService(client: PoolClient, userId: string,
     select $1,sa.id,sa.area_id,c.id,c.nombre,c.solo_area_externa from public.servicio_areas sa
     cross join public.criterios_mip c where sa.servicio_id=$1 and c.id=any($2::uuid[]) and (not c.solo_area_externa or sa.es_externa_snapshot)
     order by sa.posicion_inicial,lower(btrim(c.nombre)),c.id`, [serviceId, sources.criterionIds])
-  await client.query(`insert into public.servicio_dispositivos(servicio_id,servicio_area_id,dispositivo_id,numero_snapshot,ubicacion_snapshot,tipo_dispositivo_codigo_snapshot,estado_anterior_snapshot)
-    select $1,sa.id,d.id,d.numero,d.ubicacion,d.tipo_dispositivo_codigo,d.estado_actual
+  await client.query(`insert into public.servicio_dispositivos(servicio_id,servicio_area_id,dispositivo_id,numero_snapshot,ubicacion_snapshot,
+    tipo_dispositivo_codigo_snapshot,tipo_dispositivo_nombre_snapshot,clasificacion_snapshot,plagas_snapshot_json,estado_anterior_snapshot)
+    select $1,sa.id,d.id,d.numero,d.ubicacion,d.tipo_dispositivo_codigo,t.nombre,t.clasificacion,
+      coalesce((select jsonb_agg(jsonb_build_object('codigo',c.clave,'nombre',c.nombre)
+        order by lower(btrim(c.nombre)),c.clave) from public.configuracion c
+        where c.categoria='PLAGA' and c.activo and c.clasificacion_mip=t.clasificacion),'[]'::jsonb),d.estado_actual
     from public.servicio_areas sa join public.dispositivos d on d.area_id=sa.area_id
+    join public.trampas t on t.clave=d.tipo_dispositivo_codigo
     where sa.servicio_id=$1 and d.id=any($2::uuid[]) order by sa.posicion_inicial,lower(btrim(d.numero)),d.id`, [serviceId, sources.deviceIds])
   await client.query(`update public.productos_aplicados pa set aplicado=true,producto_nombre_snapshot=p.nombre,
     principio_activo_snapshot=p.principio_activo_composicion,registro_sanitario_snapshot=p.registro_sanitario,

@@ -7,13 +7,14 @@ withDefaults(
     label: string
     name: string
     rows?: number
+    maxlength?: number | string
     required?: boolean
     disabled?: boolean
     readonly?: boolean
     error?: string
     hint?: string
   }>(),
-  { rows: 4, required: false, disabled: false, readonly: false, error: undefined, hint: undefined },
+  { rows: 4, maxlength: undefined, required: false, disabled: false, readonly: false, error: undefined, hint: undefined },
 )
 
 const emit = defineEmits<{ 'update:modelValue': [value: string]; blur: [] }>()
@@ -33,6 +34,7 @@ const emit = defineEmits<{ 'update:modelValue': [value: string]; blur: [] }>()
       :id="name"
       :name="name"
       :rows="rows"
+      :maxlength="maxlength"
       :value="modelValue"
       :required="required"
       :disabled="disabled"

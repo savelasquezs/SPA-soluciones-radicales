@@ -13,6 +13,7 @@ export const MASTER_FILE_KINDS = [
 export type MasterFileKind = typeof MASTER_FILE_KINDS[number]
 type UploadInput = { kind: MasterFileKind; fileName: string; contentType: string; size: number }
 type ServicePhotoUploadInput = { serviceId: string; areaId: string; fileName: string; contentType: string; size: number }
+type DeviceReviewPhotoUploadInput = { serviceId: string; serviceDeviceId: string; fileName: string; contentType: string; size: number }
 export type UploadAuthorization = { url: string; storagePath: string; contentType: string; expiresIn: number }
 const PRESIGNED_TTL_SECONDS = 300
 const USER_CERTIFICATE_MAX_BYTES = 10 * 1024 * 1024
@@ -67,6 +68,14 @@ export function assertMasterStoragePath(storagePath: string): void {
 function serviceMediaBucket(): string { return process.env.R2_BUCKET_SERVICE_MEDIA?.trim() || 'sr-service-media' }
 
 export function createAreaNoAccessUploadUrl(input: ServicePhotoUploadInput): UploadAuthorization {
+  return createServicePhotoUploadUrl(input, `services/${input.serviceId}/areas/${input.areaId}/no-access`)
+}
+
+export function createDeviceReviewUploadUrl(input: DeviceReviewPhotoUploadInput): UploadAuthorization {
+  return createServicePhotoUploadUrl(input, `services/${input.serviceId}/devices/${input.serviceDeviceId}/review`)
+}
+
+function createServicePhotoUploadUrl(input: Pick<ServicePhotoUploadInput, 'fileName' | 'contentType' | 'size'>, prefix: string): UploadAuthorization {
   const extension = extensionOf(input.fileName)
   if (!SERVICE_PHOTO_EXTENSIONS.has(extension)) throw new ApiError(422, 'La evidencia debe ser una imagen JPG, PNG o WebP')
   if (!Number.isSafeInteger(input.size) || input.size <= 0 || input.size > SERVICE_PHOTO_MAX_BYTES) {
@@ -76,13 +85,19 @@ export function createAreaNoAccessUploadUrl(input: ServicePhotoUploadInput): Upl
   const suppliedContentType = input.contentType.trim().toLowerCase()
   const contentType = !suppliedContentType || suppliedContentType === 'application/octet-stream' ? expectedContentType : suppliedContentType
   if (contentType !== expectedContentType) throw new ApiError(422, 'El tipo MIME no corresponde a la extensión de la fotografía')
-  const storagePath = `services/${input.serviceId}/areas/${input.areaId}/no-access/${randomUUID()}-${safeFileName(input.fileName)}`
-  assertAreaNoAccessStoragePath(storagePath, input.serviceId, input.areaId)
+  const storagePath = `${prefix}/${randomUUID()}-${safeFileName(input.fileName)}`
   return { url: presign('PUT', storagePath, contentType, serviceMediaBucket()), storagePath, contentType, expiresIn: PRESIGNED_TTL_SECONDS }
 }
 
 export function assertAreaNoAccessStoragePath(storagePath: string, serviceId: string, areaId: string): void {
-  const prefix = `services/${serviceId}/areas/${areaId}/no-access/`
+  assertServiceMediaStoragePath(storagePath, `services/${serviceId}/areas/${areaId}/no-access/`)
+}
+
+export function assertDeviceReviewStoragePath(storagePath: string, serviceId: string, serviceDeviceId: string): void {
+  assertServiceMediaStoragePath(storagePath, `services/${serviceId}/devices/${serviceDeviceId}/review/`)
+}
+
+function assertServiceMediaStoragePath(storagePath: string, prefix: string): void {
   const normalized = storagePath.trim()
   if (!normalized.startsWith(prefix) || normalized.length <= prefix.length || normalized.includes('..') || normalized.startsWith('/')) {
     throw new ApiError(422, 'La ruta de la fotografía no es válida')
@@ -91,6 +106,15 @@ export function assertAreaNoAccessStoragePath(storagePath: string, serviceId: st
 
 export async function serviceMediaObjectExists(storagePath: string, serviceId: string, areaId: string): Promise<boolean> {
   assertAreaNoAccessStoragePath(storagePath, serviceId, areaId)
+  return privateServiceMediaObjectExists(storagePath)
+}
+
+export async function deviceReviewMediaObjectExists(storagePath: string, serviceId: string, serviceDeviceId: string): Promise<boolean> {
+  assertDeviceReviewStoragePath(storagePath, serviceId, serviceDeviceId)
+  return privateServiceMediaObjectExists(storagePath)
+}
+
+async function privateServiceMediaObjectExists(storagePath: string): Promise<boolean> {
   const response = await fetch(presign('HEAD', storagePath, undefined, serviceMediaBucket()), {
     method: 'HEAD', signal: AbortSignal.timeout(20_000), redirect: 'error',
   })
@@ -101,6 +125,15 @@ export async function serviceMediaObjectExists(storagePath: string, serviceId: s
 
 export async function deleteAreaNoAccessObject(storagePath: string, serviceId: string, areaId: string): Promise<void> {
   assertAreaNoAccessStoragePath(storagePath, serviceId, areaId)
+  await deleteServiceMediaObject(storagePath)
+}
+
+export async function deleteDeviceReviewObject(storagePath: string, serviceId: string, serviceDeviceId: string): Promise<void> {
+  assertDeviceReviewStoragePath(storagePath, serviceId, serviceDeviceId)
+  await deleteServiceMediaObject(storagePath)
+}
+
+async function deleteServiceMediaObject(storagePath: string): Promise<void> {
   const response = await fetch(presign('DELETE', storagePath, undefined, serviceMediaBucket()), {
     method: 'DELETE', signal: AbortSignal.timeout(20_000), redirect: 'error',
   })
