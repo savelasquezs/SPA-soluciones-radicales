@@ -84,11 +84,12 @@ async function frozenAreas(client: PoolClient, serviceId: string): Promise<Techn
     where servicio_id=$1 order by servicio_area_id,lower(criterio_nombre_snapshot),id`, [serviceId])).rows
   const devices = (await client.query<(TechnicianDevice & { servicioAreaId: string })>(`select id,servicio_area_id as "servicioAreaId",dispositivo_id as "dispositivoId",
     numero_snapshot as numero,ubicacion_snapshot as ubicacion,tipo_dispositivo_codigo_snapshot as "tipoCodigo",
-    estado_anterior_snapshot as "estadoAnterior" from public.servicio_dispositivos
+    estado_anterior_snapshot as "estadoAnterior",exists(select 1 from public.revisiones_dispositivos revision
+      where revision.servicio_id=servicio_dispositivos.servicio_id and revision.dispositivo_id=servicio_dispositivos.dispositivo_id) as revisado from public.servicio_dispositivos
     where servicio_id=$1 order by servicio_area_id,lower(numero_snapshot),id`, [serviceId])).rows
   return areas.map(area => ({ ...area,
     criterios: criteria.filter(item => item.servicioAreaId === area.id).map(item => ({ id:item.id,criterioId:item.criterioId,nombre:item.nombre,soloAreaExterna:item.soloAreaExterna,evaluacion:item.evaluacion,observacion:item.observacion,evidenciasStoragePaths:item.evidenciasStoragePaths,version:item.version })),
-    dispositivos: devices.filter(item => item.servicioAreaId === area.id).map(item => ({ id:item.id,dispositivoId:item.dispositivoId,numero:item.numero,ubicacion:item.ubicacion,tipoCodigo:item.tipoCodigo,estadoAnterior:item.estadoAnterior })) }))
+    dispositivos: devices.filter(item => item.servicioAreaId === area.id).map(item => ({ id:item.id,dispositivoId:item.dispositivoId,numero:item.numero,ubicacion:item.ubicacion,tipoCodigo:item.tipoCodigo,estadoAnterior:item.estadoAnterior,revisado:item.revisado })) }))
 }
 
 async function liveAreas(client: PoolClient, serviceId: string): Promise<TechnicianArea[]> {
@@ -103,12 +104,12 @@ async function liveAreas(client: PoolClient, serviceId: string): Promise<Technic
     cross join public.criterios_mip c where s.id=$1 and c.activo and (not c.solo_area_externa or a.es_externa)
     order by a.id,lower(btrim(c.nombre)),c.id`, [serviceId])).rows
   const devices = (await client.query<(TechnicianDevice & { areaId: string })>(`select d.id,d.id as "dispositivoId",d.area_id as "areaId",d.numero,
-    d.ubicacion,d.tipo_dispositivo_codigo as "tipoCodigo",d.estado_actual as "estadoAnterior"
+    d.ubicacion,d.tipo_dispositivo_codigo as "tipoCodigo",d.estado_actual as "estadoAnterior",false as revisado
     from public.servicios s join public.dispositivos d on d.sede_id=s.sede_id and d.activo
     join public.areas a on a.id=d.area_id and a.activo where s.id=$1 order by d.area_id,lower(btrim(d.numero)),d.id`, [serviceId])).rows
   return areas.map(area => ({ ...area,
     criterios: criteria.filter(item => item.areaId === area.areaId).map(item => ({ id:item.id,criterioId:item.criterioId,nombre:item.nombre,soloAreaExterna:item.soloAreaExterna,evaluacion:item.evaluacion,observacion:item.observacion,evidenciasStoragePaths:item.evidenciasStoragePaths,version:item.version })),
-    dispositivos: devices.filter(item => item.areaId === area.areaId).map(item => ({ id:item.id,dispositivoId:item.dispositivoId,numero:item.numero,ubicacion:item.ubicacion,tipoCodigo:item.tipoCodigo,estadoAnterior:item.estadoAnterior })) }))
+    dispositivos: devices.filter(item => item.areaId === area.areaId).map(item => ({ id:item.id,dispositivoId:item.dispositivoId,numero:item.numero,ubicacion:item.ubicacion,tipoCodigo:item.tipoCodigo,estadoAnterior:item.estadoAnterior,revisado:item.revisado })) }))
 }
 
 export async function getTechnicianPackage(client: PoolClient, userId: string, serviceId: string): Promise<TechnicianServicePackage> {

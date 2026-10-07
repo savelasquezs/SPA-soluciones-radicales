@@ -48,6 +48,7 @@ export interface TechnicianDevice {
   ubicacion: string
   tipoCodigo: string
   estadoAnterior: DeviceState
+  revisado: boolean
 }
 
 export interface TechnicianArea {
@@ -101,4 +102,35 @@ export interface TechnicianPackageCache {
   package: TechnicianServicePackage
   lock: TechnicianExecutionLock | null
   pendingOperation: TechnicianPendingOperation | null
+}
+
+export interface TechnicianAreaOrderVersion {
+  id: string
+  version: number
+}
+
+export interface TechnicianAreaOrderResult {
+  areas: Array<TechnicianAreaOrderVersion & { posicionRecorrido: number }>
+}
+
+export interface TechnicianAreaOrderConflict {
+  areaIds: string[]
+  versions: TechnicianAreaOrderVersion[]
+}
+
+export interface TechnicianAreaOrderMutation {
+  schemaVersion: 1
+  requestId: string
+  actorId: string
+  serviceId: string
+  deviceId: string
+  lockToken: string
+  kind: 'AREA_ORDER'
+  areaIds: string[]
+  versions: TechnicianAreaOrderVersion[]
+  status: 'PENDING' | 'SENDING' | 'CONFLICT'
+  createdAt: string
+  updatedAt: string
+  conflict: TechnicianAreaOrderConflict | null
+  error: string | null
 }

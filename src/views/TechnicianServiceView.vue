@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { Clock3, CloudOff, MapPin, PackageCheck, RefreshCw, Wifi } from 'lucide-vue-next'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import BaseButton from '@/components/base/BaseButton.vue'
 import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import StatusBadge from '@/components/base/StatusBadge.vue'
@@ -11,18 +11,21 @@ import ServicePage from '@/components/domain/services/ServicePage.vue'
 import TechnicianAreasPreview from '@/components/domain/services/TechnicianAreasPreview.vue'
 import TechnicianProductsList from '@/components/domain/services/TechnicianProductsList.vue'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
-import { formatTechnicianDateTime, technicianServiceStateLabel, technicianServiceStateTone } from '@/helpers/technicianServices'
+import { formatTechnicianDateTime, orderedTechnicianAreas, technicianServiceStateLabel, technicianServiceStateTone } from '@/helpers/technicianServices'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useTechnicianServicesStore } from '@/stores/technicianServices'
 
 const route = useRoute()
+const router = useRouter()
 const services = useTechnicianServicesStore()
 const notifications = useNotificationsStore()
 const { online } = useNetworkStatus()
-const { currentPackage: packageValue, currentCache, packageLoading, packageError, currentFromCache, action } = storeToRefs(services)
+const { currentPackage: packageValue, currentCache, packageLoading, packageError, currentFromCache, action, pendingSyncCount } = storeToRefs(services)
 const viewError = ref('')
 const serviceId = computed(() => String(route.params.id ?? ''))
 const localLock = computed(() => currentCache.value?.lock ?? null)
+const orderedAreas = computed(() => orderedTechnicianAreas(packageValue.value?.areas ?? []))
+const canEditRoute = computed(() => packageValue.value?.service.estado === 'EN_PROCESO' && Boolean(localLock.value))
 const startMessage = computed(() => {
   if (!packageValue.value || packageValue.value.service.estado !== 'PROGRAMADO') return ''
   if (!online.value) return 'Conéctate a internet para iniciar.'
@@ -32,6 +35,12 @@ const startMessage = computed(() => {
 
 onMounted(load)
 watch(serviceId, load)
+watch(online, async value => {
+  if (!value || !currentCache.value) return
+  const pending = pendingSyncCount.value
+  const result = await services.syncPending(serviceId.value)
+  if (pending && result === 'synced') notifications.show('Los cambios del recorrido quedaron sincronizados.', 'success')
+})
 
 async function load(): Promise<void> {
   viewError.value = ''
@@ -60,6 +69,14 @@ async function claim(): Promise<void> {
     notifications.show(viewError.value, 'error')
   }
 }
+
+function openArea(areaId: string): void {
+  void router.push({ name: 'technician-service-area', params: { id: serviceId.value, areaId } })
+}
+
+function orderAreas(): void {
+  void router.push({ name: 'technician-service-area-order', params: { id: serviceId.value } })
+}
 </script>
 
 <template>
@@ -87,7 +104,7 @@ async function claim(): Promise<void> {
         </div>
       </section>
       <TechnicianProductsList :products="packageValue.products" />
-      <TechnicianAreasPreview :areas="packageValue.areas" />
+      <TechnicianAreasPreview :areas="orderedAreas" :can-edit="canEditRoute" :pending-sync="pendingSyncCount" @open="openArea" @order="orderAreas" />
     </template>
   </ServicePage>
 </template>

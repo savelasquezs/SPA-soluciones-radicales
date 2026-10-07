@@ -3,7 +3,7 @@ withDefaults(
   defineProps<{
     title: string
     message?: string
-    tone?: 'neutral' | 'danger' | 'warning'
+    tone?: 'neutral' | 'danger' | 'warning' | 'success'
     busy?: boolean
   }>(),
   { message: undefined, tone: 'neutral', busy: false },
@@ -43,6 +43,11 @@ withDefaults(
 .status-panel--warning {
   border-color: var(--warning);
   background: var(--warning-subtle);
+}
+
+.status-panel--success {
+  border-color: var(--success);
+  background: var(--success-subtle);
 }
 
 h2,

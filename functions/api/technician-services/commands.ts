@@ -1,5 +1,5 @@
 import type { PoolClient } from 'pg'
-import type { TechnicianExecutionLock, TechnicianExecutionSession } from '../../../src/types/technicianServices'
+import type { TechnicianAreaOrderResult, TechnicianAreaOrderVersion, TechnicianExecutionLock, TechnicianExecutionSession } from '../../../src/types/technicianServices'
 import { ApiError } from '../auth'
 import { assertVersion, audit } from '../services/commands'
 import { assignedServiceState, getTechnicianPackage } from './queries'
@@ -38,6 +38,64 @@ async function acquireLock(client: PoolClient, userId: string, serviceId: string
   const { rows } = await client.query<{ lock_token: string; device_id: string; acquired_at: Date }>(`insert into private.service_execution_locks(service_id,user_id,device_id)
     values($1,$2,$3) returning lock_token,device_id,acquired_at`, [serviceId, userId, deviceId])
   return { token: rows[0]!.lock_token, deviceId: rows[0]!.device_id, acquiredAt: rows[0]!.acquired_at.toISOString() }
+}
+
+async function assertExecutionLock(client: PoolClient, userId: string, serviceId: string, deviceId: string, lockToken: string): Promise<void> {
+  const current = (await client.query<{ user_id: string; device_id: string; lock_token: string }>(
+    'select user_id,device_id,lock_token from private.service_execution_locks where service_id=$1 for update', [serviceId])).rows[0]
+  if (!current || current.user_id !== userId || current.device_id !== deviceId || current.lock_token !== lockToken) {
+    throw new ApiError(409, 'Este celular ya no tiene permiso para editar el servicio. Solicita al Administrador liberar el acceso.', 'SERVICE_LOCKED')
+  }
+}
+
+export async function saveTechnicianAreaOrder(
+  client: PoolClient,
+  userId: string,
+  serviceId: string,
+  deviceId: string,
+  lockToken: string,
+  areaIds: string[],
+  versions: TechnicianAreaOrderVersion[],
+): Promise<TechnicianAreaOrderResult> {
+  const service = await assignedServiceState(client, userId, serviceId, true)
+  if (service.tipo_servicio !== 'PRINCIPAL' || service.estado !== 'EN_PROCESO') {
+    throw new ApiError(409, 'El recorrido solo se modifica durante un servicio Principal En proceso.', 'SERVICE_NOT_IN_PROGRESS')
+  }
+  await assertExecutionLock(client, userId, serviceId, deviceId, lockToken)
+  const current = (await client.query<{ id: string; version: string; posicion_recorrido: number }>(
+    'select id,version,posicion_recorrido from public.servicio_areas where servicio_id=$1 order by posicion_recorrido,id for update', [serviceId])).rows
+  const currentIds = current.map(area => area.id)
+  if (areaIds.length !== currentIds.length || new Set(areaIds).size !== areaIds.length || currentIds.some(id => !areaIds.includes(id))) {
+    throw new ApiError(409, 'La composición del recorrido cambió. Conservamos tu propuesta para que revises el orden vigente.', 'AREA_COMPOSITION_CONFLICT', {
+      remote: {
+        areaIds: currentIds,
+        versions: current.map(area => ({ id: area.id, version: Number(area.version) })),
+      },
+    })
+  }
+  const expected = new Map(versions.map(item => [item.id, item.version]))
+  const versionConflict = expected.size !== current.length || current.some(area => expected.get(area.id) !== Number(area.version))
+  if (versionConflict) {
+    throw new ApiError(409, 'El recorrido cambió. Conservamos tu propuesta para que decidas cómo continuar.', 'VERSION_CONFLICT', {
+      remote: {
+        areaIds: currentIds,
+        versions: current.map(area => ({ id: area.id, version: Number(area.version) })),
+      },
+    })
+  }
+  await client.query('set constraints all deferred')
+  const updated = (await client.query<{ id: string; version: string; posicion_recorrido: number }>(`update public.servicio_areas area
+    set posicion_recorrido=(ordered.position-1)::integer
+    from unnest($2::uuid[]) with ordinality as ordered(id,position)
+    where area.servicio_id=$1 and area.id=ordered.id
+    returning area.id,area.version,area.posicion_recorrido`, [serviceId, areaIds])).rows
+  if (updated.length !== areaIds.length) throw new ApiError(409, 'El recorrido cambió durante el guardado.', 'VERSION_CONFLICT')
+  const positions = new Map(updated.map(area => [area.id, area]))
+  const result: TechnicianAreaOrderResult = {
+    areas: areaIds.map(id => ({ id, version: Number(positions.get(id)!.version), posicionRecorrido: positions.get(id)!.posicion_recorrido })),
+  }
+  await audit(client, userId, 'SERVICIO_RECORRIDO_REORDENADO', serviceId, { areaIds })
+  return result
 }
 
 async function lockSnapshotSources(client: PoolClient, serviceId: string): Promise<{ areaIds: string[]; criterionIds: string[]; deviceIds: string[] }> {

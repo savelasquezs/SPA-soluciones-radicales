@@ -39,7 +39,7 @@
 - [ ] Implementar autosave/outbox offline, recorrido, evaluaciones, revisiones de Dispositivos, Hallazgos y evidencias sobre la fundación autoritativa.
 - [ ] Implementar firmas a pantalla completa, revisión de pendientes y finalización idempotente con confirmación del servidor.
 - [x] Diseñar en Figma el orden editable del recorrido por Servicio, en claro/oscuro, con Subir/Bajar, Aplicar/Cancelar, restablecimiento y navegación a la siguiente Área pendiente; documentar en `docs/product/service-area-route.md`.
-- [ ] Implementar el recorrido editable según `docs/product/service-area-route.md`: orden compartido por Servicio, persistencia local/sincronización idempotente, validación de pertenencia y permutación completa, concurrencia, siguiente pendiente con vuelta al inicio y validaciones de casos límite. No modificar el orden de la Sede ni reintroducir formularios legacy.
+- [x] Implementar el recorrido editable según `docs/product/service-area-route.md`: orden compartido por Servicio, persistencia local/sincronización idempotente, validación de pertenencia y permutación completa, concurrencia, siguiente pendiente con vuelta al inicio y validaciones de casos límite. No modificar el orden de la Sede ni reintroducir formularios legacy.
 
 ## Certificados
 
