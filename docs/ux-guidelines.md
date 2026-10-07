@@ -50,7 +50,7 @@ Cliente Negocio
 - Un Cliente Casa oculta la Sede residencial interna y no expone Áreas, formularios MIP, certificados ni vehículos.
 - Áreas, Dispositivos y Vehículos conservan el contexto de Sede.
 - Una ruta puede existir sin aparecer en el sidebar.
-- Usar breadcrumbs cuando la ruta tenga más de un nivel de contexto.
+- Usar breadcrumbs cuando la ruta tenga más de un nivel de contexto. Los niveles anteriores deben ser enlaces navegables; el nivel actual se muestra como texto.
 
 ## Estados obligatorios
 
@@ -117,6 +117,7 @@ Una confirmación destructiva identifica el objeto, explica la consecuencia y us
 - Mantener filtros, búsqueda y página al crear o editar cuando siga siendo válido.
 - Actualizar con la respuesta definitiva de la mutación en lugar de recargar todo.
 - En desktop usar tabla si se comparan columnas.
+- En agenda semanal, representar el tiempo como una cuadrícula horaria: 08:00–21:00 por defecto, ampliable cuando existan Servicios fuera del rango. Las tarjetas muestran solo Cliente/Sede y revelan detalle en hover/focus.
 - En mobile transformar a cards o filas apiladas cuando la tabla no sea legible.
 - Las acciones por fila deben ser identificables por teclado y lector de pantalla.
 - En listados administrativos, no renderizar un formulario de edición persistente debajo de la tabla si su contenido depende de la fila seleccionada; ese patrón alarga la página y pierde previsibilidad a medida que crece la lista.

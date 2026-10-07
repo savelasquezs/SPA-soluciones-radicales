@@ -23,7 +23,7 @@ function record(id=ids.principal,kind: 'PRINCIPAL' | 'REFUERZO'='PRINCIPAL'): Ad
     servicioPrincipalId:isRef ? ids.principal : null,inicioReal:null,finReal:null,responsable:people[0]!,colaboradores:[people[1]!],contacto:contact,
     valorServicio:isRef ? 0 : 300000,observaciones:'',productos:[],refuerzo:null,principal:null,
     pago:{ metodoPago:isRef ? null : 'EFECTIVO',estadoPago:isRef ? 'SIN_REGISTRAR' : 'PENDIENTE',tecnicoRecaudoPrevistoId:isRef ? null : ids.tech,
-      tecnicoQueRecaudaId:null,tecnicoQueRecaudaNombre:null,pagoFecha:null,confirmadoAt:null,confirmadoPor:null,comprobanteStoragePath:null },
+      recaudadoPorId:null,recaudadoPorNombre:null,pagoFecha:null,confirmadoAt:null,confirmadoPor:null,comprobanteStoragePath:null },
     calendar:{ estado:'SINCRONIZADO',ultimaSyncAt:start,error:null },motivoCancelacion:null,canceladoAt:null,
   }
 }
@@ -124,7 +124,7 @@ async function setup(page: Page, role: 'ADMINISTRADOR' | 'TECNICO'='ADMINISTRADO
         for(const candidate of records.filter(value=>value.id===item.id || (value.servicioPrincipalId===item.id && value.estado==='PROGRAMADO'))) { candidate.estado='CANCELADO';candidate.version++;candidate.motivoCancelacion=body.reason ?? '';candidate.canceladoAt=new Date().toISOString() }
       } else if(parts[1]==='payment' && body) {
         const pay=body.input as unknown as AdminService['pago']
-        item.pago={ ...item.pago,...pay,tecnicoQueRecaudaNombre:people.find(person=>person.id===pay.tecnicoQueRecaudaId)?.nombreCompleto ?? null };item.version++
+        item.pago={ ...item.pago,...pay,recaudadoPorNombre:pay.recaudadoPorId===ids.admin ? 'Admin de prueba' : people.find(person=>person.id===pay.recaudadoPorId)?.nombreCompleto ?? null };item.version++
       } else if(parts[1]==='calendar') item.calendar.estado='PENDIENTE'
       await json(route,result(records.filter(value=>value.id===item.id || value.id===item.servicioPrincipalId || value.servicioPrincipalId===item.id)));return
     }
@@ -133,7 +133,20 @@ async function setup(page: Page, role: 'ADMINISTRADOR' | 'TECNICO'='ADMINISTRADO
   return { records,calls,get upcoming(){ return next },failNextList(){ failList=true },conflictNext(){ conflictOnce=true },loseCreateResponse(){ lostResponse=true },journal }
 }
 async function fillDate(page: Page,selector: string,value: string): Promise<void> {
-  const input=page.locator(selector);await input.fill(value);await input.blur()
+  const input=page.locator(selector)
+  const inputName=await input.getAttribute('name')
+  if(inputName?.endsWith('-day')) {
+    const match=/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(value)
+    if(!match) throw new Error(`Expected DD/MM/YYYY for segmented date: ${value}`)
+    const base=inputName.slice(0,-4)
+    await input.fill(match[1]!.padStart(2,'0'))
+    await page.locator(`[name="${base}-month"]`).fill(match[2]!.padStart(2,'0'))
+    await page.locator(`[name="${base}-year"]`).fill(match[3]!)
+    await page.locator(`[name="${base}-year"]`).blur()
+    return
+  }
+  await input.fill(value)
+  await input.blur()
 }
 async function selectSiteAndTeam(page: Page): Promise<void> {
   await page.getByLabel('Cliente y sede',{ exact:false }).selectOption(ids.site)
@@ -180,7 +193,7 @@ test('creates a complete reviewed pair with custom Refuerzo dates, products and 
   expect(call.body!.input.productos[0]?.lote).toBe('LOTE-2030')
   expect(call.body!.input.cobro.tecnicoRecaudoPrevistoId).toBe(ids.other)
   const created=api.records.find(value=>![ids.principal,ids.refuerzo].includes(value.id) && value.tipoServicio==='PRINCIPAL')!
-  expect(created.valorServicio).toBe(300000);expect(created.pago.estadoPago).toBe('PENDIENTE');expect(created.pago.tecnicoQueRecaudaId).toBeNull()
+  expect(created.valorServicio).toBe(300000);expect(created.pago.estadoPago).toBe('PENDIENTE');expect(created.pago.recaudadoPorId).toBeNull()
 })
 
 test('joint reprogramming and independent Refuerzo reprogramming keep separate dates',async({ page })=>{
@@ -193,6 +206,7 @@ test('joint reprogramming and independent Refuerzo reprogramming keep separate d
   expect(toBogotaInput(api.records[0]!.inicioProgramado)).toBe('2030-10-15T10:00')
   expect(toBogotaInput(api.records[1]!.inicioProgramado)).toBe('2030-11-08T15:15')
   await page.goto(`/servicios/${ids.refuerzo}`)
+  await expect(page.getByRole('navigation',{ name:'Ruta de navegación' }).getByRole('link',{ name:'Servicios',exact:true })).toHaveAttribute('href','/servicios')
   await page.getByRole('button',{ name:'Reprogramar',exact:true }).click()
   await expect(page.locator('#refuerzo-inicio')).toHaveCount(0)
   await fillDate(page,'#programacion-inicio','11/11/2030 11:30')
@@ -245,10 +259,12 @@ test('cancellation requires a reason and cash confirmation requires the actual c
   await page.locator('#payment-collected-by').selectOption('')
   await page.getByRole('button',{ name:'Confirmar pago',exact:true }).click()
   await expect(page.locator('#payment-collected-by')).toHaveAttribute('aria-invalid','true')
-  await page.locator('#payment-collected-by').selectOption(ids.other)
+  await page.locator('#payment-collected-by').selectOption(ids.admin)
+  await expect(page.locator('#payment-collected-by')).toHaveValue(ids.admin)
   await page.getByRole('button',{ name:'Confirmar pago',exact:true }).click()
   await expect(page.getByRole('dialog',{ name:'Registrar pago' })).toHaveCount(0)
-  expect(api.records[0]!.pago.tecnicoQueRecaudaId).toBe(ids.other)
+  expect(api.records[0]!.pago.recaudadoPorId).toBe(ids.admin)
+  expect(api.records[0]!.pago.recaudadoPorNombre).toBe('Admin de prueba')
   await page.getByRole('button',{ name:'Cancelar SR-0101',exact:true }).click()
   await page.getByRole('button',{ name:'Cancelar servicio',exact:true }).click()
   await expect(page.locator('#service-cancel-reason')).toHaveAttribute('aria-invalid','true')
@@ -272,12 +288,35 @@ test('lost creation response is recovered from the scoped draft without creating
   expect(api.calls.filter(call=>call.method==='POST' && call.path==='/api/admin/services')).toHaveLength(1)
 })
 
+test('weekly calendar expands its time grid and reveals operational detail on hover',async({ page })=>{
+  const api=await setup(page)
+  api.records[0]!.inicioProgramado=fromBogotaInput(`${day}T07:30`)
+  api.records[0]!.finProgramado=fromBogotaInput(`${day}T09:00`)
+  api.records[1]!.inicioProgramado=fromBogotaInput(`${day}T21:30`)
+  api.records[1]!.finProgramado=fromBogotaInput(`${day}T22:30`)
+  await page.goto(`/servicios?view=week&from=${day}`)
+  const calendar=page.getByRole('region',{ name:'Agenda semanal por horas' })
+  await expect(calendar).toBeVisible()
+  await expect(calendar.locator('.svc-week-calendar__hour-label').first()).toContainText('7:00')
+  await expect(calendar.locator('.svc-week-calendar__hour-label').last()).toContainText('10:00')
+  const event=calendar.locator('.svc-week-calendar__event').first()
+  await expect(event).toContainText('Casa Verde')
+  await event.hover()
+  const popover=event.locator('.svc-week-calendar__popover')
+  await expect(popover).toBeVisible()
+  await expect(popover).toContainText('Dirección sintética de prueba')
+  await expect(popover).toContainText('Técnico: Camilo Ruiz')
+  await expect(popover).toContainText('Programado')
+})
+
 test('error retry, compact desktop, dark mode and mobile do not overflow the page',async({ page },info)=>{
   const api=await setup(page);api.failNextList()
   await page.setViewportSize({ width:1440,height:1024 });await page.goto(listUrl)
   await expect(page.getByText('No fue posible cargar la lista',{ exact:true })).toBeVisible()
   await page.getByRole('button',{ name:'Reintentar',exact:true }).click()
   await expect(page.locator(`[data-service-id="${ids.principal}"]`)).toBeVisible()
+  const filterBottoms=await page.locator('.svc-filters > *').evaluateAll(elements=>elements.map(element=>Math.round(element.getBoundingClientRect().bottom)))
+  expect(Math.max(...filterBottoms)-Math.min(...filterBottoms)).toBeLessThanOrEqual(2)
   await page.screenshot({ path:info.outputPath('services-desktop-light.png'),fullPage:true })
   await page.evaluate(()=>{ document.documentElement.dataset.theme='dark' })
   await page.screenshot({ path:info.outputPath('services-desktop-dark.png'),fullPage:true })

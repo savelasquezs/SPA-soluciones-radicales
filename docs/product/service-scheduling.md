@@ -191,3 +191,13 @@ Agenda y Próximos por confirmar pueden compartir componentes visuales, pero rep
 - **Próximo por confirmar:** propuesta derivada de periodicidad pendiente de contacto o confirmación.
 
 La implementación debe conservar esta separación y evitar crear Servicios ficticios únicamente para representar seguimientos comerciales u operativos.
+
+
+## Registro de pago en efectivo
+
+El Técnico previsto para recaudar durante la visita y la persona que finalmente recibe el efectivo son conceptos distintos.
+
+- `tecnico_recaudo_previsto_id` continúa representando únicamente al Técnico que se espera que cobre durante la visita.
+- El receptor real del efectivo se registra como Usuario y puede ser el Técnico o el Administrador que está registrando el pago.
+- Si el Administrador recibe directamente el efectivo, el pago no debe quedar atribuido al Técnico.
+- Registrar quién recibió el efectivo no equivale a registrar una entrega de caja entre Técnico y Administrador; esa operación pertenece al módulo de caja.

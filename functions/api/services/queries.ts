@@ -31,7 +31,7 @@ export const SERVICE_SELECT = `select ${linkJson('s')} || jsonb_build_object(
   'refuerzo',(select ${linkJson('r')} from public.servicios r where r.servicio_principal_id=s.id),
   'principal',(select ${linkJson('r')} from public.servicios r where r.id=s.servicio_principal_id),
   'pago',jsonb_build_object('metodoPago',s.metodo_pago,'estadoPago',s.estado_pago,'tecnicoRecaudoPrevistoId',s.tecnico_recaudo_previsto_id,
-    'tecnicoQueRecaudaId',s.tecnico_que_recauda_id,'tecnicoQueRecaudaNombre',(select nombre_completo from public.usuarios where id=s.tecnico_que_recauda_id),
+    'recaudadoPorId',s.recaudado_por_id,'recaudadoPorNombre',(select nombre_completo from public.usuarios where id=s.recaudado_por_id),
     'pagoFecha',s.pago_fecha,'confirmadoAt',s.pago_confirmado_at,'confirmadoPor',(select nombre_completo from public.usuarios where id=s.pago_confirmado_por_id),
     'comprobanteStoragePath',s.pago_comprobante_storage_path),
   'calendar',jsonb_build_object('estado',s.calendar_sync_estado,'ultimaSyncAt',s.calendar_ultima_sync_at,

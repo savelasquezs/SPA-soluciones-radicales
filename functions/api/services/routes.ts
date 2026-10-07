@@ -144,7 +144,7 @@ adminServiceRoutes.post('/:id/cancel',async context => {
 })
 adminServiceRoutes.post('/:id/payment',async context => {
   const payload=await body(context.req.raw), recordId=id(context.req.param('id')), value=object(payload.input)
-  const input: ServicePaymentInput={ metodoPago:choice(value.metodoPago,['EFECTIVO','TRANSFERENCIA']),estadoPago:choice(value.estadoPago,['PENDIENTE','CONFIRMADO','RECHAZADO']),tecnicoQueRecaudaId:value.tecnicoQueRecaudaId ? id(value.tecnicoQueRecaudaId) : null,motivo:text(value.motivo) }
+  const input: ServicePaymentInput={ metodoPago:choice(value.metodoPago,['EFECTIVO','TRANSFERENCIA']),estadoPago:choice(value.estadoPago,['PENDIENTE','CONFIRMADO','RECHAZADO']),recaudadoPorId:value.recaudadoPorId ? id(value.recaudadoPorId) : null,motivo:text(value.motivo) }
   return context.json(await write(context,payload,`service:payment:${recordId}`,(client,admin)=>savePayment(client,admin.id,recordId,version(payload.version),input)))
 })
 adminServiceRoutes.post('/:id/calendar/retry',async context => {

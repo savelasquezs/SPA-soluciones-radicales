@@ -21,7 +21,7 @@ La SPA usa `/api/admin/services`, protegido en servidor con `requireAdmin`, iden
 
 `GET /api/services` permanece como lectura autorizada de asignaciones para el Técnico. Las antiguas escrituras `POST /api/services` y `POST /api/services/:id/calendar/retry` fueron retiradas: no existe una segunda vía administrativa sin control de versión ni una sincronización síncrona paralela.
 
-La UI no asigna consecutivos, precios, estados de ejecución ni relaciones arbitrarias. El valor del Principal se copia de la Sede al crearlo, conserva el histórico y el Refuerzo vale cero. El cobro previsto no equivale a pago confirmado ni a entrega de caja del Técnico.
+La UI no asigna consecutivos, precios, estados de ejecución ni relaciones arbitrarias. El valor del Principal se copia de la Sede al crearlo, conserva el histórico y el Refuerzo vale cero. El cobro previsto no equivale a pago confirmado. `tecnico_recaudo_previsto_id` conserva al Técnico esperado para cobrar, mientras `recaudado_por_id` identifica a quien recibió realmente el efectivo: Técnico o el Administrador que registra el pago. Este dato tampoco equivale a una entrega de caja Técnico → Administrador. `tecnico_que_recauda_id` se mantiene temporalmente espejado solo para permitir rollback durante el despliegue; el código nuevo no debe consumirlo.
 
 ## Transacciones, versiones y reintentos
 

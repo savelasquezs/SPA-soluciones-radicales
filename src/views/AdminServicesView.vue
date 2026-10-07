@@ -98,13 +98,13 @@ async function retryCalendar(record: AdminService): Promise<void> {
       <BaseSelect v-if="tab==='upcoming'" :model-value="upcomingFilter.estado" name="upcoming-status-filter" label="Seguimiento" @update:model-value="setQuery({ estado:$event || undefined,page:'1' })"><option value="">Todos los pendientes</option><option v-for="(label,value) in FOLLOW_UP_LABELS" :key="value" :value="value">{{ label }}</option></BaseSelect>
       <BaseSelect v-else :model-value="serviceFilter.estado" name="service-status-filter" label="Estado" @update:model-value="setQuery({ estado:$event || undefined,page:'1' })"><option value="">Todos</option><option v-for="(label,value) in SERVICE_STATE_LABELS" :key="value" :value="value">{{ label }}</option></BaseSelect>
       <BaseSelect v-if="tab!=='upcoming'" :model-value="serviceFilter.tipo" name="service-type-filter" label="Tipo" @update:model-value="setQuery({ tipo:$event || undefined,page:'1' })"><option value="">Todos</option><option value="PRINCIPAL">Principal</option><option value="REFUERZO">Refuerzo</option></BaseSelect>
+      <BaseSelect v-if="tab!=='upcoming'" :model-value="serviceFilter.tecnicoId" name="service-team-filter" label="Técnico" @update:model-value="setQuery({ tecnicoId:$event || undefined,page:'1' })"><option value="">Todo el equipo</option><option v-for="person in store.options?.tecnicos ?? []" :key="person.id" :value="person.id">{{ person.nombreCompleto }}</option></BaseSelect>
       <BaseButton size="compact" variant="secondary" @click="setQuery({ from:view==='week' ? monday(todayBogota()) : todayBogota(),to:view==='week' ? undefined : todayBogota(),page:'1' })">Hoy</BaseButton>
     </div>
     <div class="svc-toolbar">
       <div v-if="tab==='agenda'" class="svc-segment" role="group" aria-label="Presentación de agenda"><button :aria-pressed="view==='table'" @click="changeView('table')">Tabla</button><button :aria-pressed="view==='week'" @click="changeView('week')">Semana</button></div>
       <span v-else-if="tab==='upcoming'" class="svc-muted svc-small">Las fechas son sugeridas. Agendar crea la visita confirmada.</span>
       <span v-else class="svc-muted svc-small">Servicios finalizados y cancelados</span>
-      <BaseSelect v-if="tab!=='upcoming'" :model-value="serviceFilter.tecnicoId" name="service-team-filter" label="Técnico" @update:model-value="setQuery({ tecnicoId:$event || undefined,page:'1' })"><option value="">Todo el equipo</option><option v-for="person in store.options?.tecnicos ?? []" :key="person.id" :value="person.id">{{ person.nombreCompleto }}</option></BaseSelect>
     </div>
     <StatusPanel v-if="rangeError" title="Revisa el rango de fechas" :message="rangeError" tone="warning" />
     <LoadingSkeleton v-else-if="loading" :rows="6" />

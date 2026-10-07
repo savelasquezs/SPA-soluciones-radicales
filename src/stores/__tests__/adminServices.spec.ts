@@ -20,7 +20,7 @@ const record=(overrides: Partial<AdminService>={}): AdminService=>({
   id,solicitud:'SR-TEST',tipoServicio:'PRINCIPAL',estado:'PROGRAMADO',version:1,inicioProgramado:'2030-10-07T14:00:00Z',finProgramado:'2030-10-07T15:30:00Z',
   tecnicoResponsableId:id,tecnicosColaboradoresIds:[],clientId:id,clienteNombre:'Cliente de prueba',sedeId:id,sedeNombre:'Sede de prueba',direccion:'Dirección sintética',servicioPrincipalId:null,
   inicioReal:null,finReal:null,responsable:person,colaboradores:[],contacto:{ nombre:null,celular:null,correos:[] },valorServicio:200000,observaciones:'',productos:[],refuerzo:null,principal:null,
-  pago:{ metodoPago:null,estadoPago:'SIN_REGISTRAR',tecnicoRecaudoPrevistoId:null,tecnicoQueRecaudaId:null,tecnicoQueRecaudaNombre:null,pagoFecha:null,confirmadoAt:null,confirmadoPor:null,comprobanteStoragePath:null },
+  pago:{ metodoPago:null,estadoPago:'SIN_REGISTRAR',tecnicoRecaudoPrevistoId:null,recaudadoPorId:null,recaudadoPorNombre:null,pagoFecha:null,confirmadoAt:null,confirmadoPor:null,comprobanteStoragePath:null },
   calendar:{ estado:'PENDIENTE',ultimaSyncAt:null,error:null },motivoCancelacion:null,canceladoAt:null,...overrides,
 })
 const filter: ServiceFilter={ from:'2030-10-07',to:'2030-10-07',tab:'agenda',estado:'',tipo:'',tecnicoId:'',query:'',page:1,pageSize:25 }
