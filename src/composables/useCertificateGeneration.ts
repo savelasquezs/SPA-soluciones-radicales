@@ -1,6 +1,7 @@
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { ApiClientError } from '@/services/apiService'
 import * as service from '@/services/certificatesService'
+import { fetchAdminService } from '@/services/adminServicesService'
 import { certificateError, defaultCertificateMail, downloadLink, generationSelection } from '@/helpers/certificates'
 import { useClientsStore } from '@/stores/clients'
 import { useNotificationsStore } from '@/stores/notifications'
@@ -100,6 +101,26 @@ export function useCertificateGeneration() {
     } catch (error) { if (alive && current === request) loadError.value = certificateError(error) }
     finally { if (alive && current === request) loading.value = false }
   }
+  async function openService(id: string): Promise<void> {
+    if (busy.value || loading.value) return
+    loadError.value=''; loading.value=true
+    try {
+      const target=await fetchAdminService(id)
+      if (!alive) return
+      if (target.tipoServicio!=='PRINCIPAL' || target.estado!=='FINALIZADO') throw new Error('Los certificados requieren un servicio Principal finalizado.')
+      await init()
+      if (!alive || loadError.value) return
+      await selectClient(target.clientId)
+      if (!alive || loadError.value) return
+      siteId.value=target.sedeId
+      services.value=[{ id:target.id,solicitud:target.solicitud,fecha:target.inicioReal ?? target.inicioProgramado }]
+      hasMore.value=false
+      await selectService(target.id)
+    } catch (error) { if (alive) loadError.value=certificateError(error) }
+    finally {
+      if (alive) { loading.value=false; retryLoad=()=>openService(id) }
+    }
+  }
   function setType(value: string): void {
     if (value !== 'ESTABLECIMIENTO' && value !== 'VEHICULO') return
     type.value = value; generationAttempt.value = null; actionError.value = ''
@@ -177,7 +198,7 @@ export function useCertificateGeneration() {
     clients, clientId, siteId, serviceId, type, vehicleIds, services, context, initialLoading, loading, initialized,
     loadError, actionError, phase, busy, replaceOpen, sendOpen, mail, mailDirty, deliveryUnknown, selectedDocuments,
     availability, selection, canGenerate, canSend, businesses, sites, hasMore,
-    init, selectClient, selectSite, selectService, setType, editMail, requestGeneration, generate, send, download,
+    init, openService, selectClient, selectSite, selectService, setType, editMail, requestGeneration, generate, send, download,
     retry: () => retryLoad(), loadMore: () => loadServices(page.value + 1), acknowledgeDelivery,
   }
 }

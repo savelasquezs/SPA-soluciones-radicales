@@ -44,6 +44,18 @@ export async function getService(client: PoolClient, id: string): Promise<AdminS
   if (!rows[0]) throw new ApiError(404, 'El servicio no está disponible.')
   return rows[0].record
 }
+/** Read event metadata and its domain payload from the same MVCC statement. */
+export async function getCalendarSnapshot(client: PoolClient, id: string): Promise<{
+  record: AdminService; calendar_revision: string; calendar_event_id: string | null
+}> {
+  const { rows } = await client.query<{
+    record: AdminService; calendar_revision: string; calendar_event_id: string | null
+  }>(`select payload.record, metadata.calendar_revision, metadata.calendar_event_id
+    from (${SERVICE_SELECT} where s.id=$1::uuid) payload
+    join public.servicios metadata on metadata.id=$1::uuid`, [id])
+  if (!rows[0]) throw new ApiError(404, 'El servicio no está disponible.')
+  return rows[0]
+}
 export async function getServices(client: PoolClient, ids: string[]): Promise<AdminService[]> {
   if (!ids.length) return []
   return (await client.query<{ record: AdminService }>(`${SERVICE_SELECT} where s.id=any($1::uuid[]) order by s.inicio_programado,s.id`, [ids])).rows.map(row => row.record)

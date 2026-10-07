@@ -17,7 +17,7 @@ export const useAdminServicesStore = defineStore('admin-services',()=>{
   const lastFilter=ref<ServiceFilter | null>(null), lastUpcomingFilter=ref<UpcomingFilter | null>(null)
   let listKey='', upcomingKey='', listAt=0, upcomingAt=0, optionsAt=0
   let serviceController: AbortController | null=null, upcomingController: AbortController | null=null
-  let optionsRequest: Promise<ServiceWorkspace> | null=null, generation=0
+  let optionsRequest: Promise<ServiceWorkspace> | null=null, generation=0, mutationEpoch=0
   const rows=computed(()=>serviceIds.value.map(id=>records.value[id]).filter((row): row is AdminService=>Boolean(row)))
   const upcomingRows=computed(()=>upcomingIds.value.map(id=>upcomingRecords.value[id]).filter((row): row is UpcomingService=>Boolean(row)))
   const session=()=>`${auth.profile?.id ?? ''}:${auth.activeRole ?? ''}`
@@ -97,7 +97,13 @@ export const useAdminServicesStore = defineStore('admin-services',()=>{
     if (stamp!==generation) throw new Error('La sesión cambió.')
     upsertUpcoming(record); return record
   }
+  function cancelStaleReads(): void {
+    mutationEpoch++
+    if (loading.value) { serviceController?.abort(); loading.value=false; listKey='' }
+    if (upcomingLoading.value) { upcomingController?.abort(); upcomingLoading.value=false; upcomingKey='' }
+  }
   function applyUpcoming(result: { upcoming: UpcomingService; pendingCount: number }): void {
+    cancelStaleReads()
     upsertUpcoming(result.upcoming); pendingCount.value=result.pendingCount
     const row=upcomingRecords.value[result.upcoming.id]!
     const filter=lastUpcomingFilter.value
@@ -106,26 +112,28 @@ export const useAdminServicesStore = defineStore('admin-services',()=>{
     upcomingAt=Date.now()
   }
   function applyMutation(result: ServiceMutation, created = false): void {
+    cancelStaleReads()
     const filter=lastFilter.value
     for (const row of result.services) {
       const prior=records.value[row.id], visible=serviceIds.value.includes(row.id)
       upsert(row)
       if (!filter) continue
       const matches=matchesServiceFilter(records.value[row.id]!,filter)
-      if (visible && !matches) { serviceIds.value=serviceIds.value.filter(id=>id!==row.id); total.value=Math.max(0,total.value-1) }
-      else if (created && !prior && matches) {
-        total.value++
-        if (filter.page===1) serviceIds.value.push(row.id)
-      }
+      const wasMatching=prior ? matchesServiceFilter(prior,filter) : visible
+      const entered=matches && !wasMatching && (Boolean(prior) || created)
+      if (wasMatching && !matches) total.value=Math.max(0,total.value-1)
+      if (entered) total.value++
+      if (visible && !matches) serviceIds.value=serviceIds.value.filter(id=>id!==row.id)
+      if (entered && filter.page===1) serviceIds.value.push(row.id)
     }
     serviceIds.value=[...new Set(serviceIds.value)].sort((a,b)=>compareServices(records.value[a]!,records.value[b]!)).slice(0,filter?.pageSize ?? 100)
     pendingCount.value=result.pendingCount; listAt=Date.now()
     if (result.upcoming) applyUpcoming({ upcoming:result.upcoming,pendingCount:result.pendingCount })
   }
   async function refreshPendingCount(): Promise<void> {
-    const stamp=generation
+    const stamp=generation, epoch=mutationEpoch
     const result=await fetchPendingCount()
-    if (stamp===generation && auth.isAdmin) pendingCount.value=result.count
+    if (stamp===generation && epoch===mutationEpoch && auth.isAdmin) pendingCount.value=result.count
   }
   return { records,upcomingRecords,rows,upcomingRows,options,total,upcomingTotal,pendingCount,loading,upcomingLoading,optionsLoading,error,upcomingError,optionsError,
     lastFilter,lastUpcomingFilter,loadOptions,loadServices,loadUpcoming,ensureService,ensureUpcoming,upsert,upsertUpcoming,applyMutation,applyUpcoming,refreshPendingCount,reset }

@@ -71,6 +71,10 @@ async function setup(page: Page, role: 'ADMINISTRADOR' | 'TECNICO'='ADMINISTRADO
     const body=method==='GET' ? undefined : request.postDataJSON() as Body
     calls.push({ path,method,body })
     if(path==='/api/session') { await json(route,{ id:ids.admin,nombreCompleto:'Admin de prueba',correoGoogle:'admin@example.test',esAdmin:role==='ADMINISTRADOR',esTecnico:role==='TECNICO',rolActivo:role,requiereSeleccionRol:false });return }
+    if(path==='/api/certificates/settings') { await json(route,{ templates:[],converterReady:true });return }
+    if(path==='/api/clients') { await json(route,url.searchParams.get('active')==='false' ? [] : [{ id:ids.client,nombre:'Casa Verde',tipoCliente:'NEGOCIO',nit:'CI-1',correos:contact.correos,activo:true,version:1,vigenciaCertificadoMeses:12,sedesCount:1 }]);return }
+    if(path===`/api/clients/${ids.client}/sites`) { await json(route,[{ ...workspace.sedes[0],id:ids.site,clientId:ids.client,tipoSede:'NEGOCIO',activo:true,version:1,correos:contact.correos,areasCount:0 }]);return }
+    if(path===`/api/certificates/services/${ids.principal}/context`) { await json(route,{ serviceId:ids.principal,solicitud:'SR-0101',clientName:'Casa Verde',siteName:'Laureles',recipients:contact.correos,vehicles:[],documents:[],availability:{ ESTABLECIMIENTO:{ available:false,reason:'Configura una plantilla.',templateSource:null },VEHICULO:{ available:false,reason:'Sin vehículos.',templateSource:null } } });return }
     const base='/api/admin/services'
     if(path===`${base}/workspace`) { await json(route,workspace);return }
     if(path===`${base}/pending-count`) { await json(route,{ count:count() });return }
@@ -141,8 +145,8 @@ test('clickable team cell reuses the loaded snapshot and multiselect excludes th
   await page.getByRole('button',{ name:'Cambiar equipo de SR-0101',exact:true }).click()
   await expect(page.getByRole('dialog',{ name:'Cambiar equipo' })).toBeVisible()
   await page.getByRole('button',{ name:'Colaboradores',exact:true }).click()
-  await expect(page.getByRole('option',{ name:/Camilo Ruiz/ })).toHaveCount(0)
-  await page.getByRole('option',{ name:/Mateo Díaz/ }).click()
+  await expect(page.getByRole('listbox',{ name:'Colaboradores',exact:true }).getByRole('option',{ name:/Camilo Ruiz/ })).toHaveCount(0)
+  await page.getByRole('listbox',{ name:'Colaboradores',exact:true }).getByRole('option',{ name:/Mateo Díaz/ }).click()
   await page.getByRole('button',{ name:'Colaboradores',exact:true }).click()
   await page.getByRole('button',{ name:'Guardar cambios',exact:true }).click()
   await expect(page.getByRole('dialog',{ name:'Cambiar equipo' })).toHaveCount(0)
@@ -169,7 +173,8 @@ test('creates a complete reviewed pair with custom Refuerzo dates, products and 
   await page.getByLabel('Observaciones para la visita',{ exact:false }).fill('Visita coordinada con el cliente.')
   await page.screenshot({ path:info.outputPath('service-form-light.png'),fullPage:true })
   await page.getByRole('button',{ name:'Agendar servicio',exact:true }).first().click()
-  await expect(page).toHaveURL(/\/servicios\?/)
+  await expect(page).toHaveURL(url=>url.pathname==='/servicios')
+  await expect.poll(()=>api.calls.filter(value=>value.path==='/api/admin/services' && value.method==='POST').length).toBe(1)
   const call=api.calls.find(value=>value.path==='/api/admin/services' && value.method==='POST')!
   expect(toBogotaInput(call.body!.input.refuerzo!.inicioProgramado)).toBe('2030-11-04T14:00')
   expect(call.body!.input.productos[0]?.lote).toBe('LOTE-2030')
@@ -229,9 +234,9 @@ test('preagenda preserves the row until creation and sends predefined email only
   await page.locator('#programacion-responsable').selectOption(ids.tech)
   await page.getByLabel('El cliente confirmó la fecha y la hora de esta visita',{ exact:false }).check()
   await page.getByRole('button',{ name:'Agendar servicio',exact:true }).first().click()
-  await expect(page).toHaveURL(/tab=upcoming/)
+  await expect(page).toHaveURL(url=>url.pathname==='/servicios' && url.searchParams.get('tab')==='upcoming')
   await expect(row).toHaveCount(0)
-  expect(api.upcoming.servicioAgendadoId).toBeTruthy()
+  await expect.poll(()=>api.upcoming.servicioAgendadoId).toBeTruthy()
 })
 
 test('cancellation requires a reason and cash confirmation requires the actual collector',async({ page })=>{
@@ -289,4 +294,17 @@ test('technician role cannot enter administrator creation or call admin endpoint
   const api=await setup(page,'TECNICO');await page.goto('/servicios/nuevo')
   await expect(page).not.toHaveURL(/\/servicios\/nuevo/)
   expect(api.calls.filter(call=>call.path.startsWith('/api/admin/services'))).toHaveLength(0)
+})
+
+
+test('opens certificates with the finalized service already selected without a history scan',async({ page })=>{
+  const api=await setup(page)
+  api.records[0]!.estado='FINALIZADO';api.records[0]!.inicioReal=start;api.records[0]!.finReal=api.records[0]!.finProgramado
+  await page.goto(`/servicios/${ids.principal}`)
+  await page.getByRole('button',{ name:'Generar y consultar certificados',exact:true }).click()
+  await expect(page.locator('#cert-service')).toHaveValue(ids.principal)
+  await expect(page.locator('#cert-business')).toHaveValue(ids.client)
+  await expect(page.locator('#cert-site')).toHaveValue(ids.site)
+  expect(api.calls.filter(call=>call.path==='/api/certificates/services')).toHaveLength(0)
+  expect(api.calls.filter(call=>call.method==='POST')).toHaveLength(0)
 })

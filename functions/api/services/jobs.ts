@@ -3,10 +3,10 @@ import type { PoolClient } from 'pg'
 import type { ConfirmationEmail } from '../../../src/types/adminServices'
 import { isServiceId } from '../../../src/helpers/adminServices'
 import { ApiError } from '../auth'
-import { pool, transaction } from '../db'
+import { transaction } from '../db'
 import { sendGmailMessage, upsertCalendarEvent } from '../google'
 import { audit } from './commands'
-import { getService } from './queries'
+import { getCalendarSnapshot } from './queries'
 
 interface JobPayload {
   scope: 'ADMIN_SERVICES'
@@ -43,62 +43,52 @@ async function complete(client: PoolClient, job: ServiceJob, outcome: string): P
 async function processCalendar(job: ServiceJob): Promise<void> {
   const serviceId = job.payload.serviceId
   if (!isServiceId(serviceId) || !isServiceId(job.payload.actorId)) throw new Error('Invalid durable Calendar job')
-  const client = await pool.connect()
-  let locked = false, discardConnection = false
+  let revision: number | null = null
   try {
-    locked = Boolean((await client.query<{ locked: boolean }>('select pg_try_advisory_lock(hashtextextended($1,0)) as locked',[`admin-service-calendar:${serviceId}`])).rows[0]?.locked)
-    if (!locked) {
-      await client.query("update private.integration_jobs set status='PENDING',attempts=greatest(attempts-1,0),run_after=now()+interval '15 seconds',lease_until=null where id=$1",[job.id])
-      return
-    }
-    await client.query('begin isolation level repeatable read read only')
-    const service = await getService(client,serviceId)
-    const metadata = (await client.query<{ calendar_revision: string; calendar_event_id: string | null }>('select calendar_revision,calendar_event_id from public.servicios where id=$1',[serviceId])).rows[0]!
-    await client.query('commit')
-    const revision = Number(metadata.calendar_revision)
-    if (service.calendar.estado === 'SINCRONIZADO' && Number(job.payload.revision) <= revision) {
-      await client.query('begin')
-      await complete(client,job,'ALREADY_SYNCHRONIZED')
-      await audit(client,job.payload.actorId,'SERVICIO_CALENDAR_INTENTO',serviceId,{ jobId:job.id,resultado:'YA_SINCRONIZADO',revision })
-      await client.query('commit')
-      return
-    }
-    try {
+    await transaction(async client => {
+      // Transaction-level locks are compatible with Neon transaction pooling.
+      // Only other Calendar deliveries take this lock, not administrator edits.
+      const locked = Boolean((await client.query<{ locked: boolean }>(
+        'select pg_try_advisory_xact_lock(hashtextextended($1,0)) as locked',
+        [`admin-service-calendar:${serviceId}`],
+      )).rows[0]?.locked)
+      if (!locked) {
+        await client.query("update private.integration_jobs set status='PENDING',attempts=greatest(attempts-1,0),run_after=now()+interval '15 seconds',lease_until=null where id=$1", [job.id])
+        return
+      }
+      const metadata = await getCalendarSnapshot(client, serviceId)
+      const service = metadata.record
+      revision = Number(metadata.calendar_revision)
+      if (service.calendar.estado === 'SINCRONIZADO' && Number(job.payload.revision) <= revision) {
+        await complete(client, job, 'ALREADY_SYNCHRONIZED')
+        return
+      }
       const eventId = await upsertCalendarEvent({
-        serviceId,eventId:metadata.calendar_event_id,
+        serviceId, eventId:metadata.calendar_event_id,
         summary:`${service.tipoServicio === 'REFUERZO' ? 'Refuerzo' : 'MIP'} · ${service.clienteNombre} · ${service.sedeNombre}`,
         description:`${service.solicitud}\nResponsable: ${service.responsable.nombreCompleto}\nColaboradores: ${service.colaboradores.map(person=>person.nombreCompleto).join(', ') || 'Sin colaboradores'}\nTipo: ${service.tipoServicio}`,
-        location:service.direccion,start:service.inicioProgramado,end:service.finProgramado,
-        attendees:[service.responsable.correoGoogle,...service.colaboradores.map(person=>person.correoGoogle)],
+        location:service.direccion, start:service.inicioProgramado, end:service.finProgramado,
+        attendees:[service.responsable.correoGoogle, ...service.colaboradores.map(person=>person.correoGoogle)],
         cancelled:service.estado === 'CANCELADO',
       })
-      await client.query('begin')
-      // A newer internal revision remains pending while this older request exits.
+      // No row lock is held during the bounded provider call. A concurrent
+      // schedule edit remains pending and is delivered by its own revision.
       const saved = await client.query(`update public.servicios set calendar_event_id=$2,calendar_sync_estado='SINCRONIZADO',calendar_ultima_sync_at=now(),calendar_sync_error=null
-        where id=$1 and calendar_revision=$3 returning id`,[serviceId,eventId,revision])
-      await complete(client,job,saved.rowCount ? 'SYNCHRONIZED' : 'SUPERSEDED')
-      await audit(client,job.payload.actorId,'SERVICIO_CALENDAR_INTENTO',serviceId,{ jobId:job.id,revision,resultado:saved.rowCount ? 'SINCRONIZADO' : 'VERSION_SUPERADA',cancelado:service.estado==='CANCELADO' })
-      await client.query('commit')
-    } catch (error) {
-      await client.query('rollback')
-      const code = error instanceof ApiError ? error.code ?? 'CALENDAR_UNAVAILABLE' : 'CALENDAR_UNAVAILABLE'
-      await client.query('begin')
-      await client.query(`update public.servicios set calendar_sync_estado='ERROR',calendar_sync_error='No fue posible sincronizar Calendar.'
-        where id=$1 and calendar_revision=$2`,[serviceId,revision])
-      await client.query(`update private.integration_jobs set status='FAILED',lease_until=null,last_error=$2,
-        run_after=now()+make_interval(secs => least(3600,60*power(2,least(attempts,6)))::integer) where id=$1`,[job.id,code])
-      await audit(client,job.payload.actorId,'SERVICIO_CALENDAR_INTENTO',serviceId,{ jobId:job.id,revision,resultado:'ERROR',code })
-      await client.query('commit')
-    }
+        where id=$1 and calendar_revision=$3 returning id`, [serviceId, eventId, revision])
+      await complete(client, job, saved.rowCount ? 'SYNCHRONIZED' : 'SUPERSEDED')
+      await audit(client, job.payload.actorId, 'SERVICIO_CALENDAR_INTENTO', serviceId, {
+        jobId:job.id, revision, resultado:saved.rowCount ? 'SINCRONIZADO' : 'VERSION_SUPERADA', cancelado:service.estado==='CANCELADO',
+      })
+    })
   } catch (error) {
-    await client.query('rollback').catch(()=>undefined)
-    throw error
-  } finally {
-    if (locked) {
-      try { await client.query('select pg_advisory_unlock(hashtextextended($1,0))',[`admin-service-calendar:${serviceId}`]) }
-      catch { discardConnection = true }
-    }
-    client.release(discardConnection)
+    const code = error instanceof ApiError ? error.code ?? 'CALENDAR_UNAVAILABLE' : 'CALENDAR_UNAVAILABLE'
+    await transaction(async client => {
+      await client.query(`update public.servicios set calendar_sync_estado='ERROR',calendar_sync_error='No fue posible sincronizar Calendar.'
+        where id=$1 and calendar_revision=$2 and calendar_sync_estado<>'SINCRONIZADO'`, [serviceId, revision])
+      await client.query(`update private.integration_jobs set status='FAILED',lease_until=null,last_error=$2,
+        run_after=now()+make_interval(secs => least(3600,60*power(2,least(attempts,6)))::integer) where id=$1`, [job.id, code])
+      await audit(client, job.payload.actorId, 'SERVICIO_CALENDAR_INTENTO', serviceId, { jobId:job.id, revision, resultado:'ERROR', code })
+    })
   }
 }
 

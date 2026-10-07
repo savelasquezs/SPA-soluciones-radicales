@@ -10,7 +10,7 @@ import type { AdminService, ServiceEditorDraft, ServiceErrors, ServiceScheduleDr
 
 const props=withDefaults(defineProps<{ modelValue: ServiceEditorDraft; workspace: ServiceWorkspace; record?: AdminService | null; disabled?: boolean; errors?: ServiceErrors; formId?: string }>(),{ record:null,disabled:false,errors:()=>({}),formId:'admin-service-form' })
 const emit=defineEmits<{ 'update:modelValue': [value: ServiceEditorDraft]; submit: []; changed: [] }>()
-const touched=ref(new Set<string>()), automaticRefuerzo=ref(!props.record)
+const touched=ref(new Set<string>()), automaticRefuerzo=ref(!props.record && (!props.modelValue.refuerzo || JSON.stringify(props.modelValue.refuerzo)===JSON.stringify(scheduleToDraft(suggestReinforcement(scheduleFromDraft(props.modelValue.programacion))))))
 const selectedSite=computed(()=>props.workspace.sedes.find(site=>site.id===props.modelValue.sedeId))
 const reinforcement=computed(()=>props.record?.tipoServicio==='REFUERZO')
 const confirmedPayment=computed(()=>props.record?.pago.estadoPago==='CONFIRMADO')

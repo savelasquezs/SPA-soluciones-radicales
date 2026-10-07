@@ -167,14 +167,7 @@ export type ServiceRecord = {
   warning?: string
 }
 
-export type ServiceDraft = {
-  sedeId: string
-  tecnicoResponsableId: string
-  tecnicosColaboradoresIds: string[]
-  inicioProgramado: string
-  duracionMinutos: string
-  observaciones: string
-}
+
 
 export type NotificationTone = 'success' | 'error' | 'warning' | 'info'
 

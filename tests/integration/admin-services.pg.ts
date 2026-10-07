@@ -185,6 +185,21 @@ describe('administrator services · real PostgreSQL',()=>{
     expect((await readService(p.id)).calendar.estado).toBe('SINCRONIZADO')
     expect(external.calendar.mock.calls[1]?.[0].start).toBe((await readService(p.id)).inicioProgramado)
   })
+  it('serializes simultaneous Calendar deliveries without blocking administrator reprogramming',async()=>{
+    const f=await fixture(false), p=principal(await create(f))
+    external.calendar.mockImplementationOnce(async()=>{
+      await transaction(client=>rescheduleService(client,f.admin,p.id,p.version,{ ...scheduleFromRecord(p),inicioProgramado:addInstantDays(p.inicioProgramado,1) },false))
+      await drainServiceJobs(1)
+      expect(external.calendar).toHaveBeenCalledTimes(1)
+      return `sr${p.id.replaceAll('-','')}`
+    })
+    await drainServiceJobs(1)
+    expect((await readService(p.id)).calendar.estado).toBe('PENDIENTE')
+    await pool.query("update private.integration_jobs set run_after=now() where payload->>'serviceId'=$1 and status='PENDING'",[p.id])
+    await drainServiceJobs(1)
+    expect(external.calendar).toHaveBeenCalledTimes(2)
+    expect((await readService(p.id)).calendar.estado).toBe('SINCRONIZADO')
+  })
   it('does not resend a confirmation email after uncertain delivery',async()=>{
     const f=await fixture(false), p=principal(await create(f)), nextId=await finish(f,p.id)
     await pool.query("update private.integration_jobs set status='COMPLETED' where payload->>'scope'='ADMIN_SERVICES'")
@@ -215,7 +230,7 @@ describe('administrator services · real PostgreSQL',()=>{
       values(private.session_key($1,$2::jsonb),$1,'ADMINISTRADOR',to_timestamp(4102444800))`,[`services-ci:${f.admin}`,JSON.stringify(session)])
     async function asUser(user: string,work: (client: PoolClient)=>Promise<unknown>): Promise<unknown> {
       return transaction(async client=>{
-        await client.query("select set_config('test.auth_user_id',$1,true),set_config('test.auth_session',$2,true)",[`services-ci:${user}`,JSON.stringify(session)])
+        await client.query("select set_config('test.user_id',$1,true),set_config('test.auth_session',$2,true)",[`services-ci:${user}`,JSON.stringify(session)])
         await client.query('set local role authenticated')
         return work(client)
       })

@@ -4,14 +4,14 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import StatusPanel from '@/components/base/StatusPanel.vue'
 import ServicePage from '@/components/domain/services/ServicePage.vue'
-import { getServiceWorkspace } from '@/services/servicesService'
+import { listAssignedServices } from '@/services/servicesService'
 import { formatServiceDate } from '@/helpers/adminServices'
 import type { ServiceRecord } from '@/types/domain'
 const records=ref<ServiceRecord[]>([]), loading=ref(true), error=ref('')
 onMounted(load)
 async function load(): Promise<void> {
   loading.value=true; error.value=''
-  try { records.value=(await getServiceWorkspace(false)).services }
+  try { records.value=await listAssignedServices() }
   catch(failure) { error.value=failure instanceof Error ? failure.message : 'No fue posible cargar tus servicios.' }
   finally { loading.value=false }
 }

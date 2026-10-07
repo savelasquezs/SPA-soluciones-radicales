@@ -5,7 +5,7 @@ on:
     paths: ['src/**','functions/api/**','database/**','scripts/database/**','e2e/**','tests/**','vitest.services.config.ts','neon.ts','package*.json','.github/workflows/admin-services.yml']
   workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
 concurrency:
   group: admin-services-${{ github.ref }}
   cancel-in-progress: true
@@ -32,67 +32,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.head_ref || github.ref_name }}
-          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
           cache: npm
-      - name: Apply reviewed implementation corrections on the feature branch
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feature/admin-services-complete' && github.event.pull_request.head.repo.full_name == github.repository
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          def replace(path, old, new):
-              p=Path(path); value=p.read_text(); sentinel='__ALREADY_APPLIED_REVIEWED_CHANGE__'
-              # Protect a replacement containing its original, but never skip an
-              # original merely because the shorter replacement is a substring.
-              shielded=bool(new and old in new)
-              source=value.replace(new,sentinel) if shielded else value
-              if old in source:
-                  result=source.replace(old,new)
-                  p.write_text(result.replace(sentinel,new) if shielded else result)
-              elif new and new not in value:
-                  raise RuntimeError('Unexpected source in '+path)
-          replace('functions/api/services/commands.ts', '],ids,accepted)', '],[id,...(child ? [child.id] : [])],accepted)')
-          replace('functions/api/services/commands.ts', "s.tipo_sede='NEGOCIO' and s.valor_servicio is not null`, [id]", "s.tipo_sede='NEGOCIO' and s.valor_servicio is not null and s.periodicidad_meses > 0 and s.duracion_servicio_minutos > 0`, [id]")
-          replace('functions/api/services/jobs.ts', '    const service = await getService(client,serviceId)', "    await client.query('begin isolation level repeatable read read only')\n    const service = await getService(client,serviceId)")
-          replace('functions/api/services/jobs.ts', '    const revision = Number(metadata.calendar_revision)', "    await client.query('commit')\n    const revision = Number(metadata.calendar_revision)")
-          replace('functions/api/calendarClient.ts', 'input: CalendarEventInput, accessToken: string)', 'input: CalendarEventInput, accessToken: string, retry = 0)')
-          replace('functions/api/calendarClient.ts', '  let result = exists', '  const result = exists')
-          replace('functions/api/calendarClient.ts', 'if (!exists && result.status === 409)', 'if (!exists && result.status === 409 && retry < 1)')
-          replace('functions/api/calendarClient.ts', 'writeCalendarEvent({ ...input, eventId: id }, accessToken)', 'writeCalendarEvent({ ...input, eventId: id }, accessToken, retry + 1)')
-          replace('tests/integration/admin-services.pg.ts', 'ServiceInput,ServiceMutation,ServiceSchedule', 'ServiceInput,ServiceMutation')
-          replace('tests/integration/admin-services.pg.ts', 'getService(awaitClient(),p.id)', 'readService(p.id)')
-          replace('tests/integration/admin-services.pg.ts', 'function awaitClient(): PoolClient { return pool as unknown as PoolClient }', '')
-          replace('tests/integration/admin-services.pg.ts', 'attachDatabasePool:vi.fn(),waitUntil:vi.fn()', 'attachDatabasePool:vi.fn<() => void>(),waitUntil:vi.fn<() => void>()')
-          replace('tests/integration/admin-services.pg.ts', 'mail:vi.fn(),calendar:vi.fn()', "mail:vi.fn<(input: MailInput) => Promise<string>>(),calendar:vi.fn<(input: import('../../functions/api/calendarClient').CalendarEventInput) => Promise<string>>()")
-          replace('src/helpers/adminServices.spec.ts', 'new Array(101).fill({})', 'Array.from({ length:101 },()=>({}))')
-          replace('src/components/domain/services/ServiceQuickEditor.vue', 'let baseline=serialize()', 'const baseline=ref(serialize())')
-          replace('src/components/domain/services/ServiceQuickEditor.vue', 'serialize()!==baseline)', 'serialize()!==baseline.value)')
-          replace('src/components/domain/services/ServiceQuickEditor.vue', 'baseline=serialize()', 'baseline.value=serialize()')
-          replace('src/components/domain/services/UpcomingEditor.vue', 'let baseline=JSON.stringify(form.value)', 'const baseline=ref(JSON.stringify(form.value))')
-          replace('src/components/domain/services/UpcomingEditor.vue', 'JSON.stringify(form.value)!==baseline)', 'JSON.stringify(form.value)!==baseline.value)')
-          replace('src/components/domain/services/UpcomingEditor.vue', 'baseline=JSON.stringify(form.value)', 'baseline.value=JSON.stringify(form.value)')
-          replace('src/components/domain/services/ServiceForm.vue', '<div><dt>Principal</dt><dd>', "<div><dt>{{ reinforcement ? 'Refuerzo' : 'Principal' }}</dt><dd>")
-          replace('src/components/domain/services/ServiceQuickEditor.vue', "'Este cambio no modifica la programación del Principal.'", "original.tipoServicio==='REFUERZO' ? 'Este cambio no modifica la programación del Principal.' : 'Se actualizará la programación de esta visita.'")
-          replace('src/views/ServiceEditorView.vue', '  const parsed=validateServiceInput(draftToServiceInput(draft.value))', "  const invalidDate=document.querySelector<HTMLElement>('#admin-service-form .date-time-control input[aria-invalid=\"true\"]')\n  if(invalidDate) { invalidDate.focus(); notifications.show('Revisa las fechas y horas antes de guardar.','error'); return }\n  const parsed=validateServiceInput(draftToServiceInput(draft.value))")
-          replace('src/components/domain/services/ServiceQuickEditor.vue', '  const fields: ServiceErrors={}', "  const invalidDate=document.querySelector<HTMLElement>('#service-quick-form .date-time-control input[aria-invalid=\"true\"]')\n  if(invalidDate) { invalidDate.focus(); notifications.show('Revisa las fechas y horas antes de guardar.','error'); return }\n  const fields: ServiceErrors={}")
-          PY
       - run: npm ci
         id: install
       - run: npm run lint
         id: lint
-      - name: Record reviewed corrections and formatting
-        if: steps.lint.outcome == 'success' && github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feature/admin-services-complete' && github.event.pull_request.head.repo.full_name == github.repository
-        run: |
-          git add src functions/api tests e2e
-          if ! git diff --cached --quiet; then
-            git config user.name 'github-actions[bot]'
-            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git commit -m 'fix(services): preserve sibling conflicts and consistent integration snapshots'
-            git push origin HEAD:feature/admin-services-complete
-          fi
       - run: npm run test:unit:run
         if: always() && steps.install.outcome == 'success'
       - run: npm run build
@@ -110,19 +58,12 @@ jobs:
         if: always() && steps.install.outcome == 'success'
       - name: Administrator service flows and responsive review
         if: always() && steps.install.outcome == 'success'
-        run: npx playwright test e2e/admin-services.spec.ts --project=chromium
-      - name: Source snapshot for review
-        if: always()
-        run: |
-          git archive --format=zip HEAD -o /tmp/admin-services-source.zip
-          if [ -d node_modules ]; then tar -czf /tmp/admin-services-dependencies.tgz node_modules; fi
+        run: npx playwright test e2e/admin-services.spec.ts --project=chromium --retries=0
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: admin-services-review
           path: |
-            /tmp/admin-services-source.zip
-            /tmp/admin-services-dependencies.tgz
             playwright-report
             test-results
           retention-days: 7
