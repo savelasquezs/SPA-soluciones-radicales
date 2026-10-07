@@ -12,6 +12,7 @@ import CatalogRecords from '@/components/domain/catalogs/CatalogRecords.vue'
 import CatalogStatus from '@/components/domain/catalogs/CatalogStatus.vue'
 import MipProductForm from '@/components/domain/catalogs/MipProductForm.vue'
 import MipCatalogItemForm from '@/components/domain/catalogs/MipCatalogItemForm.vue'
+import MipCriterionForm from '@/components/domain/catalogs/MipCriterionForm.vue'
 import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
 import { coverageSummary, emptyProductInput, normalizeCatalogSearch, PEST_GROUP_LABELS, PRODUCT_PEST_CATEGORY_LABELS, productToInput } from '@/helpers/mipCatalogs'
 import { ApiClientError } from '@/services/apiService'
@@ -20,16 +21,16 @@ import { deleteMipRecord, saveMipRecord, setMipRecordActive } from '@/services/m
 import { useAuthStore } from '@/stores/auth'
 import { useMipCatalogsStore } from '@/stores/mipCatalogs'
 import { useNotificationsStore } from '@/stores/notifications'
-import type { CatalogErrors, MipCatalogItem, MipCatalogKind, MipItemInput, MipItemKind, MipProduct, MipRecord, PestGroup } from '@/types/mipCatalogs'
+import type { CatalogErrors, MipCatalogItem, MipCatalogKind, MipCriterion, MipCriterionInput, MipItemInput, MipItemKind, MipProduct, MipRecord, PestGroup } from '@/types/mipCatalogs'
 
 const store = useMipCatalogsStore(), auth = useAuthStore(), notifications = useNotificationsStore()
 const router = useRouter(), route = useRoute()
-const LABELS: Record<MipCatalogKind, string> = { products: 'Productos', traps: 'Trampas', pests: 'Plagas', methods: 'Métodos de aplicación' }
-const SINGLE: Record<MipCatalogKind, string> = { products: 'producto', traps: 'trampa', pests: 'plaga', methods: 'método' }
-const TABS = ['products', 'traps', 'pests'] as const
+const LABELS: Record<MipCatalogKind, string> = { products: 'Productos', traps: 'Trampas', pests: 'Plagas', methods: 'Métodos de aplicación', criteria: 'Criterios' }
+const SINGLE: Record<MipCatalogKind, string> = { products: 'producto', traps: 'trampa', pests: 'plaga', methods: 'método', criteria: 'criterio' }
+const TABS = ['products', 'traps', 'pests', 'criteria'] as const
 const current = computed(() => TABS.includes(route.query.tab as typeof TABS[number]) ? route.query.tab as typeof TABS[number] : 'products')
 const active = computed(() => route.query.estado !== 'inactivos')
-const filter = reactive<Record<MipCatalogKind, { query: string; group: PestGroup | '' }>>({ products: { query: '', group: '' }, traps: { query: '', group: '' }, pests: { query: '', group: '' }, methods: { query: '', group: '' } })
+const filter = reactive<Record<MipCatalogKind, { query: string; group: PestGroup | '' }>>({ products: { query: '', group: '' }, traps: { query: '', group: '' }, pests: { query: '', group: '' }, methods: { query: '', group: '' }, criteria: { query: '', group: '' } })
 const key = computed(() => `${current.value}:${active.value}`)
 const methodsOpen = ref(false), methodsActive = ref(true)
 const methodsKey = computed(() => `methods:${methodsActive.value}`)
@@ -37,7 +38,7 @@ const saving = ref(false), actionBusy = ref(false), fileReading = ref(false)
 const phase = ref('Guardando…')
 const editorOpen = ref(false), detail = ref<{ kind: MipCatalogKind; record: MipRecord } | null>(null)
 const editorKind = ref<MipCatalogKind>('products'), editing = ref<MipRecord | null>(null)
-const productDraft = ref(emptyProductInput()), itemDraft = ref<MipItemInput>({ nombre: '', clasificacion: null, categoriaProducto: null })
+const productDraft = ref(emptyProductInput()), itemDraft = ref<MipItemInput>({ nombre: '', clasificacion: null, categoriaProducto: null }), criterionDraft = ref<MipCriterionInput>({ nombre: '', soloAreaExterna: false })
 const file = ref<File | null>(null), original = ref(''), editorKey = ref(0)
 const serverErrors = ref<CatalogErrors>({}), saveError = ref(''), conflict = ref(false)
 const discard = ref<'close' | 'refresh' | null>(null)
@@ -46,7 +47,7 @@ let uploaded: { file: File; path: string } | null = null
 let alive = true
 const session = () => `${auth.profile?.id ?? ''}:${auth.activeRole ?? ''}`
 const busy = computed(() => saving.value || actionBusy.value)
-const dirty = computed(() => editorOpen.value && (JSON.stringify(editorKind.value === 'products' ? productDraft.value : itemDraft.value) !== original.value || file.value !== null))
+const dirty = computed(() => editorOpen.value && (JSON.stringify(editorKind.value === 'products' ? productDraft.value : editorKind.value === 'criteria' ? criterionDraft.value : itemDraft.value) !== original.value || file.value !== null))
 const navigation = useUnsavedChanges(dirty, busy)
 const editorTitle = computed(() => `${editing.value ? 'Editar' : editorKind.value === 'traps' || editorKind.value === 'pests' ? 'Nueva' : 'Nuevo'} ${SINGLE[editorKind.value]}`)
 const dialogModel = computed({ get: () => editorOpen.value, set: (open: boolean) => { if (!open) requestClose() } })
@@ -70,8 +71,9 @@ function feminine(kind: MipCatalogKind): boolean { return kind === 'pests' || ki
 function fillDraft(kind: MipCatalogKind, record: MipRecord | null): void {
   editorKind.value = kind; editing.value = record; editorKey.value++
   productDraft.value = kind === 'products' && record ? productToInput(record as MipProduct) : emptyProductInput()
-  itemDraft.value = record && kind !== 'products' ? { nombre: record.nombre, clasificacion: (record as MipCatalogItem).clasificacion, categoriaProducto: (record as MipCatalogItem).categoriaProducto } : { nombre: '', clasificacion: null, categoriaProducto: null }
-  original.value = JSON.stringify(kind === 'products' ? productDraft.value : itemDraft.value)
+  itemDraft.value = record && kind !== 'products' && kind !== 'criteria' ? { nombre: record.nombre, clasificacion: (record as MipCatalogItem).clasificacion, categoriaProducto: (record as MipCatalogItem).categoriaProducto } : { nombre: '', clasificacion: null, categoriaProducto: null }
+  criterionDraft.value = record && kind === 'criteria' ? { nombre: record.nombre, soloAreaExterna: (record as MipCriterion).soloAreaExterna } : { nombre: '', soloAreaExterna: false }
+  original.value = JSON.stringify(kind === 'products' ? productDraft.value : kind === 'criteria' ? criterionDraft.value : itemDraft.value)
   file.value = null; serverErrors.value = {}; saveError.value = ''; conflict.value = false
 }
 function openEditor(kind: MipCatalogKind, record: MipRecord | null = null): void {
@@ -122,11 +124,11 @@ async function save(): Promise<void> {
       productDraft.value = { ...productDraft.value, fichaTecnicaStoragePath: uploaded!.path }
     }
     phase.value = 'Guardando…'
-    const result = await saveMipRecord(kind, kind === 'products' ? productDraft.value : itemDraft.value, prior ?? undefined)
+    const result = await saveMipRecord(kind, kind === 'products' ? productDraft.value : kind === 'criteria' ? criterionDraft.value : itemDraft.value, prior ?? undefined)
     if (!alive || session() !== stamp) return
     store.upsert(kind, result)
     uploaded = null; file.value = null; editorOpen.value = false
-    notifications.show(`${LABELS[kind] === 'Productos' ? 'Producto' : kind === 'traps' ? 'Trampa' : kind === 'pests' ? 'Plaga' : 'Método'} ${prior ? 'actualizado' : 'creado'} correctamente.`, 'success')
+    notifications.show(`${kind === 'products' ? 'Producto' : kind === 'traps' ? 'Trampa' : kind === 'pests' ? 'Plaga' : kind === 'criteria' ? 'Criterio' : 'Método'} ${prior ? 'actualizado' : 'creado'} correctamente.`, 'success')
   } catch (error) {
     if (!alive || session() !== stamp) return
     saveError.value = error instanceof Error ? error.message : 'No fue posible guardar. Tus datos se conservan.'
@@ -136,7 +138,7 @@ async function save(): Promise<void> {
       if (fields && typeof fields === 'object' && !Array.isArray(fields)) serverErrors.value = Object.fromEntries(Object.entries(fields).filter(([, v]) => typeof v === 'string')) as CatalogErrors
     }
     notifications.show(saveError.value, 'error')
-    await nextTick(); document.querySelector<HTMLElement>('#mip-product-form [aria-invalid="true"], #mip-item-form [aria-invalid="true"]')?.focus()
+    await nextTick(); document.querySelector<HTMLElement>('#mip-product-form [aria-invalid="true"], #mip-item-form [aria-invalid="true"], #mip-criterion-form [aria-invalid="true"]')?.focus()
   } finally { saving.value = false }
 }
 
@@ -196,7 +198,7 @@ onBeforeUnmount(() => { alive = false; cleanupPending() })
     <div class="mip-toolbar">
       <nav class="mip-tabs mip-tabs--state" aria-label="Estado de los registros"><button type="button" :aria-current="active ? 'page' : undefined" @click="switchState(true)">{{ feminine(current) ? 'Activas' : 'Activos' }}</button><button type="button" :aria-current="!active ? 'page' : undefined" @click="switchState(false)">{{ feminine(current) ? 'Inactivas' : 'Inactivos' }}</button></nav>
       <label class="mip-search"><Search :size="16" aria-hidden="true" /><span class="sr-only">Buscar {{ LABELS[current].toLowerCase() }}</span><input v-model="filter[current].query" type="search" :placeholder="`Buscar ${LABELS[current].toLowerCase()}…`" /></label>
-      <label v-if="current !== 'products'" class="mip-filter"><span class="sr-only">Monitoreo</span><select v-model="filter[current].group"><option value="">Todas</option><option value="RASTREROS">Rastreros</option><option value="VOLADORES">Voladores</option></select></label>
+      <label v-if="current === 'traps' || current === 'pests'" class="mip-filter"><span class="sr-only">Monitoreo</span><select v-model="filter[current].group"><option value="">Todas</option><option value="RASTREROS">Rastreros</option><option value="VOLADORES">Voladores</option></select></label>
     </div>
     <LoadingSkeleton v-if="store.loading[key] && !visible.length" />
     <ErrorState v-else-if="store.errors[key]" title="No se pudo cargar el catálogo" :message="store.errors[key]!"><BaseButton variant="secondary" size="compact" @click="store.load(current, active, true)">Reintentar</BaseButton></ErrorState>
@@ -219,8 +221,9 @@ onBeforeUnmount(() => { alive = false; cleanupPending() })
         <div v-if="store.errors.options" class="mip-save-error" role="alert"><p>{{ store.errors.options }}</p><BaseButton variant="secondary" size="compact" @click="store.loadOptions(true)">Reintentar opciones</BaseButton></div>
         <MipProductForm :key="editorKey" v-model="productDraft" :options="store.options" :saving="saving" :server-errors="serverErrors" :file="file" @update:file="file = $event" @change="changed" @invalid="invalid" @submit="save" @view-file="viewFile(productDraft.fichaTecnicaStoragePath)" />
       </template>
+      <MipCriterionForm v-else-if="editorKind === 'criteria'" :key="editorKey" v-model="criterionDraft" :saving="saving" :server-errors="serverErrors" @change="changed" @invalid="invalid" @submit="save" />
       <MipCatalogItemForm v-else :key="editorKey" v-model="itemDraft" :kind="editorKind as MipItemKind" :saving="saving" :server-errors="serverErrors" @change="changed" @invalid="invalid" @submit="save" />
-      <template #footer><div class="mip-form-actions"><BaseButton variant="secondary" size="compact" :disabled="saving" @click="requestClose">Cancelar</BaseButton><BaseButton type="submit" size="compact" :form="editorKind === 'products' ? 'mip-product-form' : 'mip-item-form'" :loading="saving" :disabled="conflict || (editorKind === 'products' && !store.optionsLoaded)">{{ saving ? phase : editing ? 'Guardar cambios' : `Crear ${SINGLE[editorKind]}` }}</BaseButton></div></template>
+      <template #footer><div class="mip-form-actions"><BaseButton variant="secondary" size="compact" :disabled="saving" @click="requestClose">Cancelar</BaseButton><BaseButton type="submit" size="compact" :form="editorKind === 'products' ? 'mip-product-form' : editorKind === 'criteria' ? 'mip-criterion-form' : 'mip-item-form'" :loading="saving" :disabled="conflict || (editorKind === 'products' && !store.optionsLoaded)">{{ saving ? phase : editing ? 'Guardar cambios' : `Crear ${SINGLE[editorKind]}` }}</BaseButton></div></template>
     </BaseDialog>
 
     <BaseDialog :model-value="Boolean(detail)" :title="detail?.record.nombre ?? ''" @update:model-value="!$event && (detail = null)">
@@ -230,6 +233,9 @@ onBeforeUnmount(() => { alive = false; cleanupPending() })
           <div><dt>Principio activo</dt><dd>{{ (detail.record as MipProduct).principioActivo }}</dd></div><div><dt>Dosis de aplicación</dt><dd>{{ (detail.record as MipProduct).dosisAplicacion || 'Sin definir' }}</dd></div>
           <div><dt>Métodos</dt><dd>{{ (detail.record as MipProduct).metodos.map(m => m.nombre).join(' · ') || 'Sin definir' }}</dd></div><div><dt>Controla</dt><dd>{{ coverageSummary((detail.record as MipProduct).categorias, (detail.record as MipProduct).plagas) }}</dd></div>
           <div><dt>Registro sanitario</dt><dd>{{ (detail.record as MipProduct).registroSanitario || 'No registrado' }}</dd></div><div><dt>Grado toxicológico</dt><dd>{{ (detail.record as MipProduct).gradoToxicologico || 'No registrado' }}</dd></div><div><dt>Laboratorio</dt><dd>{{ (detail.record as MipProduct).fabricante || 'No registrado' }}</dd></div><div><dt>Antídoto</dt><dd>{{ (detail.record as MipProduct).antidoto || 'No registrado' }}</dd></div>
+        </dl>
+        <dl v-else-if="detail.kind === 'criteria'" class="mip-detail">
+          <div><dt>Aplicación</dt><dd>{{ (detail.record as MipCriterion).soloAreaExterna ? 'Solo exterior / perímetro' : 'Todas las áreas' }}</dd></div>
         </dl>
         <dl v-else-if="(detail.record as MipCatalogItem).clasificacion" class="mip-detail">
           <div><dt>Monitoreo</dt><dd>{{ PEST_GROUP_LABELS[(detail.record as MipCatalogItem).clasificacion!] }}</dd></div>
