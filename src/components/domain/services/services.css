@@ -96,9 +96,7 @@
 @media (min-width:681px) {
   .svc-filters .base-field { gap:0.25rem; }
   .svc-filters .base-field__label { font-size:0.75rem; line-height:1rem; }
-  .svc-filters input, .svc-filters select, .svc-filters .date-range-control { min-height:36px; }
-  .svc-filters input, .svc-filters select { padding-block:0.35rem; font-size:0.8125rem; }
-  .svc-filters .date-range-control__dates { padding-inline:0.55rem; }
+  .svc-filters input, .svc-filters select { min-height:36px; padding-block:0.35rem; font-size:0.8125rem; }
 }
 @media (max-width:1100px) { .svc-filters { grid-template-columns:minmax(15rem,1.5fr) minmax(10rem,1fr) minmax(8rem,1fr); } .svc-product-row { grid-template-columns:repeat(2,minmax(0,1fr)); } .svc-product-row > :first-child { grid-column:1/-1; } }
 @media (max-width:900px) { .svc-editor-layout { grid-template-columns:minmax(0,1fr); } .svc-summary { position:static; grid-template-columns:repeat(2,minmax(0,1fr)); } }
