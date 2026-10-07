@@ -74,6 +74,10 @@
 - [ ] Santiago realizará las pruebas de funcionamiento en desarrollo: OAuth, invitaciones/cambios/cancelaciones de Calendar, correo explícitamente autorizado y recuperación por trigger real. En la revisión y migración no se enviaron correos ni invitaciones de prueba.
 
 - [x] Refinar UX administrativa de Servicios: receptor de efectivo Administrador/Técnico, breadcrumb navegable, filtros compactos en desktop y agenda semanal horaria. Los nuevos rangos rápidos de fecha y el componente de rango/calendario quedan fuera de este cambio.
+- [x] Integrar PR #24 en `develop`. Merge: `957fe5c2a2e4c770bac018585dc824a8ca75fd04`.
+- [x] Aplicar `20261007_002_generic_cash_receiver.sql` en Neon `desarrollo` con SHA-256 `3c655f5b9ee8b77a022b5319a6e917cd4c3f38d1529e798b40655433cdc30d4c`. Se conservaron los 4 Servicios y los 6 jobs existentes; `recaudado_por_id` quedó sincronizado con la columna legacy sin incrementar versiones históricas.
+- [x] Desplegar API actualizada en Neon `desarrollo` como deployment 22, conservando las variables privadas existentes. El trigger `services-outbox` continúa habilitado con cron `0 13-23 * * *`.
+- [x] Conservar respaldo previo sin compute: `backup-pre-services-ux-20261007` (`br-still-dew-b7z82p1t`).
 - [ ] Retirar `tecnico_que_recauda_id` en una migración posterior cuando la versión con `recaudado_por_id` esté estable en los entornos desplegados; hasta entonces se mantiene espejada solo para rollback.
 
 Detalle técnico y comandos de verificación: `docs/architecture/admin-services.md`.
