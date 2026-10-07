@@ -5,12 +5,11 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import BaseCheckbox from '@/components/base/BaseCheckbox.vue'
 import BaseFileUpload from '@/components/base/BaseFileUpload.vue'
 import BaseInput from '@/components/base/BaseInput.vue'
-import BaseMultiSelect from '@/components/base/BaseMultiSelect.vue'
 import BaseTextarea from '@/components/base/BaseTextarea.vue'
 import { parseEmails, validateSiteInput, type SiteFormErrors } from '@/helpers/clients'
-import type { FormOption, SiteInput } from '@/types/domain'
+import type { SiteInput } from '@/types/domain'
 
-const props = defineProps<{ mode: 'create' | 'edit'; formOptions: FormOption[]; clientName?: string; saving?: boolean }>()
+const props = defineProps<{ mode: 'create' | 'edit'; clientName?: string; saving?: boolean }>()
 const model = defineModel<SiteInput>({ required: true })
 const emit = defineEmits<{ submit: []; invalid: []; 'file-selected': [kind: 'plan', file: File | null]; 'view-plan': [] }>()
 const touched = reactive<Partial<Record<keyof SiteFormErrors, boolean>>>({})
@@ -72,13 +71,6 @@ function removePlan(): void {
         <BaseInput :model-value="String(modelValue.duracionServicioMinutos)" name="site-duration" label="Duración en minutos" type="number" min="1" step="1" required :error="error('duracionServicioMinutos')" @update:model-value="update('duracionServicioMinutos', Number($event))" @blur="touched.duracionServicioMinutos = true" />
         <BaseCheckbox :model-value="modelValue.manejaRefuerzo" name="site-reinforcement" label="Maneja visita de refuerzo" @update:model-value="update('manejaRefuerzo', $event)" />
         <BaseCheckbox :model-value="modelValue.manejaVehiculos" name="site-vehicles" label="Maneja vehículos" @update:model-value="update('manejaVehiculos', $event)" />
-        <BaseMultiSelect
-          :model-value="modelValue.formulariosAplicablesIds"
-          :options="formOptions.map((form) => ({ id: form.id, label: `${form.codigo} · ${form.version}`, description: form.nombre }))"
-          name="site-forms"
-          label="Formularios aplicables"
-          @update:model-value="update('formulariosAplicablesIds', $event)"
-        />
       </div>
     </section>
 
