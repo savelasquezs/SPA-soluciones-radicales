@@ -217,10 +217,10 @@ export async function savePayment(client: PoolClient, actorId: string, id: strin
   if (before.tipoServicio==='REFUERZO') throw new ApiError(422,'El Refuerzo es gratuito y no registra pagos.','VALIDATION')
   if (before.estado==='CANCELADO' && input.estadoPago!=='RECHAZADO') throw new ApiError(409,'No se registra un nuevo pago en un servicio cancelado.','SERVICE_TERMINAL')
   if ((before.pago.estadoPago==='CONFIRMADO' || input.estadoPago==='RECHAZADO') && !input.motivo.trim()) throw new ApiError(422,'Indica el motivo de la corrección o rechazo.','VALIDATION',{ fields:{ motivo:'El motivo es obligatorio.' } })
-  if (input.metodoPago==='EFECTIVO' && input.estadoPago==='CONFIRMADO' && !input.recaudadoPorId) throw new ApiError(422,'Identifica quién recibió el efectivo.','VALIDATION',{ fields:{ recaudadoPorId:'Selecciona quién recaudó.' } })
+  if (input.metodoPago==='EFECTIVO' && input.estadoPago==='CONFIRMADO' && !input.recaudadoPorId) throw new ApiError(422,'Identifica quién recibió el efectivo.','VALIDATION',{ fields:{ recaudadoPorId:'Selecciona quién recibió el efectivo.' } })
   await validatePaymentReceiver(client,input.recaudadoPorId,actorId,before.pago.recaudadoPorId)
   const confirmed=input.estadoPago==='CONFIRMADO'
-  await client.query(`update public.servicios set metodo_pago=$2,estado_pago=$3,recaudado_por_id=$4,
+  await client.query(`update public.servicios set metodo_pago=$2,estado_pago=$3,recaudado_por_id=$4,tecnico_que_recauda_id=$4,
     pago_fecha=coalesce(pago_fecha,now()),pago_registrado_por_id=coalesce(pago_registrado_por_id,$5),
     pago_confirmado_por_id=case when $6 then $5::uuid else null end,pago_confirmado_at=case when $6 then now() else null end,
     tecnico_recaudo_previsto_id=case when $2='EFECTIVO' then tecnico_recaudo_previsto_id else null end where id=$1`,
