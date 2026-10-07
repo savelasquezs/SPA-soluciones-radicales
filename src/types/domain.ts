@@ -80,7 +80,6 @@ export type SiteRecord = {
   periodicidadMeses: number
   manejaRefuerzo: boolean
   tipoSede: 'NEGOCIO' | 'RESIDENCIAL'
-  formulariosAplicablesIds: string[]
   planoStoragePath: string | null
   manejaVehiculos: boolean
   generaCertificadoVehiculo: boolean
@@ -89,7 +88,6 @@ export type SiteRecord = {
   activo: boolean
   version: number
   areasCount: number
-  formulariosCount: number
   proximoServicio: string | null
 }
 
@@ -105,7 +103,6 @@ export type SiteInput = Pick<
   | 'valorServicio'
   | 'periodicidadMeses'
   | 'manejaRefuerzo'
-  | 'formulariosAplicablesIds'
   | 'planoStoragePath'
   | 'manejaVehiculos'
   | 'generaCertificadoVehiculo'
@@ -122,17 +119,10 @@ export type AreaRecord = {
   activo: boolean
   version: number
   dispositivosCount: number
-  ultimoServicio: string | null
 }
 
 export type AreaInput = Pick<AreaRecord, 'nombre' | 'esExterna' | 'activo'> & { version?: number }
 
-export type FormOption = {
-  id: string
-  codigo: string
-  nombre: string
-  version: string
-}
 
 export type ServiceHistoryItem = {
   id: string

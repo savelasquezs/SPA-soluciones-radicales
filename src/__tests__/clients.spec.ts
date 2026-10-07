@@ -5,7 +5,7 @@ import type { ClientInput, SiteInput } from '@/types/domain'
 
 const business = (): ClientInput => ({ tipoCliente: 'NEGOCIO', nombre: 'Acme SAS', nit: '900123456', correos: [], activo: true, vigenciaCertificadoMeses: 12, residenciaDireccion: null, residenciaCelular: null })
 const residence = (): ClientInput => ({ tipoCliente: 'RESIDENCIAL', nombre: 'María Gómez', nit: null, correos: [], activo: true, vigenciaCertificadoMeses: null, residenciaDireccion: 'Calle 1 # 2-3', residenciaCelular: '300 123 4567' })
-const site = (): SiteInput => ({ nombre: 'Principal', direccion: 'Calle 10', correos: [], heredaCorreosCliente: true, contactoPrincipalNombre: 'Ana', contactoPrincipalCorreo: null, contactoPrincipalCelular: '3001234567', valorServicio: 150000, periodicidadMeses: 1, manejaRefuerzo: false, formulariosAplicablesIds: [], planoStoragePath: null, manejaVehiculos: false, generaCertificadoVehiculo: false, vigenciaCertificadoVehiculoMeses: null, duracionServicioMinutos: 120, activo: true })
+const site = (): SiteInput => ({ nombre: 'Principal', direccion: 'Calle 10', correos: [], heredaCorreosCliente: true, contactoPrincipalNombre: 'Ana', contactoPrincipalCorreo: null, contactoPrincipalCelular: '3001234567', valorServicio: 150000, periodicidadMeses: 1, manejaRefuerzo: false, planoStoragePath: null, manejaVehiculos: false, generaCertificadoVehiculo: false, vigenciaCertificadoVehiculoMeses: null, duracionServicioMinutos: 120, activo: true })
 
 describe('clientes helpers', () => {
   it('exige nombre, NIT y vigencia para Negocio', () => {

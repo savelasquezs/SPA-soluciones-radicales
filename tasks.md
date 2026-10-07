@@ -28,7 +28,8 @@
 ## Ejecución MIP
 
 - [x] Documentar la eliminación del motor genérico de formularios y definir la ejecución por Áreas, Criterios, Dispositivos y snapshots históricos.
-- [ ] Definir, antes de programar cambios de esquema/API/UI, la implementación mínima necesaria para ejecutar y finalizar el primer Servicio Principal según `docs/product/service-execution.md`.
+- [x] Retirar por completo el motor legacy de formularios MIP de BD, API y frontend mediante la migración 011.
+- [ ] Definir la implementación mínima necesaria para ejecutar y finalizar el primer Servicio Principal según `docs/product/service-execution.md`.
 
 ## Certificados
 

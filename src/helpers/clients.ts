@@ -21,7 +21,6 @@ export type SiteFormErrors = Partial<Record<
   | 'contactoPrincipalCelular'
   | 'valorServicio'
   | 'periodicidadMeses'
-  | 'formulariosAplicablesIds'
   | 'vigenciaCertificadoVehiculoMeses'
   | 'duracionServicioMinutos',
   string

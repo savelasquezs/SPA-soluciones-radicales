@@ -124,7 +124,7 @@ Los Criterios MIP son catálogo administrable. Las Áreas externas reciben adem�
 
 Al iniciar un Servicio se conservan snapshots suficientes de criterios, dispositivos y opciones de monitoreo para que un cambio posterior de catálogo no altere el histórico. La persistencia histórica no depende de reconstruir una versión de formulario.
 
-El baseline todavía contiene tablas/columnas del modelo anterior de formularios. ADR-019 las declara transitorias; se refactorizarán con una migración nueva al implementar el primer Servicio.
+La migración `20261006_011_remove_legacy_mip_forms.sql` retiró las tablas y columnas del modelo anterior de formularios. El histórico MIP futuro no depende de versiones de formulario.
 
 ## Archivos
 
