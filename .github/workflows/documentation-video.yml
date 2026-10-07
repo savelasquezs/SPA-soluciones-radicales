@@ -1,10 +1,6 @@
 name: Documentation video
 
 on:
-  push:
-    branches: [develop]
-    paths:
-      - '.github/documentation-video-trigger'
   workflow_dispatch:
     inputs:
       voice:
@@ -84,7 +80,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: documentation-video-mip-catalogs-v2
+          name: documentation-video-mip-catalogs
           path: |
             docs-media/final/
             docs-media/audio/
