@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useRoute } from 'vue-router'
+import { isServiceId } from '@/helpers/adminServices'
 import { Download, FileCheck2, Mail, RefreshCw } from 'lucide-vue-next'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseSelect from '@/components/base/BaseSelect.vue'
@@ -20,6 +22,7 @@ import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
 import { downloadLink } from '@/helpers/certificates'
 import { CERTIFICATE_TYPES } from '@/types/certificates'
 
+const route = useRoute()
 const templates = reactive(useCertificateTemplates())
 const generation = reactive(useCertificateGeneration())
 const tab = ref<'templates' | 'generate'>('templates')
@@ -46,7 +49,13 @@ function toggleDocument(id: string, selected: boolean): void {
   generation.editMail()
 }
 const formatDate = (value: string) => value.slice(0, 10).split('-').reverse().join('/')
-onMounted(() => templates.load())
+onMounted(async () => {
+  void templates.load()
+  if (route.query.tab!=='generate') return
+  tab.value='generate'
+  if (isServiceId(route.query.serviceId)) await generation.openService(route.query.serviceId)
+  else await generation.init()
+})
 </script>
 <template>
   <section class="certificates-page">
@@ -75,7 +84,7 @@ onMounted(() => templates.load())
       <template v-if="generation.initialized">
         <section class="panel">
           <div class="context-filters">
-            <BaseSelect :model-value="generation.clientId" name="cert-business" label="Negocio" :disabled="busy" @update:model-value="changeContext(() => generation.selectClient($event))"><option value="">Selecciona un negocio</option><option v-for="client in generation.businesses" :key="client.id" :value="client.id">{{ client.nombre }}{{ client.activo ? '' : ' (inactivo)' }}</option></BaseSelect>
+            <BaseSelect :model-value="generation.clientId" name="cert-business" label="Negocio" :disabled="busy || generation.loading" @update:model-value="changeContext(() => generation.selectClient($event))"><option value="">Selecciona un negocio</option><option v-for="client in generation.businesses" :key="client.id" :value="client.id">{{ client.nombre }}{{ client.activo ? '' : ' (inactivo)' }}</option></BaseSelect>
             <BaseSelect :model-value="generation.siteId" name="cert-site" label="Sede" :disabled="busy || !generation.clientId || generation.loading" @update:model-value="changeContext(() => generation.selectSite($event))"><option value="">Selecciona una sede</option><option v-for="site in generation.sites" :key="site.id" :value="site.id">{{ site.nombre }}</option></BaseSelect>
             <BaseSelect :model-value="generation.serviceId" name="cert-service" label="Servicio finalizado" :disabled="busy || !generation.siteId || generation.loading" @update:model-value="changeContext(() => generation.selectService($event))"><option value="">Selecciona un servicio</option><option v-for="item in generation.services" :key="item.id" :value="item.id">{{ item.solicitud }} · {{ formatDate(item.fecha) }}</option></BaseSelect>
           </div>

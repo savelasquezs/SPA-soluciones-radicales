@@ -27,4 +27,12 @@ export default defineConfig({
       },
     },
   },
+  triggers: {
+    'services-outbox': {
+      type: 'schedule',
+      function: 'api',
+      cron: '*/15 * * * *',
+      functionPath: '/jobs/services',
+    },
+  },
 });

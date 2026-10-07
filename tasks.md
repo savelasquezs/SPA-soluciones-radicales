@@ -59,6 +59,13 @@
 ## Programación de Servicios
 
 - [x] Documentar reglas de Principal, Refuerzo editable a +21 días iniciales y Próximos por confirmar en `docs/product/service-scheduling.md`.
-- [ ] Actualizar BD/API/frontend para retirar la restricción actual de Refuerzo a +20 días exactos y soportar propuesta inicial +21 días con reprogramación libre.
-- [ ] Implementar reprogramación transaccional conjunta de Principal + Refuerzo, manteniendo reprogramación independiente del Refuerzo.
-- [ ] Implementar Próximos por confirmar como preagenda separada de `servicios`, con estados, contactos por WhatsApp/correo, badge de próximos siete días y acción Agendar precargada.
+- [x] Actualizar BD/API/frontend para retirar la restricción actual de Refuerzo a +20 días exactos y soportar propuesta inicial +21 días con reprogramación libre.
+- [x] Implementar reprogramación transaccional conjunta de Principal + Refuerzo, manteniendo reprogramación independiente del Refuerzo.
+- [x] Implementar Próximos por confirmar como preagenda separada de `servicios`, con estados, contactos por WhatsApp/correo, badge de próximos siete días y acción Agendar precargada.
+
+- [x] Implementar agenda/historial, detalle, formulario compartido, productos previstos, cobro separado de recaudo real, cancelación auditada y recuperación de borradores por usuario.
+- [x] Integrar Calendar/Gmail mediante outbox con revisiones, control de duplicados y entrega incierta; retirar escrituras administrativas legacy.
+- [ ] Activar el módulo en la rama Neon autorizada: revisar diff, aplicar `20261007_001_admin_services.sql`, desplegar API/trigger y frontend. No se ha desplegado desde este PR.
+- [ ] Validar en desarrollo OAuth, invitaciones/cambios/cancelaciones de Calendar, correo explícitamente autorizado y recuperación por trigger real. Las pruebas de CI usan datos sintéticos y proveedores simulados.
+
+Detalle técnico y comandos de verificación: `docs/architecture/admin-services.md`.

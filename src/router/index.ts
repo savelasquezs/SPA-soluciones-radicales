@@ -18,9 +18,11 @@ const router = createRouter({
       children: [
         { path: 'prohibido', name: 'forbidden', component: () => import('@/views/ForbiddenView.vue') },
         { path: '', name: 'dashboard', component: () => import('@/views/DashboardView.vue'), meta: { breadcrumb: 'Resumen' } },
-        { path: 'agenda', name: 'agenda', component: () => import('@/views/PlaceholderView.vue'), meta: { breadcrumb: 'Agenda', placeholderTitle: 'Agenda', placeholderDescription: 'La agenda se implementará en su issue funcional.' } },
+        { path: 'agenda', name: 'agenda', component: () => import('@/views/AdminServicesView.vue'), meta: { roles: adminOnly, breadcrumb: 'Agenda' } },
         { path: 'servicios', name: 'services', component: () => import('@/views/ServicesView.vue'), meta: { breadcrumb: 'Servicios' } },
-        { path: 'servicios/:id', name: 'service-detail', component: () => import('@/views/PlaceholderView.vue'), meta: { breadcrumb: 'Servicios / Detalle', placeholderTitle: 'Detalle del Servicio', placeholderDescription: 'El detalle operativo del Servicio se implementará en su issue funcional.' } },
+        { path: 'servicios/nuevo', name: 'admin-service-new', component: () => import('@/views/ServiceEditorView.vue'), meta: { roles: adminOnly, breadcrumb: 'Servicios / Programar' } },
+        { path: 'servicios/:id/editar', name: 'admin-service-edit', component: () => import('@/views/ServiceEditorView.vue'), meta: { roles: adminOnly, breadcrumb: 'Servicios / Editar' } },
+        { path: 'servicios/:id', name: 'service-detail', component: () => import('@/views/ServiceDetailView.vue'), meta: { roles: adminOnly, breadcrumb: 'Servicios / Detalle' } },
         { path: 'negocios', redirect: '/clientes' },
         { path: 'clientes', name: 'clients', component: () => import('@/views/ClientsView.vue'), meta: { roles: adminOnly, breadcrumb: 'Clientes' } },
         { path: 'clientes/:id', name: 'client-detail', component: () => import('@/views/ClientDetailView.vue'), meta: { roles: adminOnly, breadcrumb: 'Clientes / Detalle' } },

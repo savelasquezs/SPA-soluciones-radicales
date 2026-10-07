@@ -20,7 +20,6 @@ import {
   createGoogleAuthorization,
   getGoogleStatus,
   sendGmailMessage,
-  upsertCalendarEvent,
 } from './google'
 import {
   MASTER_FILE_KINDS,
@@ -749,116 +748,6 @@ app.get('/api/services', async (context) => {
   return context.json(services)
 })
 
-app.post('/api/services', async (context) => {
-  const body = await jsonBody(context.req.raw)
-  const identity = context.get('identity')
-  const service = await transaction(async (client) => {
-    const admin = await requireAdmin(client, identity)
-    const site = await client.query<{ duracion: number; valor: number }>(
-      `select s.duracion_servicio_minutos as duracion,
-              s.valor_servicio as valor
-       from public.sedes s
-       join public.negocios n on n.id = s.negocio_id
-       where s.id = $1 and s.activo and s.tipo_sede = 'NEGOCIO'
-         and n.activo and n.tipo_cliente = 'NEGOCIO'`,
-      [requiredString(body, 'sedeId')],
-    )
-    const siteConfig = site.rows[0]
-
-    if (!siteConfig) {
-      throw new ApiError(422, 'La Sede seleccionada no existe')
-    }
-
-    const duration = requiredPositiveInteger(body, 'duracionMinutos')
-    const start = dateValue(body.inicioProgramado, 'inicioProgramado')
-    const end = new Date(start.getTime() + duration * 60_000)
-    const inserted = await client.query<{ id: string; solicitud: string }>(
-      `insert into public.servicios (
-         solicitud, sede_id, tipo_servicio, estado, inicio_programado,
-         fin_programado, creado_por_id, tecnico_responsable_id,
-         tecnicos_colaboradores_ids_json,
-         valor_servicio, observaciones, calendar_sync_estado
-       ) values (
-         'PENDIENTE', $1, 'PRINCIPAL', 'PROGRAMADO', $2, $3, $4, $5,
-         $6::jsonb, $7, $8, 'PENDIENTE'
-       )
-       returning id, solicitud`,
-      [
-        requiredString(body, 'sedeId'),
-        start.toISOString(),
-        end.toISOString(),
-        admin.id,
-        requiredString(body, 'tecnicoResponsableId'),
-        JSON.stringify(stringArray(body.tecnicosColaboradoresIds)),
-        siteConfig.valor,
-        optionalString(body.observaciones),
-      ],
-    )
-    const created = inserted.rows[0]
-
-    if (!created) {
-      throw new ApiError(500, 'No fue posible crear el Servicio')
-    }
-
-    await client.query(
-      `insert into private.integration_jobs (job_type, idempotency_key, payload)
-       values ('CALENDAR', $1, jsonb_build_object('serviceId', $2::text))
-       on conflict (job_type, idempotency_key) do update
-       set status = 'PENDING', run_after = now(), lease_until = null, last_error = null`,
-      [created.id, created.id],
-    )
-    await audit(client, admin.id, 'SERVICIO_PROGRAMADO', 'Servicios', created.id, {
-      solicitud: created.solicitud,
-    })
-    return created
-  })
-
-  try {
-    const synced = await syncCalendar(service.id)
-    return context.json(synced, 201)
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'No fue posible sincronizar Calendar'
-    return context.json(
-      {
-        ...service,
-        calendarSyncEstado: 'ERROR',
-        calendarSyncError: message,
-        warning: 'El Servicio quedó guardado y puedes reintentar Calendar.',
-      },
-      201,
-    )
-  }
-})
-
-app.post('/api/services/:id/calendar/retry', async (context) => {
-  const identity = context.get('identity')
-  const serviceId = context.req.param('id')
-  await transaction(async (client) => {
-    await requireAdmin(client, identity)
-    const result = await client.query(
-      `update public.servicios
-       set calendar_sync_estado = 'PENDIENTE', calendar_sync_error = null
-       where id = $1
-       returning id`,
-      [serviceId],
-    )
-
-    if (!result.rowCount) {
-      throw new ApiError(404, 'El Servicio no existe')
-    }
-
-    await client.query(
-      `insert into private.integration_jobs (job_type, idempotency_key, payload)
-       values ('CALENDAR', $1, jsonb_build_object('serviceId', $1::text))
-       on conflict (job_type, idempotency_key) do update
-       set status = 'PENDING', run_after = now(), lease_until = null, last_error = null`,
-      [serviceId],
-    )
-  })
-
-  return context.json(await syncCalendar(serviceId))
-})
-
 app.get('/api/google/status', async (context) => {
   await transaction((client) => requireAdmin(client, context.get('identity')))
   return context.json(await getGoogleStatus())
@@ -979,104 +868,6 @@ app.onError((error, context) => {
   console.error(error)
   return context.json({ error: 'Ocurrió un error interno' }, 500)
 })
-
-async function syncCalendar(serviceId: string) {
-  const serviceResult = await pool.query<{
-    id: string
-    solicitud: string
-    creado_por_id: string
-    negocio_nombre: string
-    sede_nombre: string
-    direccion: string
-    tecnico_nombre: string
-    inicio_programado: Date
-    fin_programado: Date
-  }>(
-    `select s.id, s.solicitud, s.creado_por_id,
-            n.nombre as negocio_nombre, se.nombre as sede_nombre,
-            se.direccion, u.nombre_completo as tecnico_nombre,
-            s.inicio_programado, s.fin_programado
-     from public.servicios s
-     join public.sedes se on se.id = s.sede_id
-     join public.negocios n on n.id = se.negocio_id
-     join public.usuarios u on u.id = s.tecnico_responsable_id
-     where s.id = $1`,
-    [serviceId],
-  )
-  const service = serviceResult.rows[0]
-
-  if (!service) {
-    throw new ApiError(404, 'El Servicio no existe')
-  }
-
-  await pool.query(
-    `update private.integration_jobs
-     set status = 'RUNNING', attempts = attempts + 1,
-         lease_until = now() + interval '5 minutes', last_error = null
-     where job_type = 'CALENDAR' and idempotency_key = $1`,
-    [serviceId],
-  )
-
-  try {
-    const eventId = await upsertCalendarEvent({
-      serviceId,
-      summary: `${service.solicitud} · ${service.negocio_nombre}`,
-      description: `Sede: ${service.sede_nombre}\nTécnico: ${service.tecnico_nombre}`,
-      location: service.direccion,
-      start: service.inicio_programado.toISOString(),
-      end: service.fin_programado.toISOString(),
-    })
-    await transaction(async (client) => {
-      await client.query(
-        `update public.servicios
-         set calendar_event_id = $2,
-             calendar_sync_estado = 'SINCRONIZADO',
-             calendar_ultima_sync_at = now(),
-             calendar_sync_error = null
-         where id = $1`,
-        [serviceId, eventId],
-      )
-      await client.query(
-        `update private.integration_jobs
-         set status = 'COMPLETED', lease_until = null, last_error = null
-         where job_type = 'CALENDAR' and idempotency_key = $1`,
-        [serviceId],
-      )
-      await audit(client, service.creado_por_id, 'CALENDAR_SERVICIO_SINCRONIZADO', 'Servicios', serviceId, {
-        calendarEventId: eventId,
-      })
-    })
-    return {
-      id: service.id,
-      solicitud: service.solicitud,
-      calendarSyncEstado: 'SINCRONIZADO',
-      calendarEventId: eventId,
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'No fue posible sincronizar Calendar'
-    await transaction(async (client) => {
-      await client.query(
-        `update public.servicios
-         set calendar_sync_estado = 'ERROR',
-             calendar_ultima_sync_at = now(),
-             calendar_sync_error = $2
-         where id = $1`,
-        [serviceId, message.slice(0, 1000)],
-      )
-      await client.query(
-        `update private.integration_jobs
-         set status = 'FAILED', lease_until = null, last_error = $2,
-             run_after = now() + interval '5 minutes'
-         where job_type = 'CALENDAR' and idempotency_key = $1`,
-        [serviceId, message.slice(0, 1000)],
-      )
-      await audit(client, service.creado_por_id, 'CALENDAR_SERVICIO_FALLIDO', 'Servicios', serviceId, {
-        error: message.slice(0, 500),
-      })
-    })
-    throw error
-  }
-}
 
 async function audit(
   client: PoolClient,
@@ -1336,17 +1127,6 @@ function optionalEnum<T extends string>(
 ): T | null {
   if (value === undefined || value === null || value === '') return null
   return enumValue(value, values, key)
-}
-
-function dateValue(value: unknown, key: string): Date {
-  if (typeof value !== 'string') {
-    throw new ApiError(422, `${key} es obligatorio`)
-  }
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    throw new ApiError(422, `${key} no es una fecha válida`)
-  }
-  return date
 }
 
 function enumValue<T extends string>(value: unknown, values: readonly T[], key: string): T {

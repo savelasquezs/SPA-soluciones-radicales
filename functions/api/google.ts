@@ -4,6 +4,7 @@ import type { PoolClient } from 'pg'
 import { ApiError } from './auth'
 import { pool, transaction } from './db'
 import { buildMailMessage, type MailInput } from './mailMessage'
+import { writeCalendarEvent, type CalendarEventInput } from './calendarClient'
 
 const clientId = requiredEnvironment('GOOGLE_CLIENT_ID')
 const clientSecret = requiredEnvironment('GOOGLE_CLIENT_SECRET')
@@ -340,48 +341,8 @@ export async function sendGmailMessage(input: MailInput): Promise<string> {
   }
 }
 
-export async function upsertCalendarEvent(input: {
-  serviceId: string
-  summary: string
-  description: string
-  location: string
-  start: string
-  end: string
-}): Promise<string> {
-  const accessToken = await getAccessToken()
-  const eventId = `sr${input.serviceId.replaceAll('-', '')}`
-  const event = {
-    id: eventId,
-    summary: input.summary,
-    description: input.description,
-    location: input.location,
-    start: { dateTime: input.start, timeZone: 'America/Bogota' },
-    end: { dateTime: input.end, timeZone: 'America/Bogota' },
-  }
-  const headers = {
-    Authorization: `Bearer ${accessToken}`,
-    'Content-Type': 'application/json',
-  }
-  let response = await googleFetch(
-    `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
-    { method: 'PUT', headers, body: JSON.stringify(event) },
-  )
-
-  if (response.status === 404) {
-    response = await googleFetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(event),
-    })
-  }
-
-  const result = (await response.json()) as { id?: string; error?: { message?: string } }
-
-  if (!response.ok || !result.id) {
-    throw new ApiError(502, result.error?.message ?? 'No fue posible sincronizar Calendar')
-  }
-
-  return result.id
+export async function upsertCalendarEvent(input: CalendarEventInput): Promise<string> {
+  return writeCalendarEvent(input, await getAccessToken())
 }
 
 async function googleFetch(input: string, init: RequestInit): Promise<Response> {
