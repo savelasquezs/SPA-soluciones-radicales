@@ -14,12 +14,13 @@ La SPA usa `/api/admin/services`, protegido en servidor con `requireAdmin`, iden
 | Crear / editar | `POST /`, `PUT /:id` |
 | Reprogramar / cancelar / registrar pago | `POST /:id/reschedule`, `POST /:id/cancel`, `POST /:id/payment` |
 | Reintentar Calendar | `POST /:id/calendar/retry` |
+| Liberar bloqueo móvil auditado | `POST /:id/execution-lock/release` |
 | Preagenda / contador de siete días | `GET /upcoming`, `GET /pending-count` |
 | Consultar / gestionar seguimiento | `GET /upcoming/:id`, `PATCH /upcoming/:id` |
 | Preparar / solicitar correo | `GET /upcoming/:id/email-preview`, `POST /upcoming/:id/email` |
 | Recuperar creación cuya respuesta se perdió | `GET /commands/:requestId` |
 
-`GET /api/services` permanece como lectura autorizada de asignaciones para el Técnico. Las antiguas escrituras `POST /api/services` y `POST /api/services/:id/calendar/retry` fueron retiradas: no existe una segunda vía administrativa sin control de versión ni una sincronización síncrona paralela.
+La ejecución usa la superficie separada `/api/technician/services`; la lectura legacy `/api/services` no es autoridad para iniciar. Las antiguas escrituras `POST /api/services` y `POST /api/services/:id/calendar/retry` fueron retiradas: no existe una segunda vía administrativa sin control de versión ni una sincronización síncrona paralela.
 
 La UI no asigna consecutivos, precios, estados de ejecución ni relaciones arbitrarias. El valor del Principal se copia de la Sede al crearlo, conserva el histórico y el Refuerzo vale cero. El cobro previsto no equivale a pago confirmado. `tecnico_recaudo_previsto_id` conserva al Técnico esperado para cobrar, mientras `recaudado_por_id` identifica a quien recibió realmente el efectivo: Técnico o el Administrador que registra el pago. Este dato tampoco equivale a una entrega de caja Técnico → Administrador. `tecnico_que_recauda_id` se mantiene temporalmente espejado solo para permitir rollback durante el despliegue; el código nuevo no debe consumirlo.
 
@@ -49,7 +50,7 @@ El correo de próxima visita se prepara en servidor y se envía solo después de
 
 El contador incluye propuestas accionables no confirmadas cuya fecha sugerida cae entre hoy y los seis días siguientes; no cuenta confirmadas, rechazadas, ya agendadas ni pospuestas con recontacto futuro. El listado permite consultar otras fechas y estados independientemente del contador.
 
-`ServiceForm`, `ServiceScheduleFields` y `ServiceProductsFields` comparten alta/edición. Los cambios breves usan editores por contexto; las altas y ediciones completas tienen rutas propias. El store reutiliza el detalle ya cargado y aplica las respuestas sin recargar toda la colección. Las lecturas anteriores a una mutación no pueden restaurar filas o contadores obsoletos. Los cambios de sesión/rol limpian snapshots administrativos.
+`ServiceForm`, `ServiceScheduleFields` y `ServiceProductsFields` comparten alta/edición. El Administrador completa lote, dosis y método para cada Producto previsto; el inicio técnico rechaza filas incompletas. Los cambios breves usan editores por contexto; las altas y ediciones completas tienen rutas propias. El store reutiliza el detalle ya cargado y aplica las respuestas sin recargar toda la colección. Las lecturas anteriores a una mutación no pueden restaurar filas o contadores obsoletos. Los cambios de sesión/rol limpian snapshots administrativos.
 
 Los borradores de creación se guardan en IndexedDB por usuario y origen de propuesta, junto con su `requestId`. Al recuperarlos se consulta primero el resultado de esa operación, evitando duplicar una creación cuya respuesta se perdió. Un Refuerzo personalizado recuperado no vuelve a sincronizarse automáticamente con la fecha del Principal.
 

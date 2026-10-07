@@ -9,6 +9,7 @@ import { transaction } from '../db'
 import { cancelService, command, confirmationEmail, createService, editService, queueConfirmationEmail, rescheduleService, retryCalendar, savePayment, updateUpcoming } from './commands'
 import { kickServiceJobs } from './jobs'
 import { getService, getUpcoming, listServices, listUpcoming, pendingCount, workspace } from './queries'
+import { releaseTechnicianServiceLock } from '../technician-services/commands'
 
 type Environment = { Variables: { identity: Identity } }
 export const adminServiceRoutes = new Hono<Environment>()
@@ -150,6 +151,10 @@ adminServiceRoutes.post('/:id/payment',async context => {
 adminServiceRoutes.post('/:id/calendar/retry',async context => {
   const payload=await body(context.req.raw), recordId=id(context.req.param('id'))
   return context.json(await write(context,payload,`service:calendar:${recordId}`,(client,admin)=>retryCalendar(client,admin.id,recordId)),202)
+})
+adminServiceRoutes.post('/:id/execution-lock/release',async context => {
+  const payload=await body(context.req.raw), recordId=id(context.req.param('id')), reason=text(payload.reason,5_000,true)
+  return context.json(await write(context,payload,`service:execution-lock:release:${recordId}`,(client,admin)=>releaseTechnicianServiceLock(client,admin.id,recordId,reason)))
 })
 adminServiceRoutes.onError((error,context)=>{
   if (error instanceof ApiError) return context.json({ error:error.message,code:error.code,details:error.details },error.status as ContentfulStatusCode)

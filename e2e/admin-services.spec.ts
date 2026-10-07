@@ -13,7 +13,7 @@ const people=[technician(ids.tech,'Camilo Ruiz'),technician(ids.other,'Ana Torre
 const contact={ nombre:'Laura de prueba',celular:'+573000000001',correos:['cliente@example.invalid'] }
 const workspace: ServiceWorkspace={
   sedes:[{ id:ids.site,clientId:ids.client,clienteNombre:'Casa Verde',nombre:'Laureles',direccion:'Dirección sintética de prueba',valorServicio:300000,periodicidadMeses:1,duracionServicioMinutos:90,manejaRefuerzo:true,contacto:contact }],
-  tecnicos:people,productos:[{ id:ids.product,nombre:'Producto de prueba',principioActivo:'Composición de prueba',dosisAplicacion:'5 mL/L',activo:true }],
+  tecnicos:people,productos:[{ id:ids.product,nombre:'Producto de prueba',principioActivo:'Composición de prueba',dosisAplicacion:'5 mL/L',metodos:[{ codigo:'ASPERSION',nombre:'Aspersión' }],activo:true }],
 }
 function record(id=ids.principal,kind: 'PRINCIPAL' | 'REFUERZO'='PRINCIPAL'): AdminService {
   const isRef=kind==='REFUERZO', beginning=isRef ? addInstantDays(start,21) : start
@@ -100,7 +100,7 @@ async function setup(page: Page, role: 'ADMINISTRADOR' | 'TECNICO'='ADMINISTRADO
       if(journal.has(body.requestId)) { await json(route,journal.get(body.requestId),201);return }
       const created=record(uid(counter++));created.solicitud=`SR-${counter}`;created.tecnicosColaboradoresIds=[]
       schedule(created,body.input.programacion);created.observaciones=body.input.observaciones
-      created.productos=body.input.productos.map(product=>({ ...product,id:uid(counter++),nombre:'Producto de prueba',activo:true,aplicado:false }))
+      created.productos=body.input.productos.map(product=>({ ...product,id:uid(counter++),nombre:'Producto de prueba',metodoAplicacionNombre:'Aspersión',activo:true,aplicado:false }))
       created.pago={ ...created.pago,...body.input.cobro,estadoPago:body.input.cobro.metodoPago ? 'PENDIENTE' : 'SIN_REGISTRAR' }
       const child=record(uid(counter++),'REFUERZO');child.solicitud=`SR-${counter}`;child.servicioPrincipalId=created.id
       schedule(child,body.input.refuerzo ?? suggestReinforcement(body.input.programacion));records.push(created,child)
@@ -179,6 +179,8 @@ test('creates a complete reviewed pair with custom Refuerzo dates, products and 
   await page.getByRole('option',{ name:/Producto de prueba/ }).click()
   await page.getByRole('button',{ name:'Productos a utilizar',exact:true }).click()
   await page.locator('#producto-0-lote').fill('LOTE-2030')
+  await page.locator('#producto-0-dosis').fill('5 mL/L')
+  await page.locator('#producto-0-metodo').selectOption('ASPERSION')
   await fillDate(page,'#producto-0-fabricacion','01/01/2026')
   await fillDate(page,'#producto-0-vencimiento','01/12/2035')
   await fillDate(page,'#refuerzo-inicio','04/11/2030 14:00')
@@ -186,12 +188,17 @@ test('creates a complete reviewed pair with custom Refuerzo dates, products and 
   await page.locator('#servicio-recauda').selectOption(ids.other)
   await page.getByLabel('Observaciones para la visita',{ exact:false }).fill('Visita coordinada con el cliente.')
   await page.screenshot({ path:info.outputPath('service-form-light.png'),fullPage:true })
+  await page.setViewportSize({ width:390,height:844 })
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true)
+  await page.screenshot({ path:info.outputPath('service-form-mobile-light.png'),fullPage:true })
   await page.getByRole('button',{ name:'Agendar servicio',exact:true }).first().click()
   await expect(page).toHaveURL(url=>url.pathname==='/servicios')
   await expect.poll(()=>api.calls.filter(value=>value.path==='/api/admin/services' && value.method==='POST').length).toBe(1)
   const call=api.calls.find(value=>value.path==='/api/admin/services' && value.method==='POST')!
   expect(toBogotaInput(call.body!.input.refuerzo!.inicioProgramado)).toBe('2030-11-04T14:00')
   expect(call.body!.input.productos[0]?.lote).toBe('LOTE-2030')
+  expect(call.body!.input.productos[0]?.dosis).toBe('5 mL/L')
+  expect(call.body!.input.productos[0]?.metodoAplicacionCodigo).toBe('ASPERSION')
   expect(call.body!.input.cobro.tecnicoRecaudoPrevistoId).toBe(ids.other)
   const created=api.records.find(value=>![ids.principal,ids.refuerzo].includes(value.id) && value.tipoServicio==='PRINCIPAL')!
   expect(created.valorServicio).toBe(300000);expect(created.pago.estadoPago).toBe('PENDIENTE');expect(created.pago.recaudadoPorId).toBeNull()

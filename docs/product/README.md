@@ -20,7 +20,7 @@ El comportamiento funcional aprobado del proyecto anterior se conserva. La reimp
 
 - consulta únicamente servicios asignados;
 - inicia y ejecuta servicios dentro de las reglas permitidas;
-- diligencia la evaluación MIP por Áreas, productos, dispositivos, hallazgos, evidencias y firmas;
+- diligencia la evaluación MIP por Áreas, dispositivos, hallazgos, evidencias y firmas, y consulta los Productos definidos por el Administrador;
 - trabaja offline cuando la aplicación fue cargada y autenticada previamente;
 - no administra catálogos ni datos globales.
 
@@ -40,11 +40,13 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 | `servicios` | Programación, ejecución, pago, firmas, informe y publicación |
 | Próximos por confirmar | Preagenda derivada de periodicidad para contacto y confirmación antes de crear un Servicio |
 | `criterios_mip` | Catálogo administrable de criterios de inspección aplicables a Áreas |
+| `servicio_areas` | Snapshot, recorrido y excepción de acceso de cada Área dentro del Servicio |
 | `evaluaciones_mip_area` | Histórico de criterios evaluados por Servicio y Área, independiente del catálogo vivo |
 | `productos` | Catálogo de productos utilizados |
 | `productos_aplicados` | Planeación y aplicación de productos por Servicio |
 | `configuracion` | Métodos, plagas, tipos de dispositivo y parámetros globales |
 | `dispositivos` | Identidad permanente de trampas y dispositivos por Sede y Área |
+| `servicio_dispositivos` | Identidad y estado congelados de los Dispositivos al iniciar el Servicio |
 | `revisiones_dispositivos` | Estado, capturas y evidencia observada durante un Servicio |
 | `hallazgos` | No conformidades, seguimiento y cierre posterior |
 | `vehiculos` | Vehículos asociados a Sedes habilitadas |
@@ -89,7 +91,8 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 - El responsable debe ser Técnico activo y cumplir vigencia de certificado cuando tenga uno registrado.
 - Colaboradores activos, únicos y diferentes del responsable.
 - Un Técnico solo accede a Servicios donde está asignado.
-- La edición técnica usa un lease exclusivo renovable.
+- Iniciar requiere conexión y solo se permite desde una hora antes de `inicio_programado`; preparar no equivale a iniciar.
+- Un bloqueo persistente permite un solo celular editor durante todo `EN_PROCESO`; un Administrador puede liberarlo con auditoría.
 - El valor del Servicio Principal se deriva de la Sede.
 - Si la Sede maneja Refuerzo, al confirmar un Principal se crea máximo un Refuerzo asociado, gratuito y de la misma Sede.
 - La fecha inicial del Refuerzo se propone 21 días después del Principal para conservar el mismo día de la semana y la misma hora; es un valor predeterminado editable, no una restricción permanente.
@@ -98,7 +101,7 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 - La periodicidad de la Sede genera seguimiento en Próximos por confirmar, no Servicios futuros automáticos en la Agenda.
 - Un próximo por confirmar pasa a Servicio únicamente cuando el cliente confirma y el Administrador completa la acción Agendar.
 - Una Sede residencial no exige evaluación MIP por Áreas ni informe completo.
-- Finalizar exige tiempos reales, datos técnicos requeridos y firmas aplicables.
+- Finalizar exige tiempos reales, completitud técnica, sincronización de archivos obligatorios y las firmas del Técnico y del responsable del cliente en cada Servicio.
 - El flujo completo de programación, Refuerzos y Próximos por confirmar está definido en [service-scheduling.md](service-scheduling.md).
 
 ### Ejecución MIP
@@ -106,11 +109,11 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 - No existe un constructor ni un CRUD de formularios dinámicos para la operación MIP.
 - La interfaz del Técnico tiene una estructura funcional fija y se compone con los datos del dominio: Servicio, Sede, Áreas, criterios, productos, dispositivos, plagas, hallazgos, evidencias y firmas.
 - FO-PS-02 v03, FO-PS-10 y FO-PS-09 se conservan como referencias funcionales de los datos y del informe, no como plantillas editables almacenadas en un motor de formularios.
-- Los criterios de inspección son un catálogo administrable. Cada criterio conserva identidad estable, nombre, orden, estado y si aplica únicamente a Áreas externas/perimetrales.
+- Los criterios de inspección son un catálogo administrable. Cada criterio conserva identidad estable, nombre, estado y si aplica únicamente a Áreas externas/perimetrales; se presentan alfabéticamente y no administran orden propio.
 - Los estados de evaluación `C`, `CP`, `NC` y `NA` son reglas fijas del sistema, no registros administrables.
 - Un Área externa recibe los criterios generales más los criterios exclusivos de Áreas externas.
 - Un Servicio Programado toma la configuración vigente al iniciar. Desde ese momento conserva snapshots suficientes para que cambios posteriores en catálogos no reinterpreten el histórico.
-- La evaluación histórica debe conservar, como mínimo, la identidad del criterio, nombre y orden observados al iniciar, evaluación, observación y referencias de evidencia cuando apliquen.
+- La evaluación histórica debe conservar, como mínimo, la identidad del criterio, nombre y aplicabilidad observados al iniciar, evaluación, observación y referencias de evidencia cuando apliquen.
 - El Técnico puede recorrer las Áreas en cualquier orden y volver a una anterior sin perder el borrador.
 - Los dispositivos son entidades permanentes de Sede/Área; cada Servicio crea revisiones históricas y puede registrar nuevos dispositivos para visitas futuras.
 - El flujo detallado y las reglas de composición están en [service-execution.md](service-execution.md).
@@ -120,6 +123,7 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 - V1 no implementa inventario ni consumo de stock.
 - Los productos pueden desactivarse sin romper referencias históricas.
 - Un Producto aplicado requiere lote, dosis y método de aplicación.
+- El Administrador completa esos datos antes del inicio; el Técnico consulta los Productos destinados al Servicio en modo de solo lectura.
 - La fecha de vencimiento no puede ser anterior a fabricación.
 - Existe máximo una fila por Servicio y Producto.
 
@@ -129,7 +133,7 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 - Los tipos de dispositivo son administrables.
 - Cada revisión conserva snapshots de número, ubicación y tipo.
 - Capturas puede registrar varias plagas y cantidades.
-- Dispositivos dañados o fuera de uso pueden exigir fotografía según el flujo aprobado.
+- Una revisión exige fotografía únicamente cuando el estado cambia a `DANADO` o `FUERA_DE_USO`.
 
 ### Hallazgos
 

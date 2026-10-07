@@ -35,6 +35,18 @@ El orden del recorrido es editable dentro del Servicio. Lista, selector y «Sigu
 
 Los Servicios de Refuerzo y los Servicios residenciales conservan sus reglas simplificadas y no ejecutan este recorrido MIP completo.
 
+La primera versión de trabajo de campo implementa únicamente Servicios `PRINCIPAL` de Sedes tipo Negocio. Refuerzos y Servicios residenciales no se habilitan por inferencia en esta superficie.
+
+## Preparación e inicio
+
+El Servicio sigue visible antes de la visita, pero la ejecución solo puede iniciarse desde una hora antes de `inicio_programado`. La SPA presenta `Disponible desde [hora]`; el servidor calcula la ventana con su reloj y rechaza cualquier inicio anticipado.
+
+Iniciar requiere conexión. La preparación previa permite consultar y almacenar el paquete, pero no habilita edición técnica ni sustituye el inicio confirmado por el servidor. Una vez iniciado y congelado el paquete, el Técnico puede continuar sin conexión y sincronizar posteriormente las mutaciones idempotentes.
+
+Al iniciar, el servidor vuelve a cargar la configuración vigente, congela Áreas, criterios aplicables, identidad/estado de Dispositivos y Productos previstos, registra `inicio_real` y cambia el Servicio a `EN_PROCESO` en una sola transacción. No se mezclan datos de una preparación antigua con catálogos nuevos.
+
+Solo un celular puede editar un Servicio `EN_PROCESO`. El bloqueo dura toda la ejecución y se identifica por usuario, Servicio y dispositivo; cerrar el navegador no lo libera. Un Administrador puede liberarlo de forma auditada para permitir recuperación en otro celular. La primera versión no admite edición técnica simultánea ni mezcla automática de dos dispositivos.
+
 ## Criterios MIP
 
 Los criterios son un catálogo administrable independiente.
@@ -82,7 +94,7 @@ Para cada criterio evaluado debe conservarse suficiente información para recons
 
 Renombrar, desactivar o crear criterios después de iniciado un Servicio no modifica ese Servicio ni sus informes.
 
-La representación física puede resolverse con filas o JSONB durante la implementación. La regla funcional es que el histórico sea autosuficiente y no requiera reconstruir una versión de formulario.
+El histórico se conserva en filas propias de Servicio y Área. La regla funcional es que sea autosuficiente y no requiera reconstruir una versión de formulario.
 
 ## Áreas
 
@@ -107,6 +119,8 @@ Cada Servicio Principal crea una revisión del Dispositivo. La revisión puede r
 - observaciones;
 - fotografía.
 
+Todos los Dispositivos congelados del Servicio deben quedar revisados. La primera versión no contempla una excepción de «Dispositivo inaccesible». La fotografía es obligatoria únicamente cuando el estado observado cambia desde el estado congelado a `DANADO` o `FUERA_DE_USO`; permanecer en uno de esos estados no exige una fotografía nueva por sí solo.
+
 El Técnico puede crear un nuevo Dispositivo desde el Área durante la ejecución cuando corresponda. El nuevo registro queda disponible como punto permanente para Servicios posteriores.
 
 Las Plagas disponibles para una revisión se derivan de la clasificación de monitoreo del tipo de Dispositivo:
@@ -120,7 +134,9 @@ La lista aplicable debe quedar congelada o representada de forma históricamente
 
 Productos no forman parte de la evaluación de un Área.
 
-El Administrador prepara los Productos previstos para el Servicio y el Técnico trabaja con ese conjunto. La aplicación real conserva los datos variables del Servicio, incluidos lote, fabricación, vencimiento, dosis y método de aplicación según las reglas vigentes de Producto.
+El Administrador selecciona los Productos y completa lote, dosis y método de aplicación al crear o editar el Servicio; fabricación y vencimiento se conservan cuando se informan. El Servicio no puede iniciar con un Producto previsto incompleto.
+
+El Técnico ve esos Productos en la pantalla principal del Servicio, en modo de solo lectura. No existe una pantalla técnica separada para seleccionarlos ni modificarlos. Al iniciar, el servidor marca el conjunto previsto como aplicado y congela nombre, principio activo, registro sanitario, dosis de referencia y nombre del método para que el histórico no dependa del catálogo vivo.
 
 ## Hallazgos
 
@@ -130,9 +146,21 @@ Desde el Área el Técnico puede registrar descripción, recomendación/acción 
 
 ## Firmas y finalización
 
-La firma del Técnico y la firma del responsable del cliente pertenecen al Servicio, no a un formulario.
+La firma del Técnico y la firma del responsable del cliente pertenecen al Servicio, no a un formulario. Ambas son obligatorias en cada Servicio: siempre hay una persona presente que firma por el cliente y no se implementa una excepción de ausencia.
 
-La finalización debe validar los datos técnicos obligatorios del Servicio y las firmas aplicables. El detalle exacto de validaciones de completitud se definirá al implementar el primer Servicio para no introducir requisitos no aprobados por adelantado.
+Al pulsar Firmar, el lienzo ocupa la pantalla completa para facilitar el trazo en celular. Incluye acciones visibles para borrar, cancelar y aceptar; aceptar conserva la firma durablemente antes de salir.
+
+Un Servicio Principal está completo cuando:
+
+- cada Área quedó evaluada con todos sus criterios y Dispositivos, o se resolvió como Área sin acceso con descripción y fotografía;
+- cada Dispositivo congelado tiene una revisión válida;
+- cualquier fotografía obligatoria fue capturada;
+- las dos firmas fueron aceptadas;
+- las mutaciones y archivos obligatorios quedaron sincronizados antes de que el servidor confirme la finalización.
+
+Los Hallazgos son opcionales y no se inventa uno para completar el Servicio. Abrir una pantalla no marca una sección como resuelta.
+
+Frontend y servidor validan la misma matriz de completitud. Offline puede guardarse una intención de cierre, pero la UI no muestra `FINALIZADO` hasta recibir confirmación del servidor.
 
 ## Offline y autosave
 
@@ -144,6 +172,8 @@ El recorrido debe respetar las reglas generales de operación offline:
 - sincronización idempotente;
 - conservación de fotografías y firmas pendientes;
 - resolución explícita de conflictos sobre el mismo dato.
+
+El inicio no se encola offline. Requiere confirmación online para fijar la hora, adquirir el bloqueo del dispositivo y congelar el paquete autoritativo.
 
 La unidad de trabajo offline debe seguir entidades reales del dominio, no una definición de formulario.
 
@@ -158,14 +188,6 @@ La migración `20261006_011_remove_legacy_mip_forms.sql` retira:
 
 API y frontend también dejan de exponer selección, conteo o validación de formularios por Sede. Las migraciones anteriores permanecen inmutables.
 
-## Pendiente para la siguiente etapa
+## Entrega incremental
 
-Con la limpieza terminada, el siguiente paso es definir el cambio mínimo para soportar:
-
-- catálogo de Criterios MIP;
-- snapshot/evaluación por Servicio y Área;
-- recorrido móvil por Áreas, incluido su orden editable por Servicio según `service-area-route.md`;
-- revisiones de Dispositivos;
-- Productos aplicados;
-- Hallazgos y evidencias;
-- firmas y finalización.
+La fundación de ejecución implementa el inicio online autoritativo, snapshots de Áreas/Criterios/Dispositivos/Productos, bloqueo persistente por dispositivo, liberación administrativa e idempotencia. Las entregas siguientes ensamblan sobre esta base la superficie móvil, recorrido/autosave offline, revisiones y evidencias, y finalmente firmas/cierre; ninguna etapa reintroduce formularios legacy.

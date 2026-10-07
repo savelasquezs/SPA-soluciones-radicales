@@ -16,9 +16,9 @@ import { drainServiceJobs } from '../../functions/api/services/jobs'
 
 const target=new URL(process.env.TEST_DATABASE_URL ?? '')
 if(process.env.CI!=='true' || !['localhost','127.0.0.1'].includes(target.hostname) || target.pathname!=='/sr_certificates_test') throw new Error('Ephemeral CI database required')
-interface Fixture { admin: string; responsible: string; collaborator: string; business: string; site: string; product: string }
+interface Fixture { admin: string; responsible: string; collaborator: string; business: string; site: string; product: string; method: string; methodCode: string }
 async function fixture(reinforcement=true): Promise<Fixture> {
-  const f: Fixture={ admin:randomUUID(),responsible:randomUUID(),collaborator:randomUUID(),business:randomUUID(),site:randomUUID(),product:randomUUID() }
+  const f: Fixture={ admin:randomUUID(),responsible:randomUUID(),collaborator:randomUUID(),business:randomUUID(),site:randomUUID(),product:randomUUID(),method:randomUUID(),methodCode:`METHOD_${randomUUID().replaceAll('-','')}` }
   await transaction(async client=>{
     for(const [role,user] of Object.entries({ admin:f.admin,responsible:f.responsible,collaborator:f.collaborator })) {
       await client.query('insert into public.usuarios(id,auth_user_id,nombre_completo,correo_google,es_admin,es_tecnico) values($1,$2,$3,$4,$5,$6)',[user,`services-ci:${user}`,`Services CI ${role}`,`${user}@example.invalid`,role==='admin',role!=='admin'])
@@ -28,12 +28,14 @@ async function fixture(reinforcement=true): Promise<Fixture> {
       contacto_principal_celular,contacto_principal_correo,valor_servicio,periodicidad_meses,maneja_refuerzo,tipo_sede,duracion_servicio_minutos)
       values($1,$2,'Sede de prueba','Dirección sintética','[]',true,'Contacto de prueba','+573000000001','contacto@example.invalid',300000,1,$3,'NEGOCIO',90)`,[f.site,f.business,reinforcement])
     await client.query('insert into public.productos(id,nombre,principio_activo_composicion,dosis_aplicacion) values($1,$2,$3,$4)',[f.product,`Services CI product ${f.product}`,'Composición de prueba','5 mL/L'])
+    await client.query("insert into public.configuracion(id,categoria,clave,nombre) values($1,'METODO_APLICACION',$2,$3)",[f.method,f.methodCode,`Aspersión ${f.methodCode}`])
+    await client.query('insert into public.producto_metodos(producto_id,metodo_id) values($1,$2)',[f.product,f.method])
   })
   return f
 }
 function input(f: Fixture,start='2030-10-06T09:00:00-05:00'): ServiceInput {
   return { sedeId:f.site,programacion:{ inicioProgramado:start,duracionMinutos:90,tecnicoResponsableId:f.responsible,tecnicosColaboradoresIds:[f.collaborator] },refuerzo:null,
-    productos:[{ productoId:f.product,lote:'CI-1',fechaFabricacion:'2026-01-01',fechaVencimiento:'2032-01-01' }],cobro:{ metodoPago:'EFECTIVO',tecnicoRecaudoPrevistoId:f.responsible },observaciones:'Solo datos sintéticos' }
+    productos:[{ productoId:f.product,lote:'CI-1',fechaFabricacion:'2026-01-01',fechaVencimiento:'2032-01-01',dosis:'5 mL/L',metodoAplicacionCodigo:f.methodCode }],cobro:{ metodoPago:'EFECTIVO',tecnicoRecaudoPrevistoId:f.responsible },observaciones:'Solo datos sintéticos' }
 }
 async function create(f: Fixture,value=input(f),requestId=randomUUID()): Promise<ServiceMutation> {
   return transaction(client=>command(client,f.admin,requestId,'service:create',{ input:value },()=>createService(client,f.admin,value,false)))
@@ -98,7 +100,7 @@ describe('administrator services · real PostgreSQL',()=>{
       { version:r.version+1,schedule:{ ...scheduleFromRecord(r),inicioProgramado:addInstantDays(r.inicioProgramado,4) } }))).rejects.toMatchObject({ code:'VERSION_CONFLICT' })
     expect((await readService(p.id)).inicioProgramado).toBe(p.inicioProgramado)
     const edit=draftToServiceInput(serviceToDraft(p));edit.programacion.inicioProgramado=addInstantDays(p.inicioProgramado,2)
-    edit.productos=[{ productoId:randomUUID(),lote:'',fechaFabricacion:null,fechaVencimiento:null }]
+    edit.productos=[{ productoId:randomUUID(),lote:'x',fechaFabricacion:null,fechaVencimiento:null,dosis:'x',metodoAplicacionCodigo:'ASPERSION' }]
     await expect(transaction(client=>editService(client,f.admin,p.id,p.version,edit,true,r.version))).rejects.toMatchObject({ code:'VALIDATION' })
     expect((await readService(p.id)).version).toBe(p.version)
     expect((await readService(r.id)).version).toBe(r.version)

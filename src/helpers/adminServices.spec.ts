@@ -22,13 +22,13 @@ describe('administrator service contracts',()=>{
     expect(isZonedInstant('2026-02-30T09:00:00-05:00')).toBe(false)
     expect(isDateOnly('2024-02-29')).toBe(true)
     expect(isDateOnly('2026-02-29')).toBe(false)
-    const value=input();value.productos=[{ productoId:collaborator,lote:'L-1',fechaFabricacion:'2026-12-01',fechaVencimiento:'2026-11-01' }]
+    const value=input();value.productos=[{ productoId:collaborator,lote:'L-1',fechaFabricacion:'2026-12-01',fechaVencimiento:'2026-11-01',dosis:'5 mL/L',metodoAplicacionCodigo:'ASPERSION' }]
     expect(validateServiceInput(value).errors).toHaveProperty('productos.0.fechaVencimiento')
   })
   it('rejects duplicate technicians, responsible-as-collaborator and duplicate products',()=>{
     expect(validateSchedule({ ...schedule,tecnicosColaboradoresIds:[responsible] }).errors).toHaveProperty('programacion.tecnicosColaboradoresIds')
     expect(validateSchedule({ ...schedule,tecnicosColaboradoresIds:[collaborator,collaborator] }).errors).toHaveProperty('programacion.tecnicosColaboradoresIds')
-    const value=input();const product={ productoId:collaborator,lote:'',fechaFabricacion:null,fechaVencimiento:null };value.productos=[product,product]
+    const value=input();const product={ productoId:collaborator,lote:'',fechaFabricacion:null,fechaVencimiento:null,dosis:'',metodoAplicacionCodigo:'' };value.productos=[product,product]
     expect(validateServiceInput(value).errors.productos).toBeTruthy()
   })
   it('keeps planned collection separate and strips untrusted price and terminal-state fields',()=>{
@@ -36,6 +36,14 @@ describe('administrator service contracts',()=>{
     expect(value.errors).toHaveProperty('cobro.tecnicoRecaudoPrevistoId')
     expect(value.value).not.toHaveProperty('valorServicio')
     expect(value.value).not.toHaveProperty('estado')
+  })
+  it('requires the application data that the technician will only read',()=>{
+    const value=input();value.productos=[{ productoId:collaborator,lote:'',fechaFabricacion:null,fechaVencimiento:null,dosis:'',metodoAplicacionCodigo:'' }]
+    expect(validateServiceInput(value).errors).toMatchObject({
+      'productos.0.lote':'Ingresa el lote previsto.',
+      'productos.0.dosis':'Ingresa la dosis prevista.',
+      'productos.0.metodoAplicacionCodigo':'Selecciona el método de aplicación.',
+    })
   })
   it('uses Colombian dates at the UTC day boundary and round-trips the editor',()=>{
     expect(todayBogota(new Date('2026-10-07T02:00:00Z'))).toBe('2026-10-06')

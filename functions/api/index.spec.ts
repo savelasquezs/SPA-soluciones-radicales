@@ -11,6 +11,7 @@ const {
   clientQuery,
   poolQuery,
   requireAdmin,
+  requireTechnician,
   transaction,
   upsertCalendarEvent,
   verifyAuthorization,
@@ -19,6 +20,7 @@ const {
   clientQuery: vi.fn<Query>(),
   poolQuery: vi.fn<Query>(),
   requireAdmin: vi.fn<(client: unknown, identity: unknown) => Promise<unknown>>(),
+  requireTechnician: vi.fn<(client: unknown, identity: unknown) => Promise<unknown>>(),
   transaction: vi.fn<Transaction>(),
   upsertCalendarEvent: vi.fn<(input: unknown) => Promise<string>>(),
   verifyAuthorization: vi.fn<(header: string | undefined) => Promise<unknown>>(),
@@ -37,6 +39,7 @@ vi.mock('./auth', () => ({
   },
   bootstrapProfile,
   requireAdmin,
+  requireTechnician,
   verifyAuthorization,
 }))
 
@@ -266,5 +269,28 @@ describe('administrator service authorization', () => {
     }) })
     expect(response.status).toBe(403)
     expect(clientQuery).not.toHaveBeenCalled();expect(upsertCalendarEvent).not.toHaveBeenCalled()
+  })
+})
+
+describe('technician service authorization', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    verifyAuthorization.mockResolvedValue({ authUserId:'technician-auth',session:{ sub:'technician-auth' } })
+    transaction.mockImplementation(async callback=>callback({ query:clientQuery }))
+  })
+  it('exposes the assigned-service surface only to the active Technician role',async()=>{
+    const { ApiError }=await import('./auth')
+    requireTechnician.mockRejectedValue(new ApiError(403,'Se requiere el rol Técnico'))
+    const response=await app.request('/api/technician/services',{ headers:{ Authorization:'Bearer synthetic-token' } })
+    expect(response.status).toBe(403)
+    expect(clientQuery).not.toHaveBeenCalled()
+  })
+  it('lists technician services through the dedicated authority',async()=>{
+    requireTechnician.mockResolvedValue({ id:'technician-id' })
+    clientQuery.mockResolvedValue({ rows:[],rowCount:0 })
+    const response=await app.request('/api/technician/services',{ headers:{ Authorization:'Bearer synthetic-token' } })
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual([])
+    expect(clientQuery).toHaveBeenCalledWith(expect.stringContaining("s.tipo_servicio='PRINCIPAL'"),['technician-id'])
   })
 })

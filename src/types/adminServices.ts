@@ -36,17 +36,25 @@ export interface ServiceProductOption {
   nombre: string
   principioActivo: string
   dosisAplicacion: string | null
+  metodos: ServiceProductMethodOption[]
   activo: boolean
+}
+export interface ServiceProductMethodOption {
+  codigo: string
+  nombre: string
 }
 export interface ServiceProductInput {
   productoId: string
   lote: string
   fechaFabricacion: string | null
   fechaVencimiento: string | null
+  dosis: string
+  metodoAplicacionCodigo: string
 }
 export interface ServiceProductRecord extends ServiceProductInput {
   id: string
   nombre: string
+  metodoAplicacionNombre: string | null
   aplicado: boolean
   activo: boolean
 }
