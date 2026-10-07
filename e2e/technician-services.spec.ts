@@ -2,7 +2,7 @@ import { expect, test, type Page, type Route } from '@playwright/test'
 import type { TechnicianExecutionSession, TechnicianServicePackage, TechnicianServiceSummary } from '../src/types/technicianServices'
 
 const uid = (value: number) => `20000000-0000-4000-8000-${String(value).padStart(12, '0')}`
-const ids = { actor: uid(1), service: uid(2), product: uid(3), area: uid(4), criterion: uid(5), device: uid(6), lock: uid(7), area2: uid(8), criterion2: uid(9) }
+const ids = { actor: uid(1), service: uid(2), product: uid(3), area: uid(4), criterion: uid(5), device: uid(6), lock: uid(7), area2: uid(8), criterion2: uid(9), finding: uid(10), priorService: uid(11) }
 const summary = (state: TechnicianServiceSummary['estado'] = 'PROGRAMADO'): TechnicianServiceSummary => ({
   id: ids.service,
   solicitud: 'SR-0201',
@@ -16,7 +16,7 @@ const summary = (state: TechnicianServiceSummary['estado'] = 'PROGRAMADO'): Tech
   sedeNombre: 'Laureles',
   direccion: 'Calle 10 # 20-30, Medellín',
 })
-const servicePackage = (state: TechnicianServiceSummary['estado'] = 'PROGRAMADO'): TechnicianServicePackage => ({
+const servicePackage = (state: TechnicianServiceSummary['estado'] = 'PROGRAMADO', withPriorFinding = false): TechnicianServicePackage => ({
   service: summary(state),
   frozen: state !== 'PROGRAMADO',
   serverNow: '2026-10-07T15:30:00Z',
@@ -52,6 +52,12 @@ const servicePackage = (state: TechnicianServiceSummary['estado'] = 'PROGRAMADO'
       tipoNombre: 'Trampa adhesiva', clasificacion: 'RASTREROS', plagas: [{ codigo: 'CUCARACHA', nombre: 'Cucaracha' }],
       estadoAnterior: 'ACTIVO', creadoDuranteServicio: false, revisado: false, revision: null,
     }],
+    hallazgos: withPriorFinding ? [{
+      id: ids.finding, servicioAperturaId: ids.priorService, fechaApertura: '2026-09-07T14:00:00Z',
+      descripcion: 'Abertura junto al muro', recomendacionAccion: 'Sellar el paso', evidenciasAperturaStoragePaths: [],
+      estado: 'ABIERTO', responsableNombre: 'Mantenimiento', responsableCorreo: null, servicioCierreId: null,
+      fechaCierre: null, evidenciasCierreStoragePaths: [], observacionCierre: null, version: 1,
+    }] : [],
   }, {
     id: ids.area2,
     areaId: ids.area2,
@@ -65,11 +71,12 @@ const servicePackage = (state: TechnicianServiceSummary['estado'] = 'PROGRAMADO'
     version: 1,
     criterios: [{ id: ids.criterion2, criterioId: ids.criterion2, nombre: 'Disposición de residuos', soloAreaExterna: false, evaluacion: null, observacion: null, evidenciasStoragePaths: [], version: 1 }],
     dispositivos: [],
+    hallazgos: [],
   }],
 })
 
-async function setup(page: Page) {
-  let current = servicePackage()
+async function setup(page: Page, withPriorFinding = false) {
+  let current = servicePackage('PROGRAMADO', withPriorFinding)
   let packageReads = 0
   const starts: Array<Record<string, unknown>> = []
   const orders: Array<Record<string, unknown>> = []
@@ -92,7 +99,7 @@ async function setup(page: Page) {
     if (path === `/api/technician/services/${ids.service}/package`) { packageReads++; await json(route, current); return }
     if (path === `/api/technician/services/${ids.service}/start`) {
       starts.push(request.postDataJSON() as Record<string, unknown>)
-      current = servicePackage('EN_PROCESO')
+      current = servicePackage('EN_PROCESO', withPriorFinding)
       const body = request.postDataJSON() as { deviceId: string }
       const session: TechnicianExecutionSession = { package: current, lock: { token: ids.lock, deviceId: body.deviceId, acquiredAt: current.serverNow } }
       await json(route, session)
@@ -241,7 +248,7 @@ test('a no-access Area and its required photo survive an offline reload', async 
   await page.getByLabel('Descripción').fill('Puerta cerrada por el cliente')
   await page.locator('input[type="file"]').setInputFiles({ name: 'area-sin-acceso.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('synthetic-photo') })
   await expect(page.getByText('Guardado local', { exact: true })).toBeVisible()
-  await expect(page.getByText('Los criterios y dispositivos quedan exceptuados')).toBeVisible()
+  await expect(page.getByText('Los criterios, dispositivos y cambios en Hallazgos quedan exceptuados')).toBeVisible()
   await page.addInitScript(() => Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }))
   await page.reload()
   await expect(page.getByRole('checkbox', { name: 'No fue posible acceder a esta Área' })).toBeChecked()
@@ -288,7 +295,7 @@ test('a new permanent device survives an offline reload before synchronization',
     Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false })
     window.dispatchEvent(new Event('offline'))
   })
-  await page.getByRole('button', { name: 'Agregar', exact: true }).click()
+  await page.locator('section[aria-labelledby="area-devices-title"]').getByRole('button', { name: 'Agregar', exact: true }).click()
   await page.getByLabel('Número').fill('D-02')
   await page.getByLabel('Ubicación').fill('Junto a la puerta')
   await page.getByRole('button', { name: 'Agregar dispositivo' }).click()
@@ -298,6 +305,62 @@ test('a new permanent device survives an offline reload before synchronization',
   await expect(page.getByRole('button', { name: /D-02/ })).toContainText('Creación local')
   expect(api.deviceCreations).toHaveLength(0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})
+
+test('a finding with several evidence photos survives an offline reload', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await setup(page)
+  await page.goto(`/servicios/${ids.service}/trabajo`)
+  await page.getByRole('button', { name: 'Iniciar servicio' }).click()
+  await page.getByRole('button', { name: 'Abrir Área Cocina' }).click()
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false })
+    window.dispatchEvent(new Event('offline'))
+  })
+  const findings = page.locator('section[aria-labelledby="area-findings-title"]')
+  await findings.getByRole('button', { name: 'Agregar', exact: true }).click()
+  await findings.getByLabel('Descripción').fill('Abertura junto al muro')
+  await findings.getByLabel('Recomendación o acción correctiva').fill('Sellar el paso')
+  await findings.locator('input[name="finding-responsible-name"]').fill('Mantenimiento')
+  await findings.locator('input[type="file"]').setInputFiles([
+    { name: 'hallazgo-1.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('synthetic-finding-photo-1') },
+    { name: 'hallazgo-2.png', mimeType: 'image/png', buffer: Buffer.from('synthetic-finding-photo-2') },
+  ])
+  await findings.getByRole('button', { name: 'Registrar Hallazgo' }).click()
+  await expect(findings.getByRole('button', { name: /Abertura junto al muro/ })).toBeVisible()
+  await expect(findings.getByText('1 registrados · 1 pendientes')).toBeVisible()
+  await page.addInitScript(() => Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }))
+  await page.reload()
+  await findings.getByRole('button', { name: /Abertura junto al muro/ }).click()
+  await expect(findings.getByText('2 evidencias de apertura')).toBeVisible()
+  await expect(findings.getByText('Guardado en este dispositivo · pendiente de sincronizar')).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})
+
+test('a prior finding can be closed only with evidence and survives offline reload', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await setup(page, true)
+  await page.goto(`/servicios/${ids.service}/trabajo`)
+  await page.getByRole('button', { name: 'Iniciar servicio' }).click()
+  await page.getByRole('button', { name: 'Abrir Área Cocina' }).click()
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false })
+    window.dispatchEvent(new Event('offline'))
+  })
+  const findings = page.locator('section[aria-labelledby="area-findings-title"]')
+  await findings.getByRole('button', { name: /Abertura junto al muro/ }).click()
+  await findings.getByRole('button', { name: 'Cerrar Hallazgo' }).click()
+  await findings.getByRole('button', { name: 'Confirmar cierre' }).click()
+  await expect(findings.getByText('Adjunta al menos una evidencia de cierre.')).toBeVisible()
+  await findings.getByLabel('Observación de cierre').fill('Paso sellado')
+  await findings.locator('input[type="file"]').setInputFiles({ name: 'cierre.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('synthetic-closure-photo') })
+  await findings.getByRole('button', { name: 'Confirmar cierre' }).click()
+  await expect(findings.getByText('Cerrado', { exact: true })).toBeVisible()
+  await page.addInitScript(() => Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }))
+  await page.reload()
+  await findings.getByRole('button', { name: /Abertura junto al muro/ }).click()
+  await expect(findings.getByText(/1 evidencias/)).toBeVisible()
+  await expect(findings.getByText('Paso sellado')).toBeVisible()
 })
 
 test('prepared package survives reload and remains available without connection', async ({ page }) => {

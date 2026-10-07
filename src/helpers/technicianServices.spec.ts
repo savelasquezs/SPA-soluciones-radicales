@@ -46,6 +46,7 @@ const area = (id: string, position: number, resolved = false): TechnicianArea =>
   version: 1,
   criterios: [{ id: `${id}-criterion`, criterioId: `${id}-criterion`, nombre: 'Criterio', soloAreaExterna: false, evaluacion: resolved ? 'C' : null, observacion: null, evidenciasStoragePaths: [], version: 1 }],
   dispositivos: [],
+  hallazgos: [],
 })
 
 describe('technician area route', () => {

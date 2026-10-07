@@ -8,7 +8,7 @@ vi.mock('./auth', () => ({
   },
 }))
 
-import { assertAreaNoAccessStoragePath, assertDeviceReviewStoragePath, createAreaNoAccessUploadUrl, createDeviceReviewUploadUrl, createMasterReadUrl, createMasterUploadUrl } from './r2'
+import { assertAreaNoAccessStoragePath, assertDeviceReviewStoragePath, assertFindingEvidenceStoragePath, createAreaNoAccessUploadUrl, createDeviceReviewUploadUrl, createFindingEvidenceUploadUrl, createMasterReadUrl, createMasterUploadUrl } from './r2'
 
 const original = {
   accountId: process.env.R2_ACCOUNT_ID,
@@ -95,5 +95,16 @@ describe('Cloudflare R2 presigned URLs', () => {
     expect(signed.storagePath).toMatch(new RegExp(`^services/${serviceId}/devices/${serviceDeviceId}/review/[0-9a-f-]+-Dano-puesto\\.webp$`))
     expect(url.pathname).toContain(`/sr-service-media/services/${serviceId}/devices/${serviceDeviceId}/review/`)
     expect(() => assertDeviceReviewStoragePath(signed.storagePath, serviceId, '10000000-0000-4000-8000-000000000005')).toThrow('ruta de la fotografía')
+  })
+
+  it('aísla las evidencias de apertura y cierre por Servicio y Hallazgo', () => {
+    const serviceId = '10000000-0000-4000-8000-000000000001'
+    const findingId = '10000000-0000-4000-8000-000000000006'
+    const opening = createFindingEvidenceUploadUrl({ serviceId, findingId, phase: 'OPENING', fileName: 'Inicio.jpg', contentType: 'image/jpeg', size: 4_096 })
+    const closure = createFindingEvidenceUploadUrl({ serviceId, findingId, phase: 'CLOSURE', fileName: 'Cierre.webp', contentType: 'image/webp', size: 4_096 })
+    expect(opening.storagePath).toMatch(new RegExp(`^services/${serviceId}/findings/${findingId}/opening/[0-9a-f-]+-Inicio\\.jpg$`))
+    expect(closure.storagePath).toMatch(new RegExp(`^services/${serviceId}/findings/${findingId}/closure/[0-9a-f-]+-Cierre\\.webp$`))
+    expect(() => assertFindingEvidenceStoragePath(opening.storagePath, serviceId, findingId, 'CLOSURE')).toThrow('ruta de la fotografía')
+    expect(new URL(closure.url).pathname).toContain(`/sr-service-media/services/${serviceId}/findings/${findingId}/closure/`)
   })
 })

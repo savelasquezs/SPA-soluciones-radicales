@@ -16,6 +16,7 @@ const area: TechnicianArea = {
   version: 1,
   criterios: [],
   dispositivos: [],
+  hallazgos: [],
 }
 
 describe('TechnicianAreaAccessEditor', () => {

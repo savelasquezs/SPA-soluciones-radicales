@@ -12,10 +12,12 @@ import ServicePage from '@/components/domain/services/ServicePage.vue'
 import TechnicianAreaAccessEditor from '@/components/domain/services/TechnicianAreaAccessEditor.vue'
 import TechnicianCriterionEditor from '@/components/domain/services/TechnicianCriterionEditor.vue'
 import TechnicianDeviceReviewEditor from '@/components/domain/services/TechnicianDeviceReviewEditor.vue'
+import TechnicianFindingCard from '@/components/domain/services/TechnicianFindingCard.vue'
+import TechnicianFindingCreateEditor from '@/components/domain/services/TechnicianFindingCreateEditor.vue'
 import TechnicianNewDeviceEditor from '@/components/domain/services/TechnicianNewDeviceEditor.vue'
 import { nextTechnicianArea, orderedTechnicianAreas, technicianAreaResolved } from '@/helpers/technicianServices'
 import { useTechnicianServicesStore } from '@/stores/technicianServices'
-import type { MipEvaluation, TechnicianAreaAccessMutation, TechnicianCriterionEvaluationMutation, TechnicianDeviceCreationInput, TechnicianDeviceCreationMutation, TechnicianDeviceReviewInput, TechnicianDeviceReviewMutation } from '@/types/technicianServices'
+import type { MipEvaluation, TechnicianAreaAccessMutation, TechnicianCriterionEvaluationMutation, TechnicianDeviceCreationInput, TechnicianDeviceCreationMutation, TechnicianDeviceReviewInput, TechnicianDeviceReviewMutation, TechnicianFindingCreateInput, TechnicianFindingCreateMutation, TechnicianFindingStatusInput, TechnicianFindingStatusMutation } from '@/types/technicianServices'
 
 const route = useRoute()
 const router = useRouter()
@@ -31,6 +33,8 @@ const error = ref('')
 const saveError = ref('')
 const newDeviceOpen = ref(false)
 const newDeviceSaving = ref(false)
+const newFindingOpen = ref(false)
+const findingSavingId = ref('')
 const drafts = ref<Record<string, { evaluation: MipEvaluation | null; observation: string }>>({})
 const deviceDrafts = ref<Record<string, { input: TechnicianDeviceReviewInput; photo: File | null }>>({})
 const accessDraft = ref<{ areaId: string; withoutAccess: boolean; description: string; photo: File | null } | null>(null)
@@ -38,13 +42,14 @@ const saveQueue = new Map<string, Promise<boolean>>()
 const deviceSaveQueue = new Map<string, Promise<boolean>>()
 let accessSaveQueue: Promise<boolean> | null = null
 const canEditRoute = computed(() => packageValue.value?.service.estado === 'EN_PROCESO' && Boolean(currentCache.value?.lock))
+const findings = computed(() => currentArea.value?.hallazgos ?? [])
 const next = computed(() => currentArea.value ? nextTechnicianArea(orderedAreas.value, currentArea.value.id) : { kind: 'PENDING' as const })
 const nextLabel = computed(() => next.value.kind === 'AREA' ? `Siguiente: ${next.value.area.nombre}` : next.value.kind === 'CLOSURE' ? 'Revisar cierre' : 'Revisar pendientes')
 const creationConflict = computed(() => currentMutations.value.find((item): item is TechnicianDeviceCreationMutation => item.kind === 'DEVICE_CREATE'
   && item.areaId === currentArea.value?.id && item.status === 'CONFLICT') ?? null)
 
 onMounted(load)
-watch(routeAreaId, value => { selectedAreaId.value = value; newDeviceOpen.value = false })
+watch(routeAreaId, value => { selectedAreaId.value = value; newDeviceOpen.value = false; newFindingOpen.value = false })
 watch(creationConflict, value => { if (value) newDeviceOpen.value = true })
 onBeforeRouteLeave(() => flushDrafts())
 onBeforeRouteUpdate(to => String(to.params.areaId ?? '') === routeAreaId.value || flushDrafts())
@@ -82,6 +87,11 @@ function creationMutation(serviceDeviceId: string): TechnicianDeviceCreationMuta
     && item.serviceDeviceId === serviceDeviceId) ?? null
 }
 
+function findingMutation(findingId: string): TechnicianFindingCreateMutation | TechnicianFindingStatusMutation | null {
+  return currentMutations.value.find((item): item is TechnicianFindingCreateMutation | TechnicianFindingStatusMutation =>
+    (item.kind === 'FINDING_CREATE' || item.kind === 'FINDING_STATUS') && item.findingId === findingId) ?? null
+}
+
 async function saveNewDevice(input: TechnicianDeviceCreationInput): Promise<void> {
   if (!currentArea.value) return
   newDeviceSaving.value = true
@@ -110,6 +120,45 @@ async function discardNewDevice(): Promise<void> {
   } finally {
     newDeviceSaving.value = false
   }
+}
+
+async function saveNewFinding(input: TechnicianFindingCreateInput, files: File[]): Promise<void> {
+  if (!currentArea.value) return
+  findingSavingId.value = 'new'
+  saveError.value = ''
+  try {
+    await services.applyFindingCreate(serviceId.value, currentArea.value.id, input, files)
+    newFindingOpen.value = false
+  } catch (failure) {
+    saveError.value = failure instanceof Error ? failure.message : 'No fue posible registrar el Hallazgo.'
+  } finally {
+    findingSavingId.value = ''
+  }
+}
+
+async function saveFindingStatus(findingId: string, input: TechnicianFindingStatusInput, files: File[]): Promise<void> {
+  if (!currentArea.value) return
+  findingSavingId.value = findingId
+  saveError.value = ''
+  try { await services.applyFindingStatus(serviceId.value, currentArea.value.id, findingId, input, files) }
+  catch (failure) { saveError.value = failure instanceof Error ? failure.message : 'No fue posible actualizar el Hallazgo.' }
+  finally { findingSavingId.value = '' }
+}
+
+async function useRemoteFinding(findingId: string): Promise<void> {
+  findingSavingId.value = findingId
+  saveError.value = ''
+  try { await services.discardFindingConflict(serviceId.value, findingId) }
+  catch (failure) { saveError.value = failure instanceof Error ? failure.message : 'No fue posible recuperar el Hallazgo sincronizado.' }
+  finally { findingSavingId.value = '' }
+}
+
+async function retryFinding(findingId: string): Promise<void> {
+  findingSavingId.value = findingId
+  saveError.value = ''
+  try { await services.retryFindingConflict(serviceId.value, findingId) }
+  catch (failure) { saveError.value = failure instanceof Error ? failure.message : 'No fue posible reintentar el Hallazgo.' }
+  finally { findingSavingId.value = '' }
 }
 
 function trackAccessDraft(withoutAccess: boolean, description: string, photo: File | null): void {
@@ -306,7 +355,7 @@ function goNext(): void {
         <header><div><h2 id="area-criteria-title">Condiciones del Área</h2><p>{{ currentArea.criterios.length }} criterios aplicables · guardado automático</p></div><StatusBadge :tone="technicianAreaResolved(currentArea) ? 'success' : 'neutral'"><Check v-if="technicianAreaResolved(currentArea)" :size="15" aria-hidden="true" /><MonitorCheck v-else :size="15" aria-hidden="true" />{{ technicianAreaResolved(currentArea) ? 'Resuelta' : 'Pendiente' }}</StatusBadge></header>
         <StatusPanel v-if="saveError" title="No fue posible guardar" :message="saveError" tone="danger" />
         <TechnicianAreaAccessEditor :area="currentArea" :mutation="accessMutation()" :editable="canEditRoute" :syncing="syncing" @draft="trackAccessDraft" @save="saveAccess" @use-remote="useRemoteAccess" @retry="retryAccess" />
-        <p v-if="currentArea.sinAcceso" class="area-no-access">Los criterios y dispositivos quedan exceptuados porque no fue posible acceder al Área.</p>
+        <p v-if="currentArea.sinAcceso" class="area-no-access">Los criterios, dispositivos y cambios en Hallazgos quedan exceptuados porque no fue posible acceder al Área.</p>
         <div v-else class="criteria-list"><TechnicianCriterionEditor v-for="criterion in currentArea.criterios" :key="criterion.id" :criterion="criterion" :mutation="criterionMutation(criterion.id)" :editable="canEditRoute" :syncing="syncing" @draft="(evaluation, observation) => trackCriterionDraft(criterion.id, evaluation, observation)" @save="(evaluation, observation) => saveCriterion(criterion.id, evaluation, observation)" @use-remote="useRemoteCriterion(criterion.id)" @retry="retryCriterion(criterion.id)" /></div>
       </section>
       <section v-if="!currentArea.sinAcceso" class="area-panel" aria-labelledby="area-devices-title">
@@ -315,6 +364,13 @@ function goNext(): void {
         <p v-else-if="canEditRoute && !packageValue?.deviceTypes?.length" class="area-empty">No hay tipos de dispositivo disponibles en el paquete del servicio.</p>
         <p v-if="!currentArea.dispositivos.length" class="area-empty">Esta Área no tiene Dispositivos asignados.</p>
         <div v-else class="device-list"><TechnicianDeviceReviewEditor v-for="device in currentArea.dispositivos" :key="device.id" :device="device" :creation-mutation="creationMutation(device.id)" :mutation="deviceMutation(device.id)" :editable="canEditRoute" :syncing="syncing" @draft="(input, photo) => trackDeviceDraft(device.id, input, photo)" @save="(input, photo) => saveDevice(device.id, input, photo)" @use-remote="useRemoteDevice(device.id)" @retry="retryDevice(device.id)" /></div>
+      </section>
+      <section class="area-panel" aria-labelledby="area-findings-title">
+        <header><div><h2 id="area-findings-title">Hallazgos</h2><p>{{ findings.length }} registrados · {{ findings.filter(item => item.estado !== 'CERRADO').length }} pendientes</p></div><BaseButton v-if="canEditRoute && !currentArea.sinAcceso" size="compact" variant="secondary" :disabled="findingSavingId === 'new'" @click="newFindingOpen = true"><Plus :size="17" aria-hidden="true" />Agregar</BaseButton></header>
+        <p v-if="currentArea.sinAcceso" class="area-empty">Los Hallazgos anteriores siguen visibles, pero no pueden cambiarse mientras el Área esté sin acceso.</p>
+        <TechnicianFindingCreateEditor v-if="newFindingOpen" :saving="findingSavingId === 'new'" @save="saveNewFinding" @cancel="newFindingOpen = false" />
+        <p v-if="!findings.length" class="area-empty">No hay Hallazgos registrados para esta Área.</p>
+        <div v-else class="finding-list"><TechnicianFindingCard v-for="finding in findings" :key="finding.id" :finding="finding" :current-service-id="serviceId" :mutation="findingMutation(finding.id)" :editable="canEditRoute && !currentArea.sinAcceso" :saving="findingSavingId === finding.id" @status="(input, files) => saveFindingStatus(finding.id, input, files)" @use-remote="useRemoteFinding(finding.id)" @retry="retryFinding(finding.id)" /></div>
       </section>
       <BaseButton class="area-next" @click="goNext"><ClipboardCheck v-if="next.kind !== 'AREA'" :size="18" aria-hidden="true" /><ChevronRight v-else :size="18" aria-hidden="true" />{{ nextLabel }}</BaseButton>
     </template>
@@ -327,7 +383,7 @@ function goNext(): void {
 .area-panel > header { display:flex; align-items:flex-start; justify-content:space-between; gap:0.75rem; }
 h2, p, ul { margin:0; }
 h2 { font-size:1rem; }
-.area-list, .device-list { display:grid; gap:0.6rem; padding:0; list-style:none; }
+.area-list, .device-list, .finding-list { display:grid; gap:0.6rem; padding:0; list-style:none; }
 .criteria-list { display:grid; gap:0.75rem; }
 .area-list li { display:flex; min-height:52px; align-items:center; justify-content:space-between; gap:0.75rem; border:1px solid var(--border); border-radius:var(--radius); padding:0.7rem; }
 .area-list li > span { display:grid; min-width:0; gap:0.15rem; overflow-wrap:anywhere; }

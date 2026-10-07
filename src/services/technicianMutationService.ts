@@ -14,6 +14,14 @@ function validVersions(value: unknown): boolean {
     && value.every(item => item && typeof item === 'object' && isServiceId(item.id) && Number.isSafeInteger(item.version) && item.version > 0)
 }
 
+function validFindingEvidences(value: unknown): boolean {
+  return Array.isArray(value)
+    && value.length <= 10
+    && new Set(value.map(item => item?.mediaId)).size === value.length
+    && value.every(item => item && typeof item === 'object' && isServiceId(item.mediaId)
+      && (item.storagePath === null || typeof item.storagePath === 'string'))
+}
+
 function validMutation(value: unknown, actorId?: string, serviceId?: string): value is TechnicianMutation {
   if (!value || typeof value !== 'object') return false
   const record = value as Partial<TechnicianMutation>
@@ -73,6 +81,21 @@ function validMutation(value: unknown, actorId?: string, serviceId?: string): va
     && typeof record.numero === 'string' && record.numero.trim().length > 0 && record.numero.length <= 100
     && typeof record.tipoCodigo === 'string' && record.tipoCodigo.trim().length > 0 && record.tipoCodigo.length <= 160
     && typeof record.ubicacion === 'string' && record.ubicacion.trim().length > 0 && record.ubicacion.length <= 500
+  if (record.kind === 'FINDING_CREATE') return isServiceId(record.areaId)
+    && isServiceId(record.findingId)
+    && typeof record.descripcion === 'string' && record.descripcion.trim().length > 0 && record.descripcion.length <= 2_000
+    && typeof record.recomendacionAccion === 'string' && record.recomendacionAccion.trim().length > 0 && record.recomendacionAccion.length <= 2_000
+    && typeof record.responsableNombre === 'string' && record.responsableNombre.trim().length > 0 && record.responsableNombre.length <= 200
+    && typeof record.responsableCorreo === 'string' && record.responsableCorreo.length <= 320
+    && validFindingEvidences(record.evidences)
+  if (record.kind === 'FINDING_STATUS') return isServiceId(record.areaId)
+    && isServiceId(record.findingId)
+    && ['EN_PROCESO', 'CERRADO'].includes(record.estado ?? '')
+    && typeof record.observacionCierre === 'string' && record.observacionCierre.length <= 2_000
+    && Number.isSafeInteger(record.version) && Number(record.version) > 0
+    && validFindingEvidences(record.evidences)
+    && (record.conflict === null || (Boolean(record.conflict) && isServiceId(record.conflict?.id)
+      && typeof record.conflict?.version === 'number'))
   if (record.kind === 'DEVICE_REVIEW') return isServiceId(record.areaId)
     && isServiceId(record.serviceDeviceId)
     && isServiceId(record.reviewId)

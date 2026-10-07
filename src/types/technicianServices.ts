@@ -3,6 +3,7 @@ import type { PestGroup } from './mipCatalogs'
 
 export type DeviceState = 'ACTIVO' | 'FUERA_DE_USO' | 'DANADO'
 export type MipEvaluation = 'C' | 'CP' | 'NC' | 'NA'
+export type FindingState = 'ABIERTO' | 'EN_PROCESO' | 'CERRADO'
 
 export interface TechnicianServiceSummary {
   id: string
@@ -104,6 +105,37 @@ export interface TechnicianDeviceReviewInput {
   observaciones: string
 }
 
+export interface TechnicianFinding {
+  id: string
+  servicioAperturaId: string
+  fechaApertura: string
+  descripcion: string
+  recomendacionAccion: string
+  evidenciasAperturaStoragePaths: string[]
+  evidenciasAperturaLocalIds?: string[]
+  estado: FindingState
+  responsableNombre: string
+  responsableCorreo: string | null
+  servicioCierreId: string | null
+  fechaCierre: string | null
+  evidenciasCierreStoragePaths: string[]
+  evidenciasCierreLocalIds?: string[]
+  observacionCierre: string | null
+  version: number
+}
+
+export interface TechnicianFindingCreateInput {
+  descripcion: string
+  recomendacionAccion: string
+  responsableNombre: string
+  responsableCorreo: string
+}
+
+export interface TechnicianFindingStatusInput {
+  estado: Extract<FindingState, 'EN_PROCESO' | 'CERRADO'>
+  observacionCierre: string
+}
+
 export interface TechnicianArea {
   id: string
   areaId: string
@@ -118,6 +150,7 @@ export interface TechnicianArea {
   version: number
   criterios: TechnicianCriterion[]
   dispositivos: TechnicianDevice[]
+  hallazgos: TechnicianFinding[]
 }
 
 export interface TechnicianServicePackage {
@@ -256,6 +289,31 @@ export interface TechnicianDeviceReviewMutation extends TechnicianMutationBase, 
   conflict: TechnicianDeviceReview | null
 }
 
+export interface TechnicianFindingEvidenceMutation {
+  mediaId: string
+  storagePath: string | null
+}
+
+export interface TechnicianFindingResult {
+  finding: TechnicianFinding
+}
+
+export interface TechnicianFindingCreateMutation extends TechnicianMutationBase, TechnicianFindingCreateInput {
+  kind: 'FINDING_CREATE'
+  areaId: string
+  findingId: string
+  evidences: TechnicianFindingEvidenceMutation[]
+}
+
+export interface TechnicianFindingStatusMutation extends TechnicianMutationBase, TechnicianFindingStatusInput {
+  kind: 'FINDING_STATUS'
+  areaId: string
+  findingId: string
+  version: number
+  evidences: TechnicianFindingEvidenceMutation[]
+  conflict: TechnicianFinding | null
+}
+
 export interface TechnicianMediaDraft {
   schemaVersion: 1
   id: string
@@ -271,4 +329,4 @@ export interface TechnicianMediaDraft {
   savedAt: string
 }
 
-export type TechnicianMutation = TechnicianAreaOrderMutation | TechnicianCriterionEvaluationMutation | TechnicianAreaAccessMutation | TechnicianDeviceCreationMutation | TechnicianDeviceReviewMutation
+export type TechnicianMutation = TechnicianAreaOrderMutation | TechnicianCriterionEvaluationMutation | TechnicianAreaAccessMutation | TechnicianDeviceCreationMutation | TechnicianDeviceReviewMutation | TechnicianFindingCreateMutation | TechnicianFindingStatusMutation

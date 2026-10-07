@@ -4,6 +4,7 @@ import type {
   TechnicianCriterion,
   TechnicianDevice,
   TechnicianDeviceTypeSnapshot,
+  TechnicianFinding,
   TechnicianProduct,
   TechnicianServicePackage,
   TechnicianServiceSummary,
@@ -74,8 +75,27 @@ async function products(client: PoolClient, serviceId: string, frozen: boolean):
   return rows.map(row => row.record)
 }
 
+async function findings(client: PoolClient, serviceId: string): Promise<Array<TechnicianFinding & { areaId: string }>> {
+  const { rows } = await client.query<{ areaId: string; record: TechnicianFinding }>(`select h.area_id as "areaId",jsonb_build_object(
+    'id',h.id,'servicioAperturaId',h.servicio_apertura_id,'fechaApertura',h.fecha_apertura,
+    'descripcion',h.descripcion,'recomendacionAccion',h.recomendacion_accion,
+    'evidenciasAperturaStoragePaths',coalesce(h.evidencias_apertura_storage_paths,'[]'::jsonb),
+    'estado',h.estado,'responsableNombre',h.responsable_nombre,'responsableCorreo',h.responsable_correo,
+    'servicioCierreId',h.servicio_cierre_id,'fechaCierre',h.fecha_cierre,
+    'evidenciasCierreStoragePaths',coalesce(h.evidencias_cierre_storage_paths,'[]'::jsonb),
+    'observacionCierre',h.observacion_cierre,'version',h.version
+  ) as record
+  from public.hallazgos h join public.servicios current_service on current_service.id=$1
+  join public.servicios opening_service on opening_service.id=h.servicio_apertura_id
+  where h.sede_id=current_service.sede_id and (
+    h.servicio_apertura_id=current_service.id or h.servicio_cierre_id=current_service.id
+    or (h.estado in ('ABIERTO','EN_PROCESO') and opening_service.inicio_programado<current_service.inicio_programado)
+  ) order by h.area_id,case h.estado when 'ABIERTO' then 0 when 'EN_PROCESO' then 1 else 2 end,h.fecha_apertura,h.id`, [serviceId])
+  return rows.map(row => ({ ...row.record, areaId: row.areaId }))
+}
+
 async function frozenAreas(client: PoolClient, serviceId: string): Promise<TechnicianArea[]> {
-  const areas = (await client.query<Omit<TechnicianArea, 'criterios' | 'dispositivos'>>(`select id,area_id as "areaId",nombre_snapshot as nombre,
+  const areas = (await client.query<Omit<TechnicianArea, 'criterios' | 'dispositivos' | 'hallazgos'>>(`select id,area_id as "areaId",nombre_snapshot as nombre,
     es_externa_snapshot as "esExterna",posicion_inicial as "posicionInicial",posicion_recorrido as "posicionRecorrido",
     sin_acceso as "sinAcceso",sin_acceso_descripcion as "sinAccesoDescripcion",sin_acceso_foto_storage_path as "sinAccesoFotoStoragePath",version::integer
     from public.servicio_areas where servicio_id=$1 order by posicion_recorrido,id`, [serviceId])).rows
@@ -97,13 +117,15 @@ async function frozenAreas(client: PoolClient, serviceId: string): Promise<Techn
     from public.servicio_dispositivos sd
     left join public.revisiones_dispositivos r on r.servicio_dispositivo_id=sd.id
     where sd.servicio_id=$1 order by sd.servicio_area_id,lower(sd.numero_snapshot),sd.id`, [serviceId])).rows
+  const findingRows = await findings(client, serviceId)
   return areas.map(area => ({ ...area,
     criterios: criteria.filter(item => item.servicioAreaId === area.id).map(item => ({ id:item.id,criterioId:item.criterioId,nombre:item.nombre,soloAreaExterna:item.soloAreaExterna,evaluacion:item.evaluacion,observacion:item.observacion,evidenciasStoragePaths:item.evidenciasStoragePaths,version:item.version })),
-    dispositivos: devices.filter(item => item.servicioAreaId === area.id).map(item => ({ id:item.id,dispositivoId:item.dispositivoId,numero:item.numero,ubicacion:item.ubicacion,tipoCodigo:item.tipoCodigo,tipoNombre:item.tipoNombre,clasificacion:item.clasificacion,plagas:item.plagas,estadoAnterior:item.estadoAnterior,creadoDuranteServicio:item.creadoDuranteServicio,revisado:item.revisado,revision:item.revision })) }))
+    dispositivos: devices.filter(item => item.servicioAreaId === area.id).map(item => ({ id:item.id,dispositivoId:item.dispositivoId,numero:item.numero,ubicacion:item.ubicacion,tipoCodigo:item.tipoCodigo,tipoNombre:item.tipoNombre,clasificacion:item.clasificacion,plagas:item.plagas,estadoAnterior:item.estadoAnterior,creadoDuranteServicio:item.creadoDuranteServicio,revisado:item.revisado,revision:item.revision })),
+    hallazgos: findingRows.filter(item => item.areaId === area.areaId).map(({ areaId: _areaId, ...item }) => item) }))
 }
 
 async function liveAreas(client: PoolClient, serviceId: string): Promise<TechnicianArea[]> {
-  const areas = (await client.query<Omit<TechnicianArea, 'criterios' | 'dispositivos'>>(`select a.id,a.id as "areaId",a.nombre,a.es_externa as "esExterna",
+  const areas = (await client.query<Omit<TechnicianArea, 'criterios' | 'dispositivos' | 'hallazgos'>>(`select a.id,a.id as "areaId",a.nombre,a.es_externa as "esExterna",
     (row_number() over(order by lower(btrim(a.nombre)),a.id)-1)::integer as "posicionInicial",
     (row_number() over(order by lower(btrim(a.nombre)),a.id)-1)::integer as "posicionRecorrido",false as "sinAcceso",
     null::text as "sinAccesoDescripcion",null::text as "sinAccesoFotoStoragePath",1::integer as version
@@ -122,9 +144,11 @@ async function liveAreas(client: PoolClient, serviceId: string): Promise<Technic
       order by lower(btrim(c.nombre)),c.clave) as items from public.configuracion c
       where c.categoria='PLAGA' and c.activo and c.clasificacion_mip=t.clasificacion) pests on true
     where s.id=$1 order by d.area_id,lower(btrim(d.numero)),d.id`, [serviceId])).rows
+  const findingRows = await findings(client, serviceId)
   return areas.map(area => ({ ...area,
     criterios: criteria.filter(item => item.areaId === area.areaId).map(item => ({ id:item.id,criterioId:item.criterioId,nombre:item.nombre,soloAreaExterna:item.soloAreaExterna,evaluacion:item.evaluacion,observacion:item.observacion,evidenciasStoragePaths:item.evidenciasStoragePaths,version:item.version })),
-    dispositivos: devices.filter(item => item.areaId === area.areaId).map(item => ({ id:item.id,dispositivoId:item.dispositivoId,numero:item.numero,ubicacion:item.ubicacion,tipoCodigo:item.tipoCodigo,tipoNombre:item.tipoNombre,clasificacion:item.clasificacion,plagas:item.plagas,estadoAnterior:item.estadoAnterior,creadoDuranteServicio:item.creadoDuranteServicio,revisado:item.revisado,revision:item.revision })) }))
+    dispositivos: devices.filter(item => item.areaId === area.areaId).map(item => ({ id:item.id,dispositivoId:item.dispositivoId,numero:item.numero,ubicacion:item.ubicacion,tipoCodigo:item.tipoCodigo,tipoNombre:item.tipoNombre,clasificacion:item.clasificacion,plagas:item.plagas,estadoAnterior:item.estadoAnterior,creadoDuranteServicio:item.creadoDuranteServicio,revisado:item.revisado,revision:item.revision })),
+    hallazgos: findingRows.filter(item => item.areaId === area.areaId).map(({ areaId: _areaId, ...item }) => item) }))
 }
 
 async function deviceTypes(client: PoolClient, serviceId: string, frozen: boolean): Promise<TechnicianDeviceTypeSnapshot[]> {
