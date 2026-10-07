@@ -113,6 +113,7 @@ test('prepared package survives reload and remains available without connection'
   await page.getByRole('button', { name: 'Preparar', exact: true }).click()
   await page.getByRole('button', { name: 'Abrir servicio' }).click()
   await expect(page.getByText('Gel insecticida')).toBeVisible()
+  await expect.poll(() => api.packageReads).toBe(2)
   const readsBeforeReload = api.packageReads
   await page.addInitScript(() => Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }))
   await page.reload()
