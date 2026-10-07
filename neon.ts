@@ -31,7 +31,7 @@ export default defineConfig({
     'services-outbox': {
       type: 'schedule',
       function: 'api',
-      cron: '*/15 * * * *',
+      cron: '0 13-23 * * *',
       functionPath: '/jobs/services',
     },
   },

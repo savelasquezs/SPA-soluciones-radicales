@@ -1,0 +1,36 @@
+name: Temporary Neon function bundle
+on:
+  push:
+    branches: [develop]
+    paths:
+      - neon.ts
+      - .github/workflows/neon-function-bundle.yml
+permissions:
+  contents: read
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Bundle Neon API
+        run: |
+          mkdir -p neon-function
+          npx --no-install esbuild functions/api/index.ts \
+            --bundle \
+            --platform=node \
+            --target=node24 \
+            --format=esm \
+            --outfile=neon-function/index.mjs
+          cd neon-function
+          zip -q ../neon-function.zip index.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: neon-function-bundle
+          path: neon-function.zip
+          retention-days: 1
