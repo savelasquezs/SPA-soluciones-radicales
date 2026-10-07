@@ -1,6 +1,10 @@
 name: Documentation video
 
 on:
+  push:
+    branches: [develop]
+    paths:
+      - '.github/documentation-video-trigger'
   workflow_dispatch:
     inputs:
       voice:
