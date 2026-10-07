@@ -257,7 +257,7 @@ onBeforeUnmount(() => { alive = false; cleanupPending() })
 .mip-page__header, .mip-page__actions, .mip-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-12); }
 .mip-page__header h1 { margin: 0; font-size: 1.25rem; font-weight: 500; }
 .mip-page__actions { justify-content: flex-end; gap: var(--space-8); }
-.mip-tabs { display: flex; gap: var(--space-8); border-bottom: 1px solid var(--border); }
+.mip-tabs { display: flex; max-width: 100%; gap: var(--space-8); overflow-x: auto; border-bottom: 1px solid var(--border); }
 .mip-tabs button { min-height: 40px; padding: .55rem .75rem; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--text-secondary); cursor: pointer; white-space: nowrap; }
 .mip-tabs button[aria-current='page'] { color: var(--text); border-bottom-color: var(--accent); }
 .mip-tabs--state { border-bottom: 0; }
