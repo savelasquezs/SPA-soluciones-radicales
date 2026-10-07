@@ -1,50 +1,110 @@
 {
-  "title": "Cómo crear un producto",
-  "subtitle": "Catálogos MIP",
+  "title": "Gestión de productos",
+  "subtitle": "Crear, consultar y administrar productos MIP",
   "segments": [
     {
       "id": "open-catalogs",
       "text": "En Configuración, abre Catálogos MIP y entra en Productos."
     },
     {
+      "id": "catalog-overview",
+      "text": "Aquí puedes consultar productos activos e inactivos, buscarlos y acceder a sus acciones."
+    },
+    {
       "id": "new-product",
-      "text": "Selecciona Nuevo producto para comenzar. Los campos marcados con asterisco son obligatorios."
+      "text": "Selecciona Nuevo producto. Los campos marcados con asterisco son obligatorios."
     },
     {
       "id": "required-fields",
-      "text": "Completa el nombre comercial, el principio activo o composición y la dosis de aplicación."
+      "text": "Registra el nombre comercial, el principio activo o composición y la dosis de aplicación."
     },
     {
-      "id": "optional-details",
-      "text": "También puedes registrar el número sanitario, el grado toxicológico, el laboratorio o fabricante y el antídoto."
+      "id": "optional-fields",
+      "text": "También puedes añadir el registro sanitario, el grado toxicológico, el laboratorio o fabricante y el antídoto."
     },
     {
       "id": "coverage-intro",
-      "text": "En Plagas que controla puedes elegir una categoría completa o seleccionar plagas específicas."
+      "text": "En Plagas que controla puedes combinar categorías completas con plagas individuales."
     },
     {
       "id": "coverage-category",
-      "text": "Si eliges una categoría completa, por ejemplo todos los insectos rastreros, las plagas de esa categoría quedan incluidas automáticamente."
+      "text": "Selecciona Insectos rastreros para incluir automáticamente todas las plagas de esa categoría."
     },
     {
       "id": "coverage-specific",
-      "text": "También puedes agregar una plaga concreta de otra categoría, como Mosca doméstica, sin seleccionar todos los insectos voladores. Puedes combinar categorías completas y plagas específicas según el producto. Cuando termines, presiona Listo para volver al formulario."
+      "text": "Después añade Mosca doméstica como plaga individual, sin seleccionar toda la categoría de insectos voladores."
+    },
+    {
+      "id": "coverage-close",
+      "text": "Cuando termines la selección, presiona Listo para volver al formulario."
     },
     {
       "id": "methods",
-      "text": "Selecciona uno o varios métodos de aplicación que correspondan al producto."
+      "text": "En Métodos de aplicación selecciona una o varias opciones. En este ejemplo usaremos Aspersión y Termonebulización."
     },
     {
       "id": "technical-sheet",
-      "text": "La ficha técnica es opcional. Puedes adjuntar un PDF o una imagen para conservarla junto al producto. Al seleccionarla, verás su nombre en el formulario y el archivo se cargará cuando guardes."
+      "text": "Adjunta la ficha técnica en PDF o imagen. El archivo quedará vinculado al producto."
     },
     {
-      "id": "save",
-      "text": "Revisa la información y crea el producto. El sistema prepara la ficha técnica y guarda todos los datos; espera a que finalice antes de cerrar. Cuando termine, el formulario se cerrará automáticamente."
+      "id": "save-product",
+      "text": "Revisa la información y selecciona Crear producto. Espera hasta que el formulario se cierre."
+    },
+    {
+      "id": "open-detail",
+      "text": "El producto aparece en la lista. Selecciona su nombre para consultar el detalle."
+    },
+    {
+      "id": "detail-overview",
+      "text": "El detalle reúne la composición, la dosis, los métodos, las plagas controladas y los demás datos registrados."
+    },
+    {
+      "id": "open-sheet",
+      "text": "Selecciona Ver ficha técnica para abrir el archivo guardado."
+    },
+    {
+      "id": "close-sheet",
+      "text": "Después de revisar la ficha técnica, regresa al detalle del producto."
+    },
+    {
+      "id": "open-edit",
+      "text": "El botón Editar permite actualizar la información del producto."
+    },
+    {
+      "id": "save-edit",
+      "text": "Cambiaremos la dosis de aplicación y guardaremos los cambios."
+    },
+    {
+      "id": "edit-result",
+      "text": "La lista refleja inmediatamente la información actualizada."
+    },
+    {
+      "id": "delete-action",
+      "text": "El botón Eliminar solicita confirmación antes de continuar."
+    },
+    {
+      "id": "delete-restriction",
+      "text": "La eliminación solo es posible cuando el producto no tiene referencias ni historial. En este ejemplo cancelaremos la acción."
+    },
+    {
+      "id": "deactivate-action",
+      "text": "Desactivar conserva el historial, pero impide utilizar el producto en nuevas selecciones."
+    },
+    {
+      "id": "confirm-deactivate",
+      "text": "Confirma la desactivación para mover el producto fuera de la lista de activos."
+    },
+    {
+      "id": "inactive-tab",
+      "text": "El producto queda disponible en la pestaña Inactivos."
+    },
+    {
+      "id": "reactivate-note",
+      "text": "Desde allí puedes consultar su detalle, editarlo o reactivarlo cuando vuelva a estar disponible."
     },
     {
       "id": "done",
-      "text": "Listo. El producto queda disponible en el catálogo para utilizarlo en los servicios."
+      "text": "Así se crea, consulta y administra un producto completo dentro de Catálogos MIP."
     }
   ]
 }

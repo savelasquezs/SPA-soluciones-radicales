@@ -13,6 +13,7 @@ La documentación versionada es la referencia viva de Soluciones Radicales MIP.
 | Arquitectura y decisiones | `docs/architecture/` |
 | Base de datos y migraciones | `database/README.md` |
 | Proceso de implementación | `docs/development/workflow.md` |
+| Producción de videos del manual | `docs/development/documentation-videos.md` |
 | Estado de implementación | `tasks.md`, código y pruebas |
 | Comportamiento implementado | Código y pruebas |
 
@@ -34,7 +35,9 @@ docs/
 │   └── overview.md
 ├── development/
 │   ├── cloudflare-workers.md
+│   ├── documentation-videos.md
 │   ├── neon-setup.md
+│   ├── product-management-video-storyboard.md
 │   └── workflow.md
 ├── frontend/
 │   └── reuse.md
@@ -53,6 +56,7 @@ docs/
 - Un patrón reutilizable cambia en `docs/frontend/reuse.md`.
 - Un criterio transversal de interacción cambia en `docs/ux-guidelines.md`.
 - Un token o componente visual cambia en `docs/design-system.md`.
+- El estándar audiovisual cambia en `docs/development/documentation-videos.md` y, si afecta una producción concreta, en su storyboard.
 - Una mejora aprobada fuera de alcance se registra en `tasks.md`.
 - No duplicar la misma regla en varios documentos; enlazar su fuente principal.
 
@@ -60,3 +64,8 @@ docs/
 
 - [Comportamiento manual y variables](product/certificates.md).
 - [Motor, configuración privada y comprobación de despliegue](architecture/certificates.md).
+
+### Videos del manual
+
+- [Estándar de producción](development/documentation-videos.md).
+- [Storyboard del video de referencia: Gestión de productos](development/product-management-video-storyboard.md).

@@ -1,4 +1,5 @@
 name: Documentation video
+run-name: Gestión de productos · ${{ inputs.voice || vars.GOOGLE_TTS_VOICE || 'es-US-Chirp3-HD-Kore' }}
 
 on:
   workflow_dispatch:
@@ -80,7 +81,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: documentation-video-mip-catalogs
+          name: documentation-video-gestion-productos
           path: |
             docs-media/final/
             docs-media/audio/

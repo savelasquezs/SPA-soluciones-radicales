@@ -1,11 +1,13 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { expect, test, type Locator, type Page } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
-type NarrationSegment = { id: string; text: string }
-type NarrationContent = { title: string; subtitle: string; segments: NarrationSegment[] }
-type AudioTimings = { segments?: Record<string, { durationMs?: number }> }
+import {
+  createDocumentationVideo,
+  type AudioTimings,
+  type NarrationContent,
+} from './video-harness'
 
 const narration = JSON.parse(
   readFileSync(new URL('./mip-catalogs.narration.json', import.meta.url), 'utf8'),
@@ -19,21 +21,8 @@ try {
   audioTimings = {}
 }
 
-const CAPTIONS: Record<string, string> = {
-  'open-catalogs': 'Abre Configuración → Catálogos MIP',
-  'new-product': 'Nuevo producto · * Campos obligatorios',
-  'required-fields': 'Nombre · Principio activo · Dosis',
-  'optional-details': 'Registro · Grado toxicológico · Laboratorio · Antídoto',
-  'coverage-intro': 'Categorías completas o plagas específicas',
-  'coverage-category': 'Una categoría incluye automáticamente sus plagas',
-  'coverage-specific': 'También puedes añadir plagas individuales',
-  methods: 'Uno o varios métodos de aplicación',
-  'technical-sheet': 'Ficha técnica opcional · PDF o imagen',
-  save: 'Revisa y crea el producto',
-  done: 'Producto disponible en el catálogo',
-}
+const createdProductId = '10000000-0000-4000-8000-000000000099'
 
-const productId = '10000000-0000-4000-8000-000000000001'
 const methods = [
   {
     id: '20000000-0000-4000-8000-000000000001',
@@ -114,36 +103,66 @@ const profile = {
 }
 
 const existingProduct = {
-  id: productId,
-  nombre: 'Producto de demostración existente',
-  principioActivo: 'Composición de referencia',
-  dosisAplicacion: 'Según ficha técnica',
+  id: '10000000-0000-4000-8000-000000000001',
+  nombre: 'DEMAND DUO',
+  principioActivo: 'Lambdacyhalotrina - Thiamethoxam',
+  dosisAplicacion: '8.5 ml / 1 litro',
   registroSanitario: null,
-  gradoToxicologico: null,
-  fabricante: null,
-  antidoto: null,
+  gradoToxicologico: 'III',
+  fabricante: 'Laboratorio de referencia',
+  antidoto: 'Según ficha de seguridad',
   fichaTecnicaStoragePath: null,
-  categorias: ['INSECTOS_RASTREROS'],
+  categorias: ['INSECTOS_RASTREROS', 'INSECTOS_VOLADORES'],
   metodos: [methods[0]],
   plagas: [],
   activo: true,
   version: 1,
 }
 
-function segmentText(id: string): string {
-  const segment = narration.segments.find(item => item.id === id)
-  if (!segment) throw new Error(`No existe el segmento de narración ${id}.`)
-  return segment.text
+type ProductInput = {
+  nombre: string
+  principioActivo: string
+  dosisAplicacion: string
+  registroSanitario: string | null
+  gradoToxicologico: string | null
+  fabricante: string | null
+  antidoto: string | null
+  fichaTecnicaStoragePath: string | null
+  metodoIds: string[]
+  plagaIds: string[]
+  categorias: string[]
+  version?: number
 }
 
-function segmentDuration(id: string): number {
-  const measured = audioTimings.segments?.[id]?.durationMs
-  if (typeof measured === 'number' && measured > 0) return measured
-  return Math.max(1_800, Math.round(segmentText(id).length * 54))
+type DemoProduct = Omit<ProductInput, 'metodoIds' | 'plagaIds'> & {
+  id: string
+  metodos: typeof methods
+  plagas: typeof pests
+  activo: boolean
+  version: number
 }
 
-async function setupDemo(page: Page) {
-  const products = [structuredClone(existingProduct)]
+function productFromInput(input: ProductInput, previous?: DemoProduct): DemoProduct {
+  return {
+    id: previous?.id ?? createdProductId,
+    nombre: input.nombre,
+    principioActivo: input.principioActivo,
+    dosisAplicacion: input.dosisAplicacion,
+    registroSanitario: input.registroSanitario,
+    gradoToxicologico: input.gradoToxicologico,
+    fabricante: input.fabricante,
+    antidoto: input.antidoto,
+    fichaTecnicaStoragePath: input.fichaTecnicaStoragePath,
+    categorias: input.categorias,
+    metodos: methods.filter(item => input.metodoIds.includes(item.id)),
+    plagas: pests.filter(item => input.plagaIds.includes(item.id)),
+    activo: previous?.activo ?? true,
+    version: (previous?.version ?? 0) + 1,
+  }
+}
+
+async function setupDemo(page: Page): Promise<void> {
+  const products: DemoProduct[] = [structuredClone(existingProduct) as DemoProduct]
 
   await page.addInitScript(() => {
     class DemoWorker {
@@ -158,7 +177,7 @@ async function setupDemo(page: Page) {
       }
 
       terminate(): void {
-        // Sin proceso real: solo evita comprimir archivos de demostración.
+        // La demostración conserva el archivo original para evitar procesos pesados.
       }
     }
 
@@ -166,6 +185,182 @@ async function setupDemo(page: Page) {
       configurable: true,
       writable: true,
       value: DemoWorker,
+    })
+
+    function showTechnicalSheetPreview(): void {
+      document.getElementById('docs-file-preview')?.remove()
+      const overlay = document.createElement('section')
+      overlay.id = 'docs-file-preview'
+      overlay.setAttribute('role', 'dialog')
+      overlay.setAttribute('aria-label', 'Vista previa de ficha técnica')
+      overlay.innerHTML = `
+        <div class="docs-preview-shell">
+          <header class="docs-preview-toolbar">
+            <div>
+              <strong>Ficha técnica</strong>
+              <span>ficha-tecnica-demo.pdf</span>
+            </div>
+            <button type="button" aria-label="Volver al detalle del producto">Volver al detalle</button>
+          </header>
+          <div class="docs-preview-stage">
+            <article class="docs-preview-page">
+              <header>
+                <div class="docs-preview-brand"><span>Soluciones</span> <strong>radicales</strong></div>
+                <div class="docs-preview-label">FICHA TÉCNICA</div>
+              </header>
+              <h1>Producto demostración</h1>
+              <p class="docs-preview-lead">Producto de demostración para el manual de usuario.</p>
+              <dl>
+                <div><dt>Principio activo</dt><dd>Cipermetrina 40%</dd></div>
+                <div><dt>Dosis de aplicación</dt><dd>10 ml / L</dd></div>
+                <div><dt>Registro sanitario</dt><dd>RGSP-DEMO-001</dd></div>
+                <div><dt>Grado toxicológico</dt><dd>III</dd></div>
+                <div><dt>Fabricante</dt><dd>Laboratorio de demostración</dd></div>
+                <div><dt>Antídoto</dt><dd>Según ficha de seguridad</dd></div>
+              </dl>
+              <section>
+                <h2>Indicaciones</h2>
+                <p>Consultar siempre la etiqueta y la documentación oficial del producto antes de utilizarlo.</p>
+              </section>
+            </article>
+          </div>
+        </div>
+      `
+      Object.assign(overlay.style, {
+        position: 'fixed',
+        inset: '0',
+        zIndex: '2147483644',
+        display: 'grid',
+        placeItems: 'center',
+        padding: '24px',
+        background: 'rgba(3,10,16,.88)',
+        fontFamily: 'Inter, system-ui, sans-serif',
+      })
+
+      const shell = overlay.querySelector('.docs-preview-shell') as HTMLElement
+      Object.assign(shell.style, {
+        width: 'min(1040px, 94vw)',
+        height: 'min(620px, 88vh)',
+        display: 'grid',
+        gridTemplateRows: 'auto 1fr',
+        overflow: 'hidden',
+        border: '1px solid rgba(255,255,255,.12)',
+        borderRadius: '14px',
+        background: '#141a20',
+        boxShadow: '0 24px 70px rgba(0,0,0,.42)',
+      })
+      const toolbar = overlay.querySelector('.docs-preview-toolbar') as HTMLElement
+      Object.assign(toolbar.style, {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '16px',
+        minHeight: '64px',
+        padding: '12px 16px',
+        borderBottom: '1px solid rgba(255,255,255,.10)',
+        color: '#f7fafc',
+      })
+      const toolbarCopy = toolbar.querySelector('div') as HTMLElement
+      Object.assign(toolbarCopy.style, { display: 'grid', gap: '3px' })
+      const toolbarStrong = toolbar.querySelector('strong') as HTMLElement
+      Object.assign(toolbarStrong.style, { fontSize: '15px', fontWeight: '650' })
+      const toolbarSpan = toolbar.querySelector('span') as HTMLElement
+      Object.assign(toolbarSpan.style, { color: '#aeb8c2', fontSize: '13px' })
+      const close = toolbar.querySelector('button') as HTMLButtonElement
+      Object.assign(close.style, {
+        minHeight: '36px',
+        padding: '7px 12px',
+        border: '1px solid rgba(255,255,255,.16)',
+        borderRadius: '8px',
+        background: '#1e2832',
+        color: '#fff',
+        cursor: 'pointer',
+        font: 'inherit',
+        fontSize: '13px',
+        fontWeight: '620',
+      })
+      close.addEventListener('click', () => overlay.remove())
+
+      const stage = overlay.querySelector('.docs-preview-stage') as HTMLElement
+      Object.assign(stage.style, {
+        display: 'grid',
+        placeItems: 'start center',
+        overflow: 'auto',
+        padding: '24px',
+        background: '#252d35',
+      })
+      const sheet = overlay.querySelector('.docs-preview-page') as HTMLElement
+      Object.assign(sheet.style, {
+        width: 'min(720px, 100%)',
+        minHeight: '920px',
+        padding: '46px 52px',
+        background: '#fff',
+        color: '#17212b',
+        boxShadow: '0 14px 34px rgba(0,0,0,.22)',
+      })
+      const sheetHeader = sheet.querySelector('header') as HTMLElement
+      Object.assign(sheetHeader.style, {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '20px',
+        paddingBottom: '18px',
+        borderBottom: '3px solid #0877B9',
+      })
+      const brand = sheet.querySelector('.docs-preview-brand') as HTMLElement
+      Object.assign(brand.style, { fontSize: '22px', fontWeight: '680', letterSpacing: '-.02em' })
+      ;(brand.querySelector('span') as HTMLElement).style.color = '#0877B9'
+      const brandStrong = brand.querySelector('strong') as HTMLElement
+      brandStrong.style.color = '#5B8F18'
+      brandStrong.style.fontWeight = '560'
+      const label = sheet.querySelector('.docs-preview-label') as HTMLElement
+      Object.assign(label.style, { color: '#53606c', fontSize: '12px', fontWeight: '700', letterSpacing: '.12em' })
+      const title = sheet.querySelector('h1') as HTMLElement
+      Object.assign(title.style, { margin: '32px 0 8px', fontSize: '30px', letterSpacing: '-.025em' })
+      const lead = sheet.querySelector('.docs-preview-lead') as HTMLElement
+      Object.assign(lead.style, { margin: '0 0 30px', color: '#596674', fontSize: '14px' })
+      const list = sheet.querySelector('dl') as HTMLElement
+      Object.assign(list.style, { display: 'grid', margin: '0', borderTop: '1px solid #dbe1e6' })
+      sheet.querySelectorAll('dl > div').forEach(row => {
+        Object.assign((row as HTMLElement).style, {
+          display: 'grid',
+          gridTemplateColumns: '190px 1fr',
+          gap: '20px',
+          padding: '14px 0',
+          borderBottom: '1px solid #dbe1e6',
+        })
+      })
+      sheet.querySelectorAll('dt').forEach(term => Object.assign((term as HTMLElement).style, { color: '#5b6773', fontSize: '13px', fontWeight: '650' }))
+      sheet.querySelectorAll('dd').forEach(value => Object.assign((value as HTMLElement).style, { margin: '0', fontSize: '14px' }))
+      const section = sheet.querySelector('section') as HTMLElement
+      Object.assign(section.style, { marginTop: '34px', padding: '20px', borderRadius: '10px', background: '#f2f7fa' })
+      const sectionTitle = section.querySelector('h2') as HTMLElement
+      Object.assign(sectionTitle.style, { margin: '0 0 8px', fontSize: '16px' })
+      const sectionCopy = section.querySelector('p') as HTMLElement
+      Object.assign(sectionCopy.style, { margin: '0', color: '#4f5d69', fontSize: '13px', lineHeight: '1.5' })
+      document.body.appendChild(overlay)
+    }
+
+    Object.defineProperty(window, 'open', {
+      configurable: true,
+      writable: true,
+      value: () => {
+        let href = 'about:blank'
+        const location = {}
+        Object.defineProperty(location, 'href', {
+          configurable: true,
+          get: () => href,
+          set: (value: string) => {
+            href = String(value)
+            if (href.startsWith('https://')) showTechnicalSheetPreview()
+          },
+        })
+        return {
+          opener: null,
+          location,
+          close: () => document.getElementById('docs-file-preview')?.remove(),
+        } as unknown as Window
+      },
     })
   })
 
@@ -230,37 +425,73 @@ async function setupDemo(page: Page) {
       return
     }
 
+    if (path === '/api/files/master/read-url' && methodName === 'POST') {
+      await route.fulfill({
+        json: {
+          url: 'https://files.example.test/products/demo/ficha-tecnica-demo.pdf',
+        },
+      })
+      return
+    }
+
     if (path === '/api/mip/products' && methodName === 'GET') {
-      await route.fulfill({ json: products.filter(row => row.activo) })
+      const active = url.searchParams.get('active') !== 'false'
+      await route.fulfill({ json: products.filter(row => row.activo === active) })
       return
     }
 
     if (path === '/api/mip/products' && methodName === 'POST') {
-      const body = request.postDataJSON() as {
-        nombre: string
-        principioActivo: string
-        dosisAplicacion: string
-        registroSanitario: string | null
-        gradoToxicologico: string | null
-        fabricante: string | null
-        antidoto: string | null
-        fichaTecnicaStoragePath: string | null
-        metodoIds: string[]
-        plagaIds: string[]
-        categorias: string[]
-      }
-
-      const created = {
-        ...existingProduct,
-        ...body,
-        id: '10000000-0000-4000-8000-000000000099',
-        metodos: methods.filter(item => body.metodoIds.includes(item.id)),
-        plagas: pests.filter(item => body.plagaIds.includes(item.id)),
-        activo: true,
-        version: 1,
-      }
+      const body = request.postDataJSON() as ProductInput
+      const created = productFromInput(body)
       products.push(created)
       await route.fulfill({ status: 201, json: created })
+      return
+    }
+
+    const stateMatch = path.match(/^\/api\/mip\/products\/([^/]+)\/state$/)
+    if (stateMatch && methodName === 'PATCH') {
+      const id = decodeURIComponent(stateMatch[1]!)
+      const body = request.postDataJSON() as { activo: boolean }
+      const index = products.findIndex(item => item.id === id)
+      if (index < 0) {
+        await route.fulfill({ status: 404, json: { error: 'Producto no encontrado.' } })
+        return
+      }
+      products[index] = {
+        ...products[index],
+        activo: body.activo,
+        version: products[index].version + 1,
+      }
+      await route.fulfill({ json: products[index] })
+      return
+    }
+
+    const productMatch = path.match(/^\/api\/mip\/products\/([^/]+)$/)
+    if (productMatch && methodName === 'GET') {
+      const id = decodeURIComponent(productMatch[1]!)
+      const product = products.find(item => item.id === id)
+      await route.fulfill(product ? { json: product } : { status: 404, json: { error: 'Producto no encontrado.' } })
+      return
+    }
+
+    if (productMatch && methodName === 'PATCH') {
+      const id = decodeURIComponent(productMatch[1]!)
+      const body = request.postDataJSON() as ProductInput
+      const index = products.findIndex(item => item.id === id)
+      if (index < 0) {
+        await route.fulfill({ status: 404, json: { error: 'Producto no encontrado.' } })
+        return
+      }
+      products[index] = productFromInput(body, products[index])
+      await route.fulfill({ json: products[index] })
+      return
+    }
+
+    if (productMatch && methodName === 'DELETE') {
+      const id = decodeURIComponent(productMatch[1]!)
+      const index = products.findIndex(item => item.id === id)
+      if (index >= 0) products.splice(index, 1)
+      await route.fulfill({ status: 204, body: '' })
       return
     }
 
@@ -268,433 +499,213 @@ async function setupDemo(page: Page) {
   })
 }
 
-function brandLockup(): string {
-  return `
-    <div class="brand-lockup">
-      <img class="brand-symbol" src="http://127.0.0.1:5174/favicon.png" alt="" />
-      <div class="brand-copy">
-        <div class="brand-name"><span>Soluciones</span> <strong>radicales</strong></div>
-        <div class="brand-tagline">CONTROL INTEGRADO DE PLAGAS</div>
-      </div>
-    </div>
-  `
-}
-
-async function showIntro(page: Page) {
-  await page.setContent(`
-    <!doctype html>
-    <html lang="es">
-      <head>
-        <meta charset="utf-8" />
-        <style>
-          * { box-sizing: border-box; }
-          html, body { width: 100%; height: 100%; margin: 0; }
-          body {
-            display: grid;
-            place-items: center;
-            overflow: hidden;
-            background:
-              radial-gradient(circle at 20% 18%, rgba(8,119,185,.19), transparent 34rem),
-              radial-gradient(circle at 82% 80%, rgba(91,143,24,.14), transparent 31rem),
-              #0b0c0e;
-            color: #f5f6f8;
-            font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-          }
-          main {
-            display: grid;
-            width: min(820px, 84vw);
-            justify-items: center;
-            gap: 16px;
-            text-align: center;
-            animation: intro 620ms ease both;
-          }
-          .brand-lockup { display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 12px; }
-          .brand-symbol { width: 100px; height: 100px; object-fit: contain; }
-          .brand-copy { text-align: left; }
-          .brand-name { font-size: 31px; font-weight: 650; line-height: 1; letter-spacing: -.025em; }
-          .brand-name span { color: #1797da; }
-          .brand-name strong { color: #7ebc3d; font-weight: 520; }
-          .brand-tagline { margin-top: 7px; color: #cfd5dd; font-size: 12px; letter-spacing: .12em; }
-          .eyebrow { margin: 10px 0 0; color: #aab2bd; font-size: 14px; letter-spacing: .10em; text-transform: uppercase; }
-          h1 { margin: 0; font-size: 47px; line-height: 1.07; font-weight: 670; letter-spacing: -.03em; }
-          p { margin: 0; color: #c9ced6; font-size: 21px; }
-          @keyframes intro {
-            from { opacity: 0; transform: translateY(8px); }
-            to { opacity: 1; transform: translateY(0); }
-          }
-        </style>
-      </head>
-      <body>
-        <main>
-          ${brandLockup()}
-          <div class="eyebrow">Manual de usuario</div>
-          <h1>${narration.title}</h1>
-          <p>${narration.subtitle}</p>
-        </main>
-      </body>
-    </html>
-  `)
-  await page.waitForTimeout(2_350)
-}
-
-async function installRecordingUi(page: Page) {
-  await page.evaluate(() => {
-    document.getElementById('docs-demo-cursor')?.remove()
-    const cursor = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-    cursor.id = 'docs-demo-cursor'
-    cursor.setAttribute('viewBox', '0 0 28 34')
-    cursor.setAttribute('width', '28')
-    cursor.setAttribute('height', '34')
-    cursor.innerHTML = '<path d="M3 2 22 20l-9 1 5 10-5 2-5-10-6 7z" fill="#fff" stroke="#0877B9" stroke-width="2" stroke-linejoin="round"/>'
-    Object.assign(cursor.style, {
-      position: 'fixed',
-      left: '0',
-      top: '0',
-      zIndex: '2147483647',
-      transform: 'translate(640px, 360px)',
-      transition: 'transform 360ms cubic-bezier(.22,.8,.25,1)',
-      filter: 'drop-shadow(0 3px 5px rgba(0,0,0,.28))',
-      pointerEvents: 'none',
-    })
-    document.body.appendChild(cursor)
-  })
-}
-
-async function moveCursor(target: Locator) {
-  await target.scrollIntoViewIfNeeded()
-  const box = await target.boundingBox()
-  if (!box) return
-  const x = box.x + Math.min(box.width * 0.58, Math.max(10, box.width - 10))
-  const y = box.y + Math.min(box.height * 0.56, Math.max(10, box.height - 10))
-  await target.page().evaluate(({ x, y }) => {
-    const cursor = document.getElementById('docs-demo-cursor')
-    if (cursor) cursor.style.transform = `translate(${x}px, ${y}px)`
-  }, { x, y })
-  await target.page().waitForTimeout(380)
-}
-
-async function clickRipple(target: Locator) {
-  const box = await target.boundingBox()
-  if (!box) return
-  const x = box.x + box.width / 2
-  const y = box.y + box.height / 2
-  await target.page().evaluate(({ x, y }) => {
-    const ring = document.createElement('div')
-    Object.assign(ring.style, {
-      position: 'fixed',
-      left: `${x - 10}px`,
-      top: `${y - 10}px`,
-      width: '20px',
-      height: '20px',
-      zIndex: '2147483646',
-      border: '2px solid rgba(8,119,185,.9)',
-      borderRadius: '999px',
-      pointerEvents: 'none',
-      animation: 'docsRipple 480ms ease-out forwards',
-    })
-    if (!document.getElementById('docs-ripple-style')) {
-      const style = document.createElement('style')
-      style.id = 'docs-ripple-style'
-      style.textContent = '@keyframes docsRipple { from { opacity: 1; transform: scale(.6); } to { opacity: 0; transform: scale(2.4); } }'
-      document.head.appendChild(style)
-    }
-    document.body.appendChild(ring)
-    setTimeout(() => ring.remove(), 560)
-  }, { x, y })
-}
-
-async function focusTarget(target: Locator) {
-  await target.evaluate(element => {
-    const html = element as HTMLElement
-    html.dataset.docsOriginalBoxShadow = html.style.boxShadow
-    html.style.boxShadow = '0 0 0 4px rgba(8,119,185,.25)'
-    html.style.transition = 'box-shadow 150ms ease'
-  })
-}
-
-async function releaseTarget(target: Locator) {
-  try {
-    await target.evaluate(element => {
-      const html = element as HTMLElement
-      html.style.boxShadow = html.dataset.docsOriginalBoxShadow ?? ''
-      delete html.dataset.docsOriginalBoxShadow
-    })
-  } catch {
-    // El elemento puede desaparecer después de navegar o confirmar un diálogo.
-  }
-}
-
-async function localZoom(target: Locator, scale = 1.045) {
-  await target.evaluate((element, scale) => {
-    const html = element as HTMLElement
-    html.dataset.docsOriginalTransform = html.style.transform
-    html.dataset.docsOriginalZIndex = html.style.zIndex
-    html.dataset.docsOriginalPosition = html.style.position
-    html.style.position = html.style.position || 'relative'
-    html.style.zIndex = '20'
-    html.style.transformOrigin = 'center center'
-    html.style.transition = 'transform 260ms cubic-bezier(.22,.8,.25,1)'
-    html.style.transform = `scale(${scale})`
-  }, scale)
-  await target.page().waitForTimeout(300)
-}
-
-async function resetLocalZoom(target: Locator) {
-  try {
-    await target.evaluate(element => {
-      const html = element as HTMLElement
-      html.style.transform = html.dataset.docsOriginalTransform ?? ''
-      html.style.zIndex = html.dataset.docsOriginalZIndex ?? ''
-      html.style.position = html.dataset.docsOriginalPosition ?? ''
-      delete html.dataset.docsOriginalTransform
-      delete html.dataset.docsOriginalZIndex
-      delete html.dataset.docsOriginalPosition
-    })
-    await target.page().waitForTimeout(260)
-  } catch {
-    // El elemento puede desaparecer al cerrar una sección.
-  }
-}
-
-async function showCaption(page: Page, text: string) {
-  await page.evaluate(({ text }) => {
-    document.getElementById('docs-demo-caption')?.remove()
-    const caption = document.createElement('div')
-    caption.id = 'docs-demo-caption'
-    caption.textContent = text
-    Object.assign(caption.style, {
-      position: 'fixed',
-      left: '50%',
-      bottom: '24px',
-      transform: 'translateX(-50%)',
-      zIndex: '2147483645',
-      maxWidth: '760px',
-      padding: '10px 17px',
-      border: '1px solid rgba(255,255,255,.12)',
-      borderRadius: '9px',
-      background: 'rgba(11,12,14,.90)',
-      boxShadow: '0 12px 36px rgba(0,0,0,.20)',
-      color: '#fff',
-      fontFamily: 'Inter, system-ui, sans-serif',
-      fontSize: '15px',
-      fontWeight: '560',
-      lineHeight: '1.35',
-      textAlign: 'center',
-      pointerEvents: 'none',
-      backdropFilter: 'blur(6px)',
-    })
-    document.body.appendChild(caption)
-  }, { text })
-}
-
-async function clearCaption(page: Page) {
-  await page.evaluate(() => document.getElementById('docs-demo-caption')?.remove())
-}
-
-async function demoClick(target: Locator) {
-  await moveCursor(target)
-  await focusTarget(target)
-  await clickRipple(target)
-  await target.click()
-  await releaseTarget(target)
-  await target.page().waitForTimeout(230)
-}
-
-async function demoType(target: Locator, text: string) {
-  await moveCursor(target)
-  await focusTarget(target)
-  await target.click()
-  await target.fill('')
-  await target.pressSequentially(text, { delay: 18 })
-  await releaseTarget(target)
-  await target.page().waitForTimeout(90)
-}
-
-async function demoFileUpload(button: Locator, page: Page) {
-  await moveCursor(button)
-  await focusTarget(button)
-  const chooserPromise = page.waitForEvent('filechooser')
-  await clickRipple(button)
-  await button.click()
-  const chooser = await chooserPromise
-  await chooser.setFiles({
-    name: 'ficha-tecnica-demo.pdf',
-    mimeType: 'application/pdf',
-    buffer: Buffer.from('%PDF-1.4\n% Demo Soluciones Radicales\n1 0 obj\n<<>>\nendobj\n%%EOF'),
-  })
-  await releaseTarget(button)
-  await page.waitForTimeout(250)
-}
-
-async function showOutro(page: Page) {
-  await clearCaption(page)
-  await page.evaluate(() => document.getElementById('docs-demo-cursor')?.remove())
-  await page.evaluate(() => {
-    const app = document.getElementById('app')
-    if (app) {
-      app.style.transition = 'opacity 2.05s ease'
-      app.style.opacity = '0'
-    }
-
-    const outro = document.createElement('div')
-    outro.id = 'docs-demo-outro'
-    outro.innerHTML = `
-      <div class="outro-brand">
-        <img src="/favicon.png" alt="" />
-        <div>
-          <div class="outro-name"><span>Soluciones</span> <strong>radicales</strong></div>
-          <div class="outro-tagline">CONTROL INTEGRADO DE PLAGAS</div>
-        </div>
-      </div>
-    `
-    Object.assign(outro.style, {
-      position: 'fixed',
-      inset: '0',
-      zIndex: '2147483647',
-      display: 'grid',
-      placeItems: 'center',
-      background: 'radial-gradient(circle at center, rgba(8,119,185,.12), transparent 34rem), #0b0c0e',
-      opacity: '0',
-      transition: 'opacity 2.25s ease',
-      pointerEvents: 'none',
-      fontFamily: 'Inter, system-ui, sans-serif',
-    })
-    const brand = outro.querySelector('.outro-brand') as HTMLElement
-    Object.assign(brand.style, {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '20px',
-      opacity: '0',
-      transform: 'scale(.96)',
-      transition: 'opacity 2.25s ease, transform 2.25s ease',
-    })
-    const image = outro.querySelector('img') as HTMLImageElement
-    Object.assign(image.style, { width: '118px', height: '118px', objectFit: 'contain' })
-    const name = outro.querySelector('.outro-name') as HTMLElement
-    Object.assign(name.style, { fontSize: '38px', fontWeight: '650', letterSpacing: '-.025em' })
-    ;(name.querySelector('span') as HTMLElement).style.color = '#1797da'
-    const strong = name.querySelector('strong') as HTMLElement
-    strong.style.color = '#7ebc3d'
-    strong.style.fontWeight = '520'
-    const tagline = outro.querySelector('.outro-tagline') as HTMLElement
-    Object.assign(tagline.style, {
-      marginTop: '8px',
-      color: '#cfd5dd',
-      fontSize: '13px',
-      letterSpacing: '.13em',
-    })
-    document.body.appendChild(outro)
-
-    requestAnimationFrame(() => {
-      outro.style.opacity = '1'
-      brand.style.opacity = '1'
-      brand.style.transform = 'scale(1)'
-    })
-  })
-  await page.waitForTimeout(2_700)
-}
-
-test('video: crear un producto en Catálogos MIP', async ({ page }) => {
+test('video: gestión completa de productos en Catálogos MIP', async ({ page }) => {
   await setupDemo(page)
-  const startedAt = Date.now()
-  const timeline: { narration: Array<{ id: string; startMs: number }> } = { narration: [] }
+  const video = createDocumentationVideo({ page, narration, audioTimings })
 
-  await showIntro(page)
+  await video.showIntro()
 
   await page.goto('/configuracion')
   await expect(page.getByRole('heading', { name: 'Configuración', exact: true })).toBeVisible()
-  await installRecordingUi(page)
+  await video.installRecordingUi()
   await page.waitForTimeout(260)
 
-  async function narrate(id: string, action: () => Promise<void>) {
-    const startMs = Date.now() - startedAt
-    timeline.narration.push({ id, startMs })
-    await showCaption(page, CAPTIONS[id] ?? segmentText(id))
-    await page.waitForTimeout(110)
-    await action()
-    const elapsed = Date.now() - startedAt - startMs
-    const minimum = segmentDuration(id) + 80
-    if (elapsed < minimum) await page.waitForTimeout(minimum - elapsed)
-    await clearCaption(page)
-    await page.waitForTimeout(70)
-  }
-
-  const catalogsLink = page.getByRole('link', { name: /Catálogos MIP/ })
-  await narrate('open-catalogs', async () => {
-    await demoClick(catalogsLink)
+  await video.narrate('open-catalogs', async () => {
+    await page.waitForTimeout(500)
+    await video.click(page.getByRole('link', { name: /Catálogos MIP/ }))
     await expect(page.getByRole('button', { name: 'Nuevo producto', exact: true })).toBeVisible()
   })
 
-  const newProduct = page.getByRole('button', { name: 'Nuevo producto', exact: true })
-  await narrate('new-product', async () => {
-    await demoClick(newProduct)
+  await video.narrate('catalog-overview', async () => {
+    const toolbar = page.getByRole('navigation', { name: 'Estado de los registros' })
+    await video.zoom(toolbar)
+    await page.waitForTimeout(550)
+    await video.resetZoom(toolbar)
   })
 
-  const dialog = page.getByRole('dialog', { name: 'Nuevo producto', exact: true })
-  await expect(dialog).toBeVisible()
-
-  await narrate('required-fields', async () => {
-    await demoType(dialog.getByLabel('Nombre comercial'), 'Producto demostración')
-    await demoType(dialog.getByLabel('Principio activo / composición'), 'Cipermetrina 40%')
-    await demoType(dialog.getByLabel('Dosis de aplicación'), '10 ml / L')
+  await video.narrate('new-product', async () => {
+    await page.waitForTimeout(500)
+    await video.click(page.getByRole('button', { name: 'Nuevo producto', exact: true }))
   })
 
-  await narrate('optional-details', async () => {
-    await demoType(dialog.getByLabel('Registro sanitario'), 'RGSP-DEMO-001')
-    await demoType(dialog.getByLabel('Grado toxicológico'), 'III')
-    await demoType(dialog.getByLabel('Laboratorio / fabricante'), 'Laboratorio de demostración')
-    await demoType(dialog.getByLabel('Antídoto'), 'Según ficha de seguridad')
+  const createDialog = page.getByRole('dialog', { name: 'Nuevo producto', exact: true })
+  await expect(createDialog).toBeVisible()
+
+  await video.narrate('required-fields', async () => {
+    await video.type(createDialog.getByLabel('Nombre comercial'), 'Producto demostración')
+    await video.type(createDialog.getByLabel('Principio activo / composición'), 'Cipermetrina 40%')
+    await video.type(createDialog.getByLabel('Dosis de aplicación'), '10 ml / L')
   })
 
-  const coverageButton = dialog.getByRole('button', { name: 'Plagas que controla', exact: true })
-  await narrate('coverage-intro', async () => {
-    await demoClick(coverageButton)
-    const panel = dialog.locator('#product-coverage-options')
+  await video.narrate('optional-fields', async () => {
+    await video.type(createDialog.getByLabel('Registro sanitario'), 'RGSP-DEMO-001')
+    await video.type(createDialog.getByLabel('Grado toxicológico'), 'III')
+    await video.type(createDialog.getByLabel('Laboratorio / fabricante'), 'Laboratorio de demostración')
+    await video.type(createDialog.getByLabel('Antídoto'), 'Según ficha de seguridad')
+  })
+
+  const coverageButton = createDialog.getByRole('button', { name: 'Plagas que controla', exact: true })
+  await video.narrate('coverage-intro', async () => {
+    await page.waitForTimeout(550)
+    await video.click(coverageButton)
+    const panel = createDialog.locator('#product-coverage-options')
     await expect(panel).toBeVisible()
-    await localZoom(panel)
-    await page.waitForTimeout(300)
-    await resetLocalZoom(panel)
+    await video.zoom(panel)
+    await page.waitForTimeout(500)
+    await video.resetZoom(panel)
   })
 
-  await narrate('coverage-category', async () => {
-    await demoClick(dialog.getByLabel('Todos los insectos rastreros', { exact: true }))
-    await expect(dialog.getByText('Incluida por categoría').first()).toBeVisible()
+  await video.narrate('coverage-category', async () => {
+    await page.waitForTimeout(800)
+    await video.click(createDialog.getByLabel('Todos los insectos rastreros', { exact: true }))
+    await expect(createDialog.getByText('Incluida por categoría').first()).toBeVisible()
   })
 
-  await narrate('coverage-specific', async () => {
-    await demoClick(dialog.getByLabel('Mosca doméstica', { exact: true }))
-    await demoClick(dialog.getByRole('button', { name: 'Listo', exact: true }))
+  await video.narrate('coverage-specific', async () => {
+    await page.waitForTimeout(850)
+    await video.click(createDialog.getByLabel('Mosca doméstica', { exact: true }))
+    await expect(createDialog.locator('#product-coverage-options')).toBeVisible()
   })
 
-  await narrate('methods', async () => {
-    const methodsButton = dialog.getByRole('button', { name: 'Métodos de aplicación', exact: true })
-    await demoClick(methodsButton)
-    await demoClick(dialog.getByRole('option', { name: 'Aspersión', exact: true }))
-    await demoClick(dialog.getByRole('option', { name: 'Termonebulización', exact: true }))
-    await demoClick(methodsButton)
+  await video.narrate('coverage-close', async () => {
+    await page.waitForTimeout(700)
+    await video.click(createDialog.getByRole('button', { name: 'Listo', exact: true }))
+    await expect(createDialog.locator('#product-coverage-options')).toBeHidden()
   })
 
-  await narrate('technical-sheet', async () => {
-    const uploadButton = dialog.getByRole('button', { name: 'Adjuntar archivo', exact: true })
-    await demoFileUpload(uploadButton, page)
-    await expect(dialog.getByRole('button', { name: 'ficha-tecnica-demo.pdf', exact: true })).toBeVisible()
+  await video.narrate('methods', async () => {
+    const methodsButton = createDialog.getByRole('button', { name: 'Métodos de aplicación', exact: true })
+    await page.waitForTimeout(500)
+    await video.click(methodsButton)
+    await video.click(createDialog.getByRole('option', { name: 'Aspersión', exact: true }))
+    await video.click(createDialog.getByRole('option', { name: 'Termonebulización', exact: true }))
+    await page.waitForTimeout(420)
+    await video.click(methodsButton)
   })
 
-  await narrate('save', async () => {
-    await demoClick(dialog.getByRole('button', { name: 'Crear producto', exact: true }))
-    await expect(dialog).toBeHidden()
+  await video.narrate('technical-sheet', async () => {
+    await page.waitForTimeout(500)
+    const uploadButton = createDialog.getByRole('button', { name: 'Adjuntar archivo', exact: true })
+    await video.uploadFile(uploadButton, {
+      name: 'ficha-tecnica-demo.pdf',
+      mimeType: 'application/pdf',
+      buffer: Buffer.from('%PDF-1.4\n% Demo Soluciones Radicales\n1 0 obj\n<<>>\nendobj\n%%EOF'),
+    })
+    await expect(createDialog.getByRole('button', { name: 'ficha-tecnica-demo.pdf', exact: true })).toBeVisible()
+  })
+
+  await video.narrate('save-product', async () => {
+    await page.waitForTimeout(750)
+    await video.click(createDialog.getByRole('button', { name: 'Crear producto', exact: true }))
+    await expect(createDialog).toBeHidden()
     await expect(page.getByRole('button', { name: 'Producto demostración', exact: true })).toBeVisible()
   })
 
-  await narrate('done', async () => {
-    await page.waitForTimeout(240)
+  await video.narrate('open-detail', async () => {
+    await page.waitForTimeout(650)
+    await video.click(page.getByRole('button', { name: 'Producto demostración', exact: true }))
   })
 
-  await showOutro(page)
+  const detailDialog = page.getByRole('dialog', { name: 'Producto demostración', exact: true })
+  await expect(detailDialog).toBeVisible()
 
-  mkdirSync(resolve(process.cwd(), 'docs-media'), { recursive: true })
-  writeFileSync(
-    resolve(process.cwd(), 'docs-media/timeline.json'),
-    JSON.stringify({ ...timeline, durationMs: Date.now() - startedAt }, null, 2) + '\n',
-  )
+  await video.narrate('detail-overview', async () => {
+    const detail = detailDialog.locator('.mip-detail')
+    await video.zoom(detail)
+    await page.waitForTimeout(700)
+    await video.resetZoom(detail)
+  })
+
+  await video.narrate('open-sheet', async () => {
+    await page.waitForTimeout(650)
+    await video.click(detailDialog.getByRole('button', { name: 'Ver ficha técnica', exact: true }))
+    await expect(page.getByRole('dialog', { name: 'Vista previa de ficha técnica' })).toBeVisible()
+  })
+
+  await video.narrate('close-sheet', async () => {
+    await page.waitForTimeout(900)
+    await video.click(page.getByRole('button', { name: 'Volver al detalle del producto', exact: true }))
+    await expect(page.getByRole('dialog', { name: 'Vista previa de ficha técnica' })).toBeHidden()
+    await expect(detailDialog).toBeVisible()
+  })
+
+  await video.narrate('open-edit', async () => {
+    await page.waitForTimeout(650)
+    await video.click(detailDialog.getByRole('button', { name: 'Editar', exact: true }))
+  })
+
+  const editDialog = page.getByRole('dialog', { name: 'Editar producto', exact: true })
+  await expect(editDialog).toBeVisible()
+
+  await video.narrate('save-edit', async () => {
+    await video.type(editDialog.getByLabel('Dosis de aplicación'), '12 ml / L')
+    await page.waitForTimeout(550)
+    await video.click(editDialog.getByRole('button', { name: 'Guardar cambios', exact: true }))
+    await expect(editDialog).toBeHidden()
+  })
+
+  await video.narrate('edit-result', async () => {
+    await expect(page.getByRole('cell', { name: '12 ml / L', exact: true })).toBeVisible()
+    const productRow = page.getByRole('row').filter({
+      has: page.getByRole('button', { name: 'Producto demostración', exact: true }),
+    })
+    await video.zoom(productRow)
+    await page.waitForTimeout(650)
+    await video.resetZoom(productRow)
+  })
+
+  await video.narrate('delete-action', async () => {
+    await page.waitForTimeout(650)
+    await video.click(page.getByRole('button', { name: 'Eliminar Producto demostración', exact: true }))
+    await expect(page.getByRole('dialog', { name: 'Eliminar producto', exact: true })).toBeVisible()
+  })
+
+  const deleteDialog = page.getByRole('dialog', { name: 'Eliminar producto', exact: true })
+  await video.narrate('delete-restriction', async () => {
+    const message = deleteDialog.locator('.confirm-dialog__message')
+    await video.zoom(message)
+    await page.waitForTimeout(900)
+    await video.resetZoom(message)
+    await page.waitForTimeout(600)
+    await video.click(deleteDialog.getByRole('button', { name: 'Cancelar', exact: true }))
+    await expect(deleteDialog).toBeHidden()
+  })
+
+  await video.narrate('deactivate-action', async () => {
+    await page.waitForTimeout(650)
+    await video.click(page.getByRole('button', { name: 'Desactivar Producto demostración', exact: true }))
+    await expect(page.getByRole('dialog', { name: 'Desactivar producto', exact: true })).toBeVisible()
+  })
+
+  const deactivateDialog = page.getByRole('dialog', { name: 'Desactivar producto', exact: true })
+  await video.narrate('confirm-deactivate', async () => {
+    await page.waitForTimeout(750)
+    await video.click(deactivateDialog.getByRole('button', { name: 'Desactivar', exact: true }))
+    await expect(deactivateDialog).toBeHidden()
+    await expect(page.getByRole('button', { name: 'Producto demostración', exact: true })).toBeHidden()
+  })
+
+  await video.narrate('inactive-tab', async () => {
+    await page.waitForTimeout(600)
+    const stateNav = page.getByRole('navigation', { name: 'Estado de los registros' })
+    await video.click(stateNav.getByRole('button', { name: 'Inactivos', exact: true }))
+    await expect(page.getByRole('button', { name: 'Producto demostración', exact: true })).toBeVisible()
+  })
+
+  await video.narrate('reactivate-note', async () => {
+    const inactiveRow = page.getByRole('row').filter({
+      has: page.getByRole('button', { name: 'Producto demostración', exact: true }),
+    })
+    await video.zoom(inactiveRow)
+    await page.waitForTimeout(850)
+    await video.resetZoom(inactiveRow)
+    await expect(page.getByRole('button', { name: 'Reactivar Producto demostración', exact: true })).toBeVisible()
+  })
+
+  await video.narrate('done', async () => {
+    await page.waitForTimeout(600)
+  })
+
+  await video.showOutro()
+  video.saveTimeline()
 })
