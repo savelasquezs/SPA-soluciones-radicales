@@ -132,7 +132,7 @@ database/migrations/20261004_001_initial_schema.sql
 database/migrations/20261004_002_integrity_and_rls.sql
 ```
 
-El baseline histórico incluye `formularios` y `respuestas_formulario`, pero ADR-019 los declara transitorios. No extender ese modelo. La ejecución MIP nueva se definirá mediante Áreas, Criterios, Dispositivos y snapshots históricos en una migración posterior, sin modificar las migraciones ya aplicadas.
+El baseline histórico incluyó `formularios` y `respuestas_formulario`. ADR-019 los descartó y la migración `20261006_011_remove_legacy_mip_forms.sql` los elimina junto con las columnas legacy de Sede y Servicio. No reintroducir ese modelo.
 
 Validar:
 
