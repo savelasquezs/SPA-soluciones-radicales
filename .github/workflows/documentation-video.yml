@@ -37,21 +37,40 @@ jobs:
           import shutil
 
           mapping = {
-              '.video-v4-bootstrap/mip-catalogs.docs.spec.ts.gz': 'e2e/documentation/mip-catalogs.docs.spec.ts',
-              '.video-v4-bootstrap/mip-catalogs.narration.json.gz': 'e2e/documentation/mip-catalogs.narration.json',
-              '.video-v4-bootstrap/mip-catalogs.storyboard.md.gz': 'e2e/documentation/mip-catalogs.storyboard.md',
-              '.video-v4-bootstrap/playwright.docs.config.ts.gz': 'playwright.docs.config.ts',
-              '.video-v4-bootstrap/render-video.mjs.gz': 'scripts/documentation/render-video.mjs',
-              '.video-v4-bootstrap/documentation-video.final.yml.gz': '.github/workflows/documentation-video.yml',
+              'e2e/documentation/mip-catalogs.docs.spec.ts': [
+                  '.video-v4-bootstrap/mip-catalogs.docs.spec.ts.gz.part01',
+                  '.video-v4-bootstrap/mip-catalogs.docs.spec.ts.gz.part02',
+                  '.video-v4-bootstrap/mip-catalogs.docs.spec.ts.gz.part03',
+                  '.video-v4-bootstrap/mip-catalogs.docs.spec.ts.gz.part04',
+              ],
+              'e2e/documentation/mip-catalogs.narration.json': [
+                  '.video-v4-bootstrap/mip-catalogs.narration.json.gz',
+              ],
+              'e2e/documentation/mip-catalogs.storyboard.md': [
+                  '.video-v4-bootstrap/mip-catalogs.storyboard.md.gz.part01',
+                  '.video-v4-bootstrap/mip-catalogs.storyboard.md.gz.part02',
+              ],
+              'playwright.docs.config.ts': [
+                  '.video-v4-bootstrap/playwright.docs.config.ts.gz',
+              ],
+              'scripts/documentation/render-video.mjs': [
+                  '.video-v4-bootstrap/render-video.mjs.gz',
+              ],
+              '.github/workflows/documentation-video.yml': [
+                  '.video-v4-bootstrap/documentation-video.final.yml.gz',
+              ],
           }
 
-          for source_name, target_name in mapping.items():
-              source = pathlib.Path(source_name)
+          for target_name, source_names in mapping.items():
+              compressed = bytearray()
+              for source_name in source_names:
+                  source = pathlib.Path(source_name)
+                  if not source.is_file():
+                      raise SystemExit(f'Falta el archivo de bootstrap: {source}')
+                  compressed.extend(source.read_bytes())
               target = pathlib.Path(target_name)
-              if not source.is_file():
-                  raise SystemExit(f'Falta el archivo de bootstrap: {source}')
               target.parent.mkdir(parents=True, exist_ok=True)
-              target.write_bytes(gzip.decompress(source.read_bytes()))
+              target.write_bytes(gzip.decompress(bytes(compressed)))
 
           shutil.rmtree('.video-v4-bootstrap')
           PY
