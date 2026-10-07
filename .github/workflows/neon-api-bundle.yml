@@ -30,10 +30,8 @@ jobs:
             --format=esm \
             --banner:js="import{createRequire as ___cr}from'module';import{fileURLToPath as ___f}from'url';import{dirname as ___d}from'path';const require=___cr(import.meta.url);const __filename=___f(import.meta.url);const __dirname=___d(__filename);" \
             --outfile=.neon-api/index.mjs
-          cd .neon-api
-          zip function.zip index.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: neon-api-function
-          path: .neon-api/function.zip
+          path: .neon-api/index.mjs
           retention-days: 1
