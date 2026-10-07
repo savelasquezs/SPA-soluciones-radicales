@@ -1,0 +1,63 @@
+name: Documentation video
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - 'e2e/documentation/**'
+      - 'playwright.docs.config.ts'
+      - 'package.json'
+      - '.github/workflows/documentation-video.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: documentation-video-develop
+  cancel-in-progress: true
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Record documentation flow
+        run: npm run docs:record
+
+      - name: Prepare final video
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p docs-media/final
+          VIDEO="$(find docs-media/playwright -type f -name video.webm | head -n 1)"
+          test -n "$VIDEO"
+          cp "$VIDEO" docs-media/final/mip-catalogs-crear-producto.webm
+          if ! command -v ffmpeg >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+          fi
+          ffmpeg -y -i "$VIDEO"             -c:v libx264 -preset veryfast -crf 23             -pix_fmt yuv420p -movflags +faststart -an             docs-media/final/mip-catalogs-crear-producto.mp4
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: documentation-video-mip-catalogs
+          path: |
+            docs-media/final/
+            docs-media/playwright/
+          if-no-files-found: warn
+          retention-days: 14
