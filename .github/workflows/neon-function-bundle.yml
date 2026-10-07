@@ -21,7 +21,7 @@ jobs:
       - name: Bundle Neon API
         run: |
           mkdir -p neon-function
-          npx --no-install esbuild functions/api/index.ts \
+          npx -y esbuild@0.28.2 functions/api/index.ts \
             --bundle \
             --platform=node \
             --target=node24 \
