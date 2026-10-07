@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import type { MipCatalogItem, MipCatalogKind, MipProduct, MipProductInput, MipRecord } from '../src/types/mipCatalogs'
+import type { MipCatalogItem, MipCatalogKind, MipCriterion, MipProduct, MipProductInput, MipRecord } from '../src/types/mipCatalogs'
 
 const id = '10000000-0000-4000-8000-000000000001'
 const method: MipCatalogItem = { id: '20000000-0000-4000-8000-000000000001', clave: 'ASPERSION', nombre: 'Aspersión', clasificacion: null, categoriaProducto: null, activo: true, version: 1 }
@@ -7,11 +7,12 @@ const pest: MipCatalogItem = { id: '30000000-0000-4000-8000-000000000001', clave
 const fly: MipCatalogItem = { ...pest, id: '30000000-0000-4000-8000-000000000002', clave: 'MOSCA', nombre: 'Mosca doméstica', clasificacion: 'VOLADORES', categoriaProducto: 'INSECTOS_VOLADORES' }
 const product: MipProduct = { id, nombre: 'Producto de prueba', principioActivo: 'Composición de prueba', dosisAplicacion: 'Según ficha de prueba', registroSanitario: null, gradoToxicologico: null, fabricante: null, antidoto: null, fichaTecnicaStoragePath: null, categorias: ['INSECTOS_RASTREROS'], metodos: [method], plagas: [fly], activo: true, version: 1 }
 const trap: MipCatalogItem = { id: '40000000-0000-4000-8000-000000000001', clave: 'TRAMPA_ADHESIVA', nombre: 'Trampa adhesiva', clasificacion: 'RASTREROS', categoriaProducto: null, activo: true, version: 1 }
+const criterion: MipCriterion = { id: '50000000-0000-4000-8000-000000000001', nombre: 'Mantenimiento de zonas verdes', soloAreaExterna: true, activo: true }
 const profile = { id, nombreCompleto: 'Admin de prueba', correoGoogle: 'admin@example.test', esAdmin: true, esTecnico: false, rolActivo: 'ADMINISTRADOR', requiereSeleccionRol: false }
 
 async function setup(page: Page, options: { conflict?: boolean; unavailable?: boolean; technician?: boolean } = {}) {
   const calls: { path: string; method: string }[] = []
-  const records: Record<MipCatalogKind, MipRecord[]> = { products: [structuredClone(product)], traps: [structuredClone(trap)], pests: [structuredClone(pest), structuredClone(fly)], methods: [structuredClone(method)] }
+  const records: Record<MipCatalogKind, MipRecord[]> = { products: [structuredClone(product)], traps: [structuredClone(trap)], pests: [structuredClone(pest), structuredClone(fly)], methods: [structuredClone(method)], criteria: [structuredClone(criterion)] }
   let conflict = options.conflict ?? false
   await page.route('**/get-session', async route => route.fulfill({ json: {
     session: { id: 'session', userId: 'auth-1', token: 'e2e-token', expiresAt: '2099-01-01T00:00:00.000Z', createdAt: '2026-10-04T00:00:00.000Z', updatedAt: '2026-10-04T00:00:00.000Z' },
@@ -23,7 +24,7 @@ async function setup(page: Page, options: { conflict?: boolean; unavailable?: bo
     calls.push({ path, method: verb })
     if (path === '/api/session') return route.fulfill({ json: options.technician ? { ...profile, esTecnico: true, rolActivo: 'TECNICO' } : profile })
     if (path === '/api/mip/options') return route.fulfill({ json: { methods: records.methods, pests: records.pests } })
-    const match = path.match(/^\/api\/mip\/(products|traps|pests|methods)(?:\/([^/]+))?(?:\/(state))?$/)
+    const match = path.match(/^\/api\/mip\/(products|traps|pests|methods|criteria)(?:\/([^/]+))?(?:\/(state))?$/)
     if (!match) return route.fulfill({ status: 404, json: { error: `Unhandled test path: ${path}` } })
     const kind = match[1] as MipCatalogKind, targetId = match[2]
     if (verb === 'GET') {
@@ -32,13 +33,21 @@ async function setup(page: Page, options: { conflict?: boolean; unavailable?: bo
       return route.fulfill({ json: records[kind].filter(row => row.activo === (url.searchParams.get('active') !== 'false')) })
     }
     if (conflict && verb === 'PATCH' && !match[3]) { conflict = false; return route.fulfill({ status: 409, json: { error: 'El registro cambió en otra sesión. Tus datos se conservan.', code: 'VERSION_CONFLICT' } }) }
-    const body = route.request().postDataJSON() as MipProductInput & { nombre: string; activo?: boolean; version?: number }
+    const body = route.request().postDataJSON() as MipProductInput & { nombre: string; soloAreaExterna?: boolean; activo?: boolean; version?: number }
     const previous = records[kind].find(row => row.id === targetId)
     if (verb === 'DELETE') { records[kind] = records[kind].filter(row => row.id !== targetId); return route.fulfill({ status: 204 }) }
     let result: MipRecord
-    if (match[3]) result = { ...previous!, activo: body.activo!, version: previous!.version + 1 }
-    else if (kind === 'products') result = { ...product, ...body, id: targetId ?? '10000000-0000-4000-8000-000000000099', activo: previous?.activo ?? true, version: (previous?.version ?? 0) + 1, metodos: records.methods.filter(row => body.metodoIds.includes(row.id)) as MipCatalogItem[], plagas: records.pests.filter(row => body.plagaIds.includes(row.id)) as MipCatalogItem[] }
-    else result = { ...trap, ...body, id: targetId ?? '40000000-0000-4000-8000-000000000099', activo: previous?.activo ?? true, version: (previous?.version ?? 0) + 1 }
+    if (match[3]) {
+      result = kind === 'criteria'
+        ? { ...(previous as MipCriterion), activo: body.activo! }
+        : { ...previous!, activo: body.activo!, version: ('version' in previous! ? previous!.version : 0) + 1 }
+    } else if (kind === 'products') {
+      result = { ...product, ...body, id: targetId ?? '10000000-0000-4000-8000-000000000099', activo: previous?.activo ?? true, version: ('version' in (previous ?? {}) ? (previous as MipProduct).version : 0) + 1, metodos: records.methods.filter(row => body.metodoIds.includes(row.id)) as MipCatalogItem[], plagas: records.pests.filter(row => body.plagaIds.includes(row.id)) as MipCatalogItem[] }
+    } else if (kind === 'criteria') {
+      result = { ...(previous as MipCriterion | undefined ?? criterion), ...body, id: targetId ?? '50000000-0000-4000-8000-000000000099', activo: previous?.activo ?? true } as MipCriterion
+    } else {
+      result = { ...trap, ...body, id: targetId ?? '40000000-0000-4000-8000-000000000099', activo: previous?.activo ?? true, version: ('version' in (previous ?? {}) ? (previous as MipCatalogItem).version : 0) + 1 }
+    }
     records[kind] = [...records[kind].filter(row => row.id !== result.id), result]
     return route.fulfill({ status: verb === 'POST' ? 201 : 200, json: result })
   })
@@ -102,6 +111,36 @@ test('trampas: CRUD compartido y movimiento entre Activas/Inactivas sin recargas
   await expect(page.getByRole('button', { name: 'Trampa adhesiva', exact: true })).toBeVisible()
   expect(calls.filter(call => call.path === `/api/mip/traps/${trap.id}` && call.method === 'GET')).toHaveLength(0)
   expect(calls.filter(call => call.path === '/api/mip/traps' && call.method === 'GET')).toHaveLength(2)
+})
+
+test('criterios: replica CRUD, modal compartido y edición sin GET adicional', async ({ page }) => {
+  const { calls, records } = await setup(page)
+  await page.getByRole('button', { name: 'Criterios', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Mantenimiento de zonas verdes', exact: true })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Editar Mantenimiento de zonas verdes', exact: true }).click()
+  const edit = page.getByRole('dialog', { name: 'Editar criterio', exact: true })
+  await expect(edit.getByRole('textbox', { name: 'Nombre', exact: true })).toHaveValue('Mantenimiento de zonas verdes')
+  await expect(edit.getByRole('radio', { name: 'Solo exterior / perímetro', exact: true })).toBeChecked()
+  expect(calls.filter(call => call.path === `/api/mip/criteria/${criterion.id}` && call.method === 'GET')).toHaveLength(0)
+
+  await edit.getByRole('textbox', { name: 'Nombre', exact: true }).fill('Mantenimiento de zonas verdes actualizado')
+  await edit.getByRole('radio', { name: 'Todas las áreas', exact: true }).check()
+  await edit.getByRole('button', { name: 'Guardar cambios', exact: true }).click()
+  await expect(edit).toBeHidden()
+  await expect(page.getByRole('button', { name: 'Mantenimiento de zonas verdes actualizado', exact: true })).toBeVisible()
+  expect(calls.filter(call => call.path === '/api/mip/criteria' && call.method === 'GET')).toHaveLength(1)
+
+  const saved = records.criteria.find(row => row.nombre === 'Mantenimiento de zonas verdes actualizado') as MipCriterion
+  expect(saved.soloAreaExterna).toBe(false)
+
+  await page.getByRole('button', { name: 'Nuevo criterio', exact: true }).click()
+  const create = page.getByRole('dialog', { name: 'Nuevo criterio', exact: true })
+  await create.getByRole('textbox', { name: 'Nombre', exact: true }).fill('Criterio sintético')
+  await expect(create.getByRole('radio', { name: 'Todas las áreas', exact: true })).toBeChecked()
+  await create.getByRole('button', { name: 'Crear criterio', exact: true }).click()
+  await expect(create).toBeHidden()
+  await expect(page.getByRole('button', { name: 'Criterio sintético', exact: true })).toBeVisible()
 })
 
 test('conflicto conserva el borrador y exige confirmar su reemplazo', async ({ page }) => {
