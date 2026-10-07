@@ -20,6 +20,7 @@ import { useAdminServicesStore } from '@/stores/adminServices'
 import { useNotificationsStore } from '@/stores/notifications'
 import { requestCalendarRetry } from '@/services/adminServicesService'
 import { addDateDays, FOLLOW_UP_LABELS, isDateOnly, SERVICE_STATE_LABELS, todayBogota } from '@/helpers/adminServices'
+import { SERVICE_DATE_SHORTCUTS, serviceDateShortcutRange, type ServiceDateShortcutId } from '@/helpers/serviceDateRanges'
 import { formatDateOnly } from '@/helpers/dateTime'
 import type { AdminService, FollowUpState, ServiceFilter, ServiceKind, ServiceState, UpcomingFilter, UpcomingService } from '@/types/adminServices'
 
@@ -31,6 +32,10 @@ function monday(date: string): string { const weekday=new Date(`${date}T00:00:00
 const from=computed(()=>q('from') || (tab.value==='history' ? addDateDays(todayBogota(),-90) : tab.value==='upcoming' ? addDateDays(todayBogota(),-30) : view.value==='week' ? monday(todayBogota()) : todayBogota()))
 const to=computed(()=>view.value==='week' ? addDateDays(from.value,6) : q('to') || (tab.value==='upcoming' ? addDateDays(todayBogota(),30) : todayBogota()))
 const range=computed(()=>({ from:from.value,to:to.value }))
+const activeDateShortcut=computed(()=>SERVICE_DATE_SHORTCUTS.find(shortcut=>{
+  const candidate=serviceDateShortcutRange(shortcut.id,todayBogota())
+  return candidate.from===from.value && candidate.to===to.value
+})?.id ?? null)
 const rangeError=computed(()=>!isDateOnly(from.value) || !isDateOnly(to.value) || from.value>to.value || (new Date(to.value).getTime()-new Date(from.value).getTime())/86_400_000>366 ? 'Selecciona un rango válido de hasta un año.' : '')
 const page=computed(()=>/^\d+$/.test(q('page')) ? Math.max(1,Math.min(100_000,Number(q('page')))) : 1)
 const pageSize=computed(()=>view.value==='week' ? 100 : 25)
@@ -65,6 +70,10 @@ function changeTab(next: 'agenda' | 'upcoming' | 'history'): void {
 }
 function changeView(next: 'table' | 'week'): void { setQuery({ view:next,from:next==='week' ? monday(from.value) : todayBogota(),to:next==='week' ? undefined : todayBogota(),page:'1' }) }
 function moveWeek(days: number): void { setQuery({ from:addDateDays(from.value,days),to:undefined,page:'1' }) }
+function applyDateShortcut(id: ServiceDateShortcutId): void {
+  const next=serviceDateShortcutRange(id,todayBogota())
+  setQuery({ from:next.from,to:next.to,page:'1' })
+}
 function create(): void { void router.push({ name:'admin-service-new',query:{ returnTo:route.fullPath } }) }
 function edit(record: AdminService): void { void router.push({ name:'admin-service-edit',params:{ id:record.id },query:{ returnTo:route.fullPath } }) }
 function scheduleUpcoming(record: UpcomingService): void { void router.push({ name:'admin-service-new',query:{ upcomingId:record.id,returnTo:route.fullPath } }) }
@@ -92,14 +101,18 @@ async function retryCalendar(record: AdminService): Promise<void> {
       <button role="tab" class="svc-tab" :aria-selected="tab==='history'" @click="changeTab('history')">Historial</button>
     </div>
     <div class="svc-filters" :class="{ 'svc-filters--upcoming':tab==='upcoming' }">
-      <BaseDateRangePicker v-if="view==='table'" name="services-range" label="Fechas" :model-value="range" :error="rangeError || undefined" @update:model-value="setQuery({ ...$event,page:'1' })" />
-      <div v-else class="svc-toolbar"><BaseIconButton label="Semana anterior" @click="moveWeek(-7)"><ChevronLeft :size="17" /></BaseIconButton><span class="svc-small">{{ formatDateOnly(from) }} – {{ formatDateOnly(to) }}</span><BaseIconButton label="Semana siguiente" @click="moveWeek(7)"><ChevronRight :size="17" /></BaseIconButton></div>
+      <div v-if="view==='table'" class="svc-date-filter">
+        <BaseDateRangePicker name="services-range" label="Fechas" :model-value="range" :error="rangeError || undefined" @update:model-value="setQuery({ ...$event,page:'1' })" />
+        <div class="svc-date-shortcuts" role="group" aria-label="Rangos rápidos de fecha">
+          <button v-for="shortcut in SERVICE_DATE_SHORTCUTS" :key="shortcut.id" type="button" class="svc-date-shortcut" :aria-pressed="activeDateShortcut===shortcut.id" @click="applyDateShortcut(shortcut.id)">{{ shortcut.label }}</button>
+        </div>
+      </div>
+      <div v-else class="svc-toolbar svc-week-navigation"><BaseIconButton label="Semana anterior" @click="moveWeek(-7)"><ChevronLeft :size="17" /></BaseIconButton><span class="svc-small">{{ formatDateOnly(from) }} – {{ formatDateOnly(to) }}</span><BaseIconButton label="Semana siguiente" @click="moveWeek(7)"><ChevronRight :size="17" /></BaseIconButton><BaseButton size="compact" variant="secondary" @click="setQuery({ from:monday(todayBogota()),to:undefined,page:'1' })">Hoy</BaseButton></div>
       <BaseInput v-model="search" name="service-search" label="Buscar" type="search" maxlength="160" placeholder="Cliente, sede o solicitud" />
       <BaseSelect v-if="tab==='upcoming'" :model-value="upcomingFilter.estado" name="upcoming-status-filter" label="Seguimiento" @update:model-value="setQuery({ estado:$event || undefined,page:'1' })"><option value="">Todos los pendientes</option><option v-for="(label,value) in FOLLOW_UP_LABELS" :key="value" :value="value">{{ label }}</option></BaseSelect>
       <BaseSelect v-else :model-value="serviceFilter.estado" name="service-status-filter" label="Estado" @update:model-value="setQuery({ estado:$event || undefined,page:'1' })"><option value="">Todos</option><option v-for="(label,value) in SERVICE_STATE_LABELS" :key="value" :value="value">{{ label }}</option></BaseSelect>
       <BaseSelect v-if="tab!=='upcoming'" :model-value="serviceFilter.tipo" name="service-type-filter" label="Tipo" @update:model-value="setQuery({ tipo:$event || undefined,page:'1' })"><option value="">Todos</option><option value="PRINCIPAL">Principal</option><option value="REFUERZO">Refuerzo</option></BaseSelect>
       <BaseSelect v-if="tab!=='upcoming'" :model-value="serviceFilter.tecnicoId" name="service-team-filter" label="Técnico" @update:model-value="setQuery({ tecnicoId:$event || undefined,page:'1' })"><option value="">Todo el equipo</option><option v-for="person in store.options?.tecnicos ?? []" :key="person.id" :value="person.id">{{ person.nombreCompleto }}</option></BaseSelect>
-      <BaseButton size="compact" variant="secondary" @click="setQuery({ from:view==='week' ? monday(todayBogota()) : todayBogota(),to:view==='week' ? undefined : todayBogota(),page:'1' })">Hoy</BaseButton>
     </div>
     <div class="svc-toolbar">
       <div v-if="tab==='agenda'" class="svc-segment" role="group" aria-label="Presentación de agenda"><button :aria-pressed="view==='table'" @click="changeView('table')">Tabla</button><button :aria-pressed="view==='week'" @click="changeView('week')">Semana</button></div>
