@@ -33,11 +33,9 @@ const visibleGroups = computed(() => groups.map(group => ({ ...group, items: gro
 type BreadcrumbItem = { label: string; to?: string }
 const breadcrumbItems = computed<BreadcrumbItem[]>(() => {
   const raw=route.meta.breadcrumb
-  if(Array.isArray(raw)) return raw.flatMap(item=>{
-    if(typeof item==='string' && item.trim()) return [{ label:item.trim() }]
-    if(item && typeof item==='object' && typeof (item as BreadcrumbItem).label==='string') return [{ label:(item as BreadcrumbItem).label,to:typeof (item as BreadcrumbItem).to==='string' ? (item as BreadcrumbItem).to : undefined }]
-    return []
-  })
+  if(Array.isArray(raw)) return raw
+    .filter(item=>item && typeof item.label==='string' && item.label.trim())
+    .map(item=>({ label:item.label.trim(),to:typeof item.to==='string' ? item.to : undefined }))
   return typeof raw==='string' && raw.trim() ? [{ label:raw.trim() }] : []
 })
 function isActive(to: string): boolean { return route.path === to || (to !== '/' && route.path.startsWith(`${to}/`)) }
