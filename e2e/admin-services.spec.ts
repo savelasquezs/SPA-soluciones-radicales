@@ -133,7 +133,20 @@ async function setup(page: Page, role: 'ADMINISTRADOR' | 'TECNICO'='ADMINISTRADO
   return { records,calls,get upcoming(){ return next },failNextList(){ failList=true },conflictNext(){ conflictOnce=true },loseCreateResponse(){ lostResponse=true },journal }
 }
 async function fillDate(page: Page,selector: string,value: string): Promise<void> {
-  const input=page.locator(selector);await input.fill(value);await input.blur()
+  const input=page.locator(selector)
+  const inputName=await input.getAttribute('name')
+  if(inputName?.endsWith('-day')) {
+    const match=/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(value)
+    if(!match) throw new Error(`Expected DD/MM/YYYY for segmented date: ${value}`)
+    const base=inputName.slice(0,-4)
+    await input.fill(match[1]!.padStart(2,'0'))
+    await page.locator(`[name="${base}-month"]`).fill(match[2]!.padStart(2,'0'))
+    await page.locator(`[name="${base}-year"]`).fill(match[3]!)
+    await page.locator(`[name="${base}-year"]`).blur()
+    return
+  }
+  await input.fill(value)
+  await input.blur()
 }
 async function selectSiteAndTeam(page: Page): Promise<void> {
   await page.getByLabel('Cliente y sede',{ exact:false }).selectOption(ids.site)
