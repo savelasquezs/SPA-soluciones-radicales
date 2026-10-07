@@ -53,7 +53,7 @@ function setTheme(event: Event): void { app.setTheme((event.target as HTMLSelect
 <template>
   <div class="admin-layout">
     <header class="topbar">
-      <RouterLink to="/" class="brand" aria-label="Soluciones Radicales MIP"><img class="brand__logo brand__logo--light" src="/logo-light.png" alt="" aria-hidden="true" /><img class="brand__logo brand__logo--dark" src="/logo-dark.png" alt="" aria-hidden="true" /></RouterLink>
+      <RouterLink to="/" class="brand" aria-label="Soluciones Radicales MIP"><img class="brand__symbol" src="/favicon.png" alt="" aria-hidden="true" /><div class="brand__copy"><strong>Soluciones Radicales</strong><small>MANEJO INTEGRADO DE PLAGAS</small></div></RouterLink>
       <label class="global-search"><Search :size="16" aria-hidden="true" /><span class="sr-only">Búsqueda global</span><input type="search" readonly placeholder="Buscar cliente, servicio o documento" /></label>
       <div class="topbar__activity">
         <span class="sync-state"><CheckCircle2 :size="16" aria-hidden="true" />Al día</span>
@@ -78,11 +78,12 @@ function setTheme(event: Event): void { app.setTheme((event.target as HTMLSelect
 <style scoped>
 .admin-layout { min-width: 0; min-height: 100vh; overflow-x: clip; background: var(--bg); }
 .topbar { position: sticky; top: 0; z-index: 40; display: grid; height: 64px; grid-template-columns: 260px minmax(16rem, 330px) 1fr; align-items: center; gap: 1.5rem; border-bottom: 1px solid var(--border); background: var(--surface); padding: 0 1.5rem; }
-.brand { display: inline-flex; width: fit-content; min-width: 0; align-items: center; text-decoration: none; }
-.brand__logo { display: block; width: 154px; height: 56px; object-fit: contain; object-position: left center; }
-.brand__logo--dark { display: none; }
-:global(:root[data-theme='dark']) .brand__logo--light { display: none; }
-:global(:root[data-theme='dark']) .brand__logo--dark { display: block; }
+.brand { display: inline-flex; width: fit-content; min-width: 0; align-items: center; gap: 0.65rem; color: var(--text); text-decoration: none; }
+.brand__symbol { display: block; width: 42px; height: 42px; flex: 0 0 auto; object-fit: contain; }
+.brand__copy { min-width: 0; }
+.brand__copy strong, .brand__copy small { display: block; }
+.brand__copy strong { font-size: 0.95rem; font-weight: 600; line-height: 1.15rem; white-space: nowrap; }
+.brand__copy small { margin-top: 0.1rem; color: var(--text-secondary); font-size: 0.62rem; line-height: 0.8rem; letter-spacing: 0.03em; white-space: nowrap; }
 .global-search { display: flex; min-width: 0; height: 36px; align-items: center; gap: 0.5rem; border-radius: 6px; background: var(--bg); padding: 0.5rem; color: var(--text-secondary); }
 .global-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--text); font-size: 0.8125rem; }
 .topbar__activity { display: flex; min-width: 0; align-items: center; justify-content: flex-end; gap: 1rem; }
@@ -127,7 +128,8 @@ function setTheme(event: Event): void { app.setTheme((event.target as HTMLSelect
 }
 @media (max-width: 560px) {
   .topbar { height: 60px; padding: 0 1rem; }
-  .brand__logo { width: 132px; height: 52px; }
+  .brand__symbol { width: 38px; height: 38px; }
+  .brand__copy small { display: none; }
   .shell-body { display: block; }
   .sidebar { top: 60px; }
   .drawer-backdrop { inset-block-start: 60px; }
