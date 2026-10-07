@@ -4,31 +4,47 @@
   "segments": [
     {
       "id": "open-catalogs",
-      "text": "En Configuración, abre Catálogos MIP."
+      "text": "En Configuración, abre Catálogos MIP y entra en Productos."
     },
     {
       "id": "new-product",
-      "text": "Selecciona Nuevo producto para comenzar."
+      "text": "Selecciona Nuevo producto para comenzar. Los campos marcados con asterisco son obligatorios."
     },
     {
-      "id": "basic-info",
-      "text": "Completa el nombre comercial, el principio activo y la dosis de aplicación."
+      "id": "required-fields",
+      "text": "Completa el nombre comercial, el principio activo o composición y la dosis de aplicación."
     },
     {
-      "id": "pests",
-      "text": "Indica las plagas que controla el producto."
+      "id": "optional-details",
+      "text": "También puedes registrar el número sanitario, el grado toxicológico, el laboratorio o fabricante y el antídoto."
     },
     {
-      "id": "method",
-      "text": "Selecciona el método de aplicación."
+      "id": "coverage-intro",
+      "text": "En Plagas que controla puedes elegir una categoría completa o seleccionar plagas específicas."
+    },
+    {
+      "id": "coverage-category",
+      "text": "Si eliges una categoría completa, por ejemplo todos los insectos rastreros, las plagas de esa categoría quedan incluidas automáticamente."
+    },
+    {
+      "id": "coverage-specific",
+      "text": "También puedes agregar una plaga concreta de otra categoría, como Mosca doméstica, sin seleccionar todos los insectos voladores."
+    },
+    {
+      "id": "methods",
+      "text": "Selecciona uno o varios métodos de aplicación que correspondan al producto."
+    },
+    {
+      "id": "technical-sheet",
+      "text": "La ficha técnica es opcional. Puedes adjuntar un PDF o una imagen para conservarla junto al producto."
     },
     {
       "id": "save",
-      "text": "Cuando la información esté completa, crea el producto."
+      "text": "Revisa la información y crea el producto."
     },
     {
       "id": "done",
-      "text": "Listo. El producto quedó disponible en el catálogo."
+      "text": "Listo. El producto queda disponible en el catálogo para utilizarlo en los servicios."
     }
   ]
 }
