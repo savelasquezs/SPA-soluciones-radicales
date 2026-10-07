@@ -92,7 +92,7 @@ async function retryCalendar(record: AdminService): Promise<void> {
       <button role="tab" class="svc-tab" :aria-selected="tab==='history'" @click="changeTab('history')">Historial</button>
     </div>
     <div class="svc-filters" :class="{ 'svc-filters--upcoming':tab==='upcoming' }">
-      <BaseDateRangePicker v-if="view==='table'" :model-value="range" :error="rangeError || undefined" @update:model-value="setQuery({ ...$event,page:'1' })" />
+      <BaseDateRangePicker v-if="view==='table'" name="services-range" label="Fechas" :model-value="range" :error="rangeError || undefined" @update:model-value="setQuery({ ...$event,page:'1' })" />
       <div v-else class="svc-toolbar"><BaseIconButton label="Semana anterior" @click="moveWeek(-7)"><ChevronLeft :size="17" /></BaseIconButton><span class="svc-small">{{ formatDateOnly(from) }} – {{ formatDateOnly(to) }}</span><BaseIconButton label="Semana siguiente" @click="moveWeek(7)"><ChevronRight :size="17" /></BaseIconButton></div>
       <BaseInput v-model="search" name="service-search" label="Buscar" type="search" maxlength="160" placeholder="Cliente, sede o solicitud" />
       <BaseSelect v-if="tab==='upcoming'" :model-value="upcomingFilter.estado" name="upcoming-status-filter" label="Seguimiento" @update:model-value="setQuery({ estado:$event || undefined,page:'1' })"><option value="">Todos los pendientes</option><option v-for="(label,value) in FOLLOW_UP_LABELS" :key="value" :value="value">{{ label }}</option></BaseSelect>

@@ -29,6 +29,26 @@ describe('BaseDateTimePicker', () => {
     expect(wrapper.find('.date-time-control input').exists()).toBe(true)
   })
 
+  it('guía la escritura por día, mes y año sin exigir separadores', async () => {
+    const wrapper = mount(BaseDateTimePicker, {
+      attachTo: document.body,
+      props: { modelValue: null, mode: 'date', label: 'Fecha' },
+    })
+    const inputs = wrapper.findAll('.date-segments input')
+    expect(inputs.map((input) => input.attributes('placeholder'))).toEqual(['DD', 'MM', 'AAAA'])
+
+    await inputs[0]!.setValue('10')
+    expect(document.activeElement).toBe(inputs[1]!.element)
+    await inputs[1]!.setValue('10')
+    expect(document.activeElement).toBe(inputs[2]!.element)
+    await inputs[2]!.setValue('1994')
+    await inputs[2]!.trigger('blur')
+    await wrapper.vm.$nextTick()
+
+    expect(lastEmission(wrapper)).toEqual(['1994-10-10'])
+    wrapper.unmount()
+  })
+
   it('edita una fecha, cambia mes y año y respeta min/max', async () => {
     const wrapper = mount(BaseDateTimePicker, {
       attachTo: document.body,
@@ -36,6 +56,7 @@ describe('BaseDateTimePicker', () => {
     })
     await openPicker(wrapper)
 
+    expect(wrapper.get('dialog').classes()).toContain('base-dialog--compact')
     const selects = wrapper.findAll('.calendar__selectors select')
     await selects[0]!.setValue('6')
     await selects[1]!.setValue('2027')
@@ -81,6 +102,7 @@ describe('BaseDateTimePicker', () => {
       attachTo: document.body,
       props: { modelValue: '2026-05-15T09:00', mode: 'datetime', label: 'Inicio' },
     })
+    expect(wrapper.get('input').element.value).toBe('15 / 05 / 2026 · 09:00')
     await openPicker(wrapper)
     await wrapper.get('button[aria-label="16 mayo 2026"]').trigger('click')
     const selects = wrapper.findAll('.time-picker select')
@@ -96,6 +118,7 @@ describe('BaseDateTimePicker', () => {
       props: { modelValue: null, mode: 'date', label: 'Fecha', required: true, clearable: true },
     })
     await wrapper.get('input').trigger('blur')
+    await wrapper.vm.$nextTick()
     expect(wrapper.text()).toContain('obligatorio')
     await wrapper.setProps({ modelValue: '2026-05-15' })
     await wrapper.get('button[aria-label="Limpiar"]').trigger('click')

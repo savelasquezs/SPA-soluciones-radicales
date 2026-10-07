@@ -52,7 +52,7 @@ Crear estas capacidades cuando comience la implementación de UI, antes de repli
 - paginación;
 - contenedor responsive para tabla/cards;
 - selector de archivos con progreso y error.
-- selector reutilizable de fecha, hora y fecha-hora sin depender de los controles nativos del navegador.
+- selectores reutilizables de fecha, hora, fecha-hora y rango sin depender de los controles nativos del navegador; `BaseDateInputSegments` concentra la entrada `DD / MM / AAAA`, `BaseCalendar` el calendario compartido, `BaseDateTimePicker` la selección simple y `BaseDateRangePicker` el rango en un único control.
 
 Un componente base expone una API pequeña, tipada y consistente. No incorpora nombres ni reglas de una entidad.
 

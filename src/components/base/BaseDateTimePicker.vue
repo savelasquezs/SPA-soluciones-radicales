@@ -1,35 +1,27 @@
 <script setup lang="ts">
-import { CalendarDays, ChevronLeft, ChevronRight, Clock3, X } from 'lucide-vue-next'
-import { computed, nextTick, ref, useId, watch } from 'vue'
+import { CalendarDays, Clock3, X } from 'lucide-vue-next'
+import { computed, ref, useId, watch } from 'vue'
 
 import BaseButton from '@/components/base/BaseButton.vue'
+import BaseCalendar from '@/components/base/BaseCalendar.vue'
+import BaseDateInputSegments from '@/components/base/BaseDateInputSegments.vue'
 import BaseDialog from '@/components/base/BaseDialog.vue'
 import BaseField from '@/components/base/BaseField.vue'
 import BaseIconButton from '@/components/base/BaseIconButton.vue'
 import {
-  compareDateOnly,
-  daysInMonth,
-  firstWeekdayMonday,
   formatDateInput,
-  formatDateOnly,
-  formatLocalDateTime,
   isDateOnly,
   isLocalDateTime,
   isTimeOnly,
   joinLocalDateTime,
-  monthName,
   normalizeTime,
   parseDateInput,
-  parseDateOnly,
-  shiftDate,
-  shiftMonth,
   splitLocalDateTime,
-  todayInTimeZone,
 } from '@/helpers/dateTime'
 import type { DateOnly, LocalDateTime, TimeOnly } from '@/types/domain'
 
 type PickerMode = 'date' | 'time' | 'datetime'
-type CalendarCell = { key: string; date: DateOnly | null; day: number | null }
+type DateInputDraftState = 'empty' | 'partial' | 'valid' | 'invalid'
 
 const props = withDefaults(defineProps<{
   modelValue: string | null
@@ -68,36 +60,15 @@ const inputText = ref('')
 const localError = ref<string | null>(null)
 const selectedDate = ref<DateOnly | null>(null)
 const selectedTime = ref<TimeOnly | null>(null)
-const today = ref(todayInTimeZone())
-const initialParts = parseDateOnly(today.value)!
-const viewYear = ref(initialParts.year)
-const viewMonth = ref(initialParts.month)
-const calendarButtons = ref<Record<string, HTMLButtonElement | null>>({})
+let restoreOnClose = true
 
-const weekdays = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 const effectiveError = computed(() => props.error ?? localError.value ?? undefined)
 const hasDate = computed(() => props.mode !== 'time')
 const hasTime = computed(() => props.mode !== 'date')
 const title = computed(() => props.mode === 'date' ? 'Seleccionar fecha' : props.mode === 'time' ? 'Seleccionar hora' : 'Seleccionar fecha y hora')
-const yearOptions = computed(() => {
-  const minYear = parseDateOnly(datePart(props.min))?.year ?? viewYear.value - 80
-  const maxYear = parseDateOnly(datePart(props.max))?.year ?? viewYear.value + 20
-  return Array.from({ length: maxYear - minYear + 1 }, (_, index) => minYear + index)
-})
 const minuteOptions = computed(() => {
   const step = validStep(props.minuteStep)
   return Array.from({ length: Math.ceil(60 / step) }, (_, index) => index * step).filter((value) => value < 60)
-})
-const calendarCells = computed<CalendarCell[]>(() => {
-  const blanks = firstWeekdayMonday(viewYear.value, viewMonth.value)
-  const count = daysInMonth(viewYear.value, viewMonth.value)
-  const cells: CalendarCell[] = Array.from({ length: blanks }, (_, index) => ({ key: `blank-${index}`, date: null, day: null }))
-  for (let day = 1; day <= count; day += 1) {
-    const date = `${viewYear.value}-${String(viewMonth.value).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-    cells.push({ key: date, date, day })
-  }
-  while (cells.length % 7 !== 0) cells.push({ key: `tail-${cells.length}`, date: null, day: null })
-  return cells
 })
 const timeHours = computed(() => selectedTime.value?.slice(0, 2) ?? '09')
 const timeMinutes = computed(() => selectedTime.value?.slice(3, 5) ?? String(minuteOptions.value[0] ?? 0).padStart(2, '0'))
@@ -109,7 +80,7 @@ function syncFromModel(value: string | null): void {
   if (props.mode === 'date') {
     selectedDate.value = value && isDateOnly(value) ? value : null
     selectedTime.value = null
-    inputText.value = selectedDate.value ? formatDateInput(selectedDate.value) : ''
+    inputText.value = ''
   } else if (props.mode === 'time') {
     selectedDate.value = null
     selectedTime.value = value && isTimeOnly(value) ? value : null
@@ -118,18 +89,14 @@ function syncFromModel(value: string | null): void {
     const parts = value && isLocalDateTime(value) ? splitLocalDateTime(value) : null
     selectedDate.value = parts?.date ?? null
     selectedTime.value = parts?.time ?? null
-    inputText.value = parts ? formatLocalDateTime(value as LocalDateTime) : ''
-  }
-  const parts = parseDateOnly(selectedDate.value ?? today.value)
-  if (parts) {
-    viewYear.value = parts.year
-    viewMonth.value = parts.month
+    inputText.value = parts ? `${formatDateInput(parts.date)} · ${parts.time}` : ''
   }
 }
 
 function showPicker(): void {
   if (props.disabled || props.readonly) return
   syncFromModel(props.modelValue)
+  restoreOnClose = true
   if (hasTime.value && !selectedTime.value) {
     const minimumTime = props.mode === 'time'
       ? normalizeTime(props.min ?? '', validStep(props.minuteStep))
@@ -140,6 +107,7 @@ function showPicker(): void {
 }
 
 function commitInput(): void {
+  if (props.mode === 'date') return
   const value = inputText.value.trim()
   if (!value) {
     if (props.required) localError.value = 'Este campo es obligatorio'
@@ -148,7 +116,6 @@ function commitInput(): void {
     return
   }
   let parsed: string | null = null
-  if (props.mode === 'date') parsed = parseDateInput(value)
   if (props.mode === 'time') parsed = normalizeTime(value, validStep(props.minuteStep))
   if (props.mode === 'datetime') {
     const match = /^(.+?)(?:\s*[·,]\s*|\s+)(\d{1,2}:\d{2})$/.exec(value)
@@ -165,9 +132,38 @@ function commitInput(): void {
   emit('blur')
 }
 
-function selectDate(value: DateOnly): void {
-  if (dateDisabled(value)) return
+function handleDateComplete(value: DateOnly): void {
   selectedDate.value = value
+  if (!withinRange(value) || dateDisabled(value)) {
+    localError.value = 'Ingresa una fecha válida dentro del rango permitido'
+    return
+  }
+  localError.value = null
+  if (props.modelValue !== value) emit('update:modelValue', value)
+}
+
+function commitDateInput(value: DateOnly | null, state: DateInputDraftState): void {
+  if (state === 'empty') {
+    selectedDate.value = null
+    if (props.required) localError.value = 'Este campo es obligatorio'
+    else {
+      localError.value = null
+      emit('update:modelValue', null)
+    }
+  } else if (state === 'partial') {
+    localError.value = 'Completa la fecha'
+  } else if (state === 'invalid' || !value || !withinRange(value) || dateDisabled(value)) {
+    localError.value = 'Ingresa una fecha válida dentro del rango permitido'
+  } else {
+    selectedDate.value = value
+    localError.value = null
+    if (props.modelValue !== value) emit('update:modelValue', value)
+  }
+  emit('blur')
+}
+
+function selectDate(value: DateOnly): void {
+  if (!dateDisabled(value)) selectedDate.value = value
 }
 
 function setTimePart(part: 'hour' | 'minute', value: string): void {
@@ -191,55 +187,33 @@ function apply(): void {
   }
   localError.value = null
   emit('update:modelValue', value)
+  restoreOnClose = false
+  open.value = false
+}
+
+function cancelPicker(): void {
   open.value = false
 }
 
 function clear(): void {
   selectedDate.value = null
   selectedTime.value = null
+  inputText.value = ''
   localError.value = null
   emit('update:modelValue', null)
+  restoreOnClose = false
   open.value = false
 }
 
-function chooseToday(): void {
-  if (!dateDisabled(today.value)) {
-    selectedDate.value = today.value
-    const parts = parseDateOnly(today.value)!
-    viewYear.value = parts.year
-    viewMonth.value = parts.month
-  }
-}
-
-function changeMonth(amount: number): void {
-  const next = shiftMonth(viewYear.value, viewMonth.value, amount)
-  viewYear.value = next.year
-  viewMonth.value = next.month
-}
-
-function moveFocus(date: DateOnly, amount: number): void {
-  const next = shiftDate(date, amount)
-  const parts = parseDateOnly(next)!
-  viewYear.value = parts.year
-  viewMonth.value = parts.month
-  void nextTick(() => calendarButtons.value[next]?.focus())
-}
-
-function handleDateKeydown(event: KeyboardEvent, date: DateOnly): void {
-  const movements: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 }
-  const movement = movements[event.key]
-  if (movement) {
-    event.preventDefault()
-    moveFocus(date, movement)
-  }
+function handleDialogClosed(): void {
+  if (restoreOnClose) syncFromModel(props.modelValue)
+  restoreOnClose = true
 }
 
 function dateDisabled(value: DateOnly): boolean {
   const min = datePart(props.min)
   const max = datePart(props.max)
-  return Boolean((min && compareDateOnly(value, min) < 0)
-    || (max && compareDateOnly(value, max) > 0)
-    || props.isDateDisabled?.(value))
+  return Boolean((min && value < min) || (max && value > max) || props.isDateDisabled?.(value))
 }
 
 function withinRange(value: string): boolean {
@@ -267,21 +241,39 @@ function validStep(value: number): number {
       :error="effectiveError"
       :disabled="disabled"
     >
-      <div class="date-time-control" :class="{ 'date-time-control--invalid': effectiveError, 'date-time-control--disabled': disabled }">
+      <div
+        class="date-time-control"
+        :class="{ 'date-time-control--invalid': effectiveError, 'date-time-control--disabled': disabled }"
+        @keydown.down.prevent="showPicker"
+        @keydown.esc="open = false"
+      >
+        <BaseDateInputSegments
+          v-if="mode === 'date'"
+          class="date-time-control__segments"
+          :model-value="selectedDate"
+          :name="name"
+          :disabled="disabled"
+          :readonly="readonly"
+          :invalid="Boolean(effectiveError)"
+          :required="required"
+          :described-by="describedBy"
+          :label="label"
+          @complete="handleDateComplete"
+          @commit="commitDateInput"
+        />
         <input
+          v-else
           :id="name"
           v-model="inputText"
           type="text"
           :name="name"
-          :placeholder="mode === 'time' ? 'HH:mm' : mode === 'date' ? 'DD / MM / AAAA' : 'DD / MM / AAAA · HH:mm'"
+          :placeholder="mode === 'time' ? 'HH:mm' : 'DD / MM / AAAA · HH:mm'"
           :required="required"
           :disabled="disabled"
           :readonly="readonly"
           :aria-invalid="Boolean(effectiveError)"
           :aria-describedby="describedBy"
           @blur="commitInput"
-          @keydown.down.prevent="showPicker"
-          @keydown.esc="open = false"
         />
         <BaseIconButton :label="title" size="small" :disabled="disabled || readonly" @click="showPicker">
           <Clock3 v-if="mode === 'time'" :size="18" />
@@ -293,47 +285,17 @@ function validStep(value: number): number {
       </div>
     </BaseField>
 
-    <BaseDialog v-model="open" :title="title">
+    <BaseDialog v-model="open" :title="title" size="compact" @closed="handleDialogClosed">
       <div class="picker">
-        <section v-if="hasDate" class="calendar" aria-label="Calendario">
-          <div class="calendar__toolbar">
-            <BaseIconButton label="Mes anterior" size="small" @click="changeMonth(-1)"><ChevronLeft :size="18" /></BaseIconButton>
-            <div class="calendar__selectors">
-              <label>
-                <span class="sr-only">Mes</span>
-                <select v-model.number="viewMonth">
-                  <option v-for="month in 12" :key="month" :value="month">{{ monthName(month) }}</option>
-                </select>
-              </label>
-              <label>
-                <span class="sr-only">Año</span>
-                <select v-model.number="viewYear">
-                  <option v-for="year in yearOptions" :key="year" :value="year">{{ year }}</option>
-                </select>
-              </label>
-            </div>
-            <BaseIconButton label="Mes siguiente" size="small" @click="changeMonth(1)"><ChevronRight :size="18" /></BaseIconButton>
-          </div>
-          <div class="calendar__weekdays" aria-hidden="true"><span v-for="day in weekdays" :key="day">{{ day }}</span></div>
-          <div class="calendar__grid">
-            <template v-for="cell in calendarCells" :key="cell.key">
-              <span v-if="!cell.date" aria-hidden="true"></span>
-              <button
-                v-else
-                :ref="(element) => { calendarButtons[cell.date!] = element as HTMLButtonElement | null }"
-                type="button"
-                :disabled="dateDisabled(cell.date)"
-                :class="{ 'is-selected': selectedDate === cell.date, 'is-today': today === cell.date }"
-                :aria-label="formatDateOnly(cell.date, true)"
-                :aria-current="today === cell.date ? 'date' : undefined"
-                :aria-pressed="selectedDate === cell.date"
-                @click="selectDate(cell.date)"
-                @keydown="handleDateKeydown($event, cell.date)"
-              >{{ cell.day }}</button>
-            </template>
-          </div>
-          <BaseButton variant="ghost" @click="chooseToday">Hoy</BaseButton>
-        </section>
+        <BaseCalendar
+          v-if="hasDate"
+          mode="single"
+          :selected="selectedDate"
+          :min="datePart(min)"
+          :max="datePart(max)"
+          :is-date-disabled="isDateDisabled"
+          @select="selectDate"
+        />
 
         <section v-if="hasTime" class="time-picker" aria-label="Hora">
           <label>
@@ -353,9 +315,9 @@ function validStep(value: number): number {
         <p v-if="localError" class="picker__error" role="alert">{{ localError }}</p>
       </div>
       <template #footer>
-        <BaseButton v-if="clearable" variant="ghost" @click="clear">Limpiar</BaseButton>
-        <BaseButton variant="secondary" @click="open = false">Cancelar</BaseButton>
-        <BaseButton @click="apply">Aplicar</BaseButton>
+        <BaseButton v-if="clearable" size="compact" variant="ghost" @click="clear">Limpiar</BaseButton>
+        <BaseButton size="compact" variant="secondary" @click="cancelPicker">Cancelar</BaseButton>
+        <BaseButton size="compact" @click="apply">Aplicar</BaseButton>
       </template>
     </BaseDialog>
   </div>
@@ -368,30 +330,16 @@ function validStep(value: number): number {
 .date-time-control--invalid { border-color: var(--danger); }
 .date-time-control--disabled { background: var(--bg); }
 .date-time-control input { width: 0; min-width: 0; flex: 1 1 0%; box-sizing: border-box; border: 0; outline: 0; background: transparent; padding: 0.65rem 0.75rem; color: var(--text); font-size: max(1rem, 16px); }
+.date-time-control__segments { flex: 1 1 auto; padding: 0 0.75rem; }
 .date-time-control :deep(.icon-button) { flex: 0 0 auto; }
-.picker { display: grid; gap: 1.5rem; }
-.calendar { display: grid; gap: 0.75rem; }
-.calendar__toolbar { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 0.5rem; }
-.calendar__selectors { display: flex; min-width: 0; justify-content: center; gap: 0.5rem; }
-.calendar select, .time-picker select { min-height: 44px; border: 1px solid var(--control-border); border-radius: var(--radius-input); background: var(--surface); padding: 0.5rem; color: var(--text); }
-.calendar__weekdays, .calendar__grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0.25rem; text-align: center; }
-.calendar__weekdays { color: var(--text-secondary); font-size: 0.75rem; font-weight: 500; }
-.calendar__grid button, .calendar__grid > span { min-width: 44px; min-height: 44px; }
-.calendar__grid button { border: 1px solid transparent; border-radius: var(--radius-button); background: transparent; color: var(--text); cursor: pointer; }
-.calendar__grid button:hover:not(:disabled) { background: var(--hover); }
-.calendar__grid button.is-today { border-color: var(--accent); }
-.calendar__grid button.is-selected { background: var(--accent); color: var(--on-accent); }
-.calendar__grid button:disabled { color: var(--text-muted); opacity: 0.45; cursor: not-allowed; }
-.time-picker { display: flex; align-items: flex-end; justify-content: center; gap: 0.75rem; }
-.time-picker label { display: grid; gap: 0.5rem; color: var(--text-secondary); font-size: 0.8125rem; }
-.time-picker select { min-width: 6rem; font-size: 1rem; }
-.time-picker > span { padding-bottom: 0.65rem; font-size: 1.25rem; }
+.picker { display: grid; gap: 0.875rem; }
+.time-picker { display: flex; align-items: flex-end; justify-content: center; gap: 0.6rem; }
+.time-picker label { display: grid; gap: 0.3rem; color: var(--text-secondary); font-size: 0.75rem; }
+.time-picker select { min-width: 5rem; min-height: 36px; border: 1px solid var(--control-border); border-radius: var(--radius-input); background: var(--surface); padding: 0.4rem 0.5rem; color: var(--text); }
+.time-picker > span { padding-bottom: 0.45rem; font-size: 1.1rem; }
 .picker__error { margin: 0; color: var(--danger); font-size: 0.8125rem; }
-.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
-@media (max-width: 520px) {
-  .calendar__selectors { gap: 0.25rem; }
-  .calendar__selectors select { max-width: 8rem; }
-  .calendar__grid button, .calendar__grid > span { min-width: 0; min-height: 44px; }
+@media (max-width: 600px) {
+  .time-picker select { min-height: 44px; font-size: 1rem; }
 }
 </style>

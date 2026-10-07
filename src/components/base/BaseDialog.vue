@@ -10,7 +10,8 @@ const props = withDefaults(defineProps<{
   description?: string
   closeLabel?: string
   closeOnEscape?: boolean
-}>(), { description: undefined, closeLabel: 'Cerrar', closeOnEscape: true })
+  size?: 'default' | 'compact'
+}>(), { description: undefined, closeLabel: 'Cerrar', closeOnEscape: true, size: 'default' })
 
 const emit = defineEmits<{ 'update:modelValue': [value: boolean]; closed: [] }>()
 const dialog = ref<HTMLDialogElement | null>(null)
@@ -52,6 +53,7 @@ onBeforeUnmount(() => {
   <dialog
     ref="dialog"
     class="base-dialog"
+    :class="`base-dialog--${size}`"
     :aria-labelledby="titleId"
     :aria-describedby="description ? descriptionId : undefined"
     @cancel="handleCancel"
@@ -92,6 +94,13 @@ onBeforeUnmount(() => {
 .base-dialog__body { min-height: 0; overflow-y: auto; padding: 1.5rem 2rem; }
 .base-dialog__footer { display: flex; flex-wrap: wrap; gap: 0.75rem; padding: 0 2rem 2rem; }
 
+.base-dialog--compact { width: min(22rem, calc(100vw - 2rem)); }
+.base-dialog--compact .base-dialog__header { align-items: center; gap: 0.75rem; padding: 1rem 1rem 0; }
+.base-dialog--compact .base-dialog__header h2 { font-size: 1rem; line-height: 1.5rem; }
+.base-dialog--compact .base-dialog__header p { margin-top: 0.5rem; font-size: 0.8125rem; line-height: 1.2rem; }
+.base-dialog--compact .base-dialog__body { padding: 0.875rem 1rem; }
+.base-dialog--compact .base-dialog__footer { justify-content: flex-end; gap: 0.5rem; padding: 0 1rem 1rem; }
+
 @media (max-width: 600px) {
   .base-dialog {
     width: 100vw;
@@ -103,5 +112,13 @@ onBeforeUnmount(() => {
   .base-dialog__header { padding: 1.5rem 1.25rem 0; }
   .base-dialog__body { padding: 1.25rem; }
   .base-dialog__footer { position: sticky; bottom: 0; padding: 1rem 1.25rem calc(1rem + env(safe-area-inset-bottom)); background: var(--surface); }
+  .base-dialog--compact .base-dialog__header { padding: 1.25rem 1.25rem 0; }
+  .base-dialog--compact .base-dialog__body { padding: 1rem 1.25rem; }
+  .base-dialog--compact .base-dialog__footer { padding: 0.75rem 1.25rem calc(0.75rem + env(safe-area-inset-bottom)); }
 }
+
+@media (max-width: 360px) {
+  .base-dialog--compact .base-dialog__body { padding-inline: 0; }
+}
+
 </style>

@@ -116,6 +116,13 @@ Las variantes se expresan con props tipadas. No duplicar clases completas en com
 
 Estas reglas siguen patrones consolidados de formularios de GitHub Primer y Atlassian: labels permanentes y concisos, captions para contexto, validación junto al campo y agrupación visual que reduce carga cognitiva.
 
+### Fechas y rangos
+
+- Las fechas editables usan una entrada segmentada `DD / MM / AAAA`: los separadores son parte del control, los segmentos pendientes permanecen como ayuda visual tenue y el foco avanza al completar día o mes. También se admite pegar una fecha completa.
+- En escritorio el calendario muestra un solo mes en un diálogo compacto; en móvil conserva objetivos táctiles de al menos 44 px.
+- Los rangos usan un único control `Desde – Hasta` y el mismo calendario en modo rango, con inicio y fin acentuados y los días intermedios en un tono sutil.
+- La navegación por teclado del calendario cubre flechas, `PageUp`/`PageDown`, `Home`/`End` y cierre por `Escape`.
+
 ## Enlaces de entidad y WhatsApp
 
 - Un nombre de Cliente, Sede, Área o Servicio navegable usa `--text` por defecto, no `--accent`.
