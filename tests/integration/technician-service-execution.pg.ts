@@ -5,7 +5,7 @@ import type { PoolClient } from 'pg'
 vi.mock('@neon/functions', () => ({ attachDatabasePool: vi.fn<() => void>(), waitUntil: vi.fn<() => void>() }))
 
 import { pool, transaction } from '../../functions/api/db'
-import { claimTechnicianService, releaseTechnicianServiceLock, startTechnicianService, technicianCommand } from '../../functions/api/technician-services/commands'
+import { claimTechnicianService, releaseTechnicianServiceLock, saveTechnicianCriterionEvaluation, startTechnicianService, technicianCommand } from '../../functions/api/technician-services/commands'
 import { getTechnicianPackage } from '../../functions/api/technician-services/queries'
 
 const target = new URL(process.env.TEST_DATABASE_URL ?? '')
@@ -117,6 +117,21 @@ describe('technician service execution · real PostgreSQL', () => {
     expect(replay.lock.token).toBe(first.lock.token)
     await expect(run(randomUUID())).rejects.toMatchObject({ code: 'REQUEST_REUSED' })
     expect(Number((await pool.query("select count(*) from public.auditoria where registro_id=$1 and accion='SERVICIO_INICIADO'", [value.service])).rows[0].count)).toBe(1)
+  })
+
+  it('saves a criterion evaluation idempotently and rejects a stale version with the remote answer', async () => {
+    const value = await fixture(), deviceId = randomUUID(), requestId = randomUUID()
+    const session = await transaction(client => startTechnicianService(client, value.technician, value.service, 1, deviceId))
+    const criterion = session.package.areas.find(area => area.areaId === value.internalArea)!.criterios.find(item => item.criterioId === value.generalCriterion)!
+    const payload = { deviceId, criterionId: criterion.id, version: criterion.version, evaluation: 'CP', observation: 'Mejora pendiente' }
+    const save = () => transaction(client => technicianCommand(client, value.technician, requestId, 'CRITERION_EVALUATION', value.service, criterion.version,
+      payload, () => saveTechnicianCriterionEvaluation(client, value.technician, value.service, deviceId, session.lock.token, criterion.id, criterion.version, 'CP', 'Mejora pendiente')))
+    const first = await save(), replay = await save()
+    expect(first.criterion).toMatchObject({ evaluacion: 'CP', observacion: 'Mejora pendiente', version: 2 })
+    expect(replay).toEqual(first)
+    await expect(transaction(client => saveTechnicianCriterionEvaluation(client, value.technician, value.service, deviceId, session.lock.token,
+      criterion.id, 1, 'NC', 'Otra respuesta'))).rejects.toMatchObject({ code: 'VERSION_CONFLICT', details: { remote: { evaluacion: 'CP', version: 2 } } })
+    expect(Number((await pool.query("select count(*) from public.auditoria where registro_id=$1 and accion='SERVICIO_CRITERIO_EVALUADO'", [value.service])).rows[0].count)).toBe(1)
   })
 
   it('keeps one persistent mobile editor until an administrator releases the service', async () => {

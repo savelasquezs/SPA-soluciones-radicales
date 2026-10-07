@@ -1,5 +1,5 @@
 import type { PoolClient } from 'pg'
-import type { TechnicianAreaOrderResult, TechnicianAreaOrderVersion, TechnicianExecutionLock, TechnicianExecutionSession } from '../../../src/types/technicianServices'
+import type { MipEvaluation, TechnicianAreaOrderResult, TechnicianAreaOrderVersion, TechnicianCriterion, TechnicianCriterionEvaluationResult, TechnicianExecutionLock, TechnicianExecutionSession } from '../../../src/types/technicianServices'
 import { ApiError } from '../auth'
 import { assertVersion, audit } from '../services/commands'
 import { assignedServiceState, getTechnicianPackage } from './queries'
@@ -96,6 +96,51 @@ export async function saveTechnicianAreaOrder(
   }
   await audit(client, userId, 'SERVICIO_RECORRIDO_REORDENADO', serviceId, { areaIds })
   return result
+}
+
+export async function saveTechnicianCriterionEvaluation(
+  client: PoolClient,
+  userId: string,
+  serviceId: string,
+  deviceId: string,
+  lockToken: string,
+  criterionId: string,
+  expectedVersion: number,
+  evaluation: MipEvaluation,
+  observation: string,
+): Promise<TechnicianCriterionEvaluationResult> {
+  const service = await assignedServiceState(client, userId, serviceId, true)
+  if (service.tipo_servicio !== 'PRINCIPAL' || service.estado !== 'EN_PROCESO') {
+    throw new ApiError(409, 'Los criterios solo se evalúan durante un servicio Principal En proceso.', 'SERVICE_NOT_IN_PROGRESS')
+  }
+  await assertExecutionLock(client, userId, serviceId, deviceId, lockToken)
+  const current = (await client.query<(TechnicianCriterion & { sinAcceso: boolean; areaId: string })>(`select evaluation.id,
+    evaluation.criterio_id as "criterioId",evaluation.criterio_nombre_snapshot as nombre,
+    evaluation.solo_area_externa_snapshot as "soloAreaExterna",evaluation.evaluacion,
+    evaluation.observacion,evaluation.evidencias_storage_paths as "evidenciasStoragePaths",
+    evaluation.version::integer,area.sin_acceso as "sinAcceso",area.id as "areaId"
+    from public.evaluaciones_mip_area evaluation
+    join public.servicio_areas area on area.id=evaluation.servicio_area_id
+    where evaluation.id=$2 and evaluation.servicio_id=$1 and area.servicio_id=$1
+    for update of evaluation`, [serviceId, criterionId])).rows[0]
+  if (!current) throw new ApiError(404, 'El criterio no pertenece a este servicio.', 'CRITERION_NOT_FOUND')
+  if (current.sinAcceso) throw new ApiError(409, 'El Área está registrada sin acceso. Habilita la evaluación antes de cambiar sus criterios.', 'AREA_WITHOUT_ACCESS')
+  if (current.version !== expectedVersion) {
+    throw new ApiError(409, 'El criterio cambió. Conservamos tu respuesta para que decidas cómo continuar.', 'VERSION_CONFLICT', { remote: current })
+  }
+  const normalizedObservation = observation.trim()
+  const { rows } = await client.query<TechnicianCriterion>(`update public.evaluaciones_mip_area set evaluacion=$3,observacion=$4
+    where id=$2 and servicio_id=$1 returning id,criterio_id as "criterioId",criterio_nombre_snapshot as nombre,
+    solo_area_externa_snapshot as "soloAreaExterna",evaluacion,observacion,
+    evidencias_storage_paths as "evidenciasStoragePaths",version::integer`,
+  [serviceId, criterionId, evaluation, normalizedObservation || null])
+  await audit(client, userId, 'SERVICIO_CRITERIO_EVALUADO', serviceId, {
+    areaId: current.areaId,
+    criterionId,
+    evaluation,
+    hasObservation: Boolean(normalizedObservation),
+  })
+  return { criterion: rows[0]! }
 }
 
 async function lockSnapshotSources(client: PoolClient, serviceId: string): Promise<{ areaIds: string[]; criterionIds: string[]; deviceIds: string[] }> {

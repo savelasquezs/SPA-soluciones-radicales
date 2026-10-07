@@ -1,5 +1,5 @@
 import { apiRequest } from '@/services/apiService'
-import type { TechnicianAreaOrderResult, TechnicianAreaOrderVersion, TechnicianExecutionSession, TechnicianServicePackage, TechnicianServiceSummary } from '@/types/technicianServices'
+import type { MipEvaluation, TechnicianAreaOrderResult, TechnicianAreaOrderVersion, TechnicianCriterionEvaluationResult, TechnicianExecutionSession, TechnicianServicePackage, TechnicianServiceSummary } from '@/types/technicianServices'
 
 const base = 'api/technician/services'
 const json = (value: unknown): RequestInit => ({ method: 'POST', body: JSON.stringify(value) })
@@ -12,3 +12,5 @@ export const claimTechnicianService = (serviceId: string, requestId: string, dev
   apiRequest<TechnicianExecutionSession>(`${base}/${serviceId}/claim`, json({ requestId, deviceId }))
 export const saveTechnicianAreaOrder = (serviceId: string, requestId: string, deviceId: string, lockToken: string, areaIds: string[], versions: TechnicianAreaOrderVersion[]) =>
   apiRequest<TechnicianAreaOrderResult>(`${base}/${serviceId}/areas/order`, json({ requestId, deviceId, lockToken, areaIds, versions }))
+export const saveTechnicianCriterionEvaluation = (serviceId: string, requestId: string, deviceId: string, lockToken: string, criterionId: string, version: number, evaluation: MipEvaluation, observation: string) =>
+  apiRequest<TechnicianCriterionEvaluationResult>(`${base}/${serviceId}/criteria/${criterionId}`, json({ requestId, deviceId, lockToken, version, evaluation, observation }))

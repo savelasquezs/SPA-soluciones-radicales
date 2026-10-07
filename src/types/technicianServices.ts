@@ -118,19 +118,38 @@ export interface TechnicianAreaOrderConflict {
   versions: TechnicianAreaOrderVersion[]
 }
 
-export interface TechnicianAreaOrderMutation {
+interface TechnicianMutationBase {
   schemaVersion: 1
   requestId: string
   actorId: string
   serviceId: string
   deviceId: string
   lockToken: string
-  kind: 'AREA_ORDER'
-  areaIds: string[]
-  versions: TechnicianAreaOrderVersion[]
   status: 'PENDING' | 'SENDING' | 'CONFLICT'
   createdAt: string
   updatedAt: string
-  conflict: TechnicianAreaOrderConflict | null
   error: string | null
 }
+
+export interface TechnicianAreaOrderMutation extends TechnicianMutationBase {
+  kind: 'AREA_ORDER'
+  areaIds: string[]
+  versions: TechnicianAreaOrderVersion[]
+  conflict: TechnicianAreaOrderConflict | null
+}
+
+export interface TechnicianCriterionEvaluationResult {
+  criterion: TechnicianCriterion
+}
+
+export interface TechnicianCriterionEvaluationMutation extends TechnicianMutationBase {
+  kind: 'CRITERION_EVALUATION'
+  areaId: string
+  criterionId: string
+  evaluation: MipEvaluation
+  observation: string
+  version: number
+  conflict: TechnicianCriterion | null
+}
+
+export type TechnicianMutation = TechnicianAreaOrderMutation | TechnicianCriterionEvaluationMutation

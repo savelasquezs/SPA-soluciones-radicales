@@ -2,11 +2,11 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { isExactAreaPermutation, sortTechnicianServices } from '@/helpers/technicianServices'
 import { useAuthStore } from '@/stores/auth'
-import { claimTechnicianService, fetchTechnicianPackage, fetchTechnicianServices, saveTechnicianAreaOrder, startTechnicianService } from '@/services/servicesService'
+import { claimTechnicianService, fetchTechnicianPackage, fetchTechnicianServices, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, startTechnicianService } from '@/services/servicesService'
 import { ApiClientError } from '@/services/apiService'
 import { getTechnicianDeviceId, listTechnicianPackageCaches, loadTechnicianPackageCache, saveTechnicianPackageCache } from '@/services/technicianPackageService'
 import { deleteTechnicianMutation, listTechnicianMutations, saveTechnicianMutation } from '@/services/technicianMutationService'
-import type { TechnicianAreaOrderConflict, TechnicianAreaOrderMutation, TechnicianAreaOrderResult, TechnicianExecutionSession, TechnicianPackageCache, TechnicianPendingOperation, TechnicianServicePackage, TechnicianServiceSummary } from '@/types/technicianServices'
+import type { MipEvaluation, TechnicianAreaOrderConflict, TechnicianAreaOrderMutation, TechnicianAreaOrderResult, TechnicianCriterion, TechnicianCriterionEvaluationMutation, TechnicianExecutionSession, TechnicianMutation, TechnicianPackageCache, TechnicianPendingOperation, TechnicianServicePackage, TechnicianServiceSummary } from '@/types/technicianServices'
 
 function onlineNow(): boolean {
   return typeof navigator === 'undefined' || navigator.onLine
@@ -25,7 +25,7 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
   const packageError = ref('')
   const currentFromCache = ref(false)
   const action = ref<'START' | 'CLAIM' | null>(null)
-  const mutations = ref<Record<string, TechnicianAreaOrderMutation[]>>({})
+  const mutations = ref<Record<string, TechnicianMutation[]>>({})
   const syncing = ref(false)
   let loadedActorId = ''
   let listRequest = 0
@@ -34,7 +34,7 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
   const currentCache = computed(() => caches.value[currentServiceId.value] ?? null)
   const currentPackage = computed(() => currentCache.value?.package ?? null)
   const currentMutations = computed(() => mutations.value[currentServiceId.value] ?? [])
-  const currentConflict = computed(() => currentMutations.value.find(item => item.status === 'CONFLICT') ?? null)
+  const currentConflict = computed<TechnicianAreaOrderMutation | null>(() => currentMutations.value.find((item): item is TechnicianAreaOrderMutation => item.kind === 'AREA_ORDER' && item.status === 'CONFLICT') ?? null)
   const pendingSyncCount = computed(() => currentMutations.value.filter(item => item.status !== 'CONFLICT').length)
 
   function actorId(): string {
@@ -59,13 +59,13 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     if (!force && loadedActorId === actor) return
     const [found, pending] = await Promise.all([listTechnicianPackageCaches(actor), listTechnicianMutations(actor)])
     caches.value = Object.fromEntries(found.map(item => [item.serviceId, item]))
-    const grouped: Record<string, TechnicianAreaOrderMutation[]> = {}
+    const grouped: Record<string, TechnicianMutation[]> = {}
     for (const item of pending) (grouped[item.serviceId] ??= []).push(item)
     mutations.value = grouped
     loadedActorId = actor
   }
 
-  async function reloadMutations(serviceId: string): Promise<TechnicianAreaOrderMutation[]> {
+  async function reloadMutations(serviceId: string): Promise<TechnicianMutation[]> {
     const found = await listTechnicianMutations(actorId(), serviceId)
     mutations.value = { ...mutations.value, [serviceId]: found }
     return found
@@ -151,6 +151,23 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     await persistPackage({ ...cache.package, areas })
   }
 
+  async function persistCriterionEvaluation(serviceId: string, areaId: string, criterion: TechnicianCriterion): Promise<void> {
+    const cache = caches.value[serviceId]
+    if (!cache) throw new Error('Prepara el servicio antes de evaluar sus criterios.')
+    let found = false
+    const areas = cache.package.areas.map(area => {
+      if (area.id !== areaId) return area
+      const criterios = area.criterios.map(current => {
+        if (current.id !== criterion.id) return current
+        found = true
+        return criterion
+      })
+      return { ...area, criterios }
+    })
+    if (!found) throw new Error('El criterio no pertenece al Área seleccionada.')
+    await persistPackage({ ...cache.package, areas })
+  }
+
   function conflictDetails(failure: ApiClientError): TechnicianAreaOrderConflict | null {
     const remote = failure.details?.remote
     if (!remote || typeof remote !== 'object' || Array.isArray(remote)) return null
@@ -159,43 +176,68 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     return { areaIds: record.areaIds, versions: record.versions }
   }
 
+  function criterionConflictDetails(failure: ApiClientError): TechnicianCriterion | null {
+    const remote = failure.details?.remote
+    if (!remote || typeof remote !== 'object' || Array.isArray(remote)) return null
+    const record = remote as Partial<TechnicianCriterion>
+    if (!record.id || !record.criterioId || !Number.isSafeInteger(record.version) || !Array.isArray(record.evidenciasStoragePaths)) return null
+    return record as TechnicianCriterion
+  }
+
   async function syncPending(serviceId: string): Promise<'synced' | 'pending' | 'conflict'> {
     if (!onlineNow()) return 'pending'
-    if (syncing.value) return currentConflict.value ? 'conflict' : 'pending'
+    if (syncing.value) return currentMutations.value.some(item => item.status === 'CONFLICT') ? 'conflict' : 'pending'
     syncing.value = true
     try {
-      let pending = await reloadMutations(serviceId)
-      for (const operation of pending) {
-        if (operation.status === 'CONFLICT') return 'conflict'
-        const sending = { ...operation, status: 'SENDING' as const, updatedAt: new Date().toISOString(), error: null }
+      while (true) {
+        const pending = await reloadMutations(serviceId)
+        if (pending.some(item => item.status === 'CONFLICT')) return 'conflict'
+        const operation = pending[0]
+        if (!operation) return 'synced'
+        const sending = { ...operation, status: 'SENDING' as const, updatedAt: new Date().toISOString(), error: null } as TechnicianMutation
         await saveTechnicianMutation(sending)
         await reloadMutations(serviceId)
         try {
-          const result = await saveTechnicianAreaOrder(serviceId, sending.requestId, sending.deviceId, sending.lockToken, sending.areaIds, sending.versions)
-          await deleteTechnicianMutation(sending)
-          const remaining = await listTechnicianMutations(actorId(), serviceId)
-          const definitiveVersions = result.areas.map(area => ({ id: area.id, version: area.version }))
-          for (const queued of remaining.filter(item => item.status !== 'CONFLICT')) {
-            await saveTechnicianMutation({ ...queued, versions: definitiveVersions, updatedAt: new Date().toISOString() })
+          if (sending.kind === 'AREA_ORDER') {
+            const result = await saveTechnicianAreaOrder(serviceId, sending.requestId, sending.deviceId, sending.lockToken, sending.areaIds, sending.versions)
+            await deleteTechnicianMutation(sending)
+            const remaining = await listTechnicianMutations(actorId(), serviceId)
+            const definitiveVersions = result.areas.map(area => ({ id: area.id, version: area.version }))
+            for (const queued of remaining.filter((item): item is TechnicianAreaOrderMutation => item.kind === 'AREA_ORDER' && item.status !== 'CONFLICT')) {
+              await saveTechnicianMutation({ ...queued, versions: definitiveVersions, updatedAt: new Date().toISOString() })
+            }
+            const latest = [...remaining].reverse().find((item): item is TechnicianAreaOrderMutation => item.kind === 'AREA_ORDER' && item.status !== 'CONFLICT')
+            await persistAreaOrder(serviceId, latest?.areaIds ?? result.areas.map(area => area.id), result)
+          } else {
+            const result = await saveTechnicianCriterionEvaluation(serviceId, sending.requestId, sending.deviceId, sending.lockToken,
+              sending.criterionId, sending.version, sending.evaluation, sending.observation)
+            await deleteTechnicianMutation(sending)
+            const remaining = await listTechnicianMutations(actorId(), serviceId)
+            const sameCriterion = remaining.filter((item): item is TechnicianCriterionEvaluationMutation => item.kind === 'CRITERION_EVALUATION'
+              && item.criterionId === sending.criterionId && item.status !== 'CONFLICT')
+            for (const queued of sameCriterion) {
+              await saveTechnicianMutation({ ...queued, version: result.criterion.version, updatedAt: new Date().toISOString() })
+            }
+            const latest = sameCriterion[sameCriterion.length - 1]
+            const criterion = latest
+              ? { ...result.criterion, evaluacion: latest.evaluation, observacion: latest.observation || null }
+              : result.criterion
+            await persistCriterionEvaluation(serviceId, sending.areaId, criterion)
           }
-          pending = await reloadMutations(serviceId)
-          const latest = [...pending].reverse().find(item => item.status !== 'CONFLICT')
-          await persistAreaOrder(serviceId, latest?.areaIds ?? result.areas.map(area => area.id), result)
         } catch (failure) {
           const retryable = !(failure instanceof ApiClientError) || failure.status >= 500 || failure.status === 408 || failure.status === 429
-          const conflict = failure instanceof ApiClientError ? conflictDetails(failure) : null
-          await saveTechnicianMutation({
-            ...sending,
-            status: retryable ? 'SENDING' : 'CONFLICT',
-            conflict,
-            error: failure instanceof Error ? failure.message : 'No fue posible sincronizar el recorrido.',
-            updatedAt: new Date().toISOString(),
-          })
+          const error = failure instanceof Error ? failure.message : 'No fue posible sincronizar el cambio.'
+          if (sending.kind === 'AREA_ORDER') {
+            await saveTechnicianMutation({ ...sending, status: retryable ? 'SENDING' : 'CONFLICT',
+              conflict: failure instanceof ApiClientError ? conflictDetails(failure) : null, error, updatedAt: new Date().toISOString() })
+          } else {
+            await saveTechnicianMutation({ ...sending, status: retryable ? 'SENDING' : 'CONFLICT',
+              conflict: failure instanceof ApiClientError ? criterionConflictDetails(failure) : null, error, updatedAt: new Date().toISOString() })
+          }
           await reloadMutations(serviceId)
           return retryable ? 'pending' : 'conflict'
         }
       }
-      return 'synced'
     } finally {
       syncing.value = false
     }
@@ -207,8 +249,8 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     const currentIds = cache.package.areas.map(area => area.id)
     if (!isExactAreaPermutation(currentIds, areaIds)) throw new Error('El recorrido debe conservar todas las Áreas.')
     const existing = await reloadMutations(serviceId)
-    if (existing.some(item => item.status === 'CONFLICT')) return 'conflict'
-    const reusable = [...existing].reverse().find(item => item.status === 'PENDING')
+    if (existing.some(item => item.kind === 'AREA_ORDER' && item.status === 'CONFLICT')) return 'conflict'
+    const reusable = [...existing].reverse().find((item): item is TechnicianAreaOrderMutation => item.kind === 'AREA_ORDER' && item.status === 'PENDING')
     const now = new Date().toISOString()
     const operation: TechnicianAreaOrderMutation = reusable
       ? { ...reusable, areaIds, updatedAt: now }
@@ -236,9 +278,9 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
 
   async function discardAreaOrderConflict(serviceId: string): Promise<void> {
     const pending = await reloadMutations(serviceId)
-    const conflicted = pending.find(item => item.status === 'CONFLICT' && item.conflict)
+    const conflicted = pending.find((item): item is TechnicianAreaOrderMutation => item.kind === 'AREA_ORDER' && item.status === 'CONFLICT' && Boolean(item.conflict))
     if (!conflicted?.conflict) throw new Error('No hay una versión remota disponible.')
-    for (const operation of pending) await deleteTechnicianMutation(operation)
+    for (const operation of pending.filter(item => item.kind === 'AREA_ORDER')) await deleteTechnicianMutation(operation)
     await reloadMutations(serviceId)
     const versions = new Map(conflicted.conflict.versions.map(item => [item.id, item.version]))
     await persistAreaOrder(serviceId, conflicted.conflict.areaIds, { areas: conflicted.conflict.areaIds.map((id, posicionRecorrido) => ({
@@ -251,13 +293,85 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
   async function retryAreaOrderConflict(serviceId: string): Promise<'synced' | 'pending' | 'conflict'> {
     const cache = caches.value[serviceId]
     const pending = await reloadMutations(serviceId)
-    const conflicted = pending.find(item => item.status === 'CONFLICT' && item.conflict)
+    const conflicted = pending.find((item): item is TechnicianAreaOrderMutation => item.kind === 'AREA_ORDER' && item.status === 'CONFLICT' && Boolean(item.conflict))
     if (!cache?.lock || !conflicted?.conflict) throw new Error('No es posible reintentar el recorrido.')
     const localOrder = cache.package.areas.map(area => area.id)
-    for (const operation of pending) await deleteTechnicianMutation(operation)
+    for (const operation of pending.filter(item => item.kind === 'AREA_ORDER')) await deleteTechnicianMutation(operation)
     const now = new Date().toISOString()
     await saveTechnicianMutation({ ...conflicted, requestId: crypto.randomUUID(), areaIds: localOrder, versions: conflicted.conflict.versions,
       status: 'PENDING', conflict: null, error: null, createdAt: now, updatedAt: now })
+    await reloadMutations(serviceId)
+    return syncPending(serviceId)
+  }
+
+  function criterionConflict(criterionId: string): TechnicianCriterionEvaluationMutation | null {
+    return currentMutations.value.find((item): item is TechnicianCriterionEvaluationMutation => item.kind === 'CRITERION_EVALUATION'
+      && item.criterionId === criterionId && item.status === 'CONFLICT') ?? null
+  }
+
+  async function applyCriterionEvaluation(serviceId: string, areaId: string, criterionId: string, evaluation: MipEvaluation, observation: string): Promise<'synced' | 'pending' | 'conflict'> {
+    const cache = caches.value[serviceId]
+    if (!cache || cache.package.service.estado !== 'EN_PROCESO' || !cache.lock) throw new Error('Este celular no puede evaluar el servicio.')
+    const area = cache.package.areas.find(item => item.id === areaId)
+    const criterion = area?.criterios.find(item => item.id === criterionId)
+    if (!area || !criterion) throw new Error('El criterio no pertenece al Área seleccionada.')
+    if (area.sinAcceso) throw new Error('Habilita la evaluación del Área antes de cambiar sus criterios.')
+    const normalizedObservation = observation.trim()
+    if (normalizedObservation.length > 2_000) throw new Error('La observación no puede superar 2000 caracteres.')
+    const existing = await reloadMutations(serviceId)
+    if (existing.some(item => item.kind === 'CRITERION_EVALUATION' && item.criterionId === criterionId && item.status === 'CONFLICT')) return 'conflict'
+    const reusable = [...existing].reverse().find((item): item is TechnicianCriterionEvaluationMutation => item.kind === 'CRITERION_EVALUATION'
+      && item.criterionId === criterionId && item.status === 'PENDING')
+    const now = new Date().toISOString()
+    const operation: TechnicianCriterionEvaluationMutation = reusable
+      ? { ...reusable, evaluation, observation: normalizedObservation, updatedAt: now }
+      : {
+          schemaVersion: 1,
+          requestId: crypto.randomUUID(),
+          actorId: actorId(),
+          serviceId,
+          deviceId: cache.deviceId,
+          lockToken: cache.lock.token,
+          kind: 'CRITERION_EVALUATION',
+          areaId,
+          criterionId,
+          evaluation,
+          observation: normalizedObservation,
+          version: criterion.version,
+          status: 'PENDING',
+          createdAt: now,
+          updatedAt: now,
+          conflict: null,
+          error: null,
+        }
+    await saveTechnicianMutation(operation)
+    await reloadMutations(serviceId)
+    await persistCriterionEvaluation(serviceId, areaId, { ...criterion, evaluacion: evaluation, observacion: normalizedObservation || null })
+    return onlineNow() ? syncPending(serviceId) : 'pending'
+  }
+
+  async function discardCriterionEvaluationConflict(serviceId: string, criterionId: string): Promise<void> {
+    const pending = await reloadMutations(serviceId)
+    const conflicted = pending.find((item): item is TechnicianCriterionEvaluationMutation => item.kind === 'CRITERION_EVALUATION'
+      && item.criterionId === criterionId && item.status === 'CONFLICT' && Boolean(item.conflict))
+    if (!conflicted?.conflict) throw new Error('No hay una respuesta sincronizada disponible.')
+    for (const operation of pending.filter(item => item.kind === 'CRITERION_EVALUATION' && item.criterionId === criterionId)) await deleteTechnicianMutation(operation)
+    await reloadMutations(serviceId)
+    await persistCriterionEvaluation(serviceId, conflicted.areaId, conflicted.conflict)
+  }
+
+  async function retryCriterionEvaluationConflict(serviceId: string, criterionId: string): Promise<'synced' | 'pending' | 'conflict'> {
+    const cache = caches.value[serviceId]
+    const pending = await reloadMutations(serviceId)
+    const conflicted = pending.find((item): item is TechnicianCriterionEvaluationMutation => item.kind === 'CRITERION_EVALUATION'
+      && item.criterionId === criterionId && item.status === 'CONFLICT' && Boolean(item.conflict))
+    const area = cache?.package.areas.find(item => item.id === conflicted?.areaId)
+    const local = area?.criterios.find(item => item.id === criterionId)
+    if (!cache?.lock || !conflicted?.conflict || !local?.evaluacion) throw new Error('No es posible reintentar esta evaluación.')
+    for (const operation of pending.filter(item => item.kind === 'CRITERION_EVALUATION' && item.criterionId === criterionId)) await deleteTechnicianMutation(operation)
+    const now = new Date().toISOString()
+    await saveTechnicianMutation({ ...conflicted, requestId: crypto.randomUUID(), evaluation: local.evaluacion, observation: local.observacion ?? '',
+      version: conflicted.conflict.version, status: 'PENDING', conflict: null, error: null, createdAt: now, updatedAt: now })
     await reloadMutations(serviceId)
     return syncPending(serviceId)
   }
@@ -287,7 +401,7 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
           if (!cached) throw new Error('Este servicio no está preparado en este celular.')
           currentFromCache.value = true
           packageError.value = synchronization === 'conflict'
-            ? 'El recorrido tiene un conflicto pendiente. Revisa cuál orden conservar.'
+            ? 'Hay un conflicto pendiente. Revisa cuál cambio conservar.'
             : 'Hay cambios guardados en este celular pendientes de sincronizar.'
           return cached.package
         }
@@ -377,5 +491,9 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     applyAreaOrder,
     discardAreaOrderConflict,
     retryAreaOrderConflict,
+    criterionConflict,
+    applyCriterionEvaluation,
+    discardCriterionEvaluationConflict,
+    retryCriterionEvaluationConflict,
   }
 })
