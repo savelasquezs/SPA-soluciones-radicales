@@ -5,7 +5,6 @@ import type {
   AreaRecord,
   ClientInput,
   ClientRecord,
-  FormOption,
   PaginatedResult,
   ServiceHistoryItem,
   SiteInput,
@@ -17,11 +16,10 @@ type ClientWire = Omit<ClientRecord, 'version' | 'sedesCount'> & {
   sedesCount: number | string
 }
 
-type SiteWire = Omit<SiteRecord, 'valorServicio' | 'version' | 'areasCount' | 'formulariosCount'> & {
+type SiteWire = Omit<SiteRecord, 'valorServicio' | 'version' | 'areasCount'> & {
   valorServicio: number | string
   version: number | string
   areasCount: number | string
-  formulariosCount: number | string
 }
 
 type AreaWire = Omit<AreaRecord, 'version' | 'dispositivosCount'> & {
@@ -116,10 +114,6 @@ export function listSiteHistory(siteId: string, page = 1): Promise<PaginatedResu
   return historyRequest(`api/sites/${siteId}/services?page=${page}`)
 }
 
-export function listFormOptions(): Promise<FormOption[]> {
-  return apiRequest<FormOption[]>('api/catalogs/forms')
-}
-
 function clientPayload(input: ClientInput): ClientInput {
   const residentialPhone = input.tipoCliente === 'RESIDENCIAL'
     ? normalizePhone(input.residenciaCelular ?? '')
@@ -144,7 +138,6 @@ function sitePayload(input: SiteInput): SiteInput {
     contactoPrincipalNombre: input.contactoPrincipalNombre.trim(),
     contactoPrincipalCorreo: input.contactoPrincipalCorreo?.trim().toLocaleLowerCase('es-CO') || null,
     contactoPrincipalCelular: normalizePhone(input.contactoPrincipalCelular) ?? input.contactoPrincipalCelular.trim(),
-    formulariosAplicablesIds: [...new Set(input.formulariosAplicablesIds)],
   }
 }
 
@@ -162,7 +155,6 @@ function normalizeSite(site: SiteWire): SiteRecord {
     valorServicio: Number(site.valorServicio),
     version: Number(site.version),
     areasCount: Number(site.areasCount),
-    formulariosCount: Number(site.formulariosCount),
   }
 }
 
