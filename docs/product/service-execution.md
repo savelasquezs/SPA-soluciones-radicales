@@ -31,6 +31,8 @@ Servicio
 
 El Técnico puede desplazarse entre Áreas en cualquier orden y volver a una anterior. No existe un orden obligatorio de inspección.
 
+El orden del recorrido es editable dentro del Servicio. Lista, selector y «Siguiente: [Área]» usan la misma secuencia; la navegación omite Áreas resueltas, vuelve al inicio cuando hay pendientes anteriores y ofrece revisar el cierre solo cuando no quedan Áreas pendientes. Reorganizar no modifica la Sede ni los datos de evaluación. El detalle de interacción, persistencia offline, excepciones, concurrencia y criterios de aceptación está en [service-area-route.md](service-area-route.md).
+
 Los Servicios de Refuerzo y los Servicios residenciales conservan sus reglas simplificadas y no ejecutan este recorrido MIP completo.
 
 ## Criterios MIP
@@ -162,7 +164,7 @@ Con la limpieza terminada, el siguiente paso es definir el cambio mínimo para s
 
 - catálogo de Criterios MIP;
 - snapshot/evaluación por Servicio y Área;
-- recorrido móvil por Áreas;
+- recorrido móvil por Áreas, incluido su orden editable por Servicio según `service-area-route.md`;
 - revisiones de Dispositivos;
 - Productos aplicados;
 - Hallazgos y evidencias;
