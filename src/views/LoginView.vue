@@ -30,8 +30,10 @@ async function login(): Promise<void> {
 <template>
   <main class="auth-page">
     <section class="auth-card">
-      <div class="brand-mark">SR</div>
-      <p class="eyebrow">SOLUCIONES RADICALES</p>
+      <div class="brand-logo" aria-label="Soluciones Radicales">
+        <img class="brand-logo__image brand-logo__image--light" src="/logo-light.png" alt="" aria-hidden="true" />
+        <img class="brand-logo__image brand-logo__image--dark" src="/logo-dark.png" alt="" aria-hidden="true" />
+      </div>
       <h1>Gestión MIP en un solo lugar</h1>
       <p class="intro">Programa servicios, coordina técnicos y conserva el histórico operativo con seguridad.</p>
       <BaseButton :loading="loading" @click="login">Continuar con Google</BaseButton>
@@ -64,25 +66,28 @@ async function login(): Promise<void> {
   text-align: center;
 }
 
-.brand-mark {
+.brand-logo {
   display: grid;
-  width: 64px;
-  height: 64px;
-  margin: 0 auto;
-  place-items: center;
-  border-radius: 18px;
-  background: var(--accent);
-  color: var(--accent-contrast);
-  font-size: 1.35rem;
-  font-weight: 850;
+  width: min(18rem, 88%);
+  margin: 0 auto 0.25rem;
 }
 
-.eyebrow {
-  margin: 0;
-  color: var(--accent);
-  font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: 0.12em;
+.brand-logo__image {
+  grid-area: 1 / 1;
+  width: 100%;
+  height: auto;
+}
+
+.brand-logo__image--dark {
+  display: none;
+}
+
+:global(:root[data-theme='dark']) .brand-logo__image--light {
+  display: none;
+}
+
+:global(:root[data-theme='dark']) .brand-logo__image--dark {
+  display: block;
 }
 
 h1,
