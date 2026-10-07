@@ -35,13 +35,14 @@ Otros rastreros y Otros voladores siguen siendo registros diferentes, no una ter
 
 Los criterios definen qué evalúa el Técnico dentro de cada Área durante un Servicio Principal. No son campos de un formulario genérico.
 
-Cada criterio conserva:
+Cada criterio conserva únicamente:
 
-- clave interna estable;
+- identidad UUID;
 - nombre visible;
-- orden;
 - estado activo/inactivo;
 - indicador de si aplica únicamente a Áreas externas/perimetrales.
+
+No se administran clave, orden ni versión para Criterios. El listado se presenta alfabéticamente y la edición administrativa no usa control de concurrencia optimista.
 
 Los criterios generales aplican a cualquier Área. Los criterios marcados como exclusivos de exterior se agregan únicamente cuando `Area.es_externa = true`. La V1 no introduce un catálogo adicional de tipos de Área.
 
@@ -57,13 +58,13 @@ Los criterios iniciales derivados de FO-PS-02 son:
 
 Desactivar o renombrar un criterio solo afecta Servicios que todavía no hayan iniciado. Al iniciar un Servicio se conserva un snapshot suficiente de los criterios aplicables para que el histórico y los informes no cambien al modificar posteriormente el catálogo.
 
-El futuro catálogo de Criterios requerirá su propia migración; no reutiliza el motor de formularios eliminado por la migración 011.
+La migración `20261006_012_mip_criteria.sql` crea `criterios_mip` como catálogo independiente, sin reutilizar el motor de formularios eliminado por la migración 011. `database/bootstrap/003_mip_criteria.sql` carga los cinco criterios iniciales aprobados de forma idempotente.
 
 ## Persistencia e historial
 
 La migración 009 reutiliza `configuracion` para métodos y plagas porque Servicios y revisiones ya referencian sus claves. Añade la clasificación de monitoreo, timestamps/version, `trampas` y las relaciones `producto_metodos`, `producto_categorias_plaga` y `producto_plagas`. La migración 010, creada después de detectar la diferencia en PRODUCTOS A APLICAR, añade `configuracion.categoria_producto` y cambia `producto_categorias_plaga` para almacenar INSECTOS_RASTREROS / INSECTOS_VOLADORES / ROEDORES sin modificar la migración 009 ya aplicada. No crea un catálogo paralelo de métodos/plagas ni migra los puestos físicos.
 
-Los listados incluyen el snapshot ligero editable. Crear/Editar comparte formulario y validación. Editar nunca consulta por ID cuando ya dispone del snapshot. El backend devuelve la entidad definitiva; la UI hace upsert y mueve entre Activos/Inactivos sin recargar la colección. El caché es de memoria, con caducidad de cinco minutos e invalidación por sesión/rol. Una lectura en vuelo se concilia por registro: conserva cambios y eliminaciones posteriores sin perder el resto de la respuesta. Un cambio en otro catálogo no descarta las opciones. La respuesta de opciones también alimenta los listados de Métodos/Plagas, evitando descargarlos de nuevo mientras sean vigentes. Los conflictos de versión conservan el borrador; la recarga del registro es explícita.
+Los listados incluyen el snapshot ligero editable. Crear/Editar comparte exactamente el mismo modal y formulario. Editar nunca consulta por ID cuando ya dispone del snapshot. El backend devuelve la entidad definitiva; la UI hace upsert y mueve entre Activos/Inactivos sin recargar la colección. El caché es de memoria, con caducidad de cinco minutos e invalidación por sesión/rol. Una lectura en vuelo se concilia por registro: conserva cambios y eliminaciones posteriores sin perder el resto de la respuesta. Un cambio en otro catálogo no descarta las opciones. La respuesta de opciones también alimenta los listados de Métodos/Plagas, evitando descargarlos de nuevo mientras sean vigentes. Los catálogos que usan versión conservan el borrador ante conflicto; Criterios no tiene versión ni flujo de conflicto.
 
 Los productos, métodos y plagas referenciados no se borran. Las eliminaciones seguras solo retiran maestros sin uso y sus propias asociaciones, nunca servicios. La auditoría es append-only.
 
@@ -81,11 +82,11 @@ Los nombres duplicados previos deben resolverse antes de aplicar índices único
 
 La migración 010 asigna únicamente equivalencias conocidas: Cucaracha/Hormiga/Otros rastreros → INSECTOS_RASTREROS; Roedor → ROEDORES; las plagas voladoras conocidas → INSECTOS_VOLADORES. Las coberturas existentes RASTREROS/VOLADORES de productos se convierten en INSECTOS_RASTREROS/INSECTOS_VOLADORES; no se añade ROEDORES de forma implícita porque esa era precisamente la ambigüedad corregida.
 
-Antes de activar este ajuste en Neon, confirmar la rama autorizada y aplicar `20261006_010_product_pest_categories.sql` mediante el runner existente; luego ejecutar el bootstrap actualizado. Los tests SQL de Actions usan exclusivamente PostgreSQL efímero en CI y no aplican cambios a Neon. Verificar aparte subida, visualización, reemplazo y limpieza de una ficha en R2 real. Un PR con tests aprobados no sustituye estas comprobaciones de infraestructura.
+La migración 010 ya está aplicada en Neon `desarrollo`. Para Criterios, aplicar la migración 012 y ejecutar el bootstrap 003 en la rama autorizada. Los tests SQL de Actions usan exclusivamente PostgreSQL efímero en CI y no aplican cambios a Neon. Verificar aparte subida, visualización, reemplazo y limpieza de una ficha en R2 real. Un PR con tests aprobados no sustituye estas comprobaciones de infraestructura.
 
 ## Fuera de esta entrega
 
-Quedan para la implementación del primer Servicio: catálogo persistente de criterios, snapshots de evaluación por Área, puestos permanentes por Sede/Área, composición con trampas/productos, revisiones y operación técnica. La futura revisión conserva las plagas y criterios aplicables al iniciar el Servicio; no se reinterpretan contra catálogos vivos.
+Quedan para la implementación del primer Servicio: snapshots de evaluación por Área, puestos permanentes por Sede/Área, composición con trampas/productos, revisiones y operación técnica. La futura revisión conserva las plagas y criterios aplicables al iniciar el Servicio; no se reinterpretan contra catálogos vivos.
 
 ## Referencia visual y pruebas
 
