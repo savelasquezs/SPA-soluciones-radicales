@@ -4,6 +4,7 @@ import { emptyProductInput } from '@/helpers/mipCatalogs'
 import type { MipCatalogItem } from '@/types/mipCatalogs'
 import MipProductForm from '../MipProductForm.vue'
 import MipCatalogItemForm from '../MipCatalogItemForm.vue'
+import MipCriterionForm from '../MipCriterionForm.vue'
 import ProductCoveragePicker from '../ProductCoveragePicker.vue'
 
 const wrappers: ReturnType<typeof mount>[] = []
@@ -94,6 +95,27 @@ describe('formularios compartidos de catálogos', () => {
     })
     expect(wrapper.find('input[value=INSECTOS_RASTREROS]').exists()).toBe(true)
     expect(wrapper.find('input[value=ROEDORES]').exists()).toBe(true)
+  })
+
+  it('criterios reutilizan el mismo formulario para crear y editar', async () => {
+    const wrapper = mount(MipCriterionForm, {
+      props: {
+        modelValue: { nombre: '', soloAreaExterna: false },
+      },
+    })
+    wrappers.push(wrapper)
+
+    expect(wrapper.get('input[value=ALL]').element).toHaveProperty('checked', true)
+    await wrapper.find('form').trigger('submit')
+    expect(wrapper.emitted('invalid')).toHaveLength(1)
+
+    await wrapper.setProps({
+      modelValue: { nombre: 'Mantenimiento de zonas verdes', soloAreaExterna: true },
+    })
+    expect((wrapper.get('input[name=mip-criterion-name]').element as HTMLInputElement).value).toBe('Mantenimiento de zonas verdes')
+    expect((wrapper.get('input[value=EXTERNAL]').element as HTMLInputElement).checked).toBe(true)
+    await wrapper.find('form').trigger('submit')
+    expect(wrapper.emitted('submit')).toHaveLength(1)
   })
 
   it('selección de categoría conserva referencia simbólica y no absorbe roedores', async () => {
