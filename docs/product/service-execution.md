@@ -145,22 +145,20 @@ El recorrido debe respetar las reglas generales de operación offline:
 
 La unidad de trabajo offline debe seguir entidades reales del dominio, no una definición de formulario.
 
-## Transición desde el baseline actual
+## Limpieza del modelo anterior
 
-El esquema actual todavía contiene elementos creados para el enfoque anterior:
+La migración `20261006_011_remove_legacy_mip_forms.sql` retira:
 
 - `formularios`;
 - `respuestas_formulario`;
 - `sedes.formularios_aplicables_json`;
 - `servicios.formularios_versiones_json`.
 
-Quedan declarados como transitorios. No deben utilizarse como base de nuevas funcionalidades.
-
-Cuando se implemente el primer Servicio se diseñará una migración nueva para sustituir o retirar estas estructuras y crear únicamente los datos que requiera la ejecución definida aquí. Las migraciones aplicadas permanecen inmutables.
+API y frontend también dejan de exponer selección, conteo o validación de formularios por Sede. Las migraciones anteriores permanecen inmutables.
 
 ## Pendiente para la siguiente etapa
 
-Este cambio es documental. Antes de escribir código del primer Servicio se debe revisar el estado real de base de datos, API y frontend y definir el cambio mínimo para soportar:
+Con la limpieza terminada, el siguiente paso es definir el cambio mínimo para soportar:
 
 - catálogo de Criterios MIP;
 - snapshot/evaluación por Servicio y Área;
@@ -169,5 +167,3 @@ Este cambio es documental. Antes de escribir código del primer Servicio se debe
 - Productos aplicados;
 - Hallazgos y evidencias;
 - firmas y finalización.
-
-No se implementa nada de esa lista como parte de esta decisión documental.
