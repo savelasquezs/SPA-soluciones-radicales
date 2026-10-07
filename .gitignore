@@ -45,3 +45,6 @@ test-results/
 playwright-report/
 .neon
 .env.local
+
+# Generated documentation media
+docs-media/
