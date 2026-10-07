@@ -4,6 +4,7 @@ import { authGuard } from '@/router/guards'
 import type { ActiveRole } from '@/types/domain'
 
 const adminOnly: ActiveRole[] = ['ADMINISTRADOR']
+const technicianOnly: ActiveRole[] = ['TECNICO']
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -22,6 +23,7 @@ const router = createRouter({
         { path: 'servicios', name: 'services', component: () => import('@/views/ServicesView.vue'), meta: { breadcrumb: 'Servicios' } },
         { path: 'servicios/nuevo', name: 'admin-service-new', component: () => import('@/views/ServiceEditorView.vue'), meta: { roles: adminOnly, breadcrumb: [{ label: 'Servicios', to: '/servicios' }, { label: 'Programar' }] } },
         { path: 'servicios/:id/editar', name: 'admin-service-edit', component: () => import('@/views/ServiceEditorView.vue'), meta: { roles: adminOnly, breadcrumb: [{ label: 'Servicios', to: '/servicios' }, { label: 'Editar' }] } },
+        { path: 'servicios/:id/trabajo', name: 'technician-service-work', component: () => import('@/views/TechnicianServiceView.vue'), meta: { roles: technicianOnly, breadcrumb: [{ label: 'Servicios', to: '/servicios' }, { label: 'Trabajo de campo' }] } },
         { path: 'servicios/:id', name: 'service-detail', component: () => import('@/views/ServiceDetailView.vue'), meta: { roles: adminOnly, breadcrumb: [{ label: 'Servicios', to: '/servicios' }, { label: 'Detalle' }] } },
         { path: 'negocios', redirect: '/clientes' },
         { path: 'clientes', name: 'clients', component: () => import('@/views/ClientsView.vue'), meta: { roles: adminOnly, breadcrumb: 'Clientes' } },

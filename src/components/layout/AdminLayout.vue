@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { Building2, CalendarDays, CheckCircle2, ChevronDown, CircleHelp, FileText, Gauge, LogOut, Menu, Search, Settings2, Users, WalletCards, Wrench, X } from 'lucide-vue-next'
+import { Building2, CalendarDays, ChevronDown, CircleHelp, CloudOff, FileText, Gauge, LogOut, Menu, Search, Settings2, Users, WalletCards, Wifi, Wrench, X } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseIconButton from '@/components/base/BaseIconButton.vue'
+import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import { useNotificationsStore } from '@/stores/notifications'
@@ -13,11 +14,12 @@ import type { ActiveRole, ThemePreference } from '@/types/domain'
 type NavigationItem = { to: string; label: string; icon: typeof Gauge; admin?: boolean }
 type NavigationGroup = { label: string; items: NavigationItem[] }
 const auth = useAuthStore(), app = useAppStore(), notifications = useNotificationsStore()
+const { online } = useNetworkStatus()
 const route = useRoute(), router = useRouter()
 const navigationOpen = ref(false), switchingRole = ref(false)
 const groups: NavigationGroup[] = [
   { label: 'OPERACIÓN', items: [
-    { to: '/', label: 'Resumen', icon: Gauge }, { to: '/agenda', label: 'Agenda', icon: CalendarDays }, { to: '/servicios', label: 'Servicios', icon: FileText },
+    { to: '/', label: 'Resumen', icon: Gauge }, { to: '/agenda', label: 'Agenda', icon: CalendarDays, admin: true }, { to: '/servicios', label: 'Servicios', icon: FileText },
   ] },
   { label: 'GESTIÓN', items: [
     { to: '/clientes', label: 'Clientes', icon: Building2, admin: true },
@@ -63,7 +65,7 @@ function setTheme(event: Event): void { app.setTheme((event.target as HTMLSelect
       <RouterLink to="/" class="brand" aria-label="Soluciones Radicales MIP"><img class="brand__symbol" src="/favicon.png" alt="" aria-hidden="true" /><div class="brand__copy"><strong>Soluciones Radicales</strong><small>MANEJO INTEGRADO DE PLAGAS</small></div></RouterLink>
       <label class="global-search"><Search :size="16" aria-hidden="true" /><span class="sr-only">Búsqueda global</span><input type="search" readonly placeholder="Buscar cliente, servicio o documento" /></label>
       <div class="topbar__activity">
-        <span class="sync-state"><CheckCircle2 :size="16" aria-hidden="true" />Al día</span>
+        <span class="sync-state" :class="{ 'sync-state--offline': !online }"><Wifi v-if="online" :size="16" aria-hidden="true" /><CloudOff v-else :size="16" aria-hidden="true" />{{ online ? 'En línea' : 'Sin conexión' }}</span>
         <label class="theme-select"><span class="sr-only">Apariencia</span><select :value="app.theme" @change="setTheme"><option value="light">Claro</option><option value="dark">Oscuro</option><option value="system">Sistema</option></select></label>
         <details class="account-menu"><summary><strong>{{ auth.profile?.nombreCompleto }}</strong><span>{{ auth.activeRole === 'ADMINISTRADOR' ? 'Administrador' : 'Técnico' }}</span><ChevronDown :size="16" aria-hidden="true" /></summary>
           <div class="account-menu__panel"><p>{{ auth.authEmail }}</p><div v-if="auth.rolesAvailable.length > 1" class="role-options"><BaseButton v-for="role in auth.rolesAvailable" :key="role" variant="ghost" :disabled="switchingRole || auth.activeRole === role" @click="switchRole(role)"><Wrench v-if="role === 'TECNICO'" :size="17" /><Users v-else :size="17" />{{ role === 'ADMINISTRADOR' ? 'Administrador' : 'Técnico' }}</BaseButton></div><BaseButton variant="secondary" @click="logout"><LogOut :size="17" />Cerrar sesión</BaseButton></div>
@@ -95,6 +97,7 @@ function setTheme(event: Event): void { app.setTheme((event.target as HTMLSelect
 .global-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--text); font-size: 0.8125rem; }
 .topbar__activity { display: flex; min-width: 0; align-items: center; justify-content: flex-end; gap: 1rem; }
 .sync-state { display: inline-flex; align-items: center; gap: 0.5rem; color: var(--text-secondary); font-size: 0.8125rem; white-space: nowrap; }
+.sync-state--offline { color: var(--warning); }
 .theme-select select { min-height: 36px; border: 0; background: transparent; color: var(--text-secondary); font-size: 0.8125rem; }
 .account-menu { position: relative; min-width: 0; }
 .account-menu summary { display: flex; min-height: 44px; align-items: center; gap: 0.5rem; list-style: none; cursor: pointer; }

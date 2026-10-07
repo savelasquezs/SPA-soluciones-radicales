@@ -85,3 +85,20 @@ export interface TechnicianExecutionSession {
   package: TechnicianServicePackage
   lock: TechnicianExecutionLock
 }
+
+export interface TechnicianPendingOperation {
+  kind: 'START' | 'CLAIM'
+  requestId: string
+  version: number | null
+}
+
+export interface TechnicianPackageCache {
+  schemaVersion: 1
+  actorId: string
+  serviceId: string
+  deviceId: string
+  savedAt: string
+  package: TechnicianServicePackage
+  lock: TechnicianExecutionLock | null
+  pendingOperation: TechnicianPendingOperation | null
+}
