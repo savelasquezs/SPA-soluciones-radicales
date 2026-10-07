@@ -3,11 +3,13 @@ import type { NavigationGuard, RouteLocationNormalized } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import type { ActiveRole } from '@/types/domain'
 
+type BreadcrumbMeta = string | Array<{ label: string; to?: string }>
+
 declare module 'vue-router' {
   interface RouteMeta {
     public?: boolean
     roles?: ActiveRole[]
-    breadcrumb?: string
+    breadcrumb?: BreadcrumbMeta
     placeholderTitle?: string
     placeholderDescription?: string
   }
