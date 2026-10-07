@@ -28,7 +28,7 @@ async function fixture(reinforcement=true): Promise<Fixture> {
       contacto_principal_celular,contacto_principal_correo,valor_servicio,periodicidad_meses,maneja_refuerzo,tipo_sede,duracion_servicio_minutos)
       values($1,$2,'Sede de prueba','Dirección sintética','[]',true,'Contacto de prueba','+573000000001','contacto@example.invalid',300000,1,$3,'NEGOCIO',90)`,[f.site,f.business,reinforcement])
     await client.query('insert into public.productos(id,nombre,principio_activo_composicion,dosis_aplicacion) values($1,$2,$3,$4)',[f.product,`Services CI product ${f.product}`,'Composición de prueba','5 mL/L'])
-    await client.query("insert into public.configuracion(id,categoria,clave,nombre) values($1,'METODO_APLICACION',$2,'Aspersión')",[f.method,f.methodCode])
+    await client.query("insert into public.configuracion(id,categoria,clave,nombre) values($1,'METODO_APLICACION',$2,$3)",[f.method,f.methodCode,`Aspersión ${f.methodCode}`])
     await client.query('insert into public.producto_metodos(producto_id,metodo_id) values($1,$2)',[f.product,f.method])
   })
   return f

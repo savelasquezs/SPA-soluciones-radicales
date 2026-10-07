@@ -48,8 +48,8 @@ async function fixture(offset = '30 minutes'): Promise<Fixture> {
     await client.query('insert into public.areas(id,sede_id,nombre,es_externa) values($1,$3,\'Cocina\',false),($2,$3,\'Exterior\',true)', [value.internalArea, value.externalArea, site])
     await client.query('insert into public.criterios_mip(id,nombre,solo_area_externa) values($1,$3,false),($2,$4,true)',
       [value.generalCriterion, value.externalCriterion, `Orden y aseo ${value.generalCriterion}`, `Perímetro ${value.externalCriterion}`])
-    await client.query("insert into public.configuracion(id,categoria,clave,nombre) values($1,'METODO_APLICACION',$2,'Aspersión de prueba'),($3,'TIPO_DISPOSITIVO',$4,'Trampa de prueba')",
-      [method, value.methodCode, randomUUID(), deviceType])
+    await client.query("insert into public.configuracion(id,categoria,clave,nombre) values($1,'METODO_APLICACION',$2,$3),($4,'TIPO_DISPOSITIVO',$5,$6)",
+      [method, value.methodCode, `Aspersión ${value.methodCode}`, randomUUID(), deviceType, `Trampa ${deviceType}`])
     await client.query('insert into public.productos(id,nombre,principio_activo_composicion,dosis_aplicacion,registro_sanitario) values($1,$2,\'Composición inicial\',\'5 mL/L\',\'RS-1\')', [value.product, `Producto inicial ${value.product}`])
     await client.query('insert into public.producto_metodos(producto_id,metodo_id) values($1,$2)', [value.product, method])
     await client.query('insert into public.dispositivos(id,sede_id,area_id,numero,tipo_dispositivo_codigo,ubicacion,estado_actual) values($1,$2,$3,\'D-01\',$4,\'Bajo mesón\',\'ACTIVO\')',
@@ -90,7 +90,7 @@ describe('technician service execution · real PostgreSQL', () => {
     expect(session.package.areas.find(area => area.areaId === value.externalArea)?.criterios.some(item => item.criterioId === value.generalCriterion)).toBe(true)
     expect(session.package.areas.find(area => area.areaId === value.externalArea)?.criterios.some(item => item.criterioId === value.externalCriterion)).toBe(true)
     expect(session.package.areas.find(area => area.areaId === value.internalArea)?.dispositivos[0]?.numero).toBe('D-01')
-    expect(session.package.products[0]).toMatchObject({ lote: 'L-TECH', dosis: '5 mL/L', metodoAplicacion: 'Aspersión de prueba' })
+    expect(session.package.products[0]).toMatchObject({ lote: 'L-TECH', dosis: '5 mL/L', metodoAplicacion: `Aspersión ${value.methodCode}` })
     await pool.query('update public.productos set nombre=\'Producto renombrado\' where id=$1', [value.product])
     await pool.query('update public.criterios_mip set nombre=\'Criterio renombrado\' where id=$1', [value.generalCriterion])
     await pool.query('update public.dispositivos set numero=\'D-99\' where id=$1', [value.device])
