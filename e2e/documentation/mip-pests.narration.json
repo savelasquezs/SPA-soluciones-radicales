@@ -1,0 +1,118 @@
+{
+  "title": "Gestión de plagas",
+  "subtitle": "Crear, clasificar y administrar plagas del catálogo MIP",
+  "segments": [
+    {
+      "id": "intro",
+      "text": "En este video aprenderás a crear, clasificar y administrar las plagas del catálogo MIP."
+    },
+    {
+      "id": "open-catalogs",
+      "text": "Desde Configuración, abre Catálogos MIP para administrar los maestros utilizados durante la operación técnica."
+    },
+    {
+      "id": "open-pests",
+      "text": "Selecciona la pestaña Plagas. Aquí se administran las plagas disponibles para monitoreo y cobertura de productos."
+    },
+    {
+      "id": "pest-list",
+      "text": "El listado muestra el nombre, la clasificación de monitoreo, la categoría utilizada por productos, el estado y las acciones disponibles."
+    },
+    {
+      "id": "search-filter",
+      "text": "Puedes buscar por nombre y filtrar la lista por monitoreo Rastreros o Voladores."
+    },
+    {
+      "id": "new-pest",
+      "text": "Para registrar una plaga, selecciona Nueva plaga."
+    },
+    {
+      "id": "pest-name",
+      "text": "Escribe un nombre claro que permita reconocer la plaga durante la operación."
+    },
+    {
+      "id": "two-dimensions",
+      "text": "Cada plaga tiene dos clasificaciones distintas: el grupo de monitoreo y la categoría usada por los productos."
+    },
+    {
+      "id": "choose-voladores",
+      "text": "Si seleccionas Voladores, la categoría Insectos voladores se asigna automáticamente."
+    },
+    {
+      "id": "auto-category",
+      "text": "Esta asignación automática evita combinaciones incoherentes entre monitoreo y cobertura química."
+    },
+    {
+      "id": "switch-rastreros",
+      "text": "Para una plaga de monitoreo Rastreros, debes indicar si pertenece a Insectos rastreros o a Roedores."
+    },
+    {
+      "id": "choose-roedores",
+      "text": "En esta demostración registraremos un roedor, así que seleccionaremos Roedores como categoría para productos."
+    },
+    {
+      "id": "create-pest",
+      "text": "Cuando el nombre y las dos clasificaciones estén listas, selecciona Crear plaga."
+    },
+    {
+      "id": "created-pest",
+      "text": "La nueva plaga aparece inmediatamente en la lista de Activas."
+    },
+    {
+      "id": "open-detail",
+      "text": "Selecciona el nombre de la plaga para consultar su detalle."
+    },
+    {
+      "id": "pest-detail",
+      "text": "El detalle muestra por separado Monitoreo y Categoría para productos. En este caso, Rastreros y Roedores."
+    },
+    {
+      "id": "edit-pest",
+      "text": "Desde el detalle puedes abrir Editar para modificar la información permitida del registro."
+    },
+    {
+      "id": "save-edit",
+      "text": "Actualiza el nombre y selecciona Guardar cambios."
+    },
+    {
+      "id": "row-actions",
+      "text": "En la fila encontrarás las acciones Editar, Desactivar y Eliminar."
+    },
+    {
+      "id": "deactivate-pest",
+      "text": "Usa Desactivar cuando una plaga ya no deba ofrecerse para nuevas selecciones, pero necesites conservar sus referencias."
+    },
+    {
+      "id": "confirm-deactivation",
+      "text": "Confirma la desactivación para retirarla de la lista de Activas."
+    },
+    {
+      "id": "inactive-pest",
+      "text": "La plaga queda disponible en la pestaña Inactivas."
+    },
+    {
+      "id": "reactivate-pest",
+      "text": "Si necesitas volver a utilizarla, selecciona Reactivar y confirma la acción."
+    },
+    {
+      "id": "active-again",
+      "text": "La plaga vuelve a Activas y queda disponible para nuevas selecciones."
+    },
+    {
+      "id": "delete-pest",
+      "text": "Eliminar solo debe usarse cuando la plaga no tiene relaciones ni historial. Si ya fue utilizada, la opción correcta es desactivarla."
+    },
+    {
+      "id": "confirm-delete",
+      "text": "Como esta plaga de demostración no tiene historial, confirmaremos su eliminación."
+    },
+    {
+      "id": "deleted-pest",
+      "text": "Al finalizar, el registro desaparece del catálogo sin afectar las demás plagas."
+    },
+    {
+      "id": "outro",
+      "text": "Con esto puedes crear, clasificar, consultar y administrar las plagas del catálogo MIP."
+    }
+  ]
+}
