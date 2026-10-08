@@ -323,6 +323,20 @@ describe('technician services state', () => {
     expect(api.saveTechnicianDeviceReview).not.toHaveBeenCalled()
   })
 
+  it('keeps an optional monitoring-point photo even when the trap state does not require evidence', async () => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+    vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([executionCache()])
+    const store = useTechnicianServicesStore()
+    await store.ensurePackage(serviceId)
+    const photo = new File(['photo'], 'puesto.jpg', { type: 'image/jpeg' })
+    expect(await store.applyDeviceReview(serviceId, areaIds[0]!, serviceDeviceId, {
+      estadoObservado: 'ACTIVO', capturas: [], consumo: '', productoQuimico: '', antidoto: '', observaciones: '',
+    }, photo)).toBe('pending')
+    expect(mutationRecords[0]).toMatchObject({ kind: 'DEVICE_REVIEW', serviceDeviceId, photoMediaId: expect.any(String) })
+    expect(mediaService.saveTechnicianMedia).toHaveBeenCalledWith(expect.objectContaining({ serviceId, areaId: areaIds[0], serviceDeviceId, file: photo }))
+    expect(store.currentPackage?.areas[0]?.dispositivos[0]?.revision?.fotoLocalId).toEqual(expect.any(String))
+  })
+
   it('creates a permanent device locally while offline and queues it before its review', async () => {
     Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
     vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([executionCache()])

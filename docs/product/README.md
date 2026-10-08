@@ -20,7 +20,7 @@ El comportamiento funcional aprobado del proyecto anterior se conserva. La reimp
 
 - consulta únicamente servicios asignados;
 - inicia y ejecuta servicios dentro de las reglas permitidas;
-- diligencia la evaluación MIP por Áreas, dispositivos, hallazgos, evidencias y firmas, y consulta los Productos definidos por el Administrador;
+- diligencia la evaluación MIP por Áreas, puestos de monitoreo, hallazgos, evidencias y firmas, y consulta los Productos definidos por el Administrador;
 - trabaja offline cuando la aplicación fue cargada y autenticada previamente;
 - no administra catálogos ni datos globales.
 
@@ -45,11 +45,11 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 | `productos` | Catálogo de productos utilizados |
 | `productos_aplicados` | Planeación y aplicación de productos por Servicio |
 | `configuracion` | Métodos, plagas y parámetros globales |
-| `trampas` | Catálogo administrable de tipos de Dispositivo y su clasificación de monitoreo |
-| `dispositivos` | Identidad permanente de trampas y dispositivos por Sede y Área |
-| `servicio_dispositivos` | Identidad y estado congelados de los Dispositivos al iniciar el Servicio |
+| `trampas` | Catálogo administrable de tipos de Trampa y su clasificación de monitoreo |
+| `dispositivos` | Persistencia técnica de los Puestos de monitoreo por Sede y Área |
+| `servicio_dispositivos` | Snapshot técnico de los Puestos de monitoreo al iniciar el Servicio |
 | `servicio_tipos_dispositivo` | Tipos, clasificación y Plagas disponibles congelados para altas técnicas durante el Servicio |
-| `revisiones_dispositivos` | Estado, capturas y evidencia observada durante un Servicio |
+| `revisiones_dispositivos` | Revisión histórica de los Puestos de monitoreo durante un Servicio |
 | `hallazgos` | No conformidades, seguimiento y cierre posterior |
 | `vehiculos` | Vehículos asociados a Sedes habilitadas |
 | `certificados` | Certificados de establecimiento o vehículo |
@@ -78,9 +78,9 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 - El concepto visible es Cliente. Un Cliente puede ser Negocio o Casa.
 - Un Cliente Negocio puede tener varias Sedes y su vigencia de certificado de establecimiento aplica a todas ellas.
 - Un Cliente Casa conserva una única Sede residencial interna, invisible en la interfaz, sin Áreas, recorrido MIP completo, certificados ni vehículos.
-- Áreas, Dispositivos y Vehículos pertenecen a una Sede.
+- Áreas, Puestos de monitoreo y Vehículos pertenecen a una Sede.
 - El nombre de Área es único dentro de su Sede.
-- El número de Dispositivo y la placa de Vehículo son únicos de forma normalizada dentro de su Sede.
+- El número de Puesto de monitoreo y la placa de Vehículo son únicos de forma normalizada dentro de su Sede.
 - Las plantillas de certificados son globales por tipo y se administran únicamente desde Configuración → Certificados.
 
 ### Servicios
@@ -109,7 +109,7 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 ### Ejecución MIP
 
 - No existe un constructor ni un CRUD de formularios dinámicos para la operación MIP.
-- La interfaz del Técnico tiene una estructura funcional fija y se compone con los datos del dominio: Servicio, Sede, Áreas, criterios, productos, dispositivos, plagas, hallazgos, evidencias y firmas.
+- La interfaz del Técnico tiene una estructura funcional fija y se compone con los datos del dominio: Servicio, Sede, Áreas, criterios, productos, puestos de monitoreo, plagas, hallazgos, evidencias y firmas.
 - FO-PS-02 v03, FO-PS-10 y FO-PS-09 se conservan como referencias funcionales de los datos y del informe, no como plantillas editables almacenadas en un motor de formularios.
 - Los criterios de inspección son un catálogo administrable. Cada criterio conserva identidad estable, nombre, estado y si aplica únicamente a Áreas externas/perimetrales; se presentan alfabéticamente y no administran orden propio.
 - Los estados de evaluación `C`, `CP`, `NC` y `NA` son reglas fijas del sistema, no registros administrables.
@@ -117,7 +117,7 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 - Un Servicio Programado toma la configuración vigente al iniciar. Desde ese momento conserva snapshots suficientes para que cambios posteriores en catálogos no reinterpreten el histórico.
 - La evaluación histórica debe conservar, como mínimo, la identidad del criterio, nombre y aplicabilidad observados al iniciar, evaluación, observación y referencias de evidencia cuando apliquen.
 - El Técnico puede recorrer las Áreas en cualquier orden y volver a una anterior sin perder el borrador.
-- Los dispositivos son entidades permanentes de Sede/Área; cada Servicio crea revisiones históricas y puede registrar nuevos dispositivos para visitas futuras.
+- Los puestos de monitoreo son entidades permanentes de Sede/Área; cada Servicio crea revisiones históricas y puede registrar nuevos puestos de monitoreo para visitas futuras.
 - El flujo detallado y las reglas de composición están en [service-execution.md](service-execution.md).
 
 ### Productos
@@ -132,7 +132,7 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 ### Monitoreo
 
 - Catálogo inicial de plagas: Polilla, Mosca doméstica, Mosca de fruta, Zancudo, Cucarrones, Cucaracha, Roedor y Otros.
-- Los tipos de dispositivo son administrables.
+- Los tipos de Trampa son administrables.
 - Cada revisión conserva snapshots de número, ubicación y tipo.
 - Capturas puede registrar varias plagas y cantidades.
 - Una revisión exige fotografía únicamente cuando el estado cambia a `DANADO` o `FUERA_DE_USO`.
