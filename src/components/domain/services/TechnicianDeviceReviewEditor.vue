@@ -208,7 +208,7 @@ function save(): void {
 .pest-chip { display:inline-flex; min-height:44px; align-items:center; gap:0.45rem; border:1px solid var(--control-border); border-radius:999px; background:var(--surface); padding:0.45rem 0.75rem; color:var(--text); font:inherit; cursor:pointer; }
 .pest-chip:hover:not(:disabled), .pest-chip:focus-visible { border-color:var(--border-strong); background:var(--hover); }
 .pest-chip--active { border-color:var(--accent); background:var(--accent-subtle); }
-.pest-chip--editing { outline:2px solid var(--focus-ring); outline-offset:1px; }
+.pest-chip--editing { border-color:var(--accent); }
 .pest-chip strong { display:grid; min-width:1.55rem; height:1.55rem; place-items:center; border-radius:999px; background:var(--surface-raised); font-size:0.78rem; }
 .pest-editor { display:grid; gap:0.45rem; border-radius:var(--radius-sm); background:var(--hover); padding:0.65rem; }
 .pest-editor :deep(.base-button) { justify-self:start; }
