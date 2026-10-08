@@ -271,7 +271,7 @@ test('video: gestionar trampas en Catálogos MIP', async ({ page }) => {
   })
 
   const search = page.getByRole('searchbox', { name: 'Buscar trampas', exact: true })
-  const monitoring = page.getByLabel('Monitoreo', { exact: true })
+  const monitoring = page.locator('.mip-filter select')
   await narrate('trap-search-filter', async clock => {
     await clock.until(0.18)
     await pointAt(search, 460)
