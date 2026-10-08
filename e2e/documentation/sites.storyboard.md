@@ -1,6 +1,7 @@
 # Storyboard · Gestión de sedes V1
 
 **Módulo:** Clientes → Sedes
+**Video ID:** `clientes-sedes-v1`
 **Salida:** `clientes-gestion-sedes-v1.mp4`
 
 ## Objetivo
