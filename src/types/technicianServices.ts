@@ -31,6 +31,13 @@ export interface TechnicianProduct {
   fechaVencimiento: string | null
   dosis: string
   metodoAplicacion: string
+  antidoto?: string
+}
+
+export interface TechnicianBaitProductSnapshot {
+  id: string
+  nombre: string
+  antidoto: string
 }
 
 export interface TechnicianCriterion {
@@ -50,15 +57,17 @@ export interface TechnicianDevice {
   dispositivoId: string
   numero: string
   ubicacion: string
-  tipoCodigo: string
-  tipoNombre: string
+  tipoCodigo: string | null
+  tipoNombre: string | null
   clasificacion: PestGroup | null
   plagas: TechnicianPestSnapshot[]
-  estadoAnterior: DeviceState
+  estadoAnterior: DeviceState | null
+  productoCebo?: TechnicianBaitProductSnapshot | null
   creadoDuranteServicio: boolean
   creacionPendiente?: boolean
   revisado: boolean
   revision: TechnicianDeviceReview | null
+  version?: number
 }
 
 export interface TechnicianPestSnapshot {
@@ -74,10 +83,14 @@ export interface TechnicianDeviceTypeSnapshot {
 }
 
 export interface TechnicianDeviceCreationInput {
-  numero: string
-  tipoCodigo: string
+  /** Solo para compatibilidad con borradores antiguos; el servidor asigna el correlativo. */
+  numero?: string
+  tipoCodigo: string | null
+  productoCeboId?: string | null
   ubicacion: string
 }
+
+export type TechnicianDeviceUpdateInput = TechnicianDeviceCreationInput
 
 export interface TechnicianDeviceCapture {
   plagaCodigo: string
@@ -87,24 +100,30 @@ export interface TechnicianDeviceCapture {
 
 export interface TechnicianDeviceReview {
   id: string
-  estadoObservado: DeviceState
+  estadoObservado: DeviceState | null
   capturas: TechnicianDeviceCapture[]
+  consumoCeboPorcentaje?: number | null
+  observaciones: string
+  fotosStoragePaths?: string[]
+  fotosLocalIds?: string[]
+  /** Campos legacy conservados mientras se migra el histórico anterior. */
   consumo: string
   productoQuimico: string
   antidoto: string
-  observaciones: string
   fotoStoragePath: string | null
   fotoLocalId?: string | null
   version: number
 }
 
 export interface TechnicianDeviceReviewInput {
-  estadoObservado: DeviceState
+  estadoObservado: DeviceState | null
   capturas: Array<{ plagaCodigo: string; cantidad: number }>
+  consumoCeboPorcentaje?: number | null
+  observaciones: string
+  /** Campos legacy; la nueva interfaz no los pide como texto libre. */
   consumo: string
   productoQuimico: string
   antidoto: string
-  observaciones: string
 }
 
 export interface TechnicianFinding {
@@ -147,6 +166,9 @@ export interface TechnicianArea {
   posicionRecorrido: number
   sinAcceso: boolean
   sinAccesoDescripcion: string | null
+  sinAccesoFotosStoragePaths?: string[]
+  sinAccesoFotosLocalIds?: string[]
+  /** Campos legacy para caches creados antes de la evidencia múltiple. */
   sinAccesoFotoStoragePath: string | null
   sinAccesoFotoLocalId?: string | null
   version: number
@@ -162,6 +184,7 @@ export interface TechnicianServicePackage {
   canStart: boolean
   startAvailableAt: string
   products: TechnicianProduct[]
+  baitProducts?: TechnicianBaitProductSnapshot[]
   deviceTypes: TechnicianDeviceTypeSnapshot[]
   areas: TechnicianArea[]
   signatures: TechnicianServiceSignatures
@@ -265,12 +288,19 @@ export interface TechnicianAreaAccessState {
   id: string
   sinAcceso: boolean
   sinAccesoDescripcion: string | null
+  sinAccesoFotosStoragePaths?: string[]
   sinAccesoFotoStoragePath: string | null
   version: number
 }
 
 export interface TechnicianAreaAccessResult {
   area: TechnicianAreaAccessState
+  removedEvidenceStoragePaths?: string[]
+}
+
+export interface TechnicianAreaEvidenceMutation {
+  mediaId: string
+  storagePath: string | null
 }
 
 export interface TechnicianAreaAccessMutation extends TechnicianMutationBase {
@@ -278,6 +308,9 @@ export interface TechnicianAreaAccessMutation extends TechnicianMutationBase {
   areaId: string
   withoutAccess: boolean
   description: string
+  evidences?: TechnicianAreaEvidenceMutation[]
+  retainedEvidenceStoragePaths?: string[]
+  /** Campos legacy para operaciones ya guardadas en IndexedDB. */
   photoMediaId: string | null
   photoStoragePath: string | null
   version: number
@@ -286,9 +319,14 @@ export interface TechnicianAreaAccessMutation extends TechnicianMutationBase {
 
 export interface TechnicianDeviceReviewResult {
   review: TechnicianDeviceReview
+  removedEvidenceStoragePaths?: string[]
 }
 
 export interface TechnicianDeviceCreationResult {
+  device: TechnicianDevice
+}
+
+export interface TechnicianDeviceUpdateResult {
   device: TechnicianDevice
 }
 
@@ -297,6 +335,20 @@ export interface TechnicianDeviceCreationMutation extends TechnicianMutationBase
   areaId: string
   permanentDeviceId: string
   serviceDeviceId: string
+  numeroProvisional?: string
+}
+
+export interface TechnicianDeviceUpdateMutation extends TechnicianMutationBase, TechnicianDeviceUpdateInput {
+  kind: 'DEVICE_UPDATE'
+  areaId: string
+  serviceDeviceId: string
+  version: number
+  conflict: TechnicianDevice | null
+}
+
+export interface TechnicianDeviceEvidenceMutation {
+  mediaId: string
+  storagePath: string | null
 }
 
 export interface TechnicianDeviceReviewMutation extends TechnicianMutationBase, TechnicianDeviceReviewInput {
@@ -304,6 +356,9 @@ export interface TechnicianDeviceReviewMutation extends TechnicianMutationBase, 
   areaId: string
   serviceDeviceId: string
   reviewId: string
+  evidences?: TechnicianDeviceEvidenceMutation[]
+  retainedEvidenceStoragePaths?: string[]
+  /** Campos legacy para operaciones ya guardadas en IndexedDB. */
   photoMediaId: string | null
   photoStoragePath: string | null
   version: number
@@ -360,4 +415,6 @@ export interface TechnicianMediaDraft {
   savedAt: string
 }
 
-export type TechnicianMutation = TechnicianAreaOrderMutation | TechnicianCriterionEvaluationMutation | TechnicianAreaAccessMutation | TechnicianDeviceCreationMutation | TechnicianDeviceReviewMutation | TechnicianFindingCreateMutation | TechnicianFindingStatusMutation | TechnicianServiceFinalizeMutation
+export type TechnicianMutation = TechnicianAreaOrderMutation | TechnicianCriterionEvaluationMutation | TechnicianAreaAccessMutation
+  | TechnicianDeviceCreationMutation | TechnicianDeviceUpdateMutation | TechnicianDeviceReviewMutation
+  | TechnicianFindingCreateMutation | TechnicianFindingStatusMutation | TechnicianServiceFinalizeMutation
