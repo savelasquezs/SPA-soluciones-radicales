@@ -16,9 +16,18 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install chromium
+      - name: Package isolated validation dependencies
+        run: tar -czf /tmp/technician-validation.tgz node_modules -C "$HOME/.cache" ms-playwright
       - uses: actions/upload-artifact@v4
         with:
-          name: technician-workspace-source
-          path: .
-          include-hidden-files: true
+          name: technician-validation-dependencies
+          path: /tmp/technician-validation.tgz
           retention-days: 1
