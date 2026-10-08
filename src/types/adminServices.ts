@@ -111,6 +111,11 @@ export interface ServiceCalendar {
   ultimaSyncAt: string | null
   error: string | null
 }
+export interface ServiceExecutionLock {
+  userId: string
+  userName: string
+  acquiredAt: string
+}
 export interface AdminService extends ServiceLink {
   clientId: string
   clienteNombre: string
@@ -130,6 +135,7 @@ export interface AdminService extends ServiceLink {
   principal: ServiceLink | null
   pago: ServicePayment
   calendar: ServiceCalendar
+  executionLock: ServiceExecutionLock | null
   motivoCancelacion: string | null
   canceladoAt: string | null
 }

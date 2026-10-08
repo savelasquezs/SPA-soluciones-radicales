@@ -39,6 +39,8 @@ export const SERVICE_SELECT = `select ${linkJson('s')} || jsonb_build_object(
     'comprobanteStoragePath',s.pago_comprobante_storage_path),
   'calendar',jsonb_build_object('estado',s.calendar_sync_estado,'ultimaSyncAt',s.calendar_ultima_sync_at,
     'error',case when s.calendar_sync_estado='ERROR' then 'No fue posible sincronizar Calendar. La programación está guardada.' else null end),
+  'executionLock',(select jsonb_build_object('userId',l.user_id,'userName',u.nombre_completo,'acquiredAt',l.acquired_at)
+    from private.service_execution_locks l join public.usuarios u on u.id=l.user_id where l.service_id=s.id),
   'motivoCancelacion',s.motivo_cancelacion,'canceladoAt',s.cancelado_at
 ) as record ${SERVICE_FROM}`
 

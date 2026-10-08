@@ -25,7 +25,7 @@ function record(id=ids.principal,kind: 'PRINCIPAL' | 'REFUERZO'='PRINCIPAL'): Ad
     valorServicio:isRef ? 0 : 300000,observaciones:'',productos:[],refuerzo:null,principal:null,
     pago:{ metodoPago:isRef ? null : 'EFECTIVO',estadoPago:isRef ? 'SIN_REGISTRAR' : 'PENDIENTE',tecnicoRecaudoPrevistoId:isRef ? null : ids.tech,
       recaudadoPorId:null,recaudadoPorNombre:null,pagoFecha:null,confirmadoAt:null,confirmadoPor:null,comprobanteStoragePath:null },
-    calendar:{ estado:'SINCRONIZADO',ultimaSyncAt:start,error:null },motivoCancelacion:null,canceladoAt:null,
+    calendar:{ estado:'SINCRONIZADO',ultimaSyncAt:start,error:null },executionLock:null,motivoCancelacion:null,canceladoAt:null,
   }
 }
 function link(value: AdminService): ServiceLink {
@@ -112,6 +112,10 @@ async function setup(page: Page, role: 'ADMINISTRADOR' | 'TECNICO'='ADMINISTRADO
     const parts=path.slice(`${base}/`.length).split('/'), item=records.find(value=>value.id===parts[0])
     if(item) {
       if(method==='GET') { synchronize();await json(route,parts[1]==='audit' ? { items:[],total:0,page:1,pageSize:20 } : item);return }
+      if(parts[1]==='execution-lock' && parts[2]==='release' && method==='POST') {
+        const released=Boolean(item.executionLock);item.executionLock=null
+        await json(route,{ serviceId:item.id,released });return
+      }
       if(conflictOnce) { conflictOnce=false;item.version++;await json(route,{ error:'Otra persona modificó el registro. Tus cambios se conservan.',code:'VERSION_CONFLICT' },409);return }
       if(method==='PUT' && body) {
         schedule(item,body.input.programacion);item.observaciones=body.input.observaciones
@@ -280,6 +284,27 @@ test('cancellation requires a reason and cash confirmation requires the actual c
   await page.getByRole('button',{ name:'Cancelar servicio',exact:true }).click()
   await expect(page.getByRole('dialog',{ name:'Cancelar servicio' })).toHaveCount(0)
   expect(api.records.every(value=>value.estado==='CANCELADO')).toBe(true)
+})
+
+test('admin releases active technician access from the service detail',async({ page })=>{
+  const api=await setup(page)
+  api.records[0]!.estado='EN_PROCESO'
+  api.records[0]!.inicioReal=start
+  api.records[0]!.executionLock={ userId:ids.tech,userName:'Camilo Ruiz',acquiredAt:start }
+  await page.goto(`/servicios/${ids.principal}`)
+  await expect(page.getByText('Edición técnica',{ exact:true })).toBeVisible()
+  await expect(page.getByText(/Camilo Ruiz · desde/)).toBeVisible()
+  await page.getByRole('button',{ name:'Liberar acceso técnico',exact:true }).click()
+  const dialog=page.getByRole('dialog',{ name:'Liberar acceso técnico' })
+  await expect(dialog).toBeVisible()
+  await expect(dialog).toContainText('Los datos ya sincronizados se conservan.')
+  await dialog.getByRole('button',{ name:'Liberar acceso',exact:true }).click()
+  await expect(dialog).toHaveCount(0)
+  await expect(page.getByRole('button',{ name:'Liberar acceso técnico',exact:true })).toHaveCount(0)
+  await expect(page.getByText('Acceso técnico liberado. Otro celular ya puede activar el servicio.',{ exact:true })).toBeVisible()
+  expect(api.records[0]!.executionLock).toBeNull()
+  const call=api.calls.find(value=>value.method==='POST' && value.path===`/api/admin/services/${ids.principal}/execution-lock/release`)
+  expect(call?.body?.reason).toContain('Camilo Ruiz')
 })
 
 test('lost creation response is recovered from the scoped draft without creating another service',async({ page })=>{

@@ -27,6 +27,8 @@ export const saveServicePayment = (record: AdminService, requestId: string, inpu
   apiRequest<ServiceMutation>(`${base}/${record.id}/payment`,json('POST',{ requestId,version:record.version,input }))
 export const requestCalendarRetry = (id: string, requestId: string) =>
   apiRequest<ServiceMutation>(`${base}/${id}/calendar/retry`,json('POST',{ requestId }))
+export const releaseServiceExecutionLock = (id: string, requestId: string, reason: string) =>
+  apiRequest<{ serviceId: string; released: boolean }>(`${base}/${id}/execution-lock/release`,json('POST',{ requestId,reason }))
 export const saveUpcomingFollowUp = (record: UpcomingService, requestId: string, input: UpcomingPatch) =>
   apiRequest<{ upcoming: UpcomingService; pendingCount: number }>(`${base}/upcoming/${record.id}`,json('PATCH',{ requestId,version:record.version,...input }))
 export const previewConfirmationEmail = (id: string) =>
