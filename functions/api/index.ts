@@ -4,11 +4,13 @@ import { mipCatalogRoutes } from './catalogs/routes'
 import { adminServiceRoutes } from './services/routes'
 import { drainServiceJobs } from './services/jobs'
 import { technicianServiceRoutes } from './technician-services/routes'
+import { siteInsightsRoutes } from './site-insights/routes'
 
 // The existing app owns authorization, CORS and errors for every /api route.
 app.route('/api/mip', mipCatalogRoutes)
 app.route('/api/admin/services', adminServiceRoutes)
 app.route('/api/technician/services', technicianServiceRoutes)
+app.route('/api/admin/sites', siteInsightsRoutes)
 
 // Neon strips spoofed x-neon-* headers. The trigger parser verifies header/body
 // identity; this internal delivery path is deliberately outside browser JWT CORS.

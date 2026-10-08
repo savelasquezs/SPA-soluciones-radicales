@@ -169,6 +169,16 @@ async function privateServiceMediaObjectExists(storagePath: string): Promise<boo
   return true
 }
 
+/** Call only after resolving the reference and authorizing its owner in PostgreSQL. */
+export function createServiceMediaReadUrl(storagePath: string, serviceId: string, ownerId: string, kind: 'REVIEW' | FindingEvidencePhase): { url: string; expiresAt: string } {
+  if (kind === 'REVIEW') assertDeviceReviewStoragePath(storagePath, serviceId, ownerId)
+  else assertFindingEvidenceStoragePath(storagePath, serviceId, ownerId, kind)
+  return {
+    url: presign('GET', storagePath, undefined, serviceMediaBucket(), { 'response-cache-control': 'private, no-store' }),
+    expiresAt: new Date(Date.now() + PRESIGNED_TTL_SECONDS * 1000).toISOString(),
+  }
+}
+
 export async function deleteAreaNoAccessObject(storagePath: string, serviceId: string, areaId: string): Promise<void> {
   assertAreaNoAccessStoragePath(storagePath, serviceId, areaId)
   await deleteServiceMediaObject(storagePath)
