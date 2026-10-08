@@ -44,8 +44,8 @@
     "artifact": "documentation-video-clientes-gestion-clientes-v1",
     "metadataTitle": "Gestión de clientes · Manual de usuario"
   },
-  "clientes-gestion-sedes-v1": {
-    "id": "clientes-gestion-sedes-v1",
+  "clientes-sedes-v1": {
+    "id": "clientes-sedes-v1",
     "narration": "e2e/documentation/sites.narration.json",
     "spec": "e2e/documentation/sites.docs.spec.ts",
     "storyboard": "e2e/documentation/sites.storyboard.md",
