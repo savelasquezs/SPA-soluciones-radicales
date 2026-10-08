@@ -15,7 +15,7 @@ beforeAll(async () => {
   db = await pool.connect()
   await db.query('begin')
   for (const [id,admin,tech] of [[ids.admin,true,false],[ids.tech,false,true]] as const) await db.query('insert into public.usuarios(id,nombre_completo,correo_google,es_admin,es_tecnico) values($1,$2,$3,$4,$5)', [id,'Técnico de prueba',`${id}@example.invalid`,admin,tech])
-  await db.query("insert into public.negocios(id,nombre,nit,correos_json,vigencia_cert_establecimiento_meses) values($1,'Cliente de prueba',$1::text,'[]',12)", [ids.client])
+  await db.query("insert into public.negocios(id,nombre,nit,correos_json,vigencia_cert_establecimiento_meses) values($1,'Cliente de prueba',$2,'[]',12)", [ids.client,ids.client])
   await db.query(`insert into public.sedes(id,negocio_id,nombre,direccion,correos_json,hereda_correos_negocio,contacto_principal_nombre,contacto_principal_celular,valor_servicio,periodicidad_meses,maneja_refuerzo,tipo_sede,duracion_servicio_minutos)
     values($1,$2,'Sede de prueba','Dirección de prueba','[]',true,'Contacto','+573000000002',100000,1,false,'NEGOCIO',60)`, [ids.site,ids.client])
   await db.query("insert into public.areas(id,sede_id,nombre) values($1,$2,'Área original')", [ids.area,ids.site])

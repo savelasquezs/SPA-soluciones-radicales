@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { ChevronLeft, ChevronRight, ImageOff, RotateCcw, ZoomIn, ZoomOut } from 'lucide-vue-next'
 import BaseDialog from '@/components/base/BaseDialog.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -21,6 +21,12 @@ let pinchDistance = 0, pinchScale = 1, gestureWasPinch = false
 const transform = computed(() => `translate(${x.value}px,${y.value}px) scale(${scale.value})`)
 function reset(): void { scale.value = 1; x.value = 0; y.value = 0; pointers.clear(); gestureWasPinch = false }
 watch(() => [props.open,props.index,props.url], () => { reset(); loaded.value = false })
+// Reaching the first/last photo disables its navigation button. Keep keyboard
+// focus in the dialog instead of leaving it on a newly disabled element.
+watch(() => props.index, async () => {
+  await nextTick()
+  if (props.open) stage.value?.focus({ preventScroll: true })
+})
 function clampPan(): void {
   const viewport = stage.value, picture = image.value
   if (!viewport || !picture) return

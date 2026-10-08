@@ -282,3 +282,28 @@ export async function deleteCertificateObject(storagePath: string): Promise<void
   const response = await fetch(presign('DELETE', storagePath, undefined, generatedBucket()), { method: 'DELETE', signal: AbortSignal.timeout(20_000), redirect: 'error' })
   if (!response.ok && response.status !== 404) throw new ApiError(502, 'No fue posible limpiar el documento temporal')
 }
+
+/**
+ * Vencimientos aprobados: SOLO fotografías operativas de servicios.
+ * Nunca admitir firmas ni otros objetos de la misma carpeta services/.
+ */
+export async function deleteRetainedServicePhoto(storagePath: string): Promise<void> {
+  const pattern = /^services\/[0-9a-f-]{36}\/(?:areas\/[0-9a-f-]{36}\/no-access|devices\/[0-9a-f-]{36}\/review|criteria\/[0-9a-f-]{36}\/evidence|findings\/[0-9a-f-]{36}\/(?:opening|closure))\/[^/]+$/i
+  if (!pattern.test(storagePath) || storagePath.includes('..')) throw new ApiError(422, 'Ruta de fotografía no permitida para retención')
+  await deleteServiceMediaObject(storagePath)
+}
+
+/** Informes, no certificados; exige que el path pertenezca al Servicio. */
+export async function deleteRetainedServiceReport(storagePath: string, serviceId: string): Promise<void> {
+  const allowed = storagePath.startsWith(`reports/${serviceId}/`) ||
+    storagePath.startsWith(`services/${serviceId}/reports/`)
+  if (!/^[0-9a-f-]{36}$/i.test(serviceId) || !allowed ||
+    !/\.pdf$/i.test(storagePath) || storagePath.includes('..') ||
+    storagePath.split('/').some(segment => !segment)) {
+    throw new ApiError(422, 'Ruta de informe no permitida para retención')
+  }
+  const response = await fetch(presign('DELETE', storagePath, undefined, generatedBucket()), {
+    method: 'DELETE', signal: AbortSignal.timeout(20_000), redirect: 'error',
+  })
+  if (!response.ok && response.status !== 404) throw new ApiError(502, 'No fue posible limpiar el informe de R2')
+}
