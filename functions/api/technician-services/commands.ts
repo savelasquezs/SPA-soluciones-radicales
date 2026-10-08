@@ -569,9 +569,10 @@ async function lockSnapshotSources(client: PoolClient, serviceId: string): Promi
   }
   await client.query(`select p.id from public.productos_aplicados pa join public.productos p on p.id=pa.producto_id
     where pa.servicio_id=$1 order by p.id for share of pa,p`, [serviceId])
-  await client.query(`select c.id from public.productos_aplicados pa join public.configuracion c
-    on c.categoria='METODO_APLICACION' and c.clave=pa.metodo_aplicacion_codigo
-    where pa.servicio_id=$1 order by c.id for share of c`, [serviceId])
+  await client.query(`select c.id from public.productos_aplicados pa
+    join public.producto_metodos pm on pm.producto_id=pa.producto_id
+    join public.configuracion c on c.id=pm.metodo_id and c.categoria='METODO_APLICACION' and c.activo
+    where pa.servicio_id=$1 order by c.id for share of pm,c`, [serviceId])
   return { areaIds, criterionIds, deviceIds }
 }
 
@@ -582,11 +583,17 @@ export async function startTechnicianService(client: PoolClient, userId: string,
   if (service.estado !== 'PROGRAMADO') throw new ApiError(409, 'El servicio ya no está Programado.', 'SERVICE_NOT_PROGRAMMED')
   if (!service.eligible) throw new ApiError(409, 'Puedes iniciar el servicio desde una hora antes de la programación.', 'SERVICE_TOO_EARLY')
   const incomplete = (await client.query<{ count: number }>(`select count(*)::integer as count from public.productos_aplicados
-    where servicio_id=$1 and (nullif(btrim(lote),'') is null or dosis is null or dosis='null'::jsonb
-      or (jsonb_typeof(dosis)='string' and nullif(btrim(dosis #>> '{}'),'') is null)
-      or nullif(btrim(metodo_aplicacion_codigo),'') is null)`, [serviceId])).rows[0]?.count ?? 0
-  if (incomplete) throw new ApiError(422, 'El Administrador debe completar lote, dosis y método de cada producto antes de iniciar.', 'PRODUCTS_INCOMPLETE')
+    where servicio_id=$1 and nullif(btrim(lote),'') is null`, [serviceId])).rows[0]?.count ?? 0
+  if (incomplete) throw new ApiError(422, 'El Administrador debe completar el lote de cada producto antes de iniciar.', 'PRODUCTS_INCOMPLETE')
   const sources = await lockSnapshotSources(client, serviceId)
+  const missingCatalog = (await client.query<{ nombre: string }>(`select p.nombre from public.productos_aplicados pa
+    join public.productos p on p.id=pa.producto_id where pa.servicio_id=$1 and (
+      nullif(btrim(p.dosis_aplicacion),'') is null or not exists (
+        select 1 from public.producto_metodos pm join public.configuracion c on c.id=pm.metodo_id
+        where pm.producto_id=p.id and c.categoria='METODO_APLICACION' and c.activo
+          and nullif(btrim(coalesce(c.nombre,'')),'') is not null))
+    order by p.nombre limit 1`, [serviceId])).rows[0]
+  if (missingCatalog) throw new ApiError(422, `El producto ${missingCatalog.nombre} necesita dosis y método configurados en el catálogo MIP.`, 'PRODUCT_CATALOG_INCOMPLETE')
   const executionLock = await acquireLock(client, userId, serviceId, deviceId)
   await client.query(`insert into public.servicio_areas(servicio_id,area_id,nombre_snapshot,es_externa_snapshot,posicion_inicial,posicion_recorrido)
     select $1,a.id,a.nombre,a.es_externa,(row_number() over(order by lower(btrim(a.nombre)),a.id)-1)::integer,
@@ -615,8 +622,11 @@ export async function startTechnicianService(client: PoolClient, userId: string,
     where sa.servicio_id=$1 and d.id=any($2::uuid[]) order by sa.posicion_inicial,lower(btrim(d.numero)),d.id`, [serviceId, sources.deviceIds])
   await client.query(`update public.productos_aplicados pa set aplicado=true,producto_nombre_snapshot=p.nombre,
     principio_activo_snapshot=p.principio_activo_composicion,registro_sanitario_snapshot=p.registro_sanitario,
-    dosis_referencia_snapshot=p.dosis_aplicacion,metodo_aplicacion_nombre_snapshot=(select c.nombre from public.configuracion c
-      where c.categoria='METODO_APLICACION' and c.clave=pa.metodo_aplicacion_codigo)
+    dosis_referencia_snapshot=p.dosis_aplicacion,dosis=to_jsonb(p.dosis_aplicacion),
+    metodo_aplicacion_codigo=null,metodo_aplicacion_nombre_snapshot=(
+      select string_agg(c.nombre,', ' order by coalesce(c.orden,2147483647),c.nombre,c.id)
+      from public.producto_metodos pm join public.configuracion c on c.id=pm.metodo_id
+      where pm.producto_id=p.id and c.categoria='METODO_APLICACION' and c.activo)
     from public.productos p
     where pa.servicio_id=$1 and p.id=pa.producto_id`, [serviceId])
   await client.query("update public.servicios set estado='EN_PROCESO',inicio_real=now() where id=$1", [serviceId])

@@ -26,10 +26,13 @@ export const SERVICE_SELECT = `select ${linkJson('s')} || jsonb_build_object(
     from public.usuarios u where coalesce(s.tecnicos_colaboradores_ids_json,'[]'::jsonb) ? u.id::text),
   'contacto',${contactJson},'valorServicio',s.valor_servicio,'observaciones',coalesce(s.observaciones,''),
   'productos',(select coalesce(jsonb_agg(jsonb_build_object('id',pa.id,'productoId',p.id,'nombre',coalesce(pa.producto_nombre_snapshot,p.nombre),
-    'activo',p.activo,'aplicado',pa.aplicado,'lote',coalesce(pa.lote,''),'fechaFabricacion',pa.fecha_fabricacion,'fechaVencimiento',pa.fecha_vencimiento,
-    'dosis',case when jsonb_typeof(pa.dosis)='string' then pa.dosis #>> '{}' else coalesce(pa.dosis::text,'') end,
-    'metodoAplicacionCodigo',coalesce(pa.metodo_aplicacion_codigo,''),'metodoAplicacionNombre',coalesce(pa.metodo_aplicacion_nombre_snapshot,
-      (select c.nombre from public.configuracion c where c.categoria='METODO_APLICACION' and c.clave=pa.metodo_aplicacion_codigo)))
+    'activo',p.activo,'aplicado',pa.aplicado,'lote',coalesce(pa.lote,''),'fechaVencimiento',pa.fecha_vencimiento,
+    'dosis',case when pa.aplicado then coalesce(pa.dosis_referencia_snapshot,p.dosis_aplicacion,'') else coalesce(p.dosis_aplicacion,'') end,
+    'metodoAplicacionNombre',case when pa.aplicado then coalesce(pa.metodo_aplicacion_nombre_snapshot,
+      (select c.nombre from public.configuracion c where c.categoria='METODO_APLICACION' and c.clave=pa.metodo_aplicacion_codigo),'')
+      else coalesce((select string_agg(c.nombre,', ' order by coalesce(c.orden,2147483647),c.nombre,c.id)
+        from public.producto_metodos pm join public.configuracion c on c.id=pm.metodo_id
+        where pm.producto_id=p.id and c.categoria='METODO_APLICACION' and c.activo),'') end)
     order by p.nombre,p.id),'[]'::jsonb) from public.productos_aplicados pa join public.productos p on p.id=pa.producto_id where pa.servicio_id=s.id),
   'refuerzo',(select ${linkJson('r')} from public.servicios r where r.servicio_principal_id=s.id),
   'principal',(select ${linkJson('r')} from public.servicios r where r.id=s.servicio_principal_id),
