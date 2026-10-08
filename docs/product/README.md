@@ -46,10 +46,10 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 | `productos_aplicados` | Planeación y aplicación de productos por Servicio |
 | `configuracion` | Métodos, plagas y parámetros globales |
 | `trampas` | Catálogo administrable de tipos de Dispositivo y su clasificación de monitoreo |
-| `puestos de monitoreo` | Identidad permanente de trampas y puestos de monitoreo por Sede y Área |
-| `servicio_puestos de monitoreo` | Identidad y estado congelados de los Puestos de monitoreo al iniciar el Servicio |
+| `dispositivos` | Persistencia técnica de los Puestos de monitoreo por Sede y Área |
+| `servicio_dispositivos` | Snapshot técnico de los Puestos de monitoreo al iniciar el Servicio |
 | `servicio_tipos_dispositivo` | Tipos, clasificación y Plagas disponibles congelados para altas técnicas durante el Servicio |
-| `revisiones_puestos de monitoreo` | Estado, capturas y evidencia observada durante un Servicio |
+| `revisiones_dispositivos` | Revisión histórica de los Puestos de monitoreo durante un Servicio |
 | `hallazgos` | No conformidades, seguimiento y cierre posterior |
 | `vehiculos` | Vehículos asociados a Sedes habilitadas |
 | `certificados` | Certificados de establecimiento o vehículo |
@@ -80,7 +80,7 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 - Un Cliente Casa conserva una única Sede residencial interna, invisible en la interfaz, sin Áreas, recorrido MIP completo, certificados ni vehículos.
 - Áreas, Puestos de monitoreo y Vehículos pertenecen a una Sede.
 - El nombre de Área es único dentro de su Sede.
-- El número de Dispositivo y la placa de Vehículo son únicos de forma normalizada dentro de su Sede.
+- El número de Puesto de monitoreo y la placa de Vehículo son únicos de forma normalizada dentro de su Sede.
 - Las plantillas de certificados son globales por tipo y se administran únicamente desde Configuración → Certificados.
 
 ### Servicios

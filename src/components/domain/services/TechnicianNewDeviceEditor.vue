@@ -35,7 +35,7 @@ function submit(): void {
   const input = { numero: numero.value.trim(), tipoCodigo: tipoCodigo.value, ubicacion: ubicacion.value.trim() }
   errors.value = {
     ...(!input.numero ? { numero: 'Escribe el número del puesto.' } : {}),
-    ...(!input.tipoCodigo || !selectedType.value ? { tipoCodigo: 'Selecciona una trampa válido.' } : {}),
+    ...(!input.tipoCodigo || !selectedType.value ? { tipoCodigo: 'Selecciona una trampa válida.' } : {}),
     ...(!input.ubicacion ? { ubicacion: 'Describe dónde queda instalado.' } : {}),
   }
   if (Object.keys(errors.value).length) return
@@ -51,7 +51,7 @@ function submit(): void {
     </div>
     <BaseInput v-model="numero" name="new-device-number" label="Número" required maxlength="100" :disabled="saving" :error="errors.numero" />
     <BaseSelect v-model="tipoCodigo" name="new-device-type" label="Trampa" required :disabled="saving" :error="errors.tipoCodigo">
-      <option value="" disabled>Selecciona un tipo</option>
+      <option value="" disabled>Selecciona una trampa</option>
       <option v-for="type in deviceTypes" :key="type.codigo" :value="type.codigo">{{ type.nombre }}</option>
     </BaseSelect>
     <p v-if="selectedType" class="new-device__context">{{ selectedType.clasificacion === 'RASTREROS' ? 'Rastreros' : 'Voladores' }} · {{ selectedType.plagas.length }} plagas aplicables</p>
