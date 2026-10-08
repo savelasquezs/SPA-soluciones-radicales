@@ -6,7 +6,7 @@ Decisión funcional aprobada el 6 de octubre de 2026. Este documento reemplaza e
 
 La ejecución de un Servicio MIP no usa un constructor de formularios, plantillas editables, secciones dinámicas ni versiones de formulario.
 
-La interfaz del Técnico tiene una estructura estable definida por el producto y se construye con datos del dominio. Lo dinámico son los catálogos, las Áreas, los Dispositivos, los Productos, las Plagas y los registros propios de cada Servicio.
+La interfaz del Técnico tiene una estructura estable definida por el producto y se construye con datos del dominio. Lo dinámico son los catálogos, las Áreas, los Puestos de monitoreo, los Productos, las Plagas y los registros propios de cada Servicio.
 
 Los formatos históricos FO-PS-02, FO-PS-10 y FO-PS-09 siguen siendo referencia funcional para los datos que deben capturarse y para la generación documental, pero no se almacenan ni administran como formularios.
 
@@ -22,7 +22,7 @@ Servicio
 │  ├─ Condiciones del Área
 │  │  └─ Criterios MIP aplicables
 │  ├─ Monitoreo
-│  │  └─ Dispositivos permanentes + revisión del Servicio
+│  │  └─ Puestos de monitoreo permanentes + revisión del Servicio
 │  └─ Hallazgos y evidencias
 ├─ Resumen de la ejecución
 ├─ Firma del Técnico
@@ -49,9 +49,9 @@ La superficie inicial del Técnico es mobile-first y compacta: lista sus Servici
 
 Un Servicio `PROGRAMADO` no muestra sus Áreas. Presenta únicamente el contexto esencial, la disponibilidad autoritativa y la acción explícita para iniciar. Tras el inicio, o al reingresar a un Servicio `EN_PROCESO` bloqueado por el mismo celular, la SPA reemplaza la ruta por la primera Área pendiente; si no quedan Áreas pendientes entra al cierre. El contexto general y los Productos permanecen disponibles como resumen plegable dentro del recorrido.
 
-Al iniciar, el servidor vuelve a cargar la configuración vigente, congela Áreas, criterios aplicables, identidad/estado de Dispositivos y Productos previstos, registra `inicio_real` y cambia el Servicio a `EN_PROCESO` en una sola transacción. No se mezclan datos de una preparación antigua con catálogos nuevos.
+Al iniciar, el servidor vuelve a cargar la configuración vigente, congela Áreas, criterios aplicables, identidad/estado de Puestos de monitoreo y Productos previstos, registra `inicio_real` y cambia el Servicio a `EN_PROCESO` en una sola transacción. No se mezclan datos de una preparación antigua con catálogos nuevos.
 
-Solo un celular puede editar un Servicio `EN_PROCESO`. El bloqueo dura toda la ejecución y se identifica por usuario, Servicio y dispositivo; cerrar el navegador no lo libera. En el detalle administrativo del Servicio se muestra quién conserva el acceso cuando existe un bloqueo y el Administrador puede liberarlo de forma auditada para permitir recuperación en otro celular. La confirmación advierte que los cambios que existan únicamente en el celular anterior no se transfieren automáticamente. La primera versión no admite edición técnica simultánea ni mezcla automática de dos dispositivos.
+Solo un celular puede editar un Servicio `EN_PROCESO`. El bloqueo dura toda la ejecución y se identifica por usuario, Servicio y dispositivo físico; cerrar el navegador no lo libera. En el detalle administrativo del Servicio se muestra quién conserva el acceso cuando existe un bloqueo y el Administrador puede liberarlo de forma auditada para permitir recuperación en otro celular. La confirmación advierte que los cambios que existan únicamente en el celular anterior no se transfieren automáticamente. La primera versión no admite edición técnica simultánea ni mezcla automática de dos dispositivos físicos.
 
 ## Criterios MIP
 
@@ -108,28 +108,29 @@ Las Áreas pertenecen a la Sede y conservan `es_externa`.
 
 La pantalla del Técnico debe derivar automáticamente los criterios aplicables según el Área, sin que un Administrador tenga que configurar un formulario por Sede.
 
-El estado de avance del Área se deriva de sus datos reales: criterios evaluados, revisiones de dispositivos y hallazgos. La UI puede resumir este avance, pero no almacena una estructura de formulario separada.
+El estado de avance del Área se deriva de sus datos reales: criterios evaluados, revisiones de puestos de monitoreo y hallazgos. La UI puede resumir este avance, pero no almacena una estructura de formulario separada.
 
-## Monitoreo y dispositivos
+## Monitoreo y puestos de monitoreo
 
-Un Dispositivo es una identidad permanente de una Sede y un Área. Conserva número, tipo, ubicación y estado.
+Un Puesto de monitoreo es una identidad permanente de una Sede y un Área. El modelo funcional aprobado separa el puesto de sus componentes: puede contener una Trampa, un Producto de cebo o ambos. La creación/asignación del Producto al puesto se implementará en la siguiente entrega de este mismo flujo; no se vuelve a capturar como texto libre durante la revisión.
 
-Cada Servicio Principal crea una revisión del Dispositivo. La revisión puede registrar, según aplique:
+En la revisión actual, la Trampa concentra estado observado y evidencias de plagas. Una plaga no seleccionada equivale a cero/no evidenciada; solo se persisten cantidades positivas. La fotografía del puesto está siempre disponible y sigue siendo obligatoria cuando una Trampa cambia desde su estado congelado a Dañada o Fuera de uso.
 
-- estado observado;
-- plagas/evidencias;
-- cantidades capturadas;
-- consumo;
-- producto químico;
-- antídoto;
+Cuando el puesto tenga un Producto de cebo asociado desde el catálogo, su revisión mostrará únicamente la información operativa que corresponda, principalmente el consumo. Producto y antídoto proceden del catálogo/snapshot y no se solicitan manualmente al Técnico.
+
+Cada Servicio Principal crea una revisión del Puesto de monitoreo. La revisión conserva, según aplique:
+
+- estado observado de la Trampa;
+- plagas evidenciadas y cantidades positivas;
+- consumo del cebo cuando exista Producto asociado;
 - observaciones;
-- fotografía.
+- evidencia fotográfica.
 
-Todos los Dispositivos congelados del Servicio deben quedar revisados. La primera versión no contempla una excepción de «Dispositivo inaccesible». La fotografía es obligatoria únicamente cuando el estado observado cambia desde el estado congelado a `DANADO` o `FUERA_DE_USO`; permanecer en uno de esos estados no exige una fotografía nueva por sí solo.
+Todos los Puestos de monitoreo congelados del Servicio deben quedar revisados. La primera versión no contempla una excepción de «Puesto de monitoreo inaccesible». La fotografía es obligatoria únicamente cuando el estado observado cambia desde el estado congelado a `DANADO` o `FUERA_DE_USO`; permanecer en uno de esos estados no exige una fotografía nueva por sí solo.
 
-El Técnico puede crear un nuevo Dispositivo desde el Área durante la ejecución cuando corresponda. El nuevo registro queda disponible como punto permanente para Servicios posteriores.
+El Técnico puede crear un nuevo Puesto de monitoreo desde el Área durante la ejecución cuando corresponda. El nuevo registro queda disponible como punto permanente para Servicios posteriores.
 
-Las Plagas disponibles para una revisión se derivan de la clasificación de monitoreo del tipo de Dispositivo:
+Las Plagas disponibles para una revisión se derivan de la clasificación de monitoreo del tipo de Puesto de monitoreo:
 
 - RASTREROS;
 - VOLADORES.
@@ -150,7 +151,7 @@ Los Hallazgos pertenecen al Servicio, Sede y Área correspondientes.
 
 Desde el Área el Técnico puede registrar descripción, recomendación/acción correctiva, evidencia y demás datos definidos por el dominio. Los Hallazgos anteriores pendientes deben seguir disponibles para verificación y eventual cierre según las reglas ya aprobadas.
 
-La apertura registra responsable y puede incluir varias fotografías. Un Hallazgo nuevo permanece `ABIERTO` y no puede verificarse ni cerrarse dentro del mismo Servicio. En un Servicio posterior de la misma Sede, el Técnico puede marcarlo `EN_PROCESO` o cerrarlo; el cierre exige al menos una fotografía de evidencia y conserva el Servicio, la fecha y la observación de cierre. Las fotografías se guardan primero en el dispositivo y se sincronizan individualmente con el almacenamiento privado cuando existe conexión.
+La apertura registra responsable y puede incluir varias fotografías. Un Hallazgo nuevo permanece `ABIERTO` y no puede verificarse ni cerrarse dentro del mismo Servicio. En un Servicio posterior de la misma Sede, el Técnico puede marcarlo `EN_PROCESO` o cerrarlo; el cierre exige al menos una fotografía de evidencia y conserva el Servicio, la fecha y la observación de cierre. Las fotografías se guardan primero en el dispositivo local y se sincronizan individualmente con el almacenamiento privado cuando existe conexión.
 
 ## Firmas y finalización
 
@@ -160,8 +161,8 @@ Al pulsar Firmar, el lienzo ocupa la pantalla completa para facilitar el trazo e
 
 Un Servicio Principal está completo cuando:
 
-- cada Área quedó evaluada con todos sus criterios y Dispositivos, o se resolvió como Área sin acceso con descripción y fotografía;
-- cada Dispositivo congelado tiene una revisión válida;
+- cada Área quedó evaluada con todos sus criterios y Puestos de monitoreo, o se resolvió como Área sin acceso con descripción y fotografía;
+- cada Puesto de monitoreo congelado tiene una revisión válida;
 - cualquier fotografía obligatoria fue capturada;
 - las dos firmas fueron aceptadas;
 - las mutaciones y archivos obligatorios quedaron sincronizados antes de que el servidor confirme la finalización.
@@ -181,7 +182,7 @@ El recorrido debe respetar las reglas generales de operación offline:
 - conservación de fotografías y firmas pendientes;
 - resolución explícita de conflictos sobre el mismo dato.
 
-El inicio no se encola offline. Requiere confirmación online para fijar la hora, adquirir el bloqueo del dispositivo y congelar el paquete autoritativo.
+El inicio no se encola offline. Requiere confirmación online para fijar la hora, adquirir el bloqueo del dispositivo físico y congelar el paquete autoritativo.
 
 La unidad de trabajo offline debe seguir entidades reales del dominio, no una definición de formulario.
 
@@ -198,8 +199,8 @@ API y frontend también dejan de exponer selección, conteo o validación de for
 
 ## Entrega incremental
 
-La fundación de ejecución implementa el inicio online autoritativo, snapshots de Áreas/Criterios/Dispositivos/Productos, bloqueo persistente por dispositivo, liberación administrativa e idempotencia. La segunda entrega incorpora la superficie móvil y la preparación durable por usuario/Servicio. La tercera implementa el recorrido editable, navegación a la siguiente Área y la base durable de mutaciones offline por usuario/Servicio. La cuarta incorpora evaluaciones `C/CP/NC/NA` y observaciones por criterio sobre esa misma cola, con autosave local, sincronización idempotente y resolución explícita de versiones en conflicto. La quinta incorpora la excepción de Área sin acceso con descripción y fotografía obligatorias, archivo local durable antes de sincronizar y carga autorizada al bucket privado de medios del Servicio. La sexta incorpora revisiones de Dispositivos con tipo, clasificación y Plagas congelados, capturas por Plaga, actualización del estado permanente, fotografía condicional, persistencia offline y resolución explícita de conflictos. La séptima congela los tipos de Dispositivo disponibles al iniciar y permite crear desde el Área un punto permanente activo, incluso offline, incorporándolo al Servicio actual para su revisión y conservando corrección explícita ante conflictos de número. La octava incorpora apertura de Hallazgos con múltiples evidencias, responsable, seguimiento de pendientes de Servicios anteriores y cierre posterior con evidencia obligatoria, usando la misma persistencia offline e idempotencia. La novena completa el módulo con ambas firmas a pantalla completa, conservación local durable, sincronización privada y finalización autoritativa contra la matriz de completitud; ninguna etapa reintroduce formularios legacy.
+La fundación de ejecución implementa el inicio online autoritativo, snapshots de Áreas/Criterios/Puestos de monitoreo/Productos, bloqueo persistente por dispositivo físico, liberación administrativa e idempotencia. La segunda entrega incorpora la superficie móvil y la preparación durable por usuario/Servicio. La tercera implementa el recorrido editable, navegación a la siguiente Área y la base durable de mutaciones offline por usuario/Servicio. La cuarta incorpora evaluaciones `C/CP/NC/NA` y observaciones por criterio sobre esa misma cola, con autosave local, sincronización idempotente y resolución explícita de versiones en conflicto. La quinta incorpora la excepción de Área sin acceso con descripción y fotografía obligatorias, archivo local durable antes de sincronizar y carga autorizada al bucket privado de medios del Servicio. La sexta incorpora revisiones de Puestos de monitoreo con tipo, clasificación y Plagas congelados, capturas por Plaga, actualización del estado permanente, fotografía condicional, persistencia offline y resolución explícita de conflictos. La séptima congela los tipos de Trampa disponibles al iniciar y permite crear desde el Área un punto permanente activo, incluso offline, incorporándolo al Servicio actual para su revisión y conservando corrección explícita ante conflictos de número. La octava incorpora apertura de Hallazgos con múltiples evidencias, responsable, seguimiento de pendientes de Servicios anteriores y cierre posterior con evidencia obligatoria, usando la misma persistencia offline e idempotencia. La novena completa el módulo con ambas firmas a pantalla completa, conservación local durable, sincronización privada y finalización autoritativa contra la matriz de completitud; ninguna etapa reintroduce formularios legacy.
 
-Cada criterio admite hasta cinco fotografías privadas, conservadas localmente hasta sincronizar. Una actualización confirma primero PostgreSQL y solo después elimina de R2 los objetos retirados. Criterios, Áreas sin acceso, Dispositivos y Hallazgos ofrecen acciones separadas para cámara trasera y galería.
+Cada criterio admite hasta cinco fotografías privadas, conservadas localmente hasta sincronizar. Una actualización confirma primero PostgreSQL y solo después elimina de R2 los objetos retirados. Criterios, Áreas sin acceso, Puestos de monitoreo y Hallazgos ofrecen acciones separadas para cámara trasera y galería.
 
-Al cancelar un Servicio se libera su bloqueo de ejecución y se desactivan, sin borrar el historial, los Dispositivos permanentes creados durante ese Servicio. Sus snapshots, revisiones y auditoría se conservan; al estar inactivos no forman parte de paquetes futuros.
+Al cancelar un Servicio se libera su bloqueo de ejecución y se desactivan, sin borrar el historial, los Puestos de monitoreo permanentes creados durante ese Servicio. Sus snapshots, revisiones y auditoría se conservan; al estar inactivos no forman parte de paquetes futuros.

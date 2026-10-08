@@ -21,7 +21,7 @@ const emit = defineEmits<{ open: [areaId: string]; order: [] }>()
       <li v-for="(area, index) in areas" :key="area.id">
         <button type="button" :aria-label="`Abrir Área ${area.nombre}`" @click="emit('open', area.id)">
           <span class="technician-area__number">{{ index + 1 }}</span>
-          <span class="technician-area__summary"><strong>{{ area.nombre }}</strong><small>{{ area.criterios.length }} criterios · {{ area.dispositivos.length }} dispositivos</small></span>
+          <span class="technician-area__summary"><strong>{{ area.nombre }}</strong><small>{{ area.criterios.length }} criterios · {{ area.dispositivos.length }} puestos</small></span>
           <StatusBadge v-if="area.sinAcceso" tone="warning" icon="warning">{{ technicianAreaResolved(area) ? 'Excepción resuelta' : 'Excepción pendiente' }}</StatusBadge>
           <StatusBadge v-else-if="technicianAreaResolved(area)" tone="success" icon="check">Resuelta</StatusBadge>
           <StatusBadge v-else tone="neutral"><MonitorCheck :size="15" aria-hidden="true" />Pendiente</StatusBadge>
