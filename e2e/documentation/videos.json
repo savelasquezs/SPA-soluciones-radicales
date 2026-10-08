@@ -16,5 +16,23 @@
     "output": "mip-gestion-trampas-v1.mp4",
     "artifact": "documentation-video-mip-gestion-trampas-v1",
     "metadataTitle": "Gestión de trampas · Manual de usuario"
+  },
+  "mip-gestion-plagas-v1": {
+    "id": "mip-gestion-plagas-v1",
+    "narration": "e2e/documentation/mip-pests.narration.json",
+    "spec": "e2e/documentation/mip-pests.docs.spec.ts",
+    "storyboard": "e2e/documentation/mip-pests.storyboard.md",
+    "output": "mip-gestion-plagas-v1.mp4",
+    "artifact": "documentation-video-mip-gestion-plagas-v1",
+    "metadataTitle": "Gestión de plagas · Manual de usuario"
+  },
+  "mip-gestion-criterios-v1": {
+    "id": "mip-gestion-criterios-v1",
+    "narration": "e2e/documentation/mip-criteria.narration.json",
+    "spec": "e2e/documentation/mip-criteria.docs.spec.ts",
+    "storyboard": "e2e/documentation/mip-criteria.storyboard.md",
+    "output": "mip-gestion-criterios-v1.mp4",
+    "artifact": "documentation-video-mip-gestion-criterios-v1",
+    "metadataTitle": "Gestión de criterios MIP · Manual de usuario"
   }
 }
