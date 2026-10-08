@@ -1,0 +1,35 @@
+name: Build Neon API bundle
+on:
+  pull_request:
+    branches: [develop]
+    paths:
+      - 'functions/api/**'
+      - 'src/helpers/**'
+      - 'src/types/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/build-neon-api-bundle.yml'
+permissions:
+  contents: read
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Bundle Neon Function
+        run: |
+          mkdir -p neon-function
+          npx esbuild functions/api/index.ts --bundle --platform=node --format=esm --target=node24 --outfile=neon-function/index.mjs
+      - name: Verify bundle
+        run: test -s neon-function/index.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: neon-api-bundle
+          path: neon-function/index.mjs
+          if-no-files-found: error
+          retention-days: 1
