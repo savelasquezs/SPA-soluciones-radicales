@@ -1,6 +1,6 @@
 # Retención automática de archivos: Cloudflare Cron
 
-**Estado:** migración aplicada en Neon `desarrollo` y Worker `sr-storage-retention-dev` creado en Cloudflare. **Sin secreto, sin Cron activado y sin despliegue de API actualizado: no hay borrado activo.** Política funcional: [Conservación de evidencias y documentos MIP](../product/file-retention.md).
+**Estado:** IMPLEMENTADO en `desarrollo` (2026-10-08). Neon Function `api` despliegue 33; Cloudflare Worker `sr-storage-retention-dev` con secreto privado, `RETENTION_MODE=delete` y Cron `0 7 * * *` UTC habilitado. La ejecución real automática ocurrirá en el siguiente horario; no se ha verificado aún un borrado positivo en R2. Política funcional: [Conservación de evidencias y documentos MIP](../product/file-retention.md).
 
 ## Decisión de infraestructura
 
@@ -25,11 +25,11 @@ Nombres propuestos:
 ### Configuración real en desarrollo
 
 - Directorio versionado: `cloudflare/storage-retention/`.
-- Worker remoto creado: `sr-storage-retention-dev`. Desplegado como módulo aislado, con `RETENTION_MODE=dry-run` y URL de Neon Functions desarrollo.
+- Worker remoto `sr-storage-retention-dev`: desplegado con `RETENTION_MODE=delete` y URL de Neon Functions `desarrollo`. Su Cron de Cloudflare está activo a las 02:00 de Bogotá.
 - `wrangler.jsonc` contiene el cron previsto `0 7 * * *`, pero el Cron Trigger **aún no está instalado en Cloudflare**. Esto evita ejecuciones fallidas mientras el endpoint de Neon no haya sido desplegado y autorizado.
-- El secreto compartido no se configura desde conversaciones ni se registra en Git. Ejecutar **localmente** `node scripts/cloudflare/setup-retention-secret.mjs` sobre la rama Neon `desarrollo` autorizada; instala el secreto en el Worker y su SHA-256 en PostgreSQL.
-- Desplegar la versión actualizada de la función Neon `api` usando `npx -y neon@6.2.4 deploy --env <archivo-local>`, conservando las variables actuales. No usar `--env` con un archivo sin todas las credenciales existentes.
-- Con el endpoint operativo y dry-run validado, activar el trigger desde el directorio del Worker con `npx wrangler deploy --config cloudflare/storage-retention/wrangler.jsonc`. Mantener `RETENTION_MODE=dry-run` en la primera prueba. Para activar borrado, cambiar la configuración versionada a `delete`, desplegar de nuevo y comprobar logs. No activar sin verificar las referencias de R2 y la compatibilidad de Neon.
+- Se generó e instaló el secreto `RETENTION_CRON_TOKEN` en Cloudflare mediante conexión autorizada y únicamente su SHA-256 quedó en Neon `desarrollo`. **No** es necesario usar Wrangler ni crear un API token en el computador. El script `scripts/cloudflare/setup-retention-secret.mjs` queda como alternativa para rotación futura.
+- Neon Function `api` fue actualizada mediante deploy de un ZIP compilado en GitHub Actions (despliegue 33). El endpoint `/jobs/retention` ya existe y la comprobación externa confirmó `/health` y HTTP 401 al invocar el cron sin secreto. Las diez variables privadas previas permanecieron intactas.
+- Cloudflare Cron `0 7 * * *` y modo `delete` fueron activados a través de Cloudflare API el 2026-10-08. Se comprobó por lectura posterior que la configuración contiene los bindings `RETENTION_API_URL`, `RETENTION_CRON_TOKEN` (tipo secret) y `RETENTION_MODE=delete`. En el momento de la activación, 0 archivos estaban vencidos; cualquier error posterior debe investigarse en métricas/logs del Worker. **Pendiente** validar una eliminación sintética real en un entorno aislado antes de considerar probada toda la cadena de R2.
 - La migración `20261008_002_storage_retention.sql` se aplicó en Neon `desarrollo`; el esquema aún no está en production.
 
 ### Datos y compatibilidad actual
