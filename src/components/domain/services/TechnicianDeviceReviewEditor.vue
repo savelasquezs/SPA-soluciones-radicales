@@ -98,8 +98,6 @@ function changeState(value: string): void {
 function selectPest(code: string): void {
   if (disabled.value) return
   activePestCode.value = code
-  if (captureQuantity(code) === 0) quantities.value = { ...quantities.value, [code]: '1' }
-  changed()
 }
 
 function changeQuantity(code: string, value: string): void {
@@ -151,8 +149,8 @@ function save(): void {
     </button>
     <div v-if="expanded" :id="`device-review-${device.id}`" class="device-form">
       <p class="device-context"><span v-if="device.creadoDuranteServicio">Creado en este servicio · </span>{{ device.clasificacion === 'VOLADORES' ? 'Voladores' : 'Rastreros' }}</p>
-      <section class="monitoring-block" aria-labelledby="trap-title">
-        <header><div><h4 id="trap-title">Trampa</h4><p>{{ device.tipoNombre }}</p></div></header>
+      <section class="monitoring-block" :aria-labelledby="`trap-title-${device.id}`">
+        <header><div><h4 :id="`trap-title-${device.id}`">Trampa</h4><p>{{ device.tipoNombre }}</p></div></header>
         <BaseSelect :model-value="state" :name="`device-state-${device.id}`" label="Estado observado" required :disabled="disabled" @update:model-value="changeState">
           <option value="ACTIVO">Activo</option>
           <option value="DANADO">Dañado</option>
@@ -161,7 +159,7 @@ function save(): void {
         <div v-if="device.plagas.length" class="pest-captures">
           <div class="pest-captures__heading"><strong>Plagas evidenciadas</strong><span>Sin seleccionar = no se evidencia</span></div>
           <div class="pest-chips" role="group" aria-label="Plagas evidenciadas">
-            <button v-for="pest in device.plagas" :key="pest.codigo" type="button" class="pest-chip" :class="{ 'pest-chip--active': captureQuantity(pest.codigo) > 0 }" :aria-pressed="captureQuantity(pest.codigo) > 0" :disabled="disabled" @click="selectPest(pest.codigo)">
+            <button v-for="pest in device.plagas" :key="pest.codigo" type="button" class="pest-chip" :class="{ 'pest-chip--active': captureQuantity(pest.codigo) > 0, 'pest-chip--editing': activePestCode === pest.codigo }" :aria-pressed="captureQuantity(pest.codigo) > 0" :disabled="disabled" @click="selectPest(pest.codigo)">
               <span>{{ pest.nombre }}</span><strong v-if="captureQuantity(pest.codigo) > 0">{{ captureQuantity(pest.codigo) }}</strong>
             </button>
           </div>
@@ -210,6 +208,7 @@ function save(): void {
 .pest-chip { display:inline-flex; min-height:44px; align-items:center; gap:0.45rem; border:1px solid var(--control-border); border-radius:999px; background:var(--surface); padding:0.45rem 0.75rem; color:var(--text); font:inherit; cursor:pointer; }
 .pest-chip:hover:not(:disabled), .pest-chip:focus-visible { border-color:var(--border-strong); background:var(--hover); }
 .pest-chip--active { border-color:var(--accent); background:var(--accent-subtle); }
+.pest-chip--editing { outline:2px solid var(--focus-ring); outline-offset:1px; }
 .pest-chip strong { display:grid; min-width:1.55rem; height:1.55rem; place-items:center; border-radius:999px; background:var(--surface-raised); font-size:0.78rem; }
 .pest-editor { display:grid; gap:0.45rem; border-radius:var(--radius-sm); background:var(--hover); padding:0.65rem; }
 .pest-editor :deep(.base-button) { justify-self:start; }

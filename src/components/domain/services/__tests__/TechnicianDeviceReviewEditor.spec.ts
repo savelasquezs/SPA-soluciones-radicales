@@ -25,6 +25,7 @@ describe('TechnicianDeviceReviewEditor', () => {
     expect(wrapper.text()).toContain('Sin seleccionar = no se evidencia')
     await wrapper.get('select').setValue('DANADO')
     await wrapper.findAll('.pest-chip')[0]!.trigger('click')
+    expect(wrapper.emitted('draft')).toBeUndefined()
     await wrapper.get('input[type="number"]').setValue('3')
     await wrapper.findAll('button').find(button => button.text() === 'Guardar revisión')!.trigger('click')
     expect(wrapper.text()).toContain('Adjunta una fotografía del cambio de estado.')
