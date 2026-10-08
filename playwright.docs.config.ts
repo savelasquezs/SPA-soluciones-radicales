@@ -2,8 +2,8 @@ import { defineConfig, devices } from '@playwright/test'
 
 export default defineConfig({
   testDir: './e2e/documentation',
-  timeout: 150_000,
-  expect: { timeout: 8_000 },
+  timeout: 300_000,
+  expect: { timeout: 10_000 },
   workers: 1,
   retries: 0,
   reporter: 'line',
@@ -14,17 +14,17 @@ export default defineConfig({
     screenshot: 'off',
     video: {
       mode: 'on',
-      size: { width: 1280, height: 720 },
+      size: { width: 1920, height: 1080 },
     },
-    viewport: { width: 1280, height: 720 },
-    actionTimeout: 10_000,
+    viewport: { width: 1920, height: 1080 },
+    actionTimeout: 15_000,
   },
   projects: [
     {
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
-        viewport: { width: 1280, height: 720 },
+        viewport: { width: 1920, height: 1080 },
       },
     },
   ],

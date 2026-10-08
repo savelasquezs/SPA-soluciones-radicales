@@ -1,4 +1,4 @@
-name: Documentation video
+name: Documentation video · Gestión de productos V4
 
 on:
   workflow_dispatch:
@@ -14,13 +14,13 @@ permissions:
   id-token: write
 
 concurrency:
-  group: documentation-video
+  group: documentation-video-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   record:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     env:
       GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
       TTS_LANGUAGE_CODE: es-US
@@ -65,26 +65,26 @@ jobs:
             sudo apt-get install -y ffmpeg
           fi
 
-      - name: Generate female Chirp 3 narration
+      - name: Generate Chirp 3 narration
         run: npm run docs:tts
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Record interface
+      - name: Record 1080p interface flow
         run: npm run docs:record
 
-      - name: Render final video
+      - name: Render and validate final video
         run: npm run docs:render
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: documentation-video-mip-catalogs
+          name: documentation-video-mip-gestion-productos-v4
           path: |
             docs-media/final/
             docs-media/audio/
             docs-media/timeline.json
             docs-media/playwright/
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 30

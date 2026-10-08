@@ -1,15 +1,31 @@
 # Videos del manual de usuario
 
-El repositorio puede generar tutoriales en video a partir de flujos Playwright y producir un MP4 final con:
+Este repositorio genera tutoriales de usuario a partir de flujos Playwright y produce un MP4 final con navegación automatizada, cursor visible, subtítulos, narración, música ambiental, portada y cierre.
 
-- navegación automatizada;
-- cursor visible y efecto de clic;
-- zoom suave en acciones importantes;
-- subtítulos sincronizados con la narración;
-- voz femenina Google Cloud Text-to-Speech Chirp 3 HD;
-- música ambiental original generada localmente;
-- portada de entrada;
-- cierre con transición al logo.
+La referencia editorial obligatoria es [Estándar de producción de videos del manual de usuario](user-manual-video-standard.md). El video piloto se documenta en [`e2e/documentation/mip-catalogs.storyboard.md`](../../e2e/documentation/mip-catalogs.storyboard.md).
+
+## Arquitectura del proceso
+
+Cada video conserva tres fuentes versionadas:
+
+```text
+e2e/documentation/<slug>.storyboard.md
+e2e/documentation/<slug>.narration.json
+e2e/documentation/<slug>.docs.spec.ts
+```
+
+La narración JSON es la única fuente de verdad para voz y subtítulos. El test registra en `timeline.json` el inicio exacto de cada segmento y el sintetizador guarda en `timings.json` su duración real.
+
+El proceso completo es:
+
+```text
+storyboard
+  → narración JSON
+  → Google Cloud Text-to-Speech
+  → grabación Playwright
+  → mezcla y codificación FFmpeg
+  → validación técnica del MP4
+```
 
 ## Comandos
 
@@ -19,21 +35,36 @@ npm run docs:record
 npm run docs:render
 ```
 
-La ejecución normal se realiza con el workflow `.github/workflows/documentation-video.yml`.
+Orden obligatorio:
+
+1. `docs:tts` sintetiza la narración y genera `docs-media/audio/timings.json`.
+2. `docs:record` usa esas duraciones para mantener cada estado visual durante el audio correspondiente y genera `docs-media/timeline.json`.
+3. `docs:render` mezcla voz y música, codifica el MP4 y valida resolución, códecs, duración e integridad del timeline.
+
+La ejecución normal se realiza con el workflow manual `.github/workflows/documentation-video.yml`.
+
+## Contrato de sincronización
+
+- El subtítulo se muestra con `segmentText(id)`, exactamente igual al texto enviado a TTS.
+- No se mantiene un mapa paralelo de subtítulos resumidos.
+- Cada segmento representa una sola idea visual.
+- Un menú, selector o diálogo permanece abierto mientras se habla de su contenido.
+- La interfaz no avanza al siguiente estado antes de terminar la narración.
+- Cualquier cambio de texto obliga a regenerar TTS, grabación y render.
 
 ## Voz
 
-La voz por defecto es:
+La voz predeterminada es:
 
 ```text
 es-US-Chirp3-HD-Kore
 ```
 
-Es una voz femenina Chirp 3 HD. Puede reemplazarse desde el input del workflow o mediante la variable de repositorio `GOOGLE_TTS_VOICE`.
+Puede reemplazarse desde el input del workflow o mediante la variable de repositorio `GOOGLE_TTS_VOICE`.
 
 ## Autenticación de Google Cloud
 
-No guardar claves JSON de cuentas de servicio en el repositorio. El workflow está preparado para Workload Identity Federation de GitHub Actions hacia Google Cloud.
+No guardar claves JSON de cuentas de servicio en el repositorio. El workflow usa Workload Identity Federation de GitHub Actions hacia Google Cloud.
 
 Variables de repositorio requeridas:
 
@@ -104,20 +135,55 @@ printf 'GCP_WORKLOAD_IDENTITY_PROVIDER=%s\n' "$PROVIDER_NAME"
 printf 'GCP_SERVICE_ACCOUNT=%s\n' "$SERVICE_ACCOUNT"
 ```
 
-Los tres últimos valores son los que deben copiarse a las variables de Actions del repositorio.
+Los tres últimos valores se copian a las variables de Actions del repositorio.
 
-## Salidas
+## Video piloto: Gestión de productos V4
 
-El workflow publica un artefacto llamado:
-
-```text
-documentation-video-mip-catalogs-v2
-```
-
-El archivo final es:
+El flujo cubre:
 
 ```text
-docs-media/final/mip-catalogos-crear-producto-v2.mp4
+Configuración
+→ Catálogos MIP
+→ crear producto
+→ seleccionar cobertura y métodos
+→ adjuntar ficha técnica
+→ consultar detalle y archivo
+→ reconocer acciones
+→ desactivar
+→ localizar en Inactivos
 ```
 
-Los archivos de trabajo dentro de `docs-media/` se consideran generados y no se versionan.
+Salida final:
+
+```text
+docs-media/final/mip-gestion-productos-v4.mp4
+```
+
+Artefacto de GitHub Actions:
+
+```text
+documentation-video-mip-gestion-productos-v4
+```
+
+El artefacto incluye:
+
+- MP4 final;
+- segmentos de audio;
+- `timings.json`;
+- `timeline.json`;
+- video bruto y resultados de Playwright.
+
+Los archivos dentro de `docs-media/` son generados y no se versionan.
+
+## Validación obligatoria
+
+Antes de aprobar un video:
+
+- revisar el MP4 completo a velocidad normal;
+- revisar cambios de escena a 0.5×;
+- verificar que audio y subtítulos coinciden palabra por palabra;
+- confirmar que cada control explicado permanece visible;
+- comprobar la portada y el logo a pantalla completa;
+- revisar el video sin audio para validar los subtítulos;
+- confirmar salida 1920 × 1080, H.264 y AAC;
+- conservar el storyboard actualizado junto con el test.
