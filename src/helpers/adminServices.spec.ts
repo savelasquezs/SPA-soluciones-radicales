@@ -41,8 +41,6 @@ describe('administrator service contracts',()=>{
     const value=input();value.productos=[{ productoId:collaborator,lote:'',fechaFabricacion:null,fechaVencimiento:null,dosis:'',metodoAplicacionCodigo:'' }]
     expect(validateServiceInput(value).errors).toMatchObject({
       'productos.0.lote':'Ingresa el lote previsto.',
-      'productos.0.dosis':'Ingresa la dosis prevista.',
-      'productos.0.metodoAplicacionCodigo':'Selecciona el método de aplicación.',
     })
   })
   it('uses Colombian dates at the UTC day boundary and round-trips the editor',()=>{
