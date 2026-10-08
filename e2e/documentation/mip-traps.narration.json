@@ -1,0 +1,110 @@
+{
+  "title": "Gestión de trampas",
+  "subtitle": "Crear, consultar y administrar trampas de monitoreo",
+  "segments": [
+    {
+      "id": "intro",
+      "text": "En este video aprenderás a crear, consultar y administrar las trampas del catálogo MIP."
+    },
+    {
+      "id": "open-catalogs",
+      "text": "Desde Configuración, abre Catálogos MIP para administrar los maestros utilizados durante la operación técnica."
+    },
+    {
+      "id": "open-traps",
+      "text": "Selecciona la pestaña Trampas. Aquí se administran los dispositivos utilizados para el monitoreo."
+    },
+    {
+      "id": "trap-list",
+      "text": "El listado separa las trampas activas e inactivas y muestra el nombre, el tipo de monitoreo, el estado y las acciones disponibles."
+    },
+    {
+      "id": "trap-search-filter",
+      "text": "Puedes buscar por nombre y filtrar el listado por monitoreo Rastreros o Voladores."
+    },
+    {
+      "id": "new-trap",
+      "text": "Para registrar una trampa, selecciona Nueva trampa."
+    },
+    {
+      "id": "trap-name",
+      "text": "Escribe un nombre claro que permita reconocer el dispositivo durante la operación."
+    },
+    {
+      "id": "monitoring-intro",
+      "text": "Cada trampa debe pertenecer a un solo tipo de monitoreo: Rastreros o Voladores."
+    },
+    {
+      "id": "monitoring-meaning",
+      "text": "Esta clasificación indica el grupo de monitoreo donde puede utilizarse la trampa. No corresponde a las categorías químicas de los productos."
+    },
+    {
+      "id": "choose-monitoring",
+      "text": "Para esta demostración seleccionaremos Voladores."
+    },
+    {
+      "id": "create-trap",
+      "text": "Cuando la información esté lista, selecciona Crear trampa."
+    },
+    {
+      "id": "created-trap",
+      "text": "La nueva trampa aparece inmediatamente en la lista de Activas."
+    },
+    {
+      "id": "open-detail",
+      "text": "Selecciona el nombre de la trampa para consultar su detalle."
+    },
+    {
+      "id": "trap-detail",
+      "text": "El detalle muestra el estado y la clasificación de monitoreo asignada."
+    },
+    {
+      "id": "edit-trap",
+      "text": "Desde el detalle puedes abrir Editar para modificar la información de la trampa."
+    },
+    {
+      "id": "save-edit",
+      "text": "Actualiza el nombre y selecciona Guardar cambios."
+    },
+    {
+      "id": "row-actions",
+      "text": "En la fila encontrarás las acciones Editar, Desactivar y Eliminar."
+    },
+    {
+      "id": "deactivate-trap",
+      "text": "Usa Desactivar cuando la trampa ya no deba ofrecerse para nuevas selecciones, pero necesites conservar su historial."
+    },
+    {
+      "id": "confirm-deactivation",
+      "text": "Confirma la desactivación para retirarla de la lista de Activas."
+    },
+    {
+      "id": "inactive-trap",
+      "text": "La trampa queda disponible en la pestaña Inactivas."
+    },
+    {
+      "id": "reactivate-trap",
+      "text": "Si necesitas volver a utilizarla, selecciona Reactivar y confirma la acción."
+    },
+    {
+      "id": "active-again",
+      "text": "La trampa vuelve a Activas y queda disponible para nuevas selecciones."
+    },
+    {
+      "id": "delete-trap",
+      "text": "Eliminar solo debe usarse cuando la trampa no tiene referencias ni historial. Si ya fue utilizada, la opción correcta es desactivarla."
+    },
+    {
+      "id": "confirm-delete",
+      "text": "Como esta trampa de demostración no tiene historial, confirmaremos su eliminación."
+    },
+    {
+      "id": "deleted-trap",
+      "text": "Al finalizar, el registro desaparece del catálogo sin afectar las demás trampas."
+    },
+    {
+      "id": "outro",
+      "text": "Con esto puedes crear, consultar, editar y administrar las trampas del catálogo MIP."
+    }
+  ]
+}
