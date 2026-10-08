@@ -45,7 +45,7 @@ function change<K extends keyof ServiceProductInput>(index: number, key: K, valu
   emit('blur', `productos.${index}.${key}`)
 }
 
-function previous(id: string): ServiceProductRecord | undefined {
+function previousProduct(id: string): ServiceProductRecord | undefined {
   return props.previous.find(product => product.productoId === id)
 }
 
@@ -54,20 +54,20 @@ function label(id: string): string {
 }
 
 function dose(id: string): string {
-  const historical = previous(id)
+  const historical = previousProduct(id)
   if (historical?.aplicado) return historical.dosis || 'Sin configurar'
   return props.products.find(product => product.id === id)?.dosisAplicacion || historical?.dosis || 'Sin configurar en catálogo'
 }
 
 function methods(id: string): string {
-  const historical = previous(id)
+  const historical = previousProduct(id)
   if (historical?.aplicado) return historical.metodoAplicacionNombre || 'Sin configurar'
   const catalog = props.products.find(product => product.id === id)?.metodos.map(method => method.nombre).filter(Boolean).join(', ')
   return catalog || historical?.metodoAplicacionNombre || 'Sin configurar en catálogo'
 }
 
 function applied(id: string): boolean {
-  return Boolean(previous(id)?.aplicado)
+  return Boolean(previousProduct(id)?.aplicado)
 }
 </script>
 
