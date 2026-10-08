@@ -20,7 +20,7 @@ export async function runScheduledRetention(env) {
         Authorization: `Bearer ${env.RETENTION_CRON_TOKEN}`,
       },
       body: JSON.stringify({ mode }),
-      redirect: 'error',
+      redirect: 'manual',
       signal: AbortSignal.timeout(60_000),
     })
     if (!response.ok) throw new Error(`La API de retención respondió HTTP ${response.status}`)
