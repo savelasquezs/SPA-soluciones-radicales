@@ -215,8 +215,8 @@ fieldset p { margin: .5rem 0 0; font-size: .8125rem; }
 .item-form__help-button { display: inline-grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: var(--text-secondary); cursor: help; }
 .item-form__help-button:hover, .item-form__help-button:focus-visible { background: var(--surface-raised); color: var(--text); outline: 0; }
 .item-form__help-button:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
-.item-form__tooltip { position: absolute; z-index: 30; top: calc(100% + .4rem); left: 50%; width: min(19rem, calc(100vw - 3rem)); padding: .65rem .75rem; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface-raised); box-shadow: var(--shadow-dialog); color: var(--text); font-size: .8125rem; font-weight: 400; line-height: 1.4; opacity: 0; pointer-events: none; transform: translate(-50%, -.25rem); transition: opacity 120ms ease, transform 120ms ease; }
-.item-form__help:hover .item-form__tooltip, .item-form__help:focus-within .item-form__tooltip { opacity: 1; transform: translate(-50%, 0); }
+.item-form__tooltip { position: absolute; z-index: 30; top: calc(100% + .4rem); right: 0; width: min(19rem, calc(100vw - 3rem)); padding: .65rem .75rem; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface-raised); box-shadow: var(--shadow-dialog); color: var(--text); font-size: .8125rem; font-weight: 400; line-height: 1.4; opacity: 0; pointer-events: none; transform: translate(0, -.25rem); transition: opacity 120ms ease, transform 120ms ease; }
+.item-form__help:hover .item-form__tooltip, .item-form__help:focus-within .item-form__tooltip { opacity: 1; transform: translate(0, 0); }
 .item-form__fixed-category { display: grid; gap: var(--space-4); min-height: 44px; padding: .65rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-raised); }
 .item-form__fixed-category small, .item-form__hint { color: var(--text-secondary); }
 input { accent-color: var(--accent); }
