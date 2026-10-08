@@ -52,12 +52,12 @@ test('video: gestión de Sedes', async ({ page }) => {
     await clock.until(.18)
     await pointAt(page.getByRole('button',{name:'Sedes',exact:true}),420)
     await clock.until(.58)
-    await pointAt(page.getByRole('button',{name:'Agregar Sede',exact:true}),620)
+    await pointAt(page.getByRole('button',{name:'Agregar Sede',exact:true}).first(),620)
   })
 
   await narrate('new-site',async clock=>{
     await clock.until(.48)
-    await demoClick(page.getByRole('button',{name:'Agregar Sede',exact:true}))
+    await demoClick(page.getByRole('button',{name:'Agregar Sede',exact:true}).first())
   })
 
   const dialog=page.getByRole('dialog',{name:'Crear Sede',exact:true})
