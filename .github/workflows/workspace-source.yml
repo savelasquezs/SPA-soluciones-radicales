@@ -2,11 +2,8 @@ name: Workspace source snapshot
 
 on:
   push:
-    branches:
-      - feature/technician-area-workspace
-    paths:
-      - .github/workflows/workspace-source.yml
-  workflow_dispatch:
+    branches: [feature/technician-area-workspace]
+    paths: [.github/workflows/workspace-source.yml]
 
 permissions:
   contents: read
@@ -17,17 +14,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
-      - run: npm ci
-      - run: npx playwright install chromium
-      - name: Package isolated validation dependencies
-        run: tar -czf /tmp/technician-validation.tgz node_modules -C "$HOME/.cache" ms-playwright
+      - name: Package source and validation runtime
+        run: |
+          tar -czf /tmp/technician-workspace-complete.tgz .
+          cp "$(command -v node)" /tmp/technician-node
       - uses: actions/upload-artifact@v4
         with:
-          name: technician-validation-dependencies
-          path: /tmp/technician-validation.tgz
+          name: technician-workspace-complete
+          path: |
+            /tmp/technician-workspace-complete.tgz
+            /tmp/technician-node
           retention-days: 1
