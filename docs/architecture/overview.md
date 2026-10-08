@@ -140,9 +140,13 @@ Las imágenes se optimizan antes de persistir y los PDF se generan comprimidos.
 
 Retención:
 
-- fotografías y firmas operativas: siete días después de validar el documento final;
-- informes y certificados PDF: hasta un año;
-- archivos maestros: mientras estén activos.
+- fotografías de revisiones, áreas y criterios: tres meses después de finalizar el Servicio;
+- fotografías de Hallazgos pendientes: un año máximo desde apertura; tras cierre, tres meses desde cierre para apertura y corrección si siguen disponibles;
+- informes PDF: doce meses desde generación;
+- certificados, firmas y maestros: políticas separadas, sin borrado por esta regla;
+- registros históricos estructurados: permanentes.
+
+La política completa y los casos límite se especifican en `docs/product/file-retention.md`. La limpieza programada dependerá de un **Cloudflare Worker con Cron Trigger independiente** (`docs/development/cloudflare-retention.md`), no de Neon scheduled triggers ni del Worker Static Assets de la SPA. Esta automatización todavía debe implementarse y desplegarse.
 
 ## Cloudflare Workers y assets estáticos
 
