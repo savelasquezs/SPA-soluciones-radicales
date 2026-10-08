@@ -60,10 +60,15 @@ Este archivo registra decisiones permanentes. Las tareas pendientes se mantienen
 
 ## ADR-009 · Almacenamiento y retención
 
-- **Estado:** Aprobada
-- **Fecha:** 2026-10-04
-- **Decisión:** Cloudflare R2 es el almacenamiento de objetos. Buckets: `sr-master-files`, `sr-service-media`, `sr-generated-documents`.
-- **Consecuencia:** Fotos/firmas operativas se eliminan siete días después de validar el documento final; PDF generados se conservan hasta un año; archivos maestros mientras estén activos.
+- **Estado:** Aprobada; revisada el 2026-10-08.
+- **Fecha inicial:** 2026-10-04.
+- **Decisión:** Cloudflare R2 es el almacenamiento de objetos. Buckets: `sr-master-files`, `sr-service-media`, `sr-generated-documents`. El plazo anterior de siete días para fotos y firmas queda **derogado**.
+- **Fotografías ordinarias:** tres meses calendario después de finalizar el Servicio.
+- **Hallazgos pendientes:** fotografías como máximo un año desde la apertura, aunque el hallazgo continúe abierto; si se cierra antes del vencimiento, las fotografías de apertura y cierre se conservan tres meses después del cierre.
+- **Informes PDF:** doce meses desde su generación. Certificados, firmas y archivos maestros tienen políticas separadas; nunca someterlos a expiración indiscriminada.
+- **Automatización:** Cloudflare Worker independiente con Cron Trigger diario. PostgreSQL/Neon determina elegibilidad y conserva el historial; **no** usar Neon scheduled triggers ni agregar cron al Worker Static Assets de la SPA.
+- **Referencia normativa del producto:** `docs/product/file-retention.md`; diseño de despliegue `docs/development/cloudflare-retention.md`.
+- **Implementación:** pendiente; la aprobación de esta ADR **no** implica que el cron ya esté activo.
 
 ## ADR-010 · Gmail y Calendar
 
