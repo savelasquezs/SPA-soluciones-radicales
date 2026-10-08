@@ -12,7 +12,6 @@ import {
   localZoom,
   moveCursor,
   pointAt,
-  promoteRecordingUi,
   resetLocalZoom,
   segmentDuration,
   segmentText,
