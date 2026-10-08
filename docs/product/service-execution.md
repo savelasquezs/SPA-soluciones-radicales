@@ -51,7 +51,7 @@ Un Servicio `PROGRAMADO` no muestra sus Áreas. Presenta únicamente el contexto
 
 Al iniciar, el servidor vuelve a cargar la configuración vigente, congela Áreas, criterios aplicables, identidad/estado de Dispositivos y Productos previstos, registra `inicio_real` y cambia el Servicio a `EN_PROCESO` en una sola transacción. No se mezclan datos de una preparación antigua con catálogos nuevos.
 
-Solo un celular puede editar un Servicio `EN_PROCESO`. El bloqueo dura toda la ejecución y se identifica por usuario, Servicio y dispositivo; cerrar el navegador no lo libera. Un Administrador puede liberarlo de forma auditada para permitir recuperación en otro celular. La primera versión no admite edición técnica simultánea ni mezcla automática de dos dispositivos.
+Solo un celular puede editar un Servicio `EN_PROCESO`. El bloqueo dura toda la ejecución y se identifica por usuario, Servicio y dispositivo; cerrar el navegador no lo libera. En el detalle administrativo del Servicio se muestra quién conserva el acceso cuando existe un bloqueo y el Administrador puede liberarlo de forma auditada para permitir recuperación en otro celular. La confirmación advierte que los cambios que existan únicamente en el celular anterior no se transfieren automáticamente. La primera versión no admite edición técnica simultánea ni mezcla automática de dos dispositivos.
 
 ## Criterios MIP
 
