@@ -166,7 +166,8 @@ filters.push(`${voiceLabels.join('')}amix=inputs=${voiceLabels.length}:duration=
 filters.push(`[voice]apad=whole_dur=${videoDuration.toFixed(3)},atrim=0:${videoDuration.toFixed(3)}[voice_full]`)
 filters.push('[voice_full]asplit=2[voice_sc][voice_mix]')
 filters.push('[music][voice_sc]sidechaincompress=threshold=0.012:ratio=10:attack=20:release=550[ducked]')
-filters.push(`[ducked][voice_mix]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.94,atrim=0:${videoDuration.toFixed(3)}[aout]`)
+filters.push(`[ducked][voice_mix]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.94,atrim=0:${videoDuration.toFixed(3)}[premaster]`)
+filters.push('[premaster]loudnorm=I=-16:TP=-1:LRA=11,aresample=48000[aout]')
 
 args.push(
   '-filter_complex', filters.join(';'),
