@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { CircleHelp } from 'lucide-vue-next'
 
 import BaseInput from '@/components/base/BaseInput.vue'
 import {
@@ -113,7 +114,10 @@ watch(
     />
 
     <fieldset v-if="kind !== 'methods'">
-      <legend>Monitoreo <span aria-hidden="true">*</span></legend>
+      <legend>
+        {{ kind === 'pests' ? 'Monitoreo con trampas' : 'Monitoreo' }}
+        <span class="item-form__required" aria-hidden="true">*</span>
+      </legend>
       <div class="item-form__groups">
         <label
           v-for="group in PEST_GROUPS"
@@ -134,13 +138,34 @@ watch(
           {{ PEST_GROUP_LABELS[group] }}
         </label>
       </div>
+      <p v-if="kind === 'pests'" class="item-form__hint">
+        Define si esta plaga se monitorea con trampas para rastreros o para voladores.
+      </p>
       <p v-if="error('clasificacion')" id="classification-error" role="alert">
         {{ error('clasificacion') }}
       </p>
     </fieldset>
 
     <fieldset v-if="kind === 'pests'">
-      <legend>Categoría para productos <span aria-hidden="true">*</span></legend>
+      <legend class="item-form__legend-with-help">
+        <span>
+          Categoría para productos
+          <span class="item-form__required" aria-hidden="true">*</span>
+        </span>
+        <span class="item-form__help">
+          <button
+            type="button"
+            class="item-form__help-button"
+            aria-describedby="product-category-help"
+            aria-label="Ayuda sobre la categoría para productos"
+          >
+            <CircleHelp :size="16" aria-hidden="true" />
+          </button>
+          <span id="product-category-help" class="item-form__tooltip" role="tooltip">
+            Define qué tipo de producto se usa para controlar esta plaga. Los voladores se agrupan como insectos voladores; en rastreros se diferencian insectos rastreros y roedores.
+          </span>
+        </span>
+      </legend>
 
       <div v-if="model.clasificacion === 'VOLADORES'" class="item-form__fixed-category">
         {{ PRODUCT_PEST_CATEGORY_LABELS.INSECTOS_VOLADORES }}
@@ -180,11 +205,18 @@ watch(
 .item-form { display: grid; gap: var(--space-16); }
 fieldset { min-width: 0; border: 0; padding: 0; margin: 0; }
 legend { padding: 0; margin-bottom: var(--space-8); font-size: .875rem; }
-legend span, fieldset p[role='alert'] { color: var(--danger); }
+.item-form__required, fieldset p[role='alert'] { color: var(--danger); }
 fieldset p { margin: .5rem 0 0; font-size: .8125rem; }
 .item-form__groups { display: flex; gap: var(--space-8); }
 .item-form__groups label { display: flex; min-height: 44px; flex: 1; gap: var(--space-8); align-items: center; border: 1px solid var(--border); border-radius: var(--radius); padding: .65rem; cursor: pointer; }
 .item-form__groups label.selected { border-color: var(--accent); background: var(--accent-subtle); }
+.item-form__legend-with-help { display: flex; align-items: center; gap: var(--space-4); }
+.item-form__help { position: relative; display: inline-flex; }
+.item-form__help-button { display: inline-grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: var(--text-secondary); cursor: help; }
+.item-form__help-button:hover, .item-form__help-button:focus-visible { background: var(--surface-raised); color: var(--text); outline: 0; }
+.item-form__help-button:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
+.item-form__tooltip { position: absolute; z-index: 30; top: calc(100% + .4rem); left: 50%; width: min(19rem, calc(100vw - 3rem)); padding: .65rem .75rem; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface-raised); box-shadow: var(--shadow-dialog); color: var(--text); font-size: .8125rem; font-weight: 400; line-height: 1.4; opacity: 0; pointer-events: none; transform: translate(-50%, -.25rem); transition: opacity 120ms ease, transform 120ms ease; }
+.item-form__help:hover .item-form__tooltip, .item-form__help:focus-within .item-form__tooltip { opacity: 1; transform: translate(-50%, 0); }
 .item-form__fixed-category { display: grid; gap: var(--space-4); min-height: 44px; padding: .65rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-raised); }
 .item-form__fixed-category small, .item-form__hint { color: var(--text-secondary); }
 input { accent-color: var(--accent); }
