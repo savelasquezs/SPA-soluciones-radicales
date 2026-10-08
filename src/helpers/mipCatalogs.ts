@@ -184,7 +184,7 @@ export function validateCatalogItem(kind: MipItemKind, input: unknown): CatalogV
     : null
 
   if (!categoriaProducto) {
-    errors.categoriaProducto = 'Selecciona la categoría usada para productos.'
+    errors.categoriaProducto = 'Selecciona la categoría de producto.'
   } else if (
     clasificacion === 'VOLADORES'
     && categoriaProducto !== 'INSECTOS_VOLADORES'
