@@ -1,4 +1,4 @@
-import type { DateOnly, LocalDateTime, TimeOnly } from '@/types/domain'
+import type { DateOnly, LocalDateTime, TimeOnly } from '../types/domain'
 
 export const APP_TIME_ZONE = 'America/Bogota'
 

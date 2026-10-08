@@ -2,9 +2,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Hono } from 'hono'
 import type { Identity } from '../auth'
+import type * as Queries from './queries'
+import type * as Storage from '../r2'
 const mocks = vi.hoisted(() => ({
-  requireAdmin: vi.fn(), listMonitoringPoints: vi.fn(), listMonitoringReviews: vi.fn(), listSiteFindings: vi.fn(), findSiteEvidence: vi.fn(),
-  deviceReviewMediaObjectExists: vi.fn(), findingEvidenceObjectExists: vi.fn(), createServiceMediaReadUrl: vi.fn(),
+  requireAdmin: vi.fn<(...args: unknown[]) => Promise<{ id: string }>>(),
+  listMonitoringPoints: vi.fn<typeof Queries.listMonitoringPoints>(),
+  listMonitoringReviews: vi.fn<typeof Queries.listMonitoringReviews>(),
+  listSiteFindings: vi.fn<typeof Queries.listSiteFindings>(),
+  findSiteEvidence: vi.fn<typeof Queries.findSiteEvidence>(),
+  deviceReviewMediaObjectExists: vi.fn<typeof Storage.deviceReviewMediaObjectExists>(),
+  findingEvidenceObjectExists: vi.fn<typeof Storage.findingEvidenceObjectExists>(),
+  createServiceMediaReadUrl: vi.fn<typeof Storage.createServiceMediaReadUrl>(),
 }))
 vi.mock('../auth', () => ({
   ApiError: class extends Error { constructor(public status: number, message: string, public code?: string) { super(message) } },
@@ -52,9 +60,8 @@ describe('site insights readonly authorization and queries', () => {
   it('distinguishes all states from the pending default and bounds every filter', () => {
     expect(insightQuery({}, 'findings').state).toBe('PENDING')
     expect(insightQuery({ state: '' }, 'findings').state).toBe('')
-    for (const invalid of [{ page: '0' }, { page: '100000' }, { page: '1.5' }, { state: 'wrong' }, { active: 'yes' }, { area: 'sql' }, { from: '2026-02-31' }, { from: '2026-10-08', to: '2026-10-07' }]) {
-      expect(() => insightQuery(invalid, 'points')).toThrow()
-    }
+    const invalidQueries: Array<Record<string, string>> = [{ page: '0' }, { page: '100000' }, { page: '1.5' }, { state: 'wrong' }, { active: 'yes' }, { area: 'sql' }, { from: '2026-02-31' }, { from: '2026-10-08', to: '2026-10-07' }]
+    for (const invalid of invalidQueries) expect(() => insightQuery(invalid, 'points')).toThrow(/no es válid|Revisa/)
   })
   it('does not reinterpret a source belonging to another site or a missing reference', async () => {
     mocks.findSiteEvidence.mockRejectedValue(new ApiError(404, 'La evidencia no está registrada.', 'EVIDENCE_NOT_FOUND'))

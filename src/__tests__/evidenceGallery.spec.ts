@@ -2,8 +2,9 @@ import { effectScope } from 'vue'
 import { flushPromises } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useEvidenceGallery } from '@/composables/useEvidenceGallery'
-import type { EvidenceReference } from '@/types/siteInsights'
-const mocks = vi.hoisted(() => ({ access: vi.fn() }))
+import type { EvidenceAccess, EvidenceReference } from '@/types/siteInsights'
+import type { getEvidenceAccess } from '@/services/siteInsightsService'
+const mocks = vi.hoisted(() => ({ access: vi.fn<typeof getEvidenceAccess>() }))
 vi.mock('@/services/siteInsightsService', () => ({ getEvidenceAccess: mocks.access }))
 const photo = (index: number): EvidenceReference => ({ kind: 'OPENING', recordId: 'finding', index, label: `Foto ${index+1}`, date: '2026-10-08T12:00:00Z' })
 beforeEach(() => {
@@ -56,8 +57,8 @@ describe('evidence gallery', () => {
   })
   it('ignores an outdated response after navigation or closing', async () => {
     const scope = effectScope(), gallery = scope.run(() => useEvidenceGallery(() => 'site'))!
-    let finish: ((value: unknown) => void) | undefined
-    mocks.access.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    let finish: ((value: EvidenceAccess) => void) | undefined
+    mocks.access.mockImplementationOnce(() => new Promise<EvidenceAccess>(resolve => { finish = resolve }))
     gallery.show([photo(0),photo(1)])
     gallery.select(1)
     await flushPromises()
