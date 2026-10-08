@@ -8,21 +8,24 @@ beforeAll(() => {
 const initial = { open: true, index: 0, total: 2, title: 'Puesto 01', caption: 'Servicio de prueba', url: 'https://storage.example.test/photo.jpg', state: 'AVAILABLE' as const }
 describe('EvidenceLightbox', () => {
   it('supports arrows, zoom, reset and close without editing photos', async () => {
-    const wrapper = mount(EvidenceLightbox, { props: initial })
+    const wrapper = mount(EvidenceLightbox, { props: initial, attachTo: document.body })
     await wrapper.find('img').trigger('load')
     await wrapper.find('[aria-label="Ampliar zoom"]').trigger('click')
     expect(wrapper.text()).toContain('150 %')
     await wrapper.find('[aria-label="Ajustar fotografía"]').trigger('click')
     expect(wrapper.text()).toContain('100 %')
-    await wrapper.find('dialog').trigger('keydown', { key: 'ArrowRight' })
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
     expect(wrapper.emitted('select')?.[0]).toEqual([1])
+    await wrapper.setProps({ index: 1, state: 'EXPIRED', url: null })
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }))
+    expect(wrapper.emitted('select')?.[1]).toEqual([0])
     await wrapper.find('[aria-label="Cerrar visor"]').trigger('click')
     expect(wrapper.emitted('close')).toHaveLength(1)
     expect(wrapper.text()).not.toContain('Eliminar')
     wrapper.unmount()
   })
   it('renders expired and retry states without a broken image', async () => {
-    const wrapper = mount(EvidenceLightbox, { props: { ...initial, state: 'EXPIRED', url: null } })
+    const wrapper = mount(EvidenceLightbox, { props: { ...initial, state: 'EXPIRED', url: null }, attachTo: document.body })
     expect(wrapper.text()).toContain('Foto vencida')
     expect(wrapper.find('img').exists()).toBe(false)
     await wrapper.setProps({ state: 'ERROR' })

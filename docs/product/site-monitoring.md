@@ -18,7 +18,7 @@ Las fotografías de apertura y cierre se identifican por fase dentro del mismo v
 
 ## Visor compartido
 
-`EvidenceLightbox` reutiliza `BaseDialog`: anterior/siguiente, contador, zoom con botones y rueda, ajuste, desplazamiento de imagen ampliada, flechas de teclado, Escape, deslizamiento y pellizco táctil. Los controles permanecen accesibles cuando una foto falta. `BaseDrawer` adapta el diálogo existente sin duplicar gestión de foco.
+`EvidenceLightbox` reutiliza `BaseDialog`: anterior/siguiente, contador, zoom con botones y rueda, ajuste, desplazamiento de imagen ampliada, flechas de teclado, Escape, deslizamiento y pellizco táctil. Los controles permanecen accesibles cuando una foto falta. Al llegar a un extremo de la galería, el foco pasa al área de la fotografía para que deshabilitar la flecha no interrumpa el teclado. `BaseDrawer` adapta el diálogo existente sin duplicar gestión de foco.
 
 No se cargan miniaturas ni se ejecutan HEAD por cada fila. El backend autoriza y resuelve una referencia de revisión/hallazgo/índice al abrir cada foto; jamás firma una ruta arbitraria proporcionada por el navegador. Libera la conexión de base de datos antes de consultar R2. Las URLs son privadas, temporales y no se persisten en almacenamiento local.
 
@@ -28,16 +28,16 @@ No se cargan miniaturas ni se ejecutan HEAD por cada fila. El backend autoriza y
 - Fallo de red, permisos o proveedor: error recuperable, nunca vencimiento supuesto.
 - Imagen fallida después de obtener URL: renovar autorización una sola vez; después ofrecer Reintentar.
 
-Los plazos provienen de `file-retention.md` (tres meses desde fin real; hallazgos un año abiertos o tres meses desde cierre según reglas). La clasificación de archivo ausente no certifica el motivo ni la fecha exacta de eliminación, que requieren el registro de retención futuro. Una foto aún disponible sigue mostrándose aunque haya transcurrido el plazo: esta consulta no implementa ni activa el cron. No se borran referencias históricas.
+Los plazos provienen de `file-retention.md` (tres meses desde fin real; hallazgos un año abiertos o tres meses desde cierre según reglas). La clasificación de archivo ausente no certifica el motivo ni la fecha exacta de eliminación. Una foto aún disponible sigue mostrándose aunque haya transcurrido el plazo: estos paneles no activan ni modifican la automatización de retención. No se borran referencias históricas. La integración conserva el Worker y las funciones de retención incorporados en paralelo a `develop`.
 
 ## Arquitectura y UX
 
-Endpoints GET bajo `/api/admin/sites/:siteId`: `monitoring-points`, `monitoring-points/:pointId/reviews`, `findings`, `photos/:kind/:recordId/:index`. Todos requieren Administrador activo; métodos de escritura rechazados. No se amplían grants de Data API y no hay migración.
+Endpoints GET bajo `/api/admin/sites/:siteId`: `monitoring-points`, `monitoring-points/:pointId/reviews`, `findings`, `photos/:kind/:recordId/:index`. Todos requieren Administrador activo; métodos de escritura rechazados. No se amplían grants de Data API y no hay migración propia de estos paneles.
 
-Tablas compactas en desktop y cards apiladas en móvil, colores semánticos puntuales, enlaces de texto neutro, controles móviles de 44 px, temas claro/oscuro. Filtros y página sobreviven cambios de pestaña mientras se conserva la Sede. La caché de lista es local al componente, con revalidación al volver después de 60 segundos; no hay polling. Cambiar contexto cancela solicitudes y descarta respuestas antiguas. Las actualizaciones conservan datos visibles y muestran carga/error/reintento contextual; los errores de colección utilizan el toast global.
+Tablas compactas en desktop y cards apiladas en móvil, colores semánticos puntuales, enlaces de texto neutro, controles móviles de 44 px, temas claro/oscuro. En móvil la búsqueda queda visible y los filtros avanzados se despliegan desde un botón con contador; no desplazan la lista bajo el primer viewport. Filtros y página sobreviven cambios de pestaña mientras se conserva la Sede. La caché de lista es local al componente, con revalidación al volver después de 60 segundos; no hay polling. Cambiar contexto cancela solicitudes y descarta respuestas antiguas. Las actualizaciones conservan datos visibles y muestran carga/error/reintento contextual; los errores de colección utilizan el toast global.
 
 El visor del historial recorre las fotografías de la página cargada, indicado cuando existe paginación. Para otras revisiones se cambia la página del historial.
 
 ## Pruebas
 
-Pruebas de autorización, filtros, aislamiento de referencias, disponibilidad R2, errores recuperables, renovación acotada, galería/teclado/zoom y presentación de vencimiento. La validación visual debe cubrir desktop/mobile y ambos temas antes de integrar.
+Pruebas de autorización, filtros, aislamiento de referencias, disponibilidad R2, errores recuperables, renovación acotada, galería/teclado/zoom y presentación de vencimiento. Pruebas SQL sobre PostgreSQL efímero y flujos E2E en Chromium, con revisión visual desktop/mobile y ambos temas. La validación no equivale a un despliegue del backend.

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ChevronLeft, ChevronRight, ImageOff, RotateCcw, ZoomIn, ZoomOut } from 'lucide-vue-next'
 import BaseDialog from '@/components/base/BaseDialog.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -21,8 +21,6 @@ let pinchDistance = 0, pinchScale = 1, gestureWasPinch = false
 const transform = computed(() => `translate(${x.value}px,${y.value}px) scale(${scale.value})`)
 function reset(): void { scale.value = 1; x.value = 0; y.value = 0; pointers.clear(); gestureWasPinch = false }
 watch(() => [props.open,props.index,props.url], () => { reset(); loaded.value = false })
-// Reaching the first/last photo disables its navigation button. Keep keyboard
-// focus in the dialog instead of leaving it on a newly disabled element.
 watch(() => props.index, async () => {
   await nextTick()
   if (props.open) stage.value?.focus({ preventScroll: true })
@@ -42,13 +40,24 @@ function zoom(value: number): void {
   clampPan()
 }
 function keydown(event: KeyboardEvent): void {
-  if (event.altKey || event.ctrlKey || event.metaKey) return
-  if (event.key === 'ArrowLeft' && props.index > 0) { event.preventDefault(); emit('select',props.index-1) }
-  if (event.key === 'ArrowRight' && props.index < props.total-1) { event.preventDefault(); emit('select',props.index+1) }
-  if (event.key === '+' || event.key === '=') { event.preventDefault(); zoom(scale.value+0.5) }
-  if (event.key === '-') { event.preventDefault(); zoom(scale.value-0.5) }
-  if (event.key === '0') { event.preventDefault(); reset() }
+  if (!props.open || event.altKey || event.ctrlKey || event.metaKey) return
+  const dialog = stage.value?.closest('dialog')
+  const dialogs = document.querySelectorAll('dialog[open]')
+  // A disabled navigation button may drop focus to the document. Capture there,
+  // but only the topmost open viewer may consume gallery keys.
+  if (!dialog || dialogs[dialogs.length - 1] !== dialog) return
+  const key = event.key
+  if (!['ArrowLeft','ArrowRight','+','=','-','0'].includes(key)) return
+  event.preventDefault()
+  event.stopPropagation()
+  if (key === 'ArrowLeft' && props.index > 0) emit('select',props.index-1)
+  if (key === 'ArrowRight' && props.index < props.total-1) emit('select',props.index+1)
+  if (key === '+' || key === '=') zoom(scale.value+0.5)
+  if (key === '-') zoom(scale.value-0.5)
+  if (key === '0') reset()
 }
+onMounted(() => document.addEventListener('keydown',keydown,true))
+onBeforeUnmount(() => document.removeEventListener('keydown',keydown,true))
 function wheel(event: WheelEvent): void { if (ready.value) zoom(scale.value+(event.deltaY < 0 ? 0.25 : -0.25)) }
 function distance(): number {
   const values = [...pointers.values()]
@@ -80,7 +89,7 @@ function pointerUp(event: PointerEvent): void {
 }
 </script>
 <template>
-  <BaseDialog class="evidence-dialog" :model-value="open" :title="title || 'Fotografías'" close-label="Cerrar visor" @update:model-value="!$event && emit('close')" @keydown="keydown">
+  <BaseDialog class="evidence-dialog" :model-value="open" :title="title || 'Fotografías'" close-label="Cerrar visor" @update:model-value="!$event && emit('close')">
     <div class="evidence-viewer">
       <div ref="stage" class="evidence-viewer__stage" :class="{ 'evidence-viewer__stage--zoomed': scale > 1 }" tabindex="0" role="group" aria-label="Fotografía. Usa las flechas para navegar y más o menos para ampliar." @wheel.prevent="wheel" @dblclick="zoom(scale === 1 ? 2 : 1)" @pointerdown="pointerDown" @pointermove="pointerMove" @pointerup="pointerUp" @pointercancel="pointers.clear()">
         <img v-if="state === 'AVAILABLE' && url" ref="image" :key="url" :src="url" :alt="title" :style="{ transform, visibility: loaded ? 'visible' : 'hidden' }" draggable="false" referrerpolicy="no-referrer" @load="loaded = true" @error="emit('imageError')" />
