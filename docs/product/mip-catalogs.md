@@ -27,6 +27,11 @@ Cada Plaga tiene dos dimensiones distintas:
 - clasificación de monitoreo: RASTREROS o VOLADORES;
 - categoría para cobertura de productos: INSECTOS_RASTREROS, INSECTOS_VOLADORES o ROEDORES.
 
+En la interfaz de administración de Plagas, estas dos dimensiones deben explicarse con lenguaje operativo:
+- **Monitoreo con trampas**: “Define si esta plaga se monitorea con trampas para rastreros o para voladores.”
+- **Categoría para productos** conserva un icono de ayuda con el texto: “Define qué tipo de producto se usa para controlar esta plaga. Los voladores se agrupan como insectos voladores; en rastreros se diferencian insectos rastreros y roedores.”
+- La validación vacía de la segunda dimensión usa el mensaje breve “Selecciona la categoría de producto.”
+
 La combinación válida es intencionalmente restringida: una plaga VOLADORES pertenece a INSECTOS_VOLADORES; una plaga RASTREROS pertenece a INSECTOS_RASTREROS o ROEDORES. Por ejemplo, Cucaracha = RASTREROS + INSECTOS_RASTREROS; Roedor = RASTREROS + ROEDORES; Mosca doméstica = VOLADORES + INSECTOS_VOLADORES. La trampa adhesiva puede seguir aplicando al grupo completo RASTREROS, incluido Roedor, porque esa relación pertenece al monitoreo y no a la cobertura química.
 
 Otros rastreros y Otros voladores siguen siendo registros diferentes, no una tercera clasificación de monitoreo. Las claves internas son estables y no se editan. Desactivar impide nuevas selecciones, pero permite conservar referencias existentes al editar un producto. El servidor rechaza asignaciones nuevas a opciones inactivas. Una plaga con relaciones o historia no cambia de identidad semántica ni se elimina; puede desactivarse.
