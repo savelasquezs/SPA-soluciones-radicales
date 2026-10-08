@@ -332,7 +332,19 @@ La vista documental debe indicar que el archivo se abre en una nueva pestaña. N
 
 ---
 
-## 10. Criterios de aprobación
+## 10. Revisión y publicación
+
+El MP4 generado es un **candidato**, no un video publicado.
+
+1. GitHub Actions genera el MP4 y lo conserva como artefacto temporal.
+2. El usuario revisa el video completo.
+3. Si requiere cambios, se genera una nueva versión candidata.
+4. Solo una aprobación explícita habilita la publicación en Cloudflare R2.
+5. Mintlify se actualiza después de publicar el MP4 y siempre pasa por preview antes de llegar a `main`.
+
+La publicación se documenta en [Publicación aprobada de videos del manual](documentation-video-publication.md).
+
+## 11. Criterios de aprobación
 
 Un video queda aprobado únicamente si cumple todos los puntos:
 
@@ -377,7 +389,7 @@ Un video queda aprobado únicamente si cumple todos los puntos:
 
 ---
 
-## 11. Convención de nombres
+## 12. Convención de nombres
 
 Ejemplo para el video piloto:
 
@@ -392,7 +404,7 @@ Artefacto: documentation-video-mip-gestion-productos-v4
 
 ---
 
-## 12. Cambios obligatorios respecto al video anterior
+## 13. Cambios obligatorios respecto al video anterior
 
 1. Cambiar el título de **Cómo crear un producto** a **Gestión de productos**.
 2. Reemplazar la portada con gradientes amplios por una composición plana y nítida.

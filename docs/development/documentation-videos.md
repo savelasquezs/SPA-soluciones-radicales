@@ -16,7 +16,9 @@ e2e/documentation/<slug>.docs.spec.ts
 
 La narración JSON es la única fuente de verdad para voz y subtítulos. El test registra en `timeline.json` el inicio exacto de cada segmento y el sintetizador guarda en `timings.json` su duración real.
 
-El proceso completo es:
+La generación y la publicación son procesos separados. La referencia de publicación es [Publicación aprobada de videos del manual](documentation-video-publication.md).
+
+El proceso de generación es:
 
 ```text
 storyboard
@@ -174,6 +176,8 @@ El artefacto incluye:
 - video bruto y resultados de Playwright.
 
 Los archivos dentro de `docs-media/` son generados y no se versionan.
+
+El artefacto generado se revisa antes de cualquier publicación. Solo después de una aprobación explícita se publica el MP4 en Cloudflare R2 y se actualiza Mintlify.
 
 ## Validación obligatoria
 
