@@ -6,7 +6,7 @@
   "triggers": { "crons": ["0 7 * * *"] },
   "vars": {
     "RETENTION_API_URL": "https://br-nameless-violet-b7y48a5v-api.compute.c-13.us-east-1.aws.neon.tech/jobs/retention",
-    "RETENTION_MODE": "dry-run"
+    "RETENTION_MODE": "delete"
   },
   "workers_dev": false
 }
