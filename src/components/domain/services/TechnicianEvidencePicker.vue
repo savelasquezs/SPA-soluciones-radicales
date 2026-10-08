@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { Camera, Image, Images, X } from 'lucide-vue-next'
-import { ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { Camera, Images, RotateCcw, X } from 'lucide-vue-next'
 import BaseButton from '@/components/base/BaseButton.vue'
+import BaseDialog from '@/components/base/BaseDialog.vue'
 import BaseField from '@/components/base/BaseField.vue'
 import BaseIconButton from '@/components/base/BaseIconButton.vue'
 
@@ -14,25 +15,157 @@ const props = withDefaults(defineProps<{
   error?: string
   max?: number
 }>(), { required: false, disabled: false, error: undefined, max: 10 })
+
 const emit = defineEmits<{ 'update:modelValue': [files: File[]] }>()
 const cameraInput = ref<HTMLInputElement | null>(null)
 const galleryInput = ref<HTMLInputElement | null>(null)
+const video = ref<HTMLVideoElement | null>(null)
+const cameraOpen = ref(false)
+const viewerOpen = ref(false)
+const viewerIndex = ref(0)
+const capturedFile = ref<File | null>(null)
+const cameraError = ref('')
+const previewUrls = new Map<string, string>()
+let stream: MediaStream | null = null
+
+const viewerFile = computed(() => props.modelValue[viewerIndex.value] ?? null)
+
+watch(() => props.modelValue.map(fileKey).join('|'), () => {
+  const retained = new Set(props.modelValue.map(fileKey))
+  const capturedKey = capturedFile.value ? fileKey(capturedFile.value) : null
+  for (const [key, url] of previewUrls) {
+    if (retained.has(key) || key === capturedKey) continue
+    URL.revokeObjectURL(url)
+    previewUrls.delete(key)
+  }
+  if (viewerIndex.value >= props.modelValue.length) viewerIndex.value = Math.max(0, props.modelValue.length - 1)
+})
+
+onBeforeUnmount(() => {
+  stopCamera()
+  for (const url of previewUrls.values()) URL.revokeObjectURL(url)
+  previewUrls.clear()
+})
 
 function fileKey(file: File): string {
   return `${file.name}:${file.size}:${file.lastModified}`
 }
 
+function previewUrl(file: File): string {
+  const key = fileKey(file)
+  const existing = previewUrls.get(key)
+  if (existing) return existing
+  const created = URL.createObjectURL(file)
+  previewUrls.set(key, created)
+  return created
+}
+
+function mergeFiles(files: File[]): File[] {
+  const current = new Map(props.modelValue.map(file => [fileKey(file), file]))
+  for (const file of files) if (current.size < props.max) current.set(fileKey(file), file)
+  return [...current.values()]
+}
+
 function select(event: Event): void {
   const selected = Array.from((event.target as HTMLInputElement).files ?? [])
-  const current = new Map(props.modelValue.map(file => [fileKey(file), file]))
-  for (const file of selected) if (current.size < props.max) current.set(fileKey(file), file)
-  emit('update:modelValue', [...current.values()])
+  if (selected.length) emit('update:modelValue', mergeFiles(selected))
   if (cameraInput.value) cameraInput.value.value = ''
   if (galleryInput.value) galleryInput.value.value = ''
 }
 
 function remove(index: number): void {
+  const file = props.modelValue[index]
+  if (file) {
+    const key = fileKey(file)
+    const url = previewUrls.get(key)
+    if (url) URL.revokeObjectURL(url)
+    previewUrls.delete(key)
+  }
   emit('update:modelValue', props.modelValue.filter((_, current) => current !== index))
+}
+
+function openViewer(index: number): void {
+  viewerIndex.value = index
+  viewerOpen.value = true
+}
+
+async function openCamera(): Promise<void> {
+  if (props.disabled || props.modelValue.length >= props.max) return
+  cameraError.value = ''
+  capturedFile.value = null
+  if (!navigator.mediaDevices?.getUserMedia) {
+    cameraInput.value?.click()
+    return
+  }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })
+    cameraOpen.value = true
+    await nextTick()
+    if (video.value) {
+      video.value.srcObject = stream
+      await video.value.play()
+    }
+  } catch {
+    stopCamera()
+    cameraInput.value?.click()
+  }
+}
+
+function capture(): void {
+  if (!video.value || !video.value.videoWidth || !video.value.videoHeight) {
+    cameraError.value = 'La cámara todavía no está lista.'
+    return
+  }
+  const canvas = document.createElement('canvas')
+  canvas.width = video.value.videoWidth
+  canvas.height = video.value.videoHeight
+  const context = canvas.getContext('2d')
+  if (!context) {
+    cameraError.value = 'No fue posible preparar la fotografía.'
+    return
+  }
+  context.drawImage(video.value, 0, 0, canvas.width, canvas.height)
+  canvas.toBlob(blob => {
+    if (!blob) {
+      cameraError.value = 'No fue posible capturar la fotografía.'
+      return
+    }
+    capturedFile.value = new File([blob], `foto-${Date.now()}.jpg`, { type: 'image/jpeg', lastModified: Date.now() })
+    cameraError.value = ''
+  }, 'image/jpeg', 0.9)
+}
+
+function retake(): void {
+  if (capturedFile.value) {
+    const key = fileKey(capturedFile.value)
+    const url = previewUrls.get(key)
+    if (url) URL.revokeObjectURL(url)
+    previewUrls.delete(key)
+  }
+  capturedFile.value = null
+}
+
+function useCaptured(takeAnother: boolean): void {
+  if (!capturedFile.value) return
+  const next = mergeFiles([capturedFile.value])
+  emit('update:modelValue', next)
+  capturedFile.value = null
+  if (takeAnother && next.length < props.max) return
+  cameraOpen.value = false
+  stopCamera()
+}
+
+function stopCamera(): void {
+  for (const track of stream?.getTracks() ?? []) track.stop()
+  stream = null
+  if (video.value) video.value.srcObject = null
+  capturedFile.value = null
+  cameraError.value = ''
+}
+
+function closeCamera(): void {
+  cameraOpen.value = false
+  stopCamera()
 }
 </script>
 
@@ -40,7 +173,7 @@ function remove(index: number): void {
   <BaseField v-slot="{ describedBy }" :name="name" :label="label" :required="required" :error="error" :disabled="disabled">
     <div class="evidence-picker" :class="{ 'evidence-picker--invalid': error }">
       <div class="evidence-picker__actions">
-        <BaseButton size="compact" variant="secondary" :disabled="disabled || modelValue.length >= max" @click="cameraInput?.click()">
+        <BaseButton size="compact" variant="secondary" :disabled="disabled || modelValue.length >= max" @click="openCamera">
           <Camera :size="18" aria-hidden="true" />Tomar foto
         </BaseButton>
         <BaseButton size="compact" variant="secondary" :disabled="disabled || modelValue.length >= max" @click="galleryInput?.click()">
@@ -74,14 +207,36 @@ function remove(index: number): void {
         :aria-describedby="describedBy"
         @change="select"
       />
-      <ul v-if="modelValue.length">
+      <ul v-if="modelValue.length" class="evidence-picker__previews">
         <li v-for="(file, index) in modelValue" :key="fileKey(file)">
-          <Image :size="17" aria-hidden="true" /><span>{{ file.name }}</span>
+          <button type="button" class="evidence-picker__preview" :aria-label="`Ver fotografía ${index + 1}`" @click="openViewer(index)">
+            <img :src="previewUrl(file)" :alt="`Fotografía ${index + 1}`" />
+          </button>
           <BaseIconButton label="Quitar evidencia" size="small" :disabled="disabled" @click="remove(index)"><X :size="17" /></BaseIconButton>
         </li>
       </ul>
     </div>
   </BaseField>
+
+  <BaseDialog v-model="viewerOpen" title="Vista previa de la fotografía" size="compact">
+    <img v-if="viewerFile" class="evidence-viewer" :src="previewUrl(viewerFile)" alt="Vista previa de la fotografía" />
+  </BaseDialog>
+
+  <BaseDialog :model-value="cameraOpen" title="Tomar fotografía" description="Revisa la imagen antes de agregarla." :close-on-escape="false" @update:model-value="value => { if (!value) closeCamera() }">
+    <div class="camera-capture">
+      <video v-if="!capturedFile" ref="video" autoplay playsinline muted />
+      <img v-else :src="previewUrl(capturedFile)" alt="Fotografía capturada" />
+      <p v-if="cameraError" role="alert">{{ cameraError }}</p>
+      <div class="camera-capture__actions">
+        <BaseButton v-if="!capturedFile" @click="capture"><Camera :size="18" aria-hidden="true" />Capturar</BaseButton>
+        <template v-else>
+          <BaseButton variant="secondary" @click="retake"><RotateCcw :size="18" aria-hidden="true" />Repetir</BaseButton>
+          <BaseButton @click="useCaptured(false)">Usar foto</BaseButton>
+          <BaseButton v-if="modelValue.length + 1 < max" variant="secondary" @click="useCaptured(true)">Usar y tomar otra</BaseButton>
+        </template>
+      </div>
+    </div>
+  </BaseDialog>
 </template>
 
 <style scoped>
@@ -90,8 +245,16 @@ function remove(index: number): void {
 .evidence-picker > span { color:var(--text-secondary); font-size:0.8125rem; }
 .evidence-picker__actions { display:flex; flex-wrap:wrap; gap:0.5rem; }
 .evidence-picker__input { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
-ul { display:grid; gap:0.4rem; margin:0; padding:0; list-style:none; }
-li { display:grid; min-height:44px; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:0.55rem; border-radius:var(--radius-sm); background:var(--surface-raised); padding:0.35rem 0.45rem 0.35rem 0.65rem; }
-li span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:0.8125rem; }
+.evidence-picker__previews { display:grid; grid-template-columns:repeat(auto-fill,minmax(5.5rem,1fr)); gap:0.55rem; margin:0; padding:0; list-style:none; }
+.evidence-picker__previews li { position:relative; min-width:0; aspect-ratio:1; border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; background:var(--surface-raised); }
+.evidence-picker__preview { width:100%; height:100%; border:0; background:transparent; padding:0; cursor:zoom-in; }
+.evidence-picker__preview img { display:block; width:100%; height:100%; object-fit:cover; }
+.evidence-picker__previews :deep(.icon-button) { position:absolute; top:0.3rem; right:0.3rem; background:var(--surface); box-shadow:var(--shadow-sm); }
+.evidence-viewer { display:block; width:100%; max-height:70dvh; object-fit:contain; border-radius:var(--radius); background:#000; }
+.camera-capture { display:grid; gap:0.85rem; }
+.camera-capture video, .camera-capture img { display:block; width:100%; max-height:62dvh; aspect-ratio:3/4; object-fit:cover; border-radius:var(--radius); background:#000; }
+.camera-capture p { margin:0; color:var(--danger); font-size:0.8125rem; }
+.camera-capture__actions { display:grid; gap:0.55rem; }
+@media (min-width:560px) { .camera-capture__actions { display:flex; flex-wrap:wrap; justify-content:flex-end; } }
 @media (max-width:420px) { .evidence-picker__actions > * { flex:1 1 8rem; } }
 </style>
