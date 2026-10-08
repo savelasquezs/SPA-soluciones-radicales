@@ -208,7 +208,7 @@ test('video: gestionar plagas en Catálogos MIP', async ({ page }) => {
   })
 
   await narrate('switch-rastreros',async clock=>{
-    await clock.until(.42)
+    await clock.until(.08)
     await demoClick(rastreros)
     await expect(rastreros).toBeChecked()
     await expect(dialog.getByRole('radio',{name:'Insectos rastreros',exact:true})).toBeVisible()
@@ -217,7 +217,7 @@ test('video: gestionar plagas en Catálogos MIP', async ({ page }) => {
 
   const roedores=dialog.getByRole('radio',{name:'Roedores',exact:true})
   await narrate('choose-roedores',async clock=>{
-    await clock.until(.54)
+    await clock.until(.24)
     await demoClick(roedores)
     await expect(roedores).toBeChecked()
   })
