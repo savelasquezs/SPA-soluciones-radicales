@@ -14,8 +14,8 @@ export const saveTechnicianAreaOrder = (serviceId: string, requestId: string, de
   apiRequest<TechnicianAreaOrderResult>(`${base}/${serviceId}/areas/order`, json({ requestId, deviceId, lockToken, areaIds, versions }))
 export const saveTechnicianCriterionEvaluation = (serviceId: string, requestId: string, deviceId: string, lockToken: string, criterionId: string, version: number, evaluation: MipEvaluation, observation: string, evidenceStoragePaths: string[]) =>
   apiRequest<TechnicianCriterionEvaluationResult>(`${base}/${serviceId}/criteria/${criterionId}`, json({ requestId, deviceId, lockToken, version, evaluation, observation, evidenceStoragePaths }))
-export const saveTechnicianAreaAccess = (serviceId: string, areaId: string, requestId: string, deviceId: string, lockToken: string, version: number, withoutAccess: boolean, description: string, photoStoragePath: string | null) =>
-  apiRequest<TechnicianAreaAccessResult>(`${base}/${serviceId}/areas/${areaId}/access`, json({ requestId, deviceId, lockToken, version, withoutAccess, description, photoStoragePath }))
+export const saveTechnicianAreaAccess = (serviceId: string, areaId: string, requestId: string, deviceId: string, lockToken: string, version: number, withoutAccess: boolean, description: string, photoStoragePath: string | null, photoStoragePaths: string[] = photoStoragePath ? [photoStoragePath] : []) =>
+  apiRequest<TechnicianAreaAccessResult>(`${base}/${serviceId}/areas/${areaId}/access`, json({ requestId, deviceId, lockToken, version, withoutAccess, description, photoStoragePath, photoStoragePaths }))
 export const createTechnicianDevice = (serviceId: string, areaId: string, requestId: string, deviceId: string, lockToken: string,
   permanentDeviceId: string, serviceDeviceId: string, input: TechnicianDeviceCreationInput) =>
   apiRequest<TechnicianDeviceCreationResult>(`${base}/${serviceId}/areas/${areaId}/devices`,

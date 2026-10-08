@@ -180,14 +180,15 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     await persistPackage({ ...cache.package, areas })
   }
 
-  async function persistAreaAccess(serviceId: string, state: TechnicianAreaAccessState, localPhotoId: string | null = null): Promise<void> {
+  async function persistAreaAccess(serviceId: string, state: TechnicianAreaAccessState, localPhotoIds: string[] = []): Promise<void> {
     const cache = caches.value[serviceId]
     if (!cache) throw new Error('Prepara el servicio antes de registrar la excepción de acceso.')
     let found = false
     const areas = cache.package.areas.map(area => {
       if (area.id !== state.id) return area
       found = true
-      return { ...area, ...state, sinAccesoFotoLocalId: localPhotoId }
+      return { ...area, ...state, sinAccesoFotoLocalId: localPhotoIds[0] ?? null,
+        sinAccesoEvidenciasLocalIds: localPhotoIds }
     })
     if (!found) throw new Error('El Área no pertenece al servicio preparado.')
     await persistPackage({ ...cache.package, areas })
@@ -413,20 +414,30 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
             await persistCriterionEvaluation(serviceId, criterionOperation.areaId, criterion)
           } else if (sending.kind === 'AREA_ACCESS') {
             const areaId = sending.areaId
-            let photoStoragePath = sending.photoStoragePath
-            if (sending.withoutAccess && !photoStoragePath) {
-              if (!sending.photoMediaId) throw new Error('La fotografía local del Área no está disponible.')
-              const media = await loadTechnicianMedia(sending.actorId, sending.photoMediaId)
-              if (!media) throw new Error('La fotografía local del Área no está disponible.')
-              photoStoragePath = await uploadTechnicianAreaPhoto(serviceId, areaId, sending.deviceId, sending.lockToken, media.file)
-              sending = { ...sending, photoStoragePath, updatedAt: new Date().toISOString() }
-              await saveTechnicianMutation(sending)
+            let areaOperation = sending
+            const initialEvidences = areaOperation.evidences ?? (areaOperation.photoMediaId
+              ? [{ mediaId: areaOperation.photoMediaId, storagePath: areaOperation.photoStoragePath }] : [])
+            for (const evidence of initialEvidences) {
+              if (!areaOperation.withoutAccess || evidence.storagePath) continue
+              const media = await loadTechnicianMedia(areaOperation.actorId, evidence.mediaId)
+              if (!media) throw new Error('Una fotografía local del Área no está disponible.')
+              const path = await uploadTechnicianAreaPhoto(serviceId, areaId, areaOperation.deviceId, areaOperation.lockToken, media.file)
+              areaOperation = { ...areaOperation, evidences: (areaOperation.evidences ?? initialEvidences)
+                .map(item => item.mediaId === evidence.mediaId ? { ...item, storagePath: path } : item),
+                photoStoragePath: areaOperation.photoStoragePath ?? path, updatedAt: new Date().toISOString() }
+              sending = areaOperation
+              await saveTechnicianMutation(areaOperation)
               await reloadMutations(serviceId)
             }
-            const result = await saveTechnicianAreaAccess(serviceId, areaId, sending.requestId, sending.deviceId, sending.lockToken,
-              sending.version, sending.withoutAccess, sending.description, sending.withoutAccess ? photoStoragePath : null)
-            await deleteTechnicianMutation(sending)
-            if (sending.photoMediaId) await deleteTechnicianMedia(sending.actorId, sending.photoMediaId)
+            const photos = areaOperation.withoutAccess ? [
+              ...(areaOperation.retainedEvidenceStoragePaths ?? []),
+              ...(areaOperation.evidences ?? initialEvidences).flatMap(evidence => evidence.storagePath ? [evidence.storagePath] : []),
+            ] : []
+            const paths = [...new Set(photos)]
+            const result = await saveTechnicianAreaAccess(serviceId, areaId, areaOperation.requestId, areaOperation.deviceId, areaOperation.lockToken,
+              areaOperation.version, areaOperation.withoutAccess, areaOperation.description, paths[0] ?? null, paths)
+            await deleteTechnicianMutation(areaOperation)
+            for (const evidence of areaOperation.evidences ?? initialEvidences) await deleteTechnicianMedia(areaOperation.actorId, evidence.mediaId)
             const remaining = await listTechnicianMutations(actorId(), serviceId)
             for (const queued of remaining.filter((item): item is TechnicianAreaOrderMutation => item.kind === 'AREA_ORDER' && item.status !== 'CONFLICT')) {
               await saveTechnicianMutation({ ...queued,
@@ -441,8 +452,9 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
               && item.areaId === areaId && item.status !== 'CONFLICT')
             await persistAreaAccess(serviceId, latest
               ? { ...result.area, sinAcceso: latest.withoutAccess, sinAccesoDescripcion: latest.withoutAccess ? latest.description : null,
-                  sinAccesoFotoStoragePath: latest.withoutAccess ? latest.photoStoragePath : null }
-              : result.area, latest?.photoMediaId ?? null)
+                  sinAccesoFotoStoragePath: latest.withoutAccess ? latest.photoStoragePath : null,
+                  sinAccesoEvidenciasStoragePaths: latest.withoutAccess ? latest.retainedEvidenceStoragePaths ?? [] : [] }
+              : result.area, latest?.evidences?.map(evidence => evidence.mediaId) ?? [])
           } else if (sending.kind === 'DEVICE_CREATE') {
             const result = await createTechnicianDevice(serviceId, sending.areaId, sending.requestId, sending.deviceId, sending.lockToken,
               sending.permanentDeviceId, sending.serviceDeviceId,
@@ -542,8 +554,21 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
             await persistDeviceReview(serviceId, reviewOperation.areaId, serviceDeviceId, review)
           }
         } catch (failure) {
+          if (sending.kind === 'AREA_ACCESS' && failure instanceof ApiClientError && failure.code === 'PHOTO_NOT_FOUND'
+            && sending.evidences?.length) {
+            const missing = typeof failure.details?.storagePath === 'string' ? failure.details.storagePath : null
+            const matching = sending.evidences.some(item => item.storagePath === missing && Boolean(item.mediaId))
+            if (matching) {
+              await saveTechnicianMutation({ ...sending, evidences: sending.evidences.map(item => item.storagePath === missing
+                ? { ...item, storagePath: null } : item), photoStoragePath: null, status: 'PENDING', error: failure.message,
+                updatedAt: new Date().toISOString() })
+              await reloadMutations(serviceId)
+              return 'pending'
+            }
+          }
           if ((sending.kind === 'AREA_ACCESS' || sending.kind === 'DEVICE_REVIEW') && failure instanceof ApiClientError
-            && failure.code === 'PHOTO_NOT_FOUND' && sending.photoMediaId) {
+            && failure.code === 'PHOTO_NOT_FOUND' && sending.photoMediaId
+            && (sending.kind === 'DEVICE_REVIEW' || !sending.evidences?.length)) {
             await saveTechnicianMutation({ ...sending, photoStoragePath: null, status: 'PENDING', error: failure.message, updatedAt: new Date().toISOString() })
             await reloadMutations(serviceId)
             return 'pending'
@@ -777,7 +802,7 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     areaId: string,
     withoutAccess: boolean,
     description: string,
-    photo: File | null,
+    selectedPhotos: File[] | File | null,
   ): Promise<'synced' | 'pending' | 'conflict'> {
     const cache = caches.value[serviceId]
     if (!cache || cache.package.service.estado !== 'EN_PROCESO' || !cache.lock) throw new Error('Este celular no puede registrar excepciones del servicio.')
@@ -792,54 +817,47 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     }
     const reusable = [...existing].reverse().find((item): item is TechnicianAreaAccessMutation => item.kind === 'AREA_ACCESS'
       && item.areaId === areaId && item.status === 'PENDING')
-    const newMediaId = photo ? crypto.randomUUID() : null
-    const photoMediaId = withoutAccess ? newMediaId ?? reusable?.photoMediaId ?? area.sinAccesoFotoLocalId ?? null : null
-    const photoStoragePath = withoutAccess && !photoMediaId ? reusable?.photoStoragePath ?? area.sinAccesoFotoStoragePath : null
-    if (withoutAccess && (!normalizedDescription || (!photoMediaId && !photoStoragePath))) {
-      throw new Error('Describe la novedad y adjunta una fotografía para registrar el Área sin acceso.')
+    const files = !withoutAccess ? [] : Array.isArray(selectedPhotos) ? selectedPhotos : selectedPhotos ? [selectedPhotos] : []
+    const retained = !withoutAccess ? [] : reusable?.retainedEvidenceStoragePaths
+      ?? area.sinAccesoEvidenciasStoragePaths ?? (area.sinAccesoFotoStoragePath ? [area.sinAccesoFotoStoragePath] : [])
+    const oldEvidence = reusable?.evidences ?? (reusable?.photoMediaId
+      ? [{ mediaId: reusable.photoMediaId, storagePath: reusable.photoStoragePath }] : [])
+    const newEvidences = files.map(() => ({ mediaId: crypto.randomUUID(), storagePath: null }))
+    const evidences = withoutAccess ? [...oldEvidence, ...newEvidences] : []
+    if (withoutAccess && (!normalizedDescription || retained.length + evidences.length < 1 || retained.length + evidences.length > 5)) {
+      throw new Error('Describe la novedad y adjunta entre una y cinco fotografías para registrar el Área sin acceso.')
     }
-    if (photo && newMediaId) {
-      await saveTechnicianMedia({ schemaVersion: 1, id: newMediaId, actorId: actorId(), serviceId, areaId, file: photo, savedAt: new Date().toISOString() })
-    }
-    const now = new Date().toISOString()
-    const operation: TechnicianAreaAccessMutation = reusable
-      ? { ...reusable, withoutAccess, description: withoutAccess ? normalizedDescription : '', photoMediaId, photoStoragePath,
-          updatedAt: now, error: null }
-      : {
-          schemaVersion: 1,
-          requestId: crypto.randomUUID(),
-          actorId: actorId(),
-          serviceId,
-          deviceId: cache.deviceId,
-          lockToken: cache.lock.token,
-          kind: 'AREA_ACCESS',
-          areaId,
-          withoutAccess,
-          description: withoutAccess ? normalizedDescription : '',
-          photoMediaId,
-          photoStoragePath,
-          version: area.version,
-          status: 'PENDING',
-          createdAt: now,
-          updatedAt: now,
-          conflict: null,
-          error: null,
-        }
+    const savedIds: string[] = []
     try {
+      for (const [index, file] of files.entries()) {
+        const mediaId = newEvidences[index]!.mediaId
+        await saveTechnicianMedia({ schemaVersion: 1, id: mediaId, actorId: actorId(), serviceId, areaId,
+          file, savedAt: new Date().toISOString() })
+        savedIds.push(mediaId)
+      }
+      const now = new Date().toISOString()
+      const normalized = { withoutAccess, description: withoutAccess ? normalizedDescription : '',
+        evidences, retainedEvidenceStoragePaths: retained,
+        photoMediaId: evidences[0]?.mediaId ?? null, photoStoragePath: evidences[0]?.storagePath ?? retained[0] ?? null }
+      const operation: TechnicianAreaAccessMutation = reusable
+        ? { ...reusable, ...normalized, updatedAt: now, error: null }
+        : { schemaVersion: 1, requestId: crypto.randomUUID(), actorId: actorId(), serviceId,
+            deviceId: cache.deviceId, lockToken: cache.lock.token, kind: 'AREA_ACCESS', areaId,
+            ...normalized, version: area.version, status: 'PENDING', createdAt: now, updatedAt: now, conflict: null, error: null }
       await saveTechnicianMutation(operation)
+      await reloadMutations(serviceId)
+      await persistAreaAccess(serviceId, { id: area.id, sinAcceso: withoutAccess,
+        sinAccesoDescripcion: withoutAccess ? normalizedDescription : null,
+        sinAccesoFotoStoragePath: withoutAccess ? retained[0] ?? null : null,
+        sinAccesoEvidenciasStoragePaths: retained,
+        version: area.version }, evidences.map(item => item.mediaId))
     } catch (failure) {
-      if (newMediaId) await deleteTechnicianMedia(actorId(), newMediaId)
+      for (const mediaId of savedIds) await deleteTechnicianMedia(actorId(), mediaId)
       throw failure
     }
-    if (reusable?.photoMediaId && reusable.photoMediaId !== photoMediaId) await deleteTechnicianMedia(actorId(), reusable.photoMediaId)
-    await reloadMutations(serviceId)
-    await persistAreaAccess(serviceId, {
-      id: area.id,
-      sinAcceso: withoutAccess,
-      sinAccesoDescripcion: withoutAccess ? normalizedDescription : null,
-      sinAccesoFotoStoragePath: withoutAccess ? photoStoragePath : null,
-      version: area.version,
-    }, photoMediaId)
+    if (!withoutAccess) {
+      for (const old of oldEvidence) await deleteTechnicianMedia(actorId(), old.mediaId)
+    }
     return onlineNow() ? syncPending(serviceId) : 'pending'
   }
 
@@ -850,11 +868,13 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     if (!conflicted?.conflict) throw new Error('No hay un estado sincronizado disponible para el Área.')
     const affected = pending.filter((item): item is TechnicianAreaAccessMutation => item.kind === 'AREA_ACCESS' && item.areaId === areaId)
     for (const operation of affected) {
-      if (operation.photoStoragePath && operation.photoStoragePath !== conflicted.conflict.sinAccesoFotoStoragePath) {
-        await deleteTechnicianAreaPhoto(serviceId, areaId, operation.deviceId, operation.lockToken, operation.photoStoragePath)
-      }
       await deleteTechnicianMutation(operation)
-      if (operation.photoMediaId) await deleteTechnicianMedia(operation.actorId, operation.photoMediaId)
+      for (const evidence of operation.evidences ?? (operation.photoMediaId ? [{ mediaId: operation.photoMediaId, storagePath: operation.photoStoragePath }] : [])) {
+        if (evidence.storagePath && !(conflicted.conflict.sinAccesoEvidenciasStoragePaths ?? []).includes(evidence.storagePath)) {
+          await deleteTechnicianAreaPhoto(serviceId, areaId, operation.deviceId, operation.lockToken, evidence.storagePath)
+        }
+        await deleteTechnicianMedia(operation.actorId, evidence.mediaId)
+      }
     }
     await reloadMutations(serviceId)
     await persistAreaAccess(serviceId, conflicted.conflict)

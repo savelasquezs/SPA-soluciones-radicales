@@ -189,3 +189,13 @@ La configuración de plantillas, la prueba sintética, la generación oficial y 
 - Producto químico y antídoto nunca se piden como texto libre durante la visita. Si el puesto tiene un Producto asociado, la interfaz usa su snapshot y muestra solo los datos operativos que el Técnico deba registrar.
 - La evidencia fotográfica del puesto ofrece Cámara y Galería. Puede adjuntarse en una revisión normal y es obligatoria cuando una regla funcional lo exija.
 - Observaciones opcionales permanecen plegadas hasta que hagan falta o ya contengan información.
+
+## Espacio de trabajo móvil del Técnico
+
+- El encabezado del trabajo muestra solo el selector de Área (con estado textual e icono), un acceso a su orden y la navegación Servicio / Áreas / Cierre. El código y el estado de red permanecen en el detalle global; no se repiten sobre los criterios.
+- Las pestañas **Criterios**, **Puestos** y **Hallazgos** distribuyen una sola responsabilidad visual por superficie. Cada pestaña tiene su propio indicador: criterios sin evaluar, puestos sin revisar o hallazgos abiertos, respectivamente. Un hallazgo abierto **no** cuenta como bloqueo de la inspección.
+- Cambiar de pestaña o Área debe conservar los borradores. La pestaña activa viaja en la URL, y el selector permite regresar a un Área incompleta sin flujos circulares ni botón global “Siguiente pendiente”.
+- «No fue posible acceder» es una acción de peligro **secundaria** que abre un diálogo, no una tarjeta roja ocupando toda el área. El botón **Habilitar Área** aparece inmediatamente en el diálogo, aunque no se hayan ingresado motivo ni fotografías. Cuando la excepción se guarda, se ocultan criterios, puestos y hallazgos de esa Área.
+- La excepción exige un motivo y entre una y cinco fotografías; después de guardar ofrece continuar a otra Área incompleta o ir al cierre. No inicia firmas automáticamente ni da por completo el servicio.
+- Las evidencias nuevas se ven como miniaturas con visor antes de guardar. La cámara integrada permite capturar, repetir, usar foto y «Usar y tomar otra»; cuando el permiso/cámara no está disponible, utiliza el selector nativo.
+- La persistencia de fotografías funciona mediante cola local e identificadores de medio; la sincronización por archivo no debe perder los restantes ni reiniciar un envío ya confirmado.

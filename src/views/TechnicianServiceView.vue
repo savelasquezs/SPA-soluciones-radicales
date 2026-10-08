@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { Clock3, CloudOff, MapPin, PackageCheck, RefreshCw, Wifi } from 'lucide-vue-next'
+import { ClipboardCheck, Clock3, CloudOff, Map, MapPin, PackageCheck, RefreshCw, Wifi } from 'lucide-vue-next'
 import { useRoute, useRouter } from 'vue-router'
 import BaseButton from '@/components/base/BaseButton.vue'
 import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
@@ -22,6 +22,7 @@ const { online } = useNetworkStatus()
 const { currentPackage: packageValue, currentCache, packageLoading, packageError, currentFromCache, action, pendingSyncCount } = storeToRefs(services)
 const viewError = ref('')
 const serviceId = computed(() => String(route.params.id ?? ''))
+const overviewRequested = computed(() => route.query.overview === '1')
 const localLock = computed(() => currentCache.value?.lock ?? null)
 const orderedAreas = computed(() => orderedTechnicianAreas(packageValue.value?.areas ?? []))
 const startMessage = computed(() => {
@@ -44,7 +45,7 @@ async function load(): Promise<void> {
   viewError.value = ''
   try {
     await services.loadPackage(serviceId.value)
-    if (packageValue.value?.service.estado === 'EN_PROCESO' && localLock.value) await enterRoute()
+    if (packageValue.value?.service.estado === 'EN_PROCESO' && localLock.value && !overviewRequested.value) await enterRoute()
   }
   catch (failure) { viewError.value = failure instanceof Error ? failure.message : 'No fue posible cargar el servicio.' }
 }
@@ -79,6 +80,19 @@ async function enterRoute(): Promise<void> {
     ? { name: 'technician-service-area', params: { id: serviceId.value, areaId: pending.id } }
     : { name: 'technician-service-review', params: { id: serviceId.value } })
 }
+
+function openAreas(): void {
+  const target = orderedAreas.value.find(area => !technicianAreaResolved(area)) ?? orderedAreas.value[0]
+  if (!target) {
+    void router.push({ name: 'technician-service-review', params: { id: serviceId.value } })
+    return
+  }
+  void router.push({ name: 'technician-service-area', params: { id: serviceId.value, areaId: target.id } })
+}
+
+function openReview(): void {
+  void router.push({ name: 'technician-service-review', params: { id: serviceId.value } })
+}
 </script>
 
 <template>
@@ -103,9 +117,10 @@ async function enterRoute(): Promise<void> {
         <div v-else-if="packageValue.service.estado === 'EN_PROCESO'" class="technician-start">
           <p>{{ localLock ? 'Este celular conserva el acceso de edición del servicio.' : 'Activa este celular para continuar la ejecución.' }}</p>
           <BaseButton v-if="!localLock" :loading="action === 'CLAIM'" :disabled="!online" @click="claim">Activar en este celular</BaseButton>
+          <div v-else class="technician-work-actions"><BaseButton @click="openAreas"><Map :size="18" aria-hidden="true" />Ir a las Áreas</BaseButton><BaseButton variant="secondary" @click="openReview"><ClipboardCheck :size="18" aria-hidden="true" />Revisar cierre</BaseButton></div>
         </div>
       </section>
-      <details v-if="packageValue.service.estado === 'PROGRAMADO'" class="technician-summary"><summary>Productos previstos ({{ packageValue.products.length }})</summary><TechnicianProductsList :products="packageValue.products" /></details>
+      <details class="technician-summary"><summary>Productos previstos ({{ packageValue.products.length }})</summary><TechnicianProductsList :products="packageValue.products" /></details>
     </template>
   </ServicePage>
 </template>
@@ -126,7 +141,9 @@ dd { overflow-wrap:anywhere; font-size:0.9375rem; }
 .technician-service-hero__saved { display:flex; align-items:center; gap:0.5rem; border-radius:var(--radius); background:var(--success-subtle); padding:0.7rem 0.8rem; color:var(--success); font-size:0.8125rem; font-weight:600; }
 .technician-start { display:grid; gap:0.75rem; border-top:1px solid var(--border); padding-top:1rem; }
 .technician-start p { color:var(--text-secondary); font-size:0.875rem; }
+.technician-work-actions { display:flex; flex-wrap:wrap; gap:0.55rem; }
 .technician-summary { border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--surface); padding:0.8rem; }
 .technician-summary summary { min-height:44px; cursor:pointer; font-weight:700; }
 @media (min-width:760px) { .technician-service-hero { padding:1.25rem; } .technician-service-hero dl { grid-template-columns:repeat(2,minmax(0,1fr)); } .technician-start { grid-template-columns:minmax(0,1fr) auto; align-items:center; } }
+@media (max-width:520px) { .technician-work-actions { display:grid; } }
 </style>

@@ -99,7 +99,8 @@ async function findings(client: PoolClient, serviceId: string): Promise<Array<Te
 async function frozenAreas(client: PoolClient, serviceId: string): Promise<TechnicianArea[]> {
   const areas = (await client.query<Omit<TechnicianArea, 'criterios' | 'dispositivos' | 'hallazgos'>>(`select id,area_id as "areaId",nombre_snapshot as nombre,
     es_externa_snapshot as "esExterna",posicion_inicial as "posicionInicial",posicion_recorrido as "posicionRecorrido",
-    sin_acceso as "sinAcceso",sin_acceso_descripcion as "sinAccesoDescripcion",sin_acceso_foto_storage_path as "sinAccesoFotoStoragePath",version::integer
+    sin_acceso as "sinAcceso",sin_acceso_descripcion as "sinAccesoDescripcion",sin_acceso_foto_storage_path as "sinAccesoFotoStoragePath",
+    sin_acceso_evidencias_storage_paths as "sinAccesoEvidenciasStoragePaths",version::integer
     from public.servicio_areas where servicio_id=$1 order by posicion_recorrido,id`, [serviceId])).rows
   const criteria = (await client.query<(TechnicianCriterion & { servicioAreaId: string })>(`select id,servicio_area_id as "servicioAreaId",criterio_id as "criterioId",
     criterio_nombre_snapshot as nombre,solo_area_externa_snapshot as "soloAreaExterna",evaluacion,observacion,
@@ -130,7 +131,7 @@ async function liveAreas(client: PoolClient, serviceId: string): Promise<Technic
   const areas = (await client.query<Omit<TechnicianArea, 'criterios' | 'dispositivos' | 'hallazgos'>>(`select a.id,a.id as "areaId",a.nombre,a.es_externa as "esExterna",
     (row_number() over(order by lower(btrim(a.nombre)),a.id)-1)::integer as "posicionInicial",
     (row_number() over(order by lower(btrim(a.nombre)),a.id)-1)::integer as "posicionRecorrido",false as "sinAcceso",
-    null::text as "sinAccesoDescripcion",null::text as "sinAccesoFotoStoragePath",1::integer as version
+    null::text as "sinAccesoDescripcion",null::text as "sinAccesoFotoStoragePath",'[]'::jsonb as "sinAccesoEvidenciasStoragePaths",1::integer as version
     from public.servicios s join public.areas a on a.sede_id=s.sede_id and a.activo where s.id=$1 order by lower(btrim(a.nombre)),a.id`, [serviceId])).rows
   const criteria = (await client.query<(TechnicianCriterion & { areaId: string })>(`select c.id,c.id as "criterioId",a.id as "areaId",c.nombre,
     c.solo_area_externa as "soloAreaExterna",null::text as evaluacion,null::text as observacion,'[]'::jsonb as "evidenciasStoragePaths",1::integer as version

@@ -28,6 +28,7 @@ const profile = {
 }
 
 export async function setupSiteDemo(page: Page) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sites: any[] = []
   await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
 
@@ -49,6 +50,7 @@ export async function setupSiteDemo(page: Page) {
     if (path===`/api/clients/${clientId}/sites` && method==='GET') { await route.fulfill({json:sites}); return }
 
     if (path===`/api/clients/${clientId}/sites` && method==='POST') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const body=request.postDataJSON() as any
       await new Promise(resolve=>setTimeout(resolve,500))
       const created={
@@ -71,6 +73,7 @@ export async function setupSiteDemo(page: Page) {
 
     if (path===`/api/sites/${siteId}` && method==='GET') { await route.fulfill({json:sites[0]}); return }
     if (path===`/api/sites/${siteId}` && method==='PATCH') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const body=request.postDataJSON() as any
       Object.assign(sites[0],body,{version:sites[0].version+1})
       await route.fulfill({json:sites[0]}); return

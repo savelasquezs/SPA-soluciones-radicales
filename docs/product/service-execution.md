@@ -204,3 +204,11 @@ La fundación de ejecución implementa el inicio online autoritativo, snapshots 
 Cada criterio admite hasta cinco fotografías privadas, conservadas localmente hasta sincronizar. Una actualización confirma primero PostgreSQL y solo después elimina de R2 los objetos retirados. Criterios, Áreas sin acceso, Puestos de monitoreo y Hallazgos ofrecen acciones separadas para cámara trasera y galería.
 
 Al cancelar un Servicio se libera su bloqueo de ejecución y se desactivan, sin borrar el historial, los Puestos de monitoreo permanentes creados durante ese Servicio. Sus snapshots, revisiones y auditoría se conservan; al estar inactivos no forman parte de paquetes futuros.
+
+## Navegación de trabajo del Técnico (revisión UX de octubre 2026)
+
+La ejecución móvil presenta el Área actual mediante un selector y distribuye el contenido en **Criterios / Puestos de monitoreo / Hallazgos**. Cada pestaña indica su propio conteo de pendientes (o abiertos, para Hallazgos), sin contador global. El Técnico puede ir libremente al detalle global del Servicio, otras Áreas o Cierre; el cierre valida la completitud real sin ocultar el acceso a esa pantalla.
+
+La excepción «No fue posible acceder» se diligencia en un diálogo. «Habilitar Área» está disponible inmediatamente, incluso antes de completar datos; mientras el Área está guardada como sin acceso, no se muestran criterios, puestos ni hallazgos editables. Se exige descripción y entre 1 y 5 evidencias privadas, con fotografía local durable y sincronización individual. La columna histórica `sin_acceso_foto_storage_path` sigue reflejando la primera evidencia por compatibilidad; `sin_acceso_evidencias_storage_paths` guarda el conjunto en una nueva migración. Tras guardar, la acción de continuar abre otra Área que aún requiera trabajo o la pantalla de revisión/cierre, no firma sin validar.
+
+No se incluyen en esta entrega los cambios estructurales del Puesto de monitoreo (numeración automática, Trampa/Cebo opcionales y edición del alta). Se implementarán con migración y validaciones backend separadas para no alterar los snapshots históricos del servicio.

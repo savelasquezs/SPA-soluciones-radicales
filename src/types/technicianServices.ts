@@ -149,6 +149,8 @@ export interface TechnicianArea {
   sinAccesoDescripcion: string | null
   sinAccesoFotoStoragePath: string | null
   sinAccesoFotoLocalId?: string | null
+  sinAccesoEvidenciasStoragePaths?: string[]
+  sinAccesoEvidenciasLocalIds?: string[]
   version: number
   criterios: TechnicianCriterion[]
   dispositivos: TechnicianDevice[]
@@ -266,6 +268,7 @@ export interface TechnicianAreaAccessState {
   sinAcceso: boolean
   sinAccesoDescripcion: string | null
   sinAccesoFotoStoragePath: string | null
+  sinAccesoEvidenciasStoragePaths?: string[]
   version: number
 }
 
@@ -280,6 +283,8 @@ export interface TechnicianAreaAccessMutation extends TechnicianMutationBase {
   description: string
   photoMediaId: string | null
   photoStoragePath: string | null
+  evidences?: TechnicianCriterionEvidenceMutation[]
+  retainedEvidenceStoragePaths?: string[]
   version: number
   conflict: TechnicianAreaAccessState | null
 }

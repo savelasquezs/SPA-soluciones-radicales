@@ -73,7 +73,7 @@ export async function authorizeTechnicianAreaChange(
   await assertExecutionLock(client, userId, serviceId, deviceId, lockToken)
   const area = (await client.query<TechnicianAreaAccessState>(`select id,sin_acceso as "sinAcceso",
     sin_acceso_descripcion as "sinAccesoDescripcion",sin_acceso_foto_storage_path as "sinAccesoFotoStoragePath",
-    version::integer from public.servicio_areas where id=$2 and servicio_id=$1${lockArea ? ' for update' : ''}`,
+    sin_acceso_evidencias_storage_paths as "sinAccesoEvidenciasStoragePaths",version::integer from public.servicio_areas where id=$2 and servicio_id=$1${lockArea ? ' for update' : ''}`,
   [serviceId, areaId])).rows[0]
   if (!area) throw new ApiError(404, 'El Área no pertenece a este servicio.', 'AREA_NOT_FOUND')
   return area
@@ -90,32 +90,35 @@ export async function saveTechnicianAreaAccess(
   withoutAccess: boolean,
   description: string,
   photoStoragePath: string | null,
-): Promise<TechnicianAreaAccessResult & { replacedPhotoPath: string | null }> {
+  photoStoragePaths: string[] = photoStoragePath ? [photoStoragePath] : [],
+): Promise<TechnicianAreaAccessResult & { removedPhotoPaths: string[] }> {
   const current = await authorizeTechnicianAreaChange(client, userId, serviceId, deviceId, lockToken, areaId, true)
   if (current.version !== expectedVersion) {
     throw new ApiError(409, 'El estado de acceso del Área cambió. Conservamos tu respuesta para que decidas cómo continuar.', 'VERSION_CONFLICT', { remote: current })
   }
   const normalizedDescription = description.trim()
-  if (withoutAccess && (!normalizedDescription || !photoStoragePath)) {
+  if (withoutAccess && (!normalizedDescription || !photoStoragePaths.length || photoStoragePaths.length > 5)) {
     throw new ApiError(422, 'Describe la novedad y adjunta una fotografía para registrar el Área sin acceso.', 'VALIDATION')
   }
   if (normalizedDescription.length > 2_000) throw new ApiError(422, 'La descripción no puede superar 2000 caracteres.', 'VALIDATION')
   const { rows } = await client.query<TechnicianAreaAccessState>(`update public.servicio_areas
-    set sin_acceso=$3,sin_acceso_descripcion=$4,sin_acceso_foto_storage_path=$5
+    set sin_acceso=$3,sin_acceso_descripcion=$4,sin_acceso_foto_storage_path=$5,
+      sin_acceso_evidencias_storage_paths=$6::jsonb
     where servicio_id=$1 and id=$2
     returning id,sin_acceso as "sinAcceso",sin_acceso_descripcion as "sinAccesoDescripcion",
-      sin_acceso_foto_storage_path as "sinAccesoFotoStoragePath",version::integer`,
-  [serviceId, areaId, withoutAccess, withoutAccess ? normalizedDescription : null, withoutAccess ? photoStoragePath : null])
+      sin_acceso_foto_storage_path as "sinAccesoFotoStoragePath",
+      sin_acceso_evidencias_storage_paths as "sinAccesoEvidenciasStoragePaths",version::integer`,
+  [serviceId, areaId, withoutAccess, withoutAccess ? normalizedDescription : null,
+    withoutAccess ? photoStoragePaths[0] : null, JSON.stringify(withoutAccess ? photoStoragePaths : [])])
   const area = rows[0]!
   await audit(client, userId, withoutAccess ? 'SERVICIO_AREA_SIN_ACCESO_REGISTRADA' : 'SERVICIO_AREA_ACCESO_HABILITADO', serviceId, {
     areaId,
-    hasPhoto: Boolean(area.sinAccesoFotoStoragePath),
+    photoCount: area.sinAccesoEvidenciasStoragePaths?.length ?? 0,
   })
   return {
     area,
-    replacedPhotoPath: current.sinAccesoFotoStoragePath && current.sinAccesoFotoStoragePath !== area.sinAccesoFotoStoragePath
-      ? current.sinAccesoFotoStoragePath
-      : null,
+    removedPhotoPaths: (current.sinAccesoEvidenciasStoragePaths ?? (current.sinAccesoFotoStoragePath ? [current.sinAccesoFotoStoragePath] : []))
+      .filter(path => !(area.sinAccesoEvidenciasStoragePaths ?? []).includes(path)),
   }
 }
 
