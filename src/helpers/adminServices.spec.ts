@@ -39,10 +39,10 @@ describe('administrator service contracts',()=>{
   })
   it('requires only the batch from the visit and ignores catalogue values sent by clients',()=>{
     const value=input();value.productos=[{ productoId:collaborator,lote:'',fechaVencimiento:null }]
-    expect(validateServiceInput(value).errors).toEqual({ 'productos.0.lote':'Ingresa el lote previsto.' })
-    const valid=validateServiceInput({ ...input(), productos:[{ ...value.productos[0], lote:'L-1',dosis:'dosis manipulada',metodoAplicacionCodigo:'INVENTADO',fechaFabricacion:'2026-01-01' }] })
+    expect(validateServiceInput(value).errors).toEqual({ 'productos.0.lote':'Ingresa el lote previsto.', 'productos.0.fechaVencimiento':'Ingresa una fecha de vencimiento válida.' })
+    const valid=validateServiceInput({ ...input(), productos:[{ ...value.productos[0], lote:'L-1',fechaVencimiento:'2030-11-01',dosis:'dosis manipulada',metodoAplicacionCodigo:'INVENTADO',fechaFabricacion:'2026-01-01' }] })
     expect(valid.errors).toEqual({})
-    expect(valid.value.productos[0]).toEqual({ productoId:collaborator,lote:'L-1',fechaVencimiento:null })
+    expect(valid.value.productos[0]).toEqual({ productoId:collaborator,lote:'L-1',fechaVencimiento:'2030-11-01' })
   })
   it('uses Colombian dates at the UTC day boundary and round-trips the editor',()=>{
     expect(todayBogota(new Date('2026-10-07T02:00:00Z'))).toBe('2026-10-06')

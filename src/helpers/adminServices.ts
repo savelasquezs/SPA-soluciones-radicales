@@ -110,7 +110,7 @@ export function validateServiceInput(value: unknown): { value: ServiceInput; err
     if (!isServiceId(productoId) || seen.has(productoId)) errors.productos = 'Selecciona productos válidos sin duplicarlos.'
     seen.add(productoId)
     if (!lote || lote.length > 120) errors[`productos.${index}.lote`] = lote ? 'El lote no puede superar 120 caracteres.' : 'Ingresa el lote previsto.'
-    if (fechaVencimiento && !isDateOnly(fechaVencimiento)) errors[`productos.${index}.fechaVencimiento`] = 'Ingresa una fecha de vencimiento válida.'
+    if (!fechaVencimiento || !isDateOnly(fechaVencimiento)) errors[`productos.${index}.fechaVencimiento`] = 'Ingresa una fecha de vencimiento válida.'
     return { productoId, lote, fechaVencimiento }
   })
   const cobro = object(input.cobro)

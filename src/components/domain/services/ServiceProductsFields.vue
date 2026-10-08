@@ -109,7 +109,7 @@ function applied(id: string): boolean {
           mode="date"
           :name="`producto-${index}-vencimiento`"
           label="Vencimiento"
-          clearable
+          required
           :disabled="disabled || applied(product.productoId)"
           :error="errors[`productos.${index}.fechaVencimiento`]"
           @update:model-value="change(index, 'fechaVencimiento', $event)"

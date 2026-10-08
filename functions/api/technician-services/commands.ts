@@ -583,8 +583,8 @@ export async function startTechnicianService(client: PoolClient, userId: string,
   if (service.estado !== 'PROGRAMADO') throw new ApiError(409, 'El servicio ya no está Programado.', 'SERVICE_NOT_PROGRAMMED')
   if (!service.eligible) throw new ApiError(409, 'Puedes iniciar el servicio desde una hora antes de la programación.', 'SERVICE_TOO_EARLY')
   const incomplete = (await client.query<{ count: number }>(`select count(*)::integer as count from public.productos_aplicados
-    where servicio_id=$1 and nullif(btrim(lote),'') is null`, [serviceId])).rows[0]?.count ?? 0
-  if (incomplete) throw new ApiError(422, 'El Administrador debe completar el lote de cada producto antes de iniciar.', 'PRODUCTS_INCOMPLETE')
+    where servicio_id=$1 and (nullif(btrim(lote),'') is null or fecha_vencimiento is null)`, [serviceId])).rows[0]?.count ?? 0
+  if (incomplete) throw new ApiError(422, 'El Administrador debe completar lote y vencimiento de cada producto antes de iniciar.', 'PRODUCTS_INCOMPLETE')
   const sources = await lockSnapshotSources(client, serviceId)
   const missingCatalog = (await client.query<{ nombre: string }>(`select p.nombre from public.productos_aplicados pa
     join public.productos p on p.id=pa.producto_id where pa.servicio_id=$1 and (
