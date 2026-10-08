@@ -63,6 +63,11 @@ Los storyboards ejecutables de cada video viven junto a sus pruebas en `e2e/docu
 - Una mejora aprobada fuera de alcance se registra en `tasks.md`.
 - No duplicar la misma regla en varios documentos; enlazar su fuente principal.
 
+### Almacenamiento y retención
+
+- [Plazos y tratamiento especial de Hallazgos](product/file-retention.md).
+- [Automatización diaria mediante Cloudflare Worker](development/cloudflare-retention.md).
+
 ### Certificados
 
 - [Comportamiento manual y variables](product/certificates.md).
