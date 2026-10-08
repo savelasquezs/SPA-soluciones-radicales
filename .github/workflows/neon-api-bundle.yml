@@ -1,0 +1,53 @@
+name: Bundle Neon API for controlled deployment
+on:
+  push:
+    branches: [develop]
+    paths:
+      - '.github/workflows/neon-api-bundle.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Build Function bundle locally without Neon credentials
+        run: |
+          mkdir -p .neon-bundle
+          node --input-type=module <<'NODE'
+          import { build } from 'esbuild';
+          await build({
+            entryPoints: ['functions/api/index.ts'],
+            outfile: '.neon-bundle/index.mjs',
+            bundle: true,
+            platform: 'node',
+            target: 'node24',
+            format: 'esm',
+            conditions: ['node'],
+            banner: { js: 'import { createRequire as __createRequire } from "node:module"; const require = __createRequire(import.meta.url);' },
+            logLevel: 'info',
+          });
+          NODE
+          node --check .neon-bundle/index.mjs
+          cd .neon-bundle
+          zip -9 -q neon-api.zip index.mjs
+          sha256sum neon-api.zip
+          ls -lh neon-api.zip
+      - name: Publish ephemeral base64 artifact in repo for deploy connector
+        run: |
+          mkdir -p .github/generated
+          base64 -w0 .neon-bundle/neon-api.zip | fold -w 180000 | awk '{print > sprintf(".github/generated/neon-api.zip.b64.%03d", NR)}'
+          git config user.name "sr-neon-bundle-bot"
+          git config user.email "sr-neon-bundle-bot@users.noreply.github.com"
+          git add .github/generated/neon-api.zip.b64.*
+          git commit -m "build: temporary Neon API deploy bundle"
+          git push origin HEAD:develop
