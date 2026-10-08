@@ -10,7 +10,7 @@ function record(id: string,start: string,end: string): AdminService {
     responsable:{ id,nombreCompleto:'Técnico',correoGoogle:'tech@example.invalid',activo:true,tieneCertificado:false,certificadoFechaVencimiento:null },
     colaboradores:[],contacto:{ nombre:null,celular:null,correos:[] },valorServicio:100000,observaciones:'',productos:[],refuerzo:null,principal:null,
     pago:{ metodoPago:null,estadoPago:'SIN_REGISTRAR',tecnicoRecaudoPrevistoId:null,recaudadoPorId:null,recaudadoPorNombre:null,pagoFecha:null,confirmadoAt:null,confirmadoPor:null,comprobanteStoragePath:null },
-    calendar:{ estado:'PENDIENTE',ultimaSyncAt:null,error:null },motivoCancelacion:null,canceladoAt:null,
+    calendar:{ estado:'PENDIENTE',ultimaSyncAt:null,error:null },executionLock:null,motivoCancelacion:null,canceladoAt:null,
   }
 }
 describe('weekly service calendar layout',()=>{
