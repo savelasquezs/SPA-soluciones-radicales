@@ -4,7 +4,6 @@ import { ArrowRight, Images, ShieldAlert, ShieldCheck } from 'lucide-vue-next'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDialog from '@/components/base/BaseDialog.vue'
 import BaseTextarea from '@/components/base/BaseTextarea.vue'
-import StatusBadge from '@/components/base/StatusBadge.vue'
 import TechnicianEvidencePicker from '@/components/domain/services/TechnicianEvidencePicker.vue'
 import type { TechnicianArea, TechnicianAreaAccessMutation } from '@/types/technicianServices'
 
@@ -18,7 +17,7 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
   draft: [withoutAccess: boolean, description: string, photo: File | null]
-  save: [withoutAccess: boolean, description: string, photo: File | null, done: (saved: boolean) => void]
+  save: [withoutAccess: boolean, description: string, photo: File | null]
   continue: []
   retry: []
   useRemote: []
@@ -33,11 +32,34 @@ const photoError = ref('')
 const submitting = ref(false)
 const disabled = computed(() => !props.editable || props.syncing || submitting.value || props.mutation?.status === 'CONFLICT')
 const hasStoredPhoto = computed(() => Boolean(props.area.sinAccesoFotoStoragePath || props.area.sinAccesoFotoLocalId))
+let fallbackTimer: number | null = null
 
 watch(() => props.area.id, reset)
-watch(() => [props.area.sinAcceso, props.area.sinAccesoDescripcion, props.area.sinAccesoFotoStoragePath, props.area.sinAccesoFotoLocalId], () => {
+watch(() => props.area.sinAcceso, (value, previous) => {
+  submitting.value = false
+  clearFallback()
+  if (dialogOpen.value && value && !previous) completed.value = true
+  if (!value && previous) dialogOpen.value = false
+})
+watch(() => [props.area.sinAccesoDescripcion, props.area.sinAccesoFotoStoragePath, props.area.sinAccesoFotoLocalId], () => {
   if (!props.mutation && !submitting.value) syncFromArea()
 })
+watch(() => props.mutation?.status, status => {
+  if (status === 'CONFLICT') {
+    submitting.value = false
+    clearFallback()
+  }
+})
+
+function clearFallback(): void {
+  if (fallbackTimer != null) window.clearTimeout(fallbackTimer)
+  fallbackTimer = null
+}
+
+function releaseIfNoUpdate(): void {
+  clearFallback()
+  fallbackTimer = window.setTimeout(() => { submitting.value = false }, 1_500)
+}
 
 function syncFromArea(): void {
   description.value = props.area.sinAccesoDescripcion ?? ''
@@ -47,6 +69,7 @@ function syncFromArea(): void {
 }
 
 function reset(): void {
+  clearFallback()
   dialogOpen.value = false
   completed.value = false
   submitting.value = false
@@ -88,24 +111,15 @@ function validate(): boolean {
 function saveException(): void {
   if (disabled.value || !validate()) return
   submitting.value = true
-  emit('save', true, description.value, photo.value, saved => {
-    submitting.value = false
-    if (!saved) return
-    completed.value = true
-    emit('draft', false, '', null)
-  })
+  emit('save', true, description.value, photo.value)
+  releaseIfNoUpdate()
 }
 
 function enableAccess(): void {
   if (disabled.value) return
   submitting.value = true
-  emit('save', false, '', null, saved => {
-    submitting.value = false
-    if (!saved) return
-    dialogOpen.value = false
-    completed.value = false
-    emit('draft', false, '', null)
-  })
+  emit('save', false, '', null)
+  releaseIfNoUpdate()
 }
 
 function continueFlow(): void {
