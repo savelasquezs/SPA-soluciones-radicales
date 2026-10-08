@@ -30,15 +30,15 @@
 - [x] Aprobar y documentar la política de fotos ordinarias (3 meses), Hallazgos pendientes (máximo 1 año), Hallazgos cerrados (3 meses tras cierre para apertura y corrección) e informes PDF (12 meses), sin alterar el historial en PostgreSQL.
 - [x] Definir que la **programación automática se ejecuta en Cloudflare Workers Cron Triggers**, nunca mediante Neon scheduled triggers ni el Worker de la SPA.
 - [x] Añadir y aplicar migración aditiva `20261008_002_storage_retention.sql` en Neon `desarrollo` con vista privada de vencimientos, auditoría de borrados, excepciones, fallos y hash del secreto; checksum `c0b13513430b55c238cd16f3acaf891e3d9be3fd288deb25632de2c540e69420`. Verificación: 13 referencias, ninguna vencida, 0 borrados.
-- [x] Añadir ruta privada `POST /jobs/retention` y ejecución protegida por bloqueo de registros, con `dry-run` por defecto, resultados auditados y reintentos. Código en `functions/api/retention/cleanup.ts`; **todavía no desplegado en la Function Neon**.
-- [x] Crear en Cloudflare el Worker `sr-storage-retention-dev` aislado, en modo `dry-run`, sin Cron activo ni secreto. Código versionado en `cloudflare/storage-retention/`.
+- [x] Añadir ruta privada `POST /jobs/retention` y ejecución protegida por bloqueo de registros, con `dry-run` por defecto, resultados auditados y reintentos. Desplegada en Neon `desarrollo` (versión 33) conservando las variables privadas.
+- [x] Crear en Cloudflare el Worker independiente `sr-storage-retention-dev`, con secreto vinculado y Cron diario `0 7 * * *` UTC activo. Modo `delete` configurado y verificado (2026-10-08).
 - [x] Configurar secreto `RETENTION_CRON_TOKEN` directamente mediante conexión de Cloudflare y guardar solo su SHA-256 en Neon `desarrollo`, sin generar ni copiar tokens de API de Wrangler. Confirmado el 2026-10-08.
-- [ ] Desplegar Neon Function `api` con las rutas de retención, heredando intactas las variables privadas actuales, y validar `POST /jobs/retention` en modo `dry-run`.
-- [ ] Activar Cron Trigger de Cloudflare en desarrollo tras validar respuesta real de la Function actualizada en `dry-run`, y luego habilitar `delete` previa prueba sintética de R2. No activar nunca mientras falte la credencial o API correspondiente.
+- [x] Desplegar Neon Function `api` versión 33 con las rutas de retención y las diez variables privadas intactas. Smoke externa: `/health` responde y `POST /jobs/retention` sin bearer devuelve 401. Falta prueba autorizada con objetos sintéticos.
+- [x] Activar Cron Trigger de Cloudflare en `desarrollo` (02:00 Colombia), vincular secreto privado a Neon y habilitar modo `delete`. Comprobada lectura posterior de horario, URL, modo y secret binding. Candidatos vencidos actualmente: cero.
 - [ ] Extender el registro de disponibilidad de fotos en vistas de dispositivos/hallazgos e instrumentar proyección/alertas de capacidad R2.
 - [ ] Añadir disponibilidad `SIN_FOTO/PENDIENTE/DISPONIBLE/VENCIDA` en las vistas de puestos, revisiones y hallazgos sin descargar miniaturas masivamente.
 - [ ] Validar dry-run en desarrollo, condiciones de carrera al cerrar hallazgos, 404/errores de R2, PDFs con imágenes incrustadas, alertas y presupuesto global de 8 GB.
-- [ ] Desplegar y habilitar Cloudflare Cron en entorno autorizado **solo después** de validar esquema/API/Worker y probar la limpieza real sobre archivos sintéticos; no activar de forma automática al documentar.
+- [ ] Probar la primera ejecución autorizada del Cron y un borrado real **sobre archivos sintéticos en un entorno aislado**; en la fecha de activación no existían archivos vencidos y no se ejecutó ninguna eliminación. Monitorear el primer cron y su observabilidad antes de promover a `production`.
 
 Fuente: `docs/product/file-retention.md`; despliegue: `docs/development/cloudflare-retention.md`.
 
