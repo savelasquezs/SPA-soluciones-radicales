@@ -27,6 +27,20 @@ El usuario debe terminar el video sabiendo:
 
 ## 2. Entregables obligatorios por video
 
+### Registro de videos
+
+Todo video producido por la tubería automática debe tener una entrada en `e2e/documentation/videos.json`. El identificador es estable e incluye versión, por ejemplo `mip-gestion-trampas-v1`.
+
+La rama de producción del candidato usa el formato:
+
+```text
+video/<video-id>
+```
+
+Un push sobre esa rama inicia automáticamente TTS, grabación, render y validación técnica. La publicación permanece bloqueada hasta la aprobación manual.
+
+
+
 Cada video debe conservar estos tres archivos fuente:
 
 ```text

@@ -29,6 +29,37 @@ storyboard
   → validación técnica del MP4
 ```
 
+## Automatización multi-video
+
+Los videos se registran en:
+
+```text
+e2e/documentation/videos.json
+```
+
+Cada entrada define narración, storyboard, prueba Playwright, nombre de salida y artefacto. Los scripts de TTS, grabación y render leen la misma configuración mediante `DOCS_VIDEO_ID`.
+
+Para producir un video nuevo:
+
+1. agregar su entrada a `videos.json`;
+2. crear storyboard, narración y prueba;
+3. trabajar en una rama con el formato `video/<video-id>`;
+4. hacer push.
+
+El workflow `.github/workflows/documentation-video.yml` detecta el ID desde el nombre de la rama y genera automáticamente el candidato. También permite ejecución manual por `workflow_dispatch`.
+
+Ejemplo:
+
+```text
+video/mip-gestion-trampas-v1
+        ↓
+DOCS_VIDEO_ID=mip-gestion-trampas-v1
+        ↓
+TTS → Playwright → render → artefacto temporal
+```
+
+El workflow nunca publica el candidato en R2. La aprobación y publicación siguen siendo pasos separados.
+
 ## Comandos
 
 ```bash

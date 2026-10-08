@@ -1,15 +1,17 @@
 import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { loadVideoTarget } from './video-target.mjs'
 
 const root = process.cwd()
+const target = loadVideoTarget()
 const playDir = resolve(root, 'docs-media/playwright')
 const audioDir = resolve(root, 'docs-media/audio')
 const finalDir = resolve(root, 'docs-media/final')
 const timelinePath = resolve(root, 'docs-media/timeline.json')
 const timingsPath = resolve(audioDir, 'timings.json')
-const narrationPath = resolve(root, 'e2e/documentation/mip-catalogs.narration.json')
-const outputPath = resolve(finalDir, 'mip-gestion-productos-v4.mp4')
+const narrationPath = resolve(root, target.narration)
+const outputPath = resolve(finalDir, target.output)
 
 function findVideo(dir) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -164,7 +166,8 @@ filters.push(`${voiceLabels.join('')}amix=inputs=${voiceLabels.length}:duration=
 filters.push(`[voice]apad=whole_dur=${videoDuration.toFixed(3)},atrim=0:${videoDuration.toFixed(3)}[voice_full]`)
 filters.push('[voice_full]asplit=2[voice_sc][voice_mix]')
 filters.push('[music][voice_sc]sidechaincompress=threshold=0.012:ratio=10:attack=20:release=550[ducked]')
-filters.push(`[ducked][voice_mix]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.94,atrim=0:${videoDuration.toFixed(3)}[aout]`)
+filters.push(`[ducked][voice_mix]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.94,atrim=0:${videoDuration.toFixed(3)}[premaster]`)
+filters.push('[premaster]loudnorm=I=-16:TP=-1:LRA=11,aresample=48000[aout]')
 
 args.push(
   '-filter_complex', filters.join(';'),
@@ -178,7 +181,7 @@ args.push(
   '-c:a', 'aac',
   '-b:a', '192k',
   '-movflags', '+faststart',
-  '-metadata', 'title=Gestión de productos · Manual de usuario',
+  '-metadata', `title=${target.metadataTitle}`,
   '-max_muxing_queue_size', '2048',
   '-t', videoDuration.toFixed(3),
   outputPath,
@@ -200,5 +203,5 @@ if (Math.abs(finalDuration - videoDuration) > 0.35) {
   throw new Error(`La duración final (${finalDuration.toFixed(3)} s) no coincide con la grabación (${videoDuration.toFixed(3)} s).`)
 }
 
-console.log(`Video final validado: ${outputPath}`)
+console.log(`Video final ${target.id} validado: ${outputPath}`)
 console.log(`Duración: ${finalDuration.toFixed(2)} s · 1920 × 1080 · H.264 + AAC`)

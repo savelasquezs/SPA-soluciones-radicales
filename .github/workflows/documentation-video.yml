@@ -1,8 +1,16 @@
-name: Documentation video · Gestión de productos V4
+name: Documentation video
 
 on:
+  push:
+    branches:
+      - 'video/**'
   workflow_dispatch:
     inputs:
+      video_id:
+        description: 'ID definido en e2e/documentation/videos.json'
+        required: true
+        default: 'mip-gestion-productos-v4'
+        type: string
       voice:
         description: 'Voz femenina Chirp 3 HD'
         required: false
@@ -33,6 +41,18 @@ jobs:
         with:
           node-version: 24
           cache: npm
+
+      - name: Resolve video target
+        id: target
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VIDEO_ID="${{ inputs.video_id }}"
+          else
+            VIDEO_ID="${GITHUB_REF_NAME#video/}"
+          fi
+          echo "DOCS_VIDEO_ID=${VIDEO_ID}" >> "$GITHUB_ENV"
+          DOCS_VIDEO_ID="${VIDEO_ID}" node scripts/documentation/video-target.mjs
 
       - name: Validate Google Cloud configuration
         shell: bash
@@ -65,7 +85,7 @@ jobs:
             sudo apt-get install -y ffmpeg
           fi
 
-      - name: Generate Chirp 3 narration
+      - name: Generate narration
         run: npm run docs:tts
 
       - name: Install Chromium
@@ -80,7 +100,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: documentation-video-mip-gestion-productos-v4
+          name: ${{ steps.target.outputs.artifact }}
           path: |
             docs-media/final/
             docs-media/audio/

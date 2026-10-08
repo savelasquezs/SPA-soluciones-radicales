@@ -1,0 +1,20 @@
+{
+  "mip-gestion-productos-v4": {
+    "id": "mip-gestion-productos-v4",
+    "narration": "e2e/documentation/mip-catalogs.narration.json",
+    "spec": "e2e/documentation/mip-catalogs.docs.spec.ts",
+    "storyboard": "e2e/documentation/mip-catalogs.storyboard.md",
+    "output": "mip-gestion-productos-v4.mp4",
+    "artifact": "documentation-video-mip-gestion-productos-v4",
+    "metadataTitle": "Gestión de productos · Manual de usuario"
+  },
+  "mip-gestion-trampas-v1": {
+    "id": "mip-gestion-trampas-v1",
+    "narration": "e2e/documentation/mip-traps.narration.json",
+    "spec": "e2e/documentation/mip-traps.docs.spec.ts",
+    "storyboard": "e2e/documentation/mip-traps.storyboard.md",
+    "output": "mip-gestion-trampas-v1.mp4",
+    "artifact": "documentation-video-mip-gestion-trampas-v1",
+    "metadataTitle": "Gestión de trampas · Manual de usuario"
+  }
+}

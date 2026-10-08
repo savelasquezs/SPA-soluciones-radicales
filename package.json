@@ -28,7 +28,7 @@
     "r2:cors:check": "npx wrangler r2 bucket cors list sr-master-files",
     "r2:service-cors:apply": "npx wrangler r2 bucket cors set sr-service-media --file cloudflare/r2-service-media-cors.json --force",
     "r2:service-cors:check": "npx wrangler r2 bucket cors list sr-service-media",
-    "docs:record": "playwright test --config=playwright.docs.config.ts",
+    "docs:record": "node scripts/documentation/record-video.mjs",
     "docs:tts": "node scripts/documentation/synthesize-tts.mjs",
     "docs:render": "node scripts/documentation/render-video.mjs"
   },
