@@ -45,7 +45,7 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 | `productos` | Catálogo de productos utilizados |
 | `productos_aplicados` | Planeación y aplicación de productos por Servicio |
 | `configuracion` | Métodos, plagas y parámetros globales |
-| `trampas` | Catálogo administrable de tipos de Dispositivo y su clasificación de monitoreo |
+| `trampas` | Catálogo administrable de tipos de Trampa y su clasificación de monitoreo |
 | `dispositivos` | Persistencia técnica de los Puestos de monitoreo por Sede y Área |
 | `servicio_dispositivos` | Snapshot técnico de los Puestos de monitoreo al iniciar el Servicio |
 | `servicio_tipos_dispositivo` | Tipos, clasificación y Plagas disponibles congelados para altas técnicas durante el Servicio |
@@ -132,7 +132,7 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 ### Monitoreo
 
 - Catálogo inicial de plagas: Polilla, Mosca doméstica, Mosca de fruta, Zancudo, Cucarrones, Cucaracha, Roedor y Otros.
-- Los tipos de dispositivo son administrables.
+- Los tipos de Trampa son administrables.
 - Cada revisión conserva snapshots de número, ubicación y tipo.
 - Capturas puede registrar varias plagas y cantidades.
 - Una revisión exige fotografía únicamente cuando el estado cambia a `DANADO` o `FUERA_DE_USO`.
