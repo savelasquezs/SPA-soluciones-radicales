@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Pencil, RotateCcw, Trash2, X } from 'lucide-vue-next'
 
@@ -10,7 +10,8 @@ import EmptyState from '@/components/base/EmptyState.vue'
 import ErrorState from '@/components/base/ErrorState.vue'
 import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import StatusBadge from '@/components/base/StatusBadge.vue'
-import StatusPanel from '@/components/base/StatusPanel.vue'
+import SiteMonitoringPanel from '@/components/domain/clients/SiteMonitoringPanel.vue'
+import SiteFindingsPanel from '@/components/domain/clients/SiteFindingsPanel.vue'
 import WhatsAppPhoneLink from '@/components/base/WhatsAppPhoneLink.vue'
 import { useFileSaveProgress } from '@/composables/useFileSaveProgress'
 import AreaForm from '@/components/domain/clients/AreaForm.vue'
@@ -28,12 +29,7 @@ const route = useRoute()
 const router = useRouter()
 const store = useClientsStore()
 const notifications = useNotificationsStore()
-const {
-  phaseLabel: savePhaseLabel,
-  onUploadPhase,
-  markSaving,
-  reset: resetSaveProgress,
-} = useFileSaveProgress()
+const { phaseLabel: savePhaseLabel, onUploadPhase, markSaving, reset: resetSaveProgress } = useFileSaveProgress()
 const siteId = computed(() => String(route.params.siteId))
 const site = computed(() => store.sitesById[siteId.value] ?? null)
 const client = computed(() => site.value ? store.clientsById[site.value.clientId] ?? null : null)
@@ -41,6 +37,7 @@ const areas = computed(() => store.areasForSite(siteId.value))
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const tab = ref<Tab>('summary')
+const visited = ref({ devices: false, findings: false })
 const siteFormOpen = ref(false)
 const siteForm = ref<SiteInput>(blankSite())
 const newArea = ref<AreaInput>(blankArea())
@@ -56,24 +53,35 @@ const historyPage = ref(1)
 const historyTotal = ref(0)
 const historyLoading = ref(false)
 const sitePlanFile = ref<File | null>(null)
+let loadRequest = 0
 
 onMounted(load)
-
+watch(siteId, () => {
+  visited.value = { devices: false, findings: false }
+  tab.value = 'summary'
+  selectedArea.value = null
+  history.value = []
+  historyPage.value = 1
+  historyTotal.value = 0
+  void load()
+})
 async function load(): Promise<void> {
+  const request = ++loadRequest
   loading.value = true
   loadError.value = null
   try {
     const loadedSite = await store.ensureSite(siteId.value)
     await store.ensureClient(loadedSite.clientId)
   } catch (error) {
-    loadError.value = message(error, 'No fue posible cargar la Sede')
+    if (request === loadRequest) loadError.value = message(error, 'No fue posible cargar la Sede')
   } finally {
-    loading.value = false
+    if (request === loadRequest) loading.value = false
   }
 }
 
 async function changeTab(next: Tab): Promise<void> {
   tab.value = next
+  if (next === 'devices' || next === 'findings') visited.value[next] = true
   if (next === 'areas' && !store.areasBySiteId[siteId.value]) await loadAreas()
   if (next === 'history' && !history.value.length) await loadHistory()
 }
@@ -121,8 +129,7 @@ async function saveSite(): Promise<void> {
     siteFormOpen.value = false
     sitePlanFile.value = null
     if (current.planoStoragePath && current.planoStoragePath !== saved.planoStoragePath) {
-      void deleteMasterFile(current.planoStoragePath).catch(() =>
-        notifications.show('La Sede se guardó, pero no fue posible limpiar el plano anterior.', 'warning'))
+      void deleteMasterFile(current.planoStoragePath).catch(() => notifications.show('La Sede se guardó, pero no fue posible limpiar el plano anterior.', 'warning'))
     }
     notifications.show('Configuración de la Sede actualizada.', 'success')
   } catch (error) {
@@ -163,8 +170,7 @@ async function updateArea(): Promise<void> {
   } catch (error) {
     if (error instanceof ApiClientError && error.code === 'VERSION_CONFLICT') await loadAreas(true)
     notifications.show(message(error, 'No fue posible actualizar el Área'), 'error')
-  }
-  finally { saving.value = false }
+  } finally { saving.value = false }
 }
 
 async function removeArea(): Promise<void> {
@@ -209,19 +215,20 @@ function formatDate(value: string): string { return new Intl.DateTimeFormat('es-
   <ErrorState v-else-if="loadError" title="No pudimos cargar la Sede" :message="loadError"><BaseButton variant="secondary" @click="load">Reintentar</BaseButton></ErrorState>
   <div v-else-if="site && client" class="site-detail">
     <header class="detail-header"><div><button class="back" @click="router.push(`/clientes/${client.id}`)">← {{ client.nombre }}</button><h1>{{ site.nombre }}</h1><StatusBadge :tone="site.activo ? 'success' : 'neutral'">{{ site.activo ? 'Activa' : 'Inactiva' }}</StatusBadge></div><BaseButton size="compact" variant="secondary" @click="openSiteEdit"><Pencil :size="16" />Editar Sede</BaseButton></header>
-    <nav class="tabs" aria-label="Detalle de Sede"><button v-for="item in ([['summary','Resumen'],['areas','Áreas'],['devices','Dispositivos'],['findings','Hallazgos'],['history','Historial de servicios'],['settings','Configuración']] as const)" :key="item[0]" :aria-current="tab === item[0] ? 'page' : undefined" @click="changeTab(item[0])">{{ item[1] }}</button></nav>
+    <nav class="tabs" aria-label="Detalle de Sede"><button v-for="item in ([['summary','Resumen'],['areas','Áreas'],['devices','Puestos de monitoreo'],['findings','Hallazgos'],['history','Historial de servicios'],['settings','Configuración']] as const)" :key="item[0]" :aria-current="tab === item[0] ? 'page' : undefined" @click="changeTab(item[0])">{{ item[1] }}</button></nav>
 
     <section v-if="tab === 'summary'" class="summary-grid"><article><h2>Contacto principal</h2><p>{{ site.contactoPrincipalNombre }}</p><WhatsAppPhoneLink v-if="site.contactoPrincipalCelular" :phone="site.contactoPrincipalCelular" /><p>{{ site.contactoPrincipalCorreo ?? 'Sin correo' }}</p></article><article><h2>Operación</h2><p>{{ formatMoney(site.valorServicio) }} por Servicio</p><p>Cada {{ site.periodicidadMeses }} mes{{ site.periodicidadMeses === 1 ? '' : 'es' }}</p><p>{{ site.duracionServicioMinutos }} minutos</p></article><article><h2>Configuración</h2><p>{{ site.areasCount }} Áreas</p><p>{{ site.manejaVehiculos ? 'Maneja vehículos' : 'Sin vehículos' }}</p></article><article><h2>Plano</h2><p>{{ site.planoStoragePath?.split('/').slice(-1)[0] ?? 'Sin plano' }}</p><BaseButton v-if="site.planoStoragePath" size="compact" variant="secondary" @click="site.planoStoragePath && openPrivateFile(site.planoStoragePath)">Ver plano</BaseButton></article></section>
 
     <section v-else-if="tab === 'areas'" class="areas-layout">
       <aside class="area-create"><h2>Agregar Área</h2><AreaForm v-model="newArea" mode="create" form-id="area-create-form" id-prefix="new-area" @submit="createArea" @invalid="notifications.show('Ingresa el nombre del Área.', 'error')" /><BaseButton size="compact" type="submit" form="area-create-form" :loading="saving">Agregar Área</BaseButton></aside>
-      <div class="areas-panel"><LoadingSkeleton v-if="areasLoading" label="Cargando Áreas" :lines="5" /><EmptyState v-else-if="areas.length === 0" title="No hay Áreas" message="Agrega la primera Área de esta Sede." /><div v-else class="areas-table-scroll"><table><thead><tr><th>Área</th><th>Ubicación</th><th>Dispositivos</th><th>Estado</th><th>Acciones</th></tr></thead><tbody><tr v-for="area in areas" :key="area.id"><td><button class="area-link" @click="selectedArea = area">{{ area.nombre }}</button></td><td>{{ area.esExterna ? 'Exterior / perímetro' : 'Interior' }}</td><td>{{ area.dispositivosCount }}</td><td><StatusBadge :tone="area.activo ? 'success' : 'neutral'">{{ area.activo ? 'Activa' : 'Inactiva' }}</StatusBadge></td><td><span class="row-actions"><button :aria-label="`Editar ${area.nombre}`" @click="openAreaEdit(area)"><Pencil :size="17" /></button><button v-if="area.activo" :aria-label="`Eliminar ${area.nombre}`" @click="deleteAreaTarget = area"><Trash2 :size="17" /></button><button v-else :aria-label="`Reactivar ${area.nombre}`" @click="setAreaActive(area, true)"><RotateCcw :size="17" /></button></span></td></tr></tbody></table></div></div>
-      <aside v-if="selectedArea" class="area-drawer" aria-label="Detalle del Área"><button class="drawer-close" aria-label="Cerrar detalle" @click="selectedArea = null"><X :size="20" /></button><h2>{{ selectedArea.nombre }}</h2><StatusBadge :tone="selectedArea.activo ? 'success' : 'neutral'">{{ selectedArea.activo ? 'Activa' : 'Inactiva' }}</StatusBadge><dl><dt>Ubicación</dt><dd>{{ selectedArea.esExterna ? 'Exterior / perímetro' : 'Interior' }}</dd><dt>Dispositivos</dt><dd>{{ selectedArea.dispositivosCount }}</dd></dl><BaseButton size="compact" variant="secondary" @click="openAreaEdit(selectedArea)">Editar Área</BaseButton></aside>
+      <div class="areas-panel"><LoadingSkeleton v-if="areasLoading" label="Cargando Áreas" :lines="5" /><EmptyState v-else-if="areas.length === 0" title="No hay Áreas" message="Agrega la primera Área de esta Sede." /><div v-else class="areas-table-scroll"><table><thead><tr><th>Área</th><th>Ubicación</th><th>Puestos</th><th>Estado</th><th>Acciones</th></tr></thead><tbody><tr v-for="area in areas" :key="area.id"><td><button class="area-link" @click="selectedArea = area">{{ area.nombre }}</button></td><td>{{ area.esExterna ? 'Exterior / perímetro' : 'Interior' }}</td><td>{{ area.dispositivosCount }}</td><td><StatusBadge :tone="area.activo ? 'success' : 'neutral'">{{ area.activo ? 'Activa' : 'Inactiva' }}</StatusBadge></td><td><span class="row-actions"><button :aria-label="`Editar ${area.nombre}`" @click="openAreaEdit(area)"><Pencil :size="17" /></button><button v-if="area.activo" :aria-label="`Eliminar ${area.nombre}`" @click="deleteAreaTarget = area"><Trash2 :size="17" /></button><button v-else :aria-label="`Reactivar ${area.nombre}`" @click="setAreaActive(area, true)"><RotateCcw :size="17" /></button></span></td></tr></tbody></table></div></div>
+      <aside v-if="selectedArea" class="area-drawer" aria-label="Detalle del Área"><button class="drawer-close" aria-label="Cerrar detalle" @click="selectedArea = null"><X :size="20" /></button><h2>{{ selectedArea.nombre }}</h2><StatusBadge :tone="selectedArea.activo ? 'success' : 'neutral'">{{ selectedArea.activo ? 'Activa' : 'Inactiva' }}</StatusBadge><dl><dt>Ubicación</dt><dd>{{ selectedArea.esExterna ? 'Exterior / perímetro' : 'Interior' }}</dd><dt>Puestos de monitoreo</dt><dd>{{ selectedArea.dispositivosCount }}</dd></dl><BaseButton size="compact" variant="secondary" @click="openAreaEdit(selectedArea)">Editar Área</BaseButton></aside>
     </section>
 
     <section v-else-if="tab === 'history'" class="history-card"><LoadingSkeleton v-if="historyLoading" label="Cargando historial" :lines="5" /><EmptyState v-else-if="history.length === 0" title="Sin historial" message="Los Servicios de esta Sede aparecerán aquí." /><div v-else class="history-scroll"><table><thead><tr><th>Servicio</th><th>Fecha</th><th>Tipo</th><th>Técnico</th><th>Estado</th><th>Valor</th></tr></thead><tbody><tr v-for="item in history" :key="item.id"><td><button class="service-link" @click="router.push(`/servicios/${item.id}`)">{{ item.solicitud }}</button></td><td>{{ formatDate(item.fecha) }}</td><td>{{ item.tipo }}</td><td>{{ item.tecnico }}</td><td>{{ item.estado }}</td><td>{{ formatMoney(item.valor) }}</td></tr></tbody></table></div><div v-if="historyTotal > 20" class="pagination"><BaseButton size="compact" variant="secondary" :disabled="historyPage === 1" @click="loadHistory(historyPage - 1)">Anterior</BaseButton><span>Página {{ historyPage }}</span><BaseButton size="compact" variant="secondary" :disabled="historyPage * 20 >= historyTotal" @click="loadHistory(historyPage + 1)">Siguiente</BaseButton></div></section>
     <section v-else-if="tab === 'settings'" class="settings-card"><h2>Configuración de la Sede</h2><p>Modifica contacto, operación, vehículos y plano desde el formulario compartido.</p><BaseButton size="compact" @click="openSiteEdit">Editar configuración</BaseButton></section>
-    <StatusPanel v-else :title="tab === 'devices' ? 'Dispositivos' : 'Hallazgos'" message="La navegación queda reservada para su issue funcional; este goal no adelanta su implementación." />
+    <SiteMonitoringPanel v-if="visited.devices" v-show="tab === 'devices'" :site-id="siteId" :active="tab === 'devices'" />
+    <SiteFindingsPanel v-if="visited.findings" v-show="tab === 'findings'" :site-id="siteId" :active="tab === 'findings'" />
 
     <BaseDialog :model-value="siteFormOpen" title="Editar Sede" @update:model-value="!saving && (siteFormOpen = $event)"><SiteForm v-model="siteForm" mode="edit" :saving="saving" :client-name="client.nombre" @submit="saveSite" @invalid="notifications.show('Revisa los campos marcados.', 'error')" @file-selected="selectSiteFile" @view-plan="siteForm.planoStoragePath && openPrivateFile(siteForm.planoStoragePath)" /><template #footer><BaseButton variant="secondary" :disabled="saving" @click="siteFormOpen = false">Cancelar</BaseButton><BaseButton type="submit" form="site-form" :loading="saving">{{ savePhaseLabel ?? 'Guardar cambios' }}</BaseButton></template></BaseDialog>
     <BaseDialog :model-value="Boolean(editingArea)" title="Editar Área" @update:model-value="!$event && (editingArea = null)"><AreaForm v-model="editAreaForm" mode="edit" form-id="area-edit-form" id-prefix="edit-area" @submit="updateArea" @invalid="notifications.show('Ingresa el nombre del Área.', 'error')" /><template #footer><BaseButton variant="secondary" @click="editingArea = null">Cancelar</BaseButton><BaseButton type="submit" form="area-edit-form" :loading="saving">Guardar cambios</BaseButton></template></BaseDialog>

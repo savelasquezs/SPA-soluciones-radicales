@@ -1,0 +1,45 @@
+.site-insights { display:grid; gap:0.8rem; min-width:0; }
+.insight-heading { display:flex; justify-content:space-between; align-items:center; gap:0.75rem; }
+.insight-heading h2 { margin:0; font-size:1rem; font-weight:600; }
+.insight-heading > div { display:flex; flex-wrap:wrap; align-items:center; gap:0.6rem; }
+.insight-count, .insight-muted { color:var(--text-secondary); font-size:0.8125rem; }
+.insight-table { width:100%; table-layout:fixed; border-collapse:collapse; }
+.insight-table th, .insight-table td { padding:0.65rem 0.75rem; text-align:left; overflow-wrap:anywhere; vertical-align:top; font-size:0.8125rem; border-bottom:1px solid var(--border); }
+.insight-table th { color:var(--text-secondary); font-weight:500; position:sticky; top:0; background:var(--surface); z-index:1; }
+.insight-table tbody tr:last-child td { border-bottom:0; }
+.insight-table tbody tr:hover { background:var(--hover); }
+.insight-table td small { display:block; margin-top:0.3rem; color:var(--text-secondary); }
+.insight-scroll { border:1px solid var(--border); border-radius:var(--radius); overflow:auto; max-height:65vh; background:var(--surface); }
+.insight-link { border:0; padding:0; background:transparent; color:var(--text); text-align:left; font:inherit; font-weight:600; cursor:pointer; text-decoration:none; overflow-wrap:anywhere; }
+.insight-link:hover, .insight-link:focus-visible { text-decoration:underline; text-underline-offset:3px; }
+.insight-link:focus-visible { outline:2px solid var(--accent); outline-offset:3px; border-radius:var(--radius-sm); }
+.insight-tags { display:flex; flex-wrap:wrap; gap:0.35rem; align-items:center; }
+.insight-mobile-card { display:grid; gap:0.65rem; min-width:0; padding:0.85rem; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); }
+.insight-mobile-card header { display:flex; justify-content:space-between; gap:0.75rem; align-items:start; }
+.insight-mobile-card p { margin:0; font-size:0.875rem; overflow-wrap:anywhere; }
+.insight-mobile-card .insight-link { min-height:44px; display:inline-flex; align-items:center; }
+.insight-detail { display:grid; gap:1rem; min-width:0; }
+.insight-detail dl { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.8rem; margin:0; }
+.insight-detail dt { color:var(--text-secondary); font-size:0.75rem; margin-bottom:0.25rem; }
+.insight-detail dd { margin:0; overflow-wrap:anywhere; font-size:0.875rem; }
+.insight-detail h3 { margin:0; font-size:0.9375rem; }
+.insight-detail h4 { margin:0; font-size:0.875rem; }
+.insight-detail p { margin:0; font-size:0.875rem; overflow-wrap:anywhere; white-space:pre-wrap; }
+.insight-divider { border-top:1px solid var(--border); padding-top:1rem; }
+.insight-provisional { display:flex; flex-wrap:wrap; gap:0.4rem; align-items:center; color:var(--info); font-size:0.8125rem; }
+.insight-feedback { display:flex; align-items:center; flex-wrap:wrap; gap:0.6rem; padding:0.6rem 0.75rem; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); font-size:0.8125rem; }
+.insight-review { border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); }
+.insight-review > summary { display:flex; cursor:pointer; justify-content:space-between; align-items:center; gap:0.5rem; padding:0.75rem; list-style:none; }
+.insight-review > summary::-webkit-details-marker { display:none; }
+.insight-review > summary > span:first-child { display:grid; gap:0.2rem; }
+.insight-review[open] > summary { border-bottom:1px solid var(--border); }
+.insight-review__body { display:grid; gap:0.85rem; padding:0.85rem; }
+.insight-captures { display:flex; flex-wrap:wrap; gap:0.4rem; margin:0; padding:0; list-style:none; }
+.insight-captures li { padding:0.3rem 0.55rem; background:var(--surface-raised); border:1px solid var(--border); border-radius:var(--radius-sm); font-size:0.8125rem; }
+.insight-photos { display:flex; flex-wrap:wrap; gap:0.4rem; }
+.insight-products { display:grid; gap:0.75rem; }
+.insight-products article { border-left:2px solid var(--border-strong); padding-left:0.65rem; display:grid; gap:0.25rem; }
+.insight-section-title { display:flex; justify-content:space-between; align-items:center; gap:0.5rem; }
+.insight-section-title small { font-weight:400; color:var(--text-secondary); }
+@media (max-width:760px) { .insight-heading h2 { font-size:0.9375rem; } .insight-detail dl { gap:0.75rem; } .insight-review > summary { min-height:56px; } }
+@media (prefers-reduced-motion:reduce) { .site-insights * { scroll-behavior:auto; } }
