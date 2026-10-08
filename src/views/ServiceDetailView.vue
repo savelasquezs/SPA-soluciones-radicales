@@ -4,6 +4,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { RefreshCw } from 'lucide-vue-next'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseIconButton from '@/components/base/BaseIconButton.vue'
+import ConfirmDialog from '@/components/base/ConfirmDialog.vue'
 import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import StatusPanel from '@/components/base/StatusPanel.vue'
 import WhatsAppPhoneLink from '@/components/base/WhatsAppPhoneLink.vue'
@@ -12,19 +13,19 @@ import ServiceQuickEditor from '@/components/domain/services/ServiceQuickEditor.
 import ServicePagination from '@/components/domain/services/ServicePagination.vue'
 import { useAdminServicesStore } from '@/stores/adminServices'
 import { useNotificationsStore } from '@/stores/notifications'
-import { fetchServiceAudit, requestCalendarRetry, type ServiceAuditEntry } from '@/services/adminServicesService'
+import { fetchServiceAudit, releaseServiceExecutionLock, requestCalendarRetry, type ServiceAuditEntry } from '@/services/adminServicesService'
 import { formatServiceDate, formatServiceMoney, PAYMENT_LABELS, SERVICE_STATE_LABELS } from '@/helpers/adminServices'
 import { formatDateOnly } from '@/helpers/dateTime'
 import type { AdminService } from '@/types/adminServices'
 
 const route=useRoute(), router=useRouter(), store=useAdminServicesStore(), notifications=useNotificationsStore()
 const id=computed(()=>String(route.params.id)), record=computed(()=>store.records[id.value] ?? null)
-const loading=ref(true), loadError=ref(''), busy=ref(false)
+const loading=ref(true), loadError=ref(''), busy=ref(false), releaseOpen=ref(false)
 const quick=ref<{ record: AdminService; mode: 'schedule' | 'team' | 'cancel' | 'payment' } | null>(null)
 const auditOpen=ref(false), auditRows=ref<ServiceAuditEntry[]>([]), auditLoading=ref(false), auditError=ref(''), auditPage=ref(1), auditTotal=ref(0)
 let generation=0
 onBeforeUnmount(()=>{ generation++ })
-watch(id,()=>{ auditOpen.value=false; auditRows.value=[]; quick.value=null; void load() },{ immediate:true })
+watch(id,()=>{ auditOpen.value=false; auditRows.value=[]; quick.value=null; releaseOpen.value=false; void load() },{ immediate:true })
 async function load(force=false): Promise<void> {
   const stamp=++generation; loading.value=true; loadError.value=''
   try { await store.ensureService(id.value,force) }
@@ -45,6 +46,20 @@ async function retryCalendar(): Promise<void> {
   catch(failure) { notifications.show(failure instanceof Error ? failure.message : 'No fue posible reintentar Calendar.','error') }
   finally { busy.value=false }
 }
+async function releaseExecutionLock(): Promise<void> {
+  if(busy.value || !record.value) return
+  const target=record.value.id, holder=record.value.executionLock?.userName ?? 'el técnico actual'
+  busy.value=true
+  try {
+    const result=await releaseServiceExecutionLock(target,crypto.randomUUID(),`Liberación manual desde administración. Bloqueo de ${holder}.`)
+    releaseOpen.value=false
+    notifications.show(result.released ? 'Acceso técnico liberado. Otro celular ya puede activar el servicio.' : 'El servicio ya no tenía un acceso técnico bloqueado.',result.released ? 'success' : 'info')
+    await store.ensureService(target,true)
+    auditRows.value=[]
+    if(auditOpen.value) await loadAudit(1)
+  } catch(failure) { notifications.show(failure instanceof Error ? failure.message : 'No fue posible liberar el acceso técnico.','error') }
+  finally { busy.value=false }
+}
 async function loadAudit(page=1): Promise<void> {
   const target=id.value, stamp=generation
   auditOpen.value=true; auditLoading.value=true; auditError.value=''
@@ -55,7 +70,7 @@ async function loadAudit(page=1): Promise<void> {
   } catch(failure) { if(stamp===generation) auditError.value=failure instanceof Error ? failure.message : 'No fue posible cargar la actividad.' }
   finally { if(stamp===generation) auditLoading.value=false }
 }
-const actionLabels: Record<string,string>={ SERVICIO_CREADO:'Servicio programado',SERVICIO_EDITADO:'Información actualizada',SERVICIO_REPROGRAMADO:'Programación actualizada',SERVICIO_CANCELADO:'Servicio cancelado',SERVICIO_PAGO_ACTUALIZADO:'Pago actualizado',SERVICIO_CALENDAR_INTENTO:'Sincronización de Calendar',SERVICIO_CALENDAR_REINTENTO_SOLICITADO:'Reintento de Calendar solicitado' }
+const actionLabels: Record<string,string>={ SERVICIO_CREADO:'Servicio programado',SERVICIO_EDITADO:'Información actualizada',SERVICIO_REPROGRAMADO:'Programación actualizada',SERVICIO_CANCELADO:'Servicio cancelado',SERVICIO_PAGO_ACTUALIZADO:'Pago actualizado',SERVICIO_CALENDAR_INTENTO:'Sincronización de Calendar',SERVICIO_CALENDAR_REINTENTO_SOLICITADO:'Reintento de Calendar solicitado',SERVICIO_BLOQUEO_LIBERADO:'Acceso técnico liberado' }
 function edit(): void { void router.push({ name:'admin-service-edit',params:{ id:id.value },query:{ returnTo:route.fullPath } }) }
 function certificates(): void {
   if(!record.value) return
@@ -68,7 +83,7 @@ function certificates(): void {
     <LoadingSkeleton v-if="loading" :rows="7" />
     <StatusPanel v-else-if="loadError" title="No fue posible cargar el servicio" :message="loadError" tone="danger"><BaseButton size="compact" variant="secondary" @click="load(true)">Reintentar</BaseButton></StatusPanel>
     <template v-else-if="record">
-      <div class="svc-toolbar"><div class="svc-actions"><span class="svc-state" :class="`svc-state--${record.estado}`">{{ SERVICE_STATE_LABELS[record.estado] }}</span><span class="svc-muted svc-small">{{ record.tipoServicio==='REFUERZO' ? 'Refuerzo gratuito' : 'Servicio Principal' }}</span></div><div class="svc-actions"><BaseButton v-if="record.estado==='PROGRAMADO'" variant="secondary" size="compact" :disabled="busy" @click="open('schedule')">Reprogramar</BaseButton><BaseButton v-if="record.estado==='PROGRAMADO'" variant="secondary" size="compact" :disabled="busy" @click="open('team')">Cambiar equipo</BaseButton><BaseButton v-if="['PROGRAMADO','EN_PROCESO'].includes(record.estado)" variant="ghost" size="compact" :disabled="busy" @click="open('cancel')">Cancelar servicio</BaseButton></div></div>
+      <div class="svc-toolbar"><div class="svc-actions"><span class="svc-state" :class="`svc-state--${record.estado}`">{{ SERVICE_STATE_LABELS[record.estado] }}</span><span class="svc-muted svc-small">{{ record.tipoServicio==='REFUERZO' ? 'Refuerzo gratuito' : 'Servicio Principal' }}</span></div><div class="svc-actions"><BaseButton v-if="record.estado==='PROGRAMADO'" variant="secondary" size="compact" :disabled="busy" @click="open('schedule')">Reprogramar</BaseButton><BaseButton v-if="record.estado==='PROGRAMADO'" variant="secondary" size="compact" :disabled="busy" @click="open('team')">Cambiar equipo</BaseButton><BaseButton v-if="record.executionLock" variant="secondary" size="compact" :disabled="busy" @click="releaseOpen=true">Liberar acceso técnico</BaseButton><BaseButton v-if="['PROGRAMADO','EN_PROCESO'].includes(record.estado)" variant="ghost" size="compact" :disabled="busy" @click="open('cancel')">Cancelar servicio</BaseButton></div></div>
       <div v-if="record.motivoCancelacion" class="svc-notice"><span>Cancelado: {{ record.motivoCancelacion }}</span><small v-if="record.canceladoAt" class="svc-muted">{{ formatServiceDate(record.canceladoAt) }}</small></div>
       <div class="svc-editor-layout">
         <div class="svc-form-main">
@@ -78,6 +93,7 @@ function certificates(): void {
             <div><dt>Responsable</dt><dd>{{ record.responsable.nombreCompleto }}</dd></div>
             <div><dt>Colaboradores</dt><dd>{{ record.colaboradores.map(person=>person.nombreCompleto).join(', ') || 'Sin colaboradores' }}</dd></div>
             <div v-if="record.inicioReal"><dt>Inicio real</dt><dd>{{ formatServiceDate(record.inicioReal) }} · {{ formatServiceDate(record.inicioReal,true) }}</dd></div>
+            <div v-if="record.executionLock"><dt>Edición técnica</dt><dd>{{ record.executionLock.userName }} · desde {{ formatServiceDate(record.executionLock.acquiredAt) }} · {{ formatServiceDate(record.executionLock.acquiredAt,true) }}</dd></div>
             <div v-if="record.finReal"><dt>Fin real</dt><dd>{{ formatServiceDate(record.finReal) }} · {{ formatServiceDate(record.finReal,true) }}</dd></div>
           </dl></section>
           <section v-if="record.refuerzo || record.principal" class="svc-card"><h2>{{ record.refuerzo ? 'Refuerzo asociado' : 'Servicio Principal' }}</h2><template v-for="linked in [record.refuerzo || record.principal]" :key="linked?.id"><div v-if="linked" class="svc-toolbar"><RouterLink class="svc-link" :to="{ name:'service-detail',params:{ id:linked.id } }">{{ linked.solicitud }}</RouterLink><span>{{ formatServiceDate(linked.inicioProgramado) }} · {{ formatServiceDate(linked.inicioProgramado,true) }}</span><span class="svc-state" :class="`svc-state--${linked.estado}`">{{ SERVICE_STATE_LABELS[linked.estado] }}</span></div></template></section>
@@ -93,6 +109,16 @@ function certificates(): void {
         </aside>
       </div>
       <ServiceQuickEditor v-if="quick" :key="`${quick.record.id}:${quick.mode}`" :record="quick.record" :mode="quick.mode" @close="quick=null" @saved="auditRows=[]; auditOpen=false" />
+      <ConfirmDialog
+        :open="releaseOpen"
+        title="Liberar acceso técnico"
+        :message="`Se liberará el acceso de ${record.executionLock?.userName ?? 'el técnico actual'}. Los datos ya sincronizados se conservan. Los cambios que existan únicamente en el celular anterior no se transfieren automáticamente; libera el acceso solo si otro celular debe continuar.`"
+        confirm-label="Liberar acceso"
+        :loading="busy"
+        danger
+        @confirm="releaseExecutionLock"
+        @cancel="releaseOpen=false"
+      />
     </template>
   </ServicePage>
 </template>
