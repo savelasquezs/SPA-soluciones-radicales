@@ -22,7 +22,7 @@ jobs:
       - run: npm ci
       - name: Build Function bundle locally without Neon credentials
         run: |
-          npm install --no-save --package-lock=false esbuild@0.25.12
+          npm install --no-save --package-lock=false --legacy-peer-deps esbuild@0.28.2
           mkdir -p .neon-bundle
           node --input-type=module <<'NODE'
           import { build } from 'esbuild';
