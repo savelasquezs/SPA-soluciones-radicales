@@ -16,7 +16,7 @@ import TechnicianFindingCard from '@/components/domain/services/TechnicianFindin
 import TechnicianFindingCreateEditor from '@/components/domain/services/TechnicianFindingCreateEditor.vue'
 import TechnicianNewDeviceEditor from '@/components/domain/services/TechnicianNewDeviceEditor.vue'
 import TechnicianProductsList from '@/components/domain/services/TechnicianProductsList.vue'
-import { nextTechnicianArea, orderedTechnicianAreas, technicianAreaResolved } from '@/helpers/technicianServices'
+import { nextTechnicianRouteStep, orderedTechnicianAreas, technicianAreaResolved } from '@/helpers/technicianServices'
 import { useTechnicianServicesStore } from '@/stores/technicianServices'
 import type { MipEvaluation, TechnicianAreaAccessMutation, TechnicianCriterionEvaluationMutation, TechnicianDeviceCreationInput, TechnicianDeviceCreationMutation, TechnicianDeviceReviewInput, TechnicianDeviceReviewMutation, TechnicianFindingCreateInput, TechnicianFindingCreateMutation, TechnicianFindingStatusInput, TechnicianFindingStatusMutation } from '@/types/technicianServices'
 
@@ -44,8 +44,8 @@ const deviceSaveQueue = new Map<string, Promise<boolean>>()
 let accessSaveQueue: Promise<boolean> | null = null
 const canEditRoute = computed(() => packageValue.value?.service.estado === 'EN_PROCESO' && Boolean(currentCache.value?.lock))
 const findings = computed(() => currentArea.value?.hallazgos ?? [])
-const next = computed(() => currentArea.value ? nextTechnicianArea(orderedAreas.value, currentArea.value.id) : { kind: 'PENDING' as const })
-const nextLabel = computed(() => next.value.kind === 'AREA' ? `Siguiente: ${next.value.area.nombre}` : next.value.kind === 'CLOSURE' ? 'Revisar cierre' : 'Revisar pendientes')
+const next = computed(() => currentArea.value ? nextTechnicianRouteStep(orderedAreas.value, currentArea.value.id) : { kind: 'REVIEW' as const })
+const nextLabel = computed(() => next.value.kind === 'AREA' ? `Siguiente: ${next.value.area.nombre}` : 'Revisar servicio')
 const creationConflict = computed(() => currentMutations.value.find((item): item is TechnicianDeviceCreationMutation => item.kind === 'DEVICE_CREATE'
   && item.areaId === currentArea.value?.id && item.status === 'CONFLICT') ?? null)
 
@@ -336,11 +336,7 @@ function goNext(): void {
     void router.push({ name: 'technician-service-area', params: { id: serviceId.value, areaId: next.value.area.id } })
     return
   }
-  if (next.value.kind === 'CLOSURE') {
-    void router.push({ name: 'technician-service-review', params: { id: serviceId.value } })
-    return
-  }
-  void router.push({ name: 'technician-service-work', params: { id: serviceId.value } })
+  void router.push({ name: 'technician-service-review', params: { id: serviceId.value } })
 }
 </script>
 
@@ -376,7 +372,7 @@ function goNext(): void {
         <p v-if="!findings.length" class="area-empty">No hay Hallazgos registrados para esta Área.</p>
         <div v-else class="finding-list"><TechnicianFindingCard v-for="finding in findings" :key="finding.id" :finding="finding" :current-service-id="serviceId" :mutation="findingMutation(finding.id)" :editable="canEditRoute && !currentArea.sinAcceso" :saving="findingSavingId === finding.id" @status="(input, files) => saveFindingStatus(finding.id, input, files)" @use-remote="useRemoteFinding(finding.id)" @retry="retryFinding(finding.id)" /></div>
       </details>
-      <BaseButton class="area-next" @click="goNext"><ClipboardCheck v-if="next.kind !== 'AREA'" :size="18" aria-hidden="true" /><ChevronRight v-else :size="18" aria-hidden="true" />{{ nextLabel }}</BaseButton>
+      <BaseButton class="area-next" @click="goNext"><ClipboardCheck v-if="next.kind === 'REVIEW'" :size="18" aria-hidden="true" /><ChevronRight v-else :size="18" aria-hidden="true" />{{ nextLabel }}</BaseButton>
     </template>
   </ServicePage>
 </template>

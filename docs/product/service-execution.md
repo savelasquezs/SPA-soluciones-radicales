@@ -31,7 +31,7 @@ Servicio
 
 El Técnico puede desplazarse entre Áreas en cualquier orden y volver a una anterior. No existe un orden obligatorio de inspección.
 
-El orden del recorrido es editable dentro del Servicio. Lista, selector y «Siguiente: [Área]» usan la misma secuencia; la navegación omite Áreas resueltas, vuelve al inicio cuando hay pendientes anteriores y ofrece revisar el cierre solo cuando no quedan Áreas pendientes. Reorganizar no modifica la Sede ni los datos de evaluación. El detalle de interacción, persistencia offline, excepciones, concurrencia y criterios de aceptación está en [service-area-route.md](service-area-route.md).
+El orden del recorrido es editable dentro del Servicio. Lista, selector y «Siguiente: [Área]» usan la misma secuencia. «Siguiente» conserva visible el paso posterior aunque el Área actual esté incompleta; después de la última Área abre la revisión y cierre, donde los pendientes se muestran y la finalización permanece bloqueada hasta completar la matriz requerida. Reorganizar no modifica la Sede ni los datos de evaluación. El detalle de interacción, persistencia offline, excepciones, concurrencia y criterios de aceptación está en [service-area-route.md](service-area-route.md).
 
 Los Servicios de Refuerzo y los Servicios residenciales conservan sus reglas simplificadas y no ejecutan este recorrido MIP completo.
 

@@ -75,12 +75,12 @@ async function finish(): Promise<void> {
 </script>
 
 <template>
-  <ServicePage title="Revisión del recorrido" :caption="packageValue?.service.solicitud">
+  <ServicePage title="Revisión y cierre" :caption="packageValue?.service.solicitud">
     <LoadingSkeleton v-if="loading" label="Revisando pendientes" :rows="5" />
     <StatusPanel v-else-if="error" title="No fue posible revisar el servicio" :message="error" tone="danger" />
     <template v-else-if="packageValue">
       <StatusPanel v-if="finalized" title="Servicio finalizado" message="Las firmas y el cierre fueron confirmados por el servidor." tone="success" />
-      <StatusPanel v-else-if="pending.length" title="Aún hay Áreas pendientes" :message="`${pending.length} de ${areas.length} Áreas requieren información antes del cierre.`" tone="warning" />
+      <StatusPanel v-else-if="pending.length" title="Aún hay Áreas pendientes" :message="`${pending.length} de ${areas.length} Áreas requieren información. Puedes revisar el cierre, pero no finalizar hasta completarlas.`" tone="warning" />
       <StatusPanel v-else title="Recorrido completo" message="Las Áreas están resueltas. Registra ambas firmas para finalizar." tone="success" />
       <section class="review-list" aria-labelledby="review-areas-title"><h2 id="review-areas-title">Estado por Área</h2><button v-for="area in areas" :key="area.id" type="button" @click="openArea(area.id)"><span>{{ area.nombre }}</span><StatusBadge :tone="technicianAreaResolved(area) ? 'success' : 'neutral'">{{ technicianAreaResolved(area) ? 'Resuelta' : 'Pendiente' }}</StatusBadge></button></section>
       <section v-if="!finalized" class="signature-section" aria-labelledby="signatures-title">

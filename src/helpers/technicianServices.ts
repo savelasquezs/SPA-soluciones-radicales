@@ -80,3 +80,15 @@ export function nextTechnicianArea(areas: TechnicianArea[], currentId: string): 
   }
   return technicianAreaResolved(ordered[currentIndex]!) ? { kind: 'CLOSURE' } : { kind: 'PENDING' }
 }
+
+export type TechnicianRouteStep =
+  | { kind: 'AREA'; area: TechnicianArea }
+  | { kind: 'REVIEW' }
+
+export function nextTechnicianRouteStep(areas: TechnicianArea[], currentId: string): TechnicianRouteStep {
+  const ordered = orderedTechnicianAreas(areas)
+  const currentIndex = ordered.findIndex(area => area.id === currentId)
+  if (currentIndex < 0) return ordered[0] ? { kind: 'AREA', area: ordered[0] } : { kind: 'REVIEW' }
+  const nextArea = ordered[currentIndex + 1]
+  return nextArea ? { kind: 'AREA', area: nextArea } : { kind: 'REVIEW' }
+}

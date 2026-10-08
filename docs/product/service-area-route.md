@@ -1,6 +1,6 @@
 # Recorrido de Áreas editable por Servicio
 
-Decisión aprobada por Santiago durante la revisión del diseño móvil. Especifica el cambio solicitado: reorganizar las Áreas para recorrerlas en el orden más conveniente y avanzar con «Siguiente».
+Decisión aprobada por Santiago durante la revisión del diseño móvil. Especifica el cambio solicitado: reorganizar las Áreas para recorrerlas en el orden más conveniente y mantener siempre visible el siguiente paso del flujo.
 
 Complementa [service-execution.md](service-execution.md). Se aplica al modelo vigente de entidades y snapshots del dominio, sin constructor de formularios ni versiones de formulario. El PR #16 fue cerrado y sustituido por la especificación vigente y el PR #18; no es la base de esta implementación.
 
@@ -67,33 +67,31 @@ La completitud de captura y la sincronización son dimensiones diferentes. Regis
 
 ## «Siguiente: [nombre del Área]»
 
-El botón muestra el destino, por ejemplo «Siguiente: Oficinas», en lugar de ocultarlo bajo una etiqueta genérica. Para nombres largos se permite ajuste de texto sin reducir la zona táctil ni desbordar la pantalla.
+El botón muestra siempre el siguiente paso visible del flujo. Mientras exista otra Área después de la actual en el orden aplicado, muestra su nombre, por ejemplo «Siguiente: Oficinas». En la última Área muestra «Revisar servicio».
 
-La misma regla se aplica desde Inspección, Puestos y Notas y fotos del Área.
+La navegación y la completitud son responsabilidades diferentes: faltar criterios, revisiones o evidencias no oculta ni reemplaza el siguiente paso. El Área permanece marcada como pendiente y la revisión final explica qué Áreas requieren información antes de permitir finalizar.
 
 Algoritmo:
 
 1. Localizar el ID del Área actual en el orden aplicado al Servicio.
-2. Buscar después de ella la primera Área pendiente, omitiendo las resueltas.
-3. Si no hay otra pendiente después, continuar desde el inicio de la lista hasta antes del Área actual. Esta vuelta evita dejar pendientes anteriores sin acceso secuencial.
-4. Nunca devolver el Área actual como su propia siguiente.
-5. Si existe otra pendiente, mostrar su nombre y navegar a ella. La actual puede seguir incompleta: se conserva y permanece pendiente.
-6. Si no hay otra pendiente pero la actual sigue incompleta, mostrar «Revisar pendientes» y abrir la lista, donde permanece identificada. No mostrar un falso recorrido terminado ni crear un bucle sobre la misma Área.
-7. Si no hay Áreas pendientes en todo el recorrido, mostrar «Revisar cierre» y abrir el resumen de validación del Servicio. Esto no confirma firmas, no completa Productos y no finaliza el Servicio automáticamente.
+2. Si existe otra Área inmediatamente después, mostrar «Siguiente: [nombre]» y navegar a ella, esté resuelta o pendiente.
+3. Si la actual es la última Área, mostrar «Revisar servicio» y abrir la pantalla de revisión y cierre.
+4. La pantalla de revisión lista todas las Áreas y conserva su estado real. Si hay pendientes, permite volver a ellas y mantiene bloqueada la finalización.
+5. La completitud nunca redirige de vuelta automáticamente a la misma Área ni crea navegación circular.
 
 Antes de navegar se conserva el borrador técnico mediante la capa compartida. Un guardado remoto pendiente no debe forzar permanecer en un Área si los datos están guardados localmente; un fallo real de persistencia local sí requiere advertencia para evitar pérdida de trabajo.
 
-El conjunto vacío o de una sola Área debe manejarse sin índices inválidos ni navegación circular. Ningún Área aplicable significa que este recorrido no añade pendientes por sí mismo; las restantes reglas del Servicio siguen vigentes.
+El conjunto vacío o de una sola Área debe manejarse sin índices inválidos ni navegación circular. Una sola Área continúa a revisión; ningún Área aplicable deja la revisión como siguiente superficie del Servicio.
 
 ### Ejemplos
 
 | Orden aplicado | Situación | Desde | Resultado |
 | --- | --- | --- | --- |
-| Producción → Baños → Oficinas | Baños resuelta por falta de acceso; Oficinas pendiente | Producción | Siguiente: Oficinas |
-| Oficinas → Producción → Baños | Oficinas pendiente; Baños resuelta | Producción | Vuelve al inicio: Siguiente: Oficinas |
-| Cualquier orden | Solo Producción pendiente | Producción | Revisar pendientes |
-| Cualquier orden | Todas resueltas | Cualquier Área | Revisar cierre |
-| Producción → Oficinas → Baños | Todas pendientes | Producción | Siguiente: Oficinas |
+| Producción → Baños → Oficinas | Producción incompleta | Producción | Siguiente: Baños |
+| Producción → Baños → Oficinas | Baños ya resuelta | Producción | Siguiente: Baños |
+| Producción → Baños → Oficinas | Oficinas incompleta | Oficinas | Revisar servicio |
+| Cualquier orden | Todas resueltas | Última Área | Revisar servicio |
+| Una sola Área | Área incompleta | Esa Área | Revisar servicio |
 
 ## Persistencia y autorización para desarrollo
 
@@ -139,9 +137,9 @@ Este cambio no obliga a agregar una nueva sección de recorrido al informe. Si e
 - Lista y selector coinciden en orden; cambiar de tema no lo reinicia.
 - Cancelar y volver desde el editor conservan el orden aplicado; restablecer modifica solo el borrador hasta aplicar.
 - Los estados y datos técnicos permanecen asociados a su Área, independientemente de su posición.
-- Siguiente omite las Áreas resueltas, incluye las excepciones incompletas como pendientes y recorre también las pendientes anteriores al volver al inicio.
-- El botón muestra el destino correcto tras reorganizar; jamás se dirige a sí mismo.
-- Si solo queda la actual, se muestran pendientes; si no queda ninguna, se accede al resumen de cierre sin finalizar automáticamente.
+- Siguiente sigue el orden aplicado del Servicio sin depender de si un Área está resuelta o pendiente.
+- El botón muestra el destino correcto tras reorganizar; jamás se dirige a sí mismo ni oculta el paso siguiente por datos incompletos.
+- La última Área siempre conduce a revisión; la revisión muestra pendientes y bloquea la finalización hasta completar la matriz requerida.
 - Volver a evaluar un Área sin acceso recalcula su completitud.
 - Reordenar funciona con datos preparados offline y comunica persistencia local/sincronización sin confundirlas.
 - Error, reintento y conflicto conservan el orden propuesto y todas las respuestas; el backend valida una permutación completa y autorizada.

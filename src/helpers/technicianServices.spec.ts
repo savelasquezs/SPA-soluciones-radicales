@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatTechnicianDateTime, isExactAreaPermutation, moveTechnicianArea, nextTechnicianArea, orderedTechnicianAreas, sortTechnicianServices, technicianAreaResolved, technicianDevicePhotoRequired, technicianServicesToAutoPrepare, technicianServiceStateLabel } from '@/helpers/technicianServices'
+import { formatTechnicianDateTime, isExactAreaPermutation, moveTechnicianArea, nextTechnicianArea, nextTechnicianRouteStep, orderedTechnicianAreas, sortTechnicianServices, technicianAreaResolved, technicianDevicePhotoRequired, technicianServicesToAutoPrepare, technicianServiceStateLabel } from '@/helpers/technicianServices'
 import type { TechnicianArea, TechnicianServiceSummary } from '@/types/technicianServices'
 
 const record = (id: string, estado: TechnicianServiceSummary['estado'], inicioProgramado: string): TechnicianServiceSummary => ({
@@ -97,5 +97,13 @@ describe('technician area route', () => {
     expect(nextTechnicianArea([], 'missing')).toEqual({ kind: 'CLOSURE' })
     expect(nextTechnicianArea([area('a', 0)], 'a')).toEqual({ kind: 'PENDING' })
     expect(nextTechnicianArea([area('a', 0, true)], 'a')).toEqual({ kind: 'CLOSURE' })
+  })
+
+  it('keeps the visible next step independent of area completeness', () => {
+    const records = [area('a', 0), area('b', 1, true), area('c', 2)]
+    expect(nextTechnicianRouteStep(records, 'a')).toMatchObject({ kind: 'AREA', area: { id: 'b' } })
+    expect(nextTechnicianRouteStep(records, 'b')).toMatchObject({ kind: 'AREA', area: { id: 'c' } })
+    expect(nextTechnicianRouteStep(records, 'c')).toEqual({ kind: 'REVIEW' })
+    expect(nextTechnicianRouteStep([], 'missing')).toEqual({ kind: 'REVIEW' })
   })
 })
