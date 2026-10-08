@@ -16,7 +16,7 @@
     },
     {
       "id": "pest-list",
-      "text": "El listado muestra el nombre, la clasificación de monitoreo, la categoría utilizada por productos, el estado y las acciones disponibles."
+      "text": "El listado muestra el nombre, el tipo de monitoreo con trampas, la categoría para productos, el estado y las acciones disponibles."
     },
     {
       "id": "search-filter",
@@ -32,23 +32,23 @@
     },
     {
       "id": "two-dimensions",
-      "text": "Cada plaga tiene dos clasificaciones distintas: el grupo de monitoreo y la categoría usada por los productos."
+      "text": "En Monitoreo con trampas eliges qué tipo de trampa puede monitorear esta plaga: las de rastreros o las de voladores."
     },
     {
       "id": "choose-voladores",
-      "text": "Si seleccionas Voladores, la categoría Insectos voladores se asigna automáticamente."
+      "text": "Si eliges Voladores, la categoría para productos se asigna automáticamente a Insectos voladores."
     },
     {
       "id": "auto-category",
-      "text": "Esta asignación automática evita combinaciones incoherentes entre monitoreo y cobertura química."
+      "text": "El icono de ayuda explica la segunda clasificación: qué tipo de producto se usa para controlar la plaga."
     },
     {
       "id": "switch-rastreros",
-      "text": "Para una plaga de monitoreo Rastreros, debes indicar si pertenece a Insectos rastreros o a Roedores."
+      "text": "En rastreros hay dos categorías de producto posibles: Insectos rastreros y Roedores."
     },
     {
       "id": "choose-roedores",
-      "text": "En esta demostración registraremos un roedor, así que seleccionaremos Roedores como categoría para productos."
+      "text": "Como estamos registrando un roedor, seleccionamos Roedores como categoría para productos."
     },
     {
       "id": "create-pest",
@@ -64,7 +64,7 @@
     },
     {
       "id": "pest-detail",
-      "text": "El detalle muestra por separado Monitoreo y Categoría para productos. En este caso, Rastreros y Roedores."
+      "text": "El detalle muestra por separado el monitoreo con trampas y la categoría para productos. En este caso, Rastreros y Roedores."
     },
     {
       "id": "edit-pest",

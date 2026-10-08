@@ -189,10 +189,13 @@ test('video: gestionar plagas en Catálogos MIP', async ({ page }) => {
   const rastreros=dialog.getByRole('radio',{name:'Rastreros',exact:true})
   const voladores=dialog.getByRole('radio',{name:'Voladores',exact:true})
   await narrate('two-dimensions',async clock=>{
-    await clock.until(.18)
-    await localZoom(dialog.locator('fieldset').first(),1.022)
-    await clock.until(.78)
-    await resetLocalZoom(dialog.locator('fieldset').first())
+    const monitoringFieldset = dialog.locator('fieldset').first()
+    await expect(monitoringFieldset).toContainText('Monitoreo con trampas')
+    await expect(monitoringFieldset).toContainText('Define si esta plaga se monitorea con trampas para rastreros o para voladores.')
+    await clock.until(.14)
+    await localZoom(monitoringFieldset,1.022)
+    await clock.until(.82)
+    await resetLocalZoom(monitoringFieldset)
   })
 
   await narrate('choose-voladores',async clock=>{
@@ -202,9 +205,18 @@ test('video: gestionar plagas en Catálogos MIP', async ({ page }) => {
   })
 
   await narrate('auto-category',async clock=>{
+    const help = dialog.getByRole('button',{name:'Ayuda sobre la categoría para productos',exact:true})
+    const tooltip = dialog.getByRole('tooltip')
     const fixed=dialog.locator('.item-form__fixed-category')
     await expect(fixed).toContainText('Insectos voladores')
-    await clock.until(.18); await localZoom(fixed,1.025); await clock.until(.82); await resetLocalZoom(fixed)
+    await clock.until(.12)
+    await moveCursor(help)
+    await help.hover()
+    await expect(tooltip).toBeVisible()
+    await expect(tooltip).toContainText('Los voladores se agrupan como insectos voladores')
+    await localZoom(tooltip,1.02)
+    await clock.until(.82)
+    await resetLocalZoom(tooltip)
   })
 
   await narrate('switch-rastreros',async clock=>{

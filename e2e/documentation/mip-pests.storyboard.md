@@ -9,8 +9,10 @@
 
 Cada plaga tiene dos dimensiones independientes:
 
-- **Monitoreo:** Rastreros o Voladores.
-- **Categoría para productos:** Insectos rastreros, Insectos voladores o Roedores.
+- **Monitoreo con trampas:** define qué tipo de trampa puede monitorear la plaga: Rastreros o Voladores.
+- **Categoría para productos:** define qué tipo de producto se usa para controlarla: Insectos rastreros, Insectos voladores o Roedores.
+
+La interfaz muestra una ayuda breve debajo de **Monitoreo con trampas** y un icono de ayuda junto a **Categoría para productos**. El video debe mostrar ambos elementos de forma visible.
 
 Combinaciones válidas:
 
@@ -48,10 +50,10 @@ Todos los datos son sintéticos y la prueba intercepta únicamente la frontera H
 5. Búsqueda y filtro.
 6. Nueva plaga.
 7. Nombre.
-8. Explicar las dos dimensiones.
+8. Explicar **Monitoreo con trampas** y su ayuda breve.
 9. Seleccionar Voladores.
-10. Mostrar asignación automática Insectos voladores.
-11. Cambiar a Rastreros.
+10. Mostrar **Insectos voladores** automático y abrir el tooltip de **Categoría para productos**.
+11. Cambiar a Rastreros y mostrar las dos categorías de producto posibles.
 12. Seleccionar Roedores.
 13. Crear.
 14. Mostrar registro creado.
@@ -72,7 +74,8 @@ Todos los datos son sintéticos y la prueba intercepta únicamente la frontera H
 
 ## Sincronización
 
-- El selector de clasificación permanece visible durante la explicación de las dos dimensiones.
+- **Monitoreo con trampas** y su texto de ayuda permanecen visibles durante la explicación.
+- El tooltip de **Categoría para productos** se abre durante la explicación de la segunda clasificación.
 - La categoría automática se muestra con Voladores antes de cambiar a Rastreros.
 - La selección Roedores ocurre solo después de que las opciones para Rastreros son visibles.
 - El detalle permanece abierto durante toda su explicación.
