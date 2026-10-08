@@ -68,8 +68,10 @@ async function products(client: PoolClient, serviceId: string, frozen: boolean):
     'registroSanitario',${frozen ? "coalesce(pa.registro_sanitario_snapshot,'')" : "coalesce(p.registro_sanitario,'')"},
     'dosisReferencia',${frozen ? "coalesce(pa.dosis_referencia_snapshot,'')" : "coalesce(p.dosis_aplicacion,'')"},
     'lote',coalesce(pa.lote,''),'fechaFabricacion',pa.fecha_fabricacion,'fechaVencimiento',pa.fecha_vencimiento,
-    'dosis',${frozen ? "coalesce(pa.dosis_referencia_snapshot,'')" : "coalesce(p.dosis_aplicacion,'')"},
-    'metodoAplicacion',${frozen ? "coalesce(pa.metodo_aplicacion_nombre_snapshot,'')" : `coalesce((select string_agg(c.nombre, ', ' order by coalesce(c.orden,2147483647),c.nombre,c.id) from public.producto_metodos pm join public.configuracion c on c.id=pm.metodo_id where pm.producto_id=p.id and c.categoria='METODO_APLICACION' and c.activo),'')`}) as record
+    'dosis',${frozen ? "coalesce(pa.dosis_referencia_snapshot,p.dosis_aplicacion,'')" : "coalesce(p.dosis_aplicacion,'')"},
+    'metodoAplicacion',${frozen
+      ? "coalesce(pa.metodo_aplicacion_nombre_snapshot,'')"
+      : "(select coalesce(string_agg(c.nombre,', ' order by coalesce(c.orden,2147483647),c.nombre,c.id),'') from public.producto_metodos pm join public.configuracion c on c.id=pm.metodo_id where pm.producto_id=p.id and c.categoria='METODO_APLICACION' and c.activo)"}) as record
     from public.productos_aplicados pa join public.productos p on p.id=pa.producto_id
     where pa.servicio_id=$1 order by ${frozen ? 'coalesce(pa.producto_nombre_snapshot,p.nombre)' : 'p.nombre'},pa.id`, [serviceId])
   return rows.map(row => row.record)

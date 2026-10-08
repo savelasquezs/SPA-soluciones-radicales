@@ -17,18 +17,18 @@ describe('administrator service contracts',()=>{
     const value=input(); value.refuerzo={ ...schedule,inicioProgramado:'2026-11-03T14:30:00-05:00' }
     expect(validateServiceInput(value).errors).toEqual({})
   })
-  it('requires zoned instants and rejects impossible dates and reversed product dates',()=>{
+  it('requires zoned instants and rejects impossible product expiration dates',()=>{
     expect(isZonedInstant('2026-10-06T09:00')).toBe(false)
     expect(isZonedInstant('2026-02-30T09:00:00-05:00')).toBe(false)
     expect(isDateOnly('2024-02-29')).toBe(true)
     expect(isDateOnly('2026-02-29')).toBe(false)
-    const value=input();value.productos=[{ productoId:collaborator,lote:'L-1',fechaFabricacion:'2026-12-01',fechaVencimiento:'2026-11-01',dosis:'5 mL/L',metodoAplicacionCodigo:'ASPERSION' }]
+    const value=input();value.productos=[{ productoId:collaborator,lote:'L-1',fechaVencimiento:'2026-02-29' }]
     expect(validateServiceInput(value).errors).toHaveProperty('productos.0.fechaVencimiento')
   })
   it('rejects duplicate technicians, responsible-as-collaborator and duplicate products',()=>{
     expect(validateSchedule({ ...schedule,tecnicosColaboradoresIds:[responsible] }).errors).toHaveProperty('programacion.tecnicosColaboradoresIds')
     expect(validateSchedule({ ...schedule,tecnicosColaboradoresIds:[collaborator,collaborator] }).errors).toHaveProperty('programacion.tecnicosColaboradoresIds')
-    const value=input();const product={ productoId:collaborator,lote:'',fechaFabricacion:null,fechaVencimiento:null,dosis:'',metodoAplicacionCodigo:'' };value.productos=[product,product]
+    const value=input();const product={ productoId:collaborator,lote:'',fechaVencimiento:null };value.productos=[product,product]
     expect(validateServiceInput(value).errors.productos).toBeTruthy()
   })
   it('keeps planned collection separate and strips untrusted price and terminal-state fields',()=>{
@@ -37,11 +37,12 @@ describe('administrator service contracts',()=>{
     expect(value.value).not.toHaveProperty('valorServicio')
     expect(value.value).not.toHaveProperty('estado')
   })
-  it('requires the application data that the technician will only read',()=>{
-    const value=input();value.productos=[{ productoId:collaborator,lote:'',fechaFabricacion:null,fechaVencimiento:null,dosis:'',metodoAplicacionCodigo:'' }]
-    expect(validateServiceInput(value).errors).toMatchObject({
-      'productos.0.lote':'Ingresa el lote previsto.',
-    })
+  it('requires only the batch from the visit and ignores catalogue values sent by clients',()=>{
+    const value=input();value.productos=[{ productoId:collaborator,lote:'',fechaVencimiento:null }]
+    expect(validateServiceInput(value).errors).toEqual({ 'productos.0.lote':'Ingresa el lote previsto.', 'productos.0.fechaVencimiento':'Ingresa una fecha de vencimiento válida.' })
+    const valid=validateServiceInput({ ...input(), productos:[{ ...value.productos[0], lote:'L-1',fechaVencimiento:'2030-11-01',dosis:'dosis manipulada',metodoAplicacionCodigo:'INVENTADO',fechaFabricacion:'2026-01-01' }] })
+    expect(valid.errors).toEqual({})
+    expect(valid.value.productos[0]).toEqual({ productoId:collaborator,lote:'L-1',fechaVencimiento:'2030-11-01' })
   })
   it('uses Colombian dates at the UTC day boundary and round-trips the editor',()=>{
     expect(todayBogota(new Date('2026-10-07T02:00:00Z'))).toBe('2026-10-06')

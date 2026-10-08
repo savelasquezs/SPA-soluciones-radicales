@@ -62,8 +62,8 @@ async function fixture(offset = '30 minutes', deviceState: DeviceState = 'ACTIVO
       tecnico_responsable_id,tecnicos_colaboradores_ids_json,valor_servicio)
       values($1,$2,'PRINCIPAL',now()+$3::interval,now()+$3::interval+interval '90 minutes',$4,$5,$6::jsonb,0)`,
       [value.service, site, offset, value.admin, value.technician, JSON.stringify([value.collaborator])])
-    await client.query(`insert into public.productos_aplicados(servicio_id,producto_id,lote,fecha_fabricacion,fecha_vencimiento,dosis,metodo_aplicacion_codigo)
-      values($1,$2,'L-TECH','2026-01-01','2030-01-01',to_jsonb('5 mL/L'::text),$3)`, [value.service, value.product, value.methodCode])
+    await client.query(`insert into public.productos_aplicados(servicio_id,producto_id,lote,fecha_vencimiento)
+      values($1,$2,'L-TECH','2030-01-01')`, [value.service, value.product])
   })
   return value
 }
@@ -117,6 +117,30 @@ describe('technician service execution · real PostgreSQL', () => {
     expect(frozen.areas.flatMap(area => area.criterios).some(criterion => criterion.nombre === 'Criterio renombrado')).toBe(false)
     expect(frozen.areas.flatMap(area => area.dispositivos)[0]?.numero).toBe('D-01')
     expect((await pool.query('select aplicado from public.productos_aplicados where servicio_id=$1', [value.service])).rows[0].aplicado).toBe(true)
+  })
+
+  it('uses all catalogue methods without requiring per-visit dose or method', async () => {
+    const value = await fixture()
+    const secondMethod = randomUUID(), secondCode = `SECOND_${randomUUID().replaceAll('-', '')}`
+    await pool.query("insert into public.configuracion(id,categoria,clave,nombre) values($1,'METODO_APLICACION',$2,'Nebulización')", [secondMethod, secondCode])
+    await pool.query('insert into public.producto_metodos(producto_id,metodo_id) values($1,$2)', [value.product, secondMethod])
+    const before = await transaction(client => getTechnicianPackage(client, value.technician, value.service))
+    expect(before.products[0]?.dosis).toBe('5 mL/L')
+    expect(before.products[0]?.metodoAplicacion).toContain('Nebulización')
+    const session = await transaction(client => startTechnicianService(client, value.technician, value.service, 1, randomUUID()))
+    expect(session.package.products[0]?.metodoAplicacion).toContain('Nebulización')
+    expect(session.package.products[0]?.metodoAplicacion).toContain(value.methodCode)
+    const frozen = await pool.query('select dosis,metodo_aplicacion_codigo,metodo_aplicacion_nombre_snapshot from public.productos_aplicados where servicio_id=$1', [value.service])
+    expect(frozen.rows[0].dosis).toBe('5 mL/L')
+    expect(frozen.rows[0].metodo_aplicacion_codigo).toBeNull()
+    expect(frozen.rows[0].metodo_aplicacion_nombre_snapshot).toContain('Nebulización')
+  })
+
+  it('rejects an incomplete product catalogue but never asks for visit-specific dose or method', async () => {
+    const value = await fixture()
+    await pool.query('delete from public.producto_metodos where producto_id=$1', [value.product])
+    await expect(transaction(client => startTechnicianService(client, value.technician, value.service, 1, randomUUID()))).rejects.toMatchObject({ code:'PRODUCT_CATALOG_INCOMPLETE' })
+    expect(Number((await pool.query('select count(*) from private.service_execution_locks where service_id=$1', [value.service])).rows[0].count)).toBe(0)
   })
 
   it('replays the same start idempotently and rejects request reuse with another device', async () => {

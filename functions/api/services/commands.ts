@@ -102,8 +102,7 @@ export async function checkSchedules(client: PoolClient, schedules: ServiceSched
 async function saveProducts(client: PoolClient, service: AdminService | null, serviceId: string, input: ServiceInput['productos']): Promise<void> {
   const ids = input.map(product => product.productoId)
   const products = (await client.query<{ id: string; activo: boolean }>(
-    'select id,activo from public.productos where id=any($1::uuid[]) for share', [ids],
-  )).rows
+    'select id,activo from public.productos where id=any($1::uuid[]) for share', [ids])).rows
   const existing = service?.productos ?? []
   if (input.some(product => !products.some(row => row.id===product.productoId && (row.activo || existing.some(old => old.productoId===row.id))))) {
     throw new ApiError(422, 'Hay productos que ya no están disponibles.', 'VALIDATION', { fields: { productos: 'Actualiza el catálogo y revisa los productos previstos.' } })
@@ -116,12 +115,9 @@ async function saveProducts(client: PoolClient, service: AdminService | null, se
   }
   await client.query('delete from public.productos_aplicados where servicio_id=$1 and not aplicado and not(producto_id=any($2::uuid[]))', [serviceId,ids])
   for (const product of input) {
-    // La dosis y los métodos se obtienen del catálogo al preparar/iniciar el servicio.
-    // Conservar fabricación histórica: no forma parte de los campos editables por visita.
     await client.query(`insert into public.productos_aplicados(servicio_id,producto_id,lote,fecha_vencimiento)
-      values($1,$2,$3,$4::date) on conflict(servicio_id,producto_id) do update set
-      lote=excluded.lote,fecha_vencimiento=excluded.fecha_vencimiento
-      where not productos_aplicados.aplicado`,
+      values($1,$2,$3,$4::date) on conflict(servicio_id,producto_id) do update set lote=excluded.lote,
+      fecha_vencimiento=excluded.fecha_vencimiento where not productos_aplicados.aplicado`,
     [serviceId,product.productoId,product.lote,product.fechaVencimiento])
   }
 }

@@ -141,9 +141,9 @@ La lista aplicable debe quedar congelada o representada de forma históricamente
 
 Productos no forman parte de la evaluación de un Área.
 
-El Administrador selecciona los Productos y únicamente edita lote y fecha de vencimiento para cada Servicio. La dosis y todos los métodos de aplicación provienen directamente del catálogo del Producto, sin captura ni selección por visita. Un Servicio no puede iniciar si faltan lote o vencimiento; el catálogo determina la dosis y los métodos disponibles. La fecha de fabricación histórica se conserva cuando exista, pero no se edita en la visita.
+El Administrador selecciona los Productos y edita únicamente el lote y la fecha de vencimiento de cada producto previsto. No selecciona dosis, método de aplicación ni fecha de fabricación por visita. La dosis y todos los métodos asociados se consultan directamente desde el catálogo MIP antes de iniciar. El inicio exige lote y vencimiento por producto, y que el catálogo tenga dosis y al menos un método activo; si falta configuración en el catálogo, el mensaje lo indica explícitamente, sin pedir al Administrador rellenarla en el Servicio.
 
-El Técnico ve esos Productos en la pantalla principal del Servicio, en modo de solo lectura. No existe una pantalla técnica separada para seleccionarlos ni modificarlos. Al iniciar, el servidor marca el conjunto previsto como aplicado y congela nombre, principio activo, registro sanitario, dosis del catálogo y nombres de los métodos configurados para que el histórico no dependa del catálogo vivo.
+El Técnico ve los Productos en solo lectura. La dosis y los métodos visibles antes del inicio reflejan el catálogo vigente; lote y vencimiento provienen del Servicio. Al iniciar, el servidor marca el conjunto previsto como aplicado y congela nombre, principio activo, registro sanitario, dosis del catálogo y nombres de todos los métodos asociados para que cambios posteriores del catálogo no reinterpreten el histórico. Los Servicios antiguos con dosis o método por visita vacíos también pueden iniciar si lote y catálogo están completos. No se sobrescribe la fabricación histórica almacenada.
 
 ## Hallazgos
 
