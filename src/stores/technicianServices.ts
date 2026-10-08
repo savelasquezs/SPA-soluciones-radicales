@@ -195,7 +195,7 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
 
   async function persistDeviceReview(serviceId: string, areaId: string, serviceDeviceId: string, review: TechnicianDeviceReview): Promise<void> {
     const cache = caches.value[serviceId]
-    if (!cache) throw new Error('Prepara el servicio antes de revisar sus dispositivos.')
+    if (!cache) throw new Error('Prepara el servicio antes de revisar sus puestos de monitoreo.')
     let found = false
     const areas = cache.package.areas.map(area => {
       if (area.id !== areaId) return area
@@ -206,13 +206,13 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
       })
       return { ...area, dispositivos }
     })
-    if (!found) throw new Error('El dispositivo no pertenece al Área seleccionada.')
+    if (!found) throw new Error('El puesto de monitoreo no pertenece al Área seleccionada.')
     await persistPackage({ ...cache.package, areas })
   }
 
   async function persistDeviceCreation(serviceId: string, areaId: string, device: TechnicianDevice): Promise<void> {
     const cache = caches.value[serviceId]
-    if (!cache) throw new Error('Prepara el servicio antes de agregar dispositivos.')
+    if (!cache) throw new Error('Prepara el servicio antes de agregar puestos de monitoreo.')
     let found = false
     const areas = cache.package.areas.map(area => {
       if (area.id !== areaId) return area
@@ -510,7 +510,7 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
             let photoStoragePath = reviewOperation.photoStoragePath
             if (reviewOperation.photoMediaId && !photoStoragePath) {
               const media = await loadTechnicianMedia(reviewOperation.actorId, reviewOperation.photoMediaId)
-              if (!media) throw new Error('La fotografía local del dispositivo no está disponible.')
+              if (!media) throw new Error('La fotografía local del puesto no está disponible.')
               photoStoragePath = await uploadTechnicianDevicePhoto(serviceId, serviceDeviceId, reviewOperation.deviceId, reviewOperation.lockToken, media.file)
               reviewOperation = { ...reviewOperation, photoStoragePath, updatedAt: new Date().toISOString() }
               sending = reviewOperation
@@ -884,17 +884,17 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     input: TechnicianDeviceCreationInput,
   ): Promise<'synced' | 'pending' | 'conflict'> {
     const cache = caches.value[serviceId]
-    if (!cache || cache.package.service.estado !== 'EN_PROCESO' || !cache.lock) throw new Error('Este celular no puede agregar dispositivos al servicio.')
+    if (!cache || cache.package.service.estado !== 'EN_PROCESO' || !cache.lock) throw new Error('Este celular no puede agregar puestos de monitoreo al servicio.')
     const area = cache.package.areas.find(item => item.id === areaId)
     if (!area) throw new Error('El Área no pertenece al servicio preparado.')
-    if (area.sinAcceso) throw new Error('Habilita el acceso al Área antes de agregar un dispositivo.')
+    if (area.sinAcceso) throw new Error('Habilita el acceso al Área antes de agregar un puesto de monitoreo.')
     const normalized = { numero: input.numero.trim(), tipoCodigo: input.tipoCodigo.trim(), ubicacion: input.ubicacion.trim() }
     if (!normalized.numero || normalized.numero.length > 100) throw new Error('El número es obligatorio y no puede superar 100 caracteres.')
     if (!normalized.ubicacion || normalized.ubicacion.length > 500) throw new Error('La ubicación es obligatoria y no puede superar 500 caracteres.')
     const type = (cache.package.deviceTypes ?? []).find(item => item.codigo === normalized.tipoCodigo)
     if (!type) throw new Error('Selecciona un tipo disponible en el paquete del servicio.')
     if (cache.package.areas.some(item => item.dispositivos.some(device => device.numero.localeCompare(normalized.numero, 'es', { sensitivity: 'base' }) === 0))) {
-      throw new Error('Ya existe un dispositivo con ese número en la Sede.')
+      throw new Error('Ya existe un puesto de monitoreo con ese número en la Sede.')
     }
     const now = new Date().toISOString()
     const operation: TechnicianDeviceCreationMutation = {
@@ -957,16 +957,16 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     const pending = await reloadMutations(serviceId)
     const conflicted = pending.find((item): item is TechnicianDeviceCreationMutation => item.kind === 'DEVICE_CREATE'
       && item.serviceDeviceId === serviceDeviceId && item.status === 'CONFLICT')
-    if (!cache?.lock || !conflicted) throw new Error('No es posible corregir la creación del dispositivo.')
+    if (!cache?.lock || !conflicted) throw new Error('No es posible corregir la creación del puesto de monitoreo.')
     const normalized = { numero: input.numero.trim(), tipoCodigo: input.tipoCodigo.trim(), ubicacion: input.ubicacion.trim() }
     if (!normalized.numero || normalized.numero.length > 100 || !normalized.ubicacion || normalized.ubicacion.length > 500) {
-      throw new Error('Completa el número y la ubicación del dispositivo.')
+      throw new Error('Completa el número y la ubicación del puesto de monitoreo.')
     }
     const type = (cache.package.deviceTypes ?? []).find(item => item.codigo === normalized.tipoCodigo)
     if (!type) throw new Error('Selecciona un tipo disponible en el paquete del servicio.')
     if (cache.package.areas.some(area => area.dispositivos.some(device => device.id !== serviceDeviceId
       && device.numero.localeCompare(normalized.numero, 'es', { sensitivity: 'base' }) === 0))) {
-      throw new Error('Ya existe un dispositivo con ese número en la Sede.')
+      throw new Error('Ya existe un puesto de monitoreo con ese número en la Sede.')
     }
     for (const operation of pending.filter(item => (item.kind === 'DEVICE_CREATE' || item.kind === 'DEVICE_REVIEW')
       && item.serviceDeviceId === serviceDeviceId)) {

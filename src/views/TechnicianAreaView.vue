@@ -337,7 +337,7 @@ async function useRemoteDevice(serviceDeviceId: string): Promise<void> {
 async function retryDevice(serviceDeviceId: string): Promise<void> {
   saveError.value = ''
   try { const result = await services.retryDeviceReviewConflict(serviceId.value, serviceDeviceId); if (result !== 'conflict') clearDeviceDraft(serviceDeviceId) }
-  catch (failure) { saveError.value = failure instanceof Error ? failure.message : 'No fue posible reintentar la revisión del dispositivo.' }
+  catch (failure) { saveError.value = failure instanceof Error ? failure.message : 'No fue posible reintentar la revisión del puesto de monitoreo.' }
 }
 
 function goNext(): void {
