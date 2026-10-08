@@ -433,6 +433,7 @@ async function retryDevice(serviceDeviceId: string): Promise<void> {
         :continue-label="continueLabel"
         @continue="continueAfterException"
         @draft="trackAccessDraft"
+        @cancel="accessDraft = null"
         @save="handleAccessSave"
         @use-remote="useRemoteAccess"
         @retry="retryAccess"

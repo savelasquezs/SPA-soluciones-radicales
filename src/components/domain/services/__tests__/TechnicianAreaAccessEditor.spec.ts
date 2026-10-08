@@ -43,6 +43,19 @@ describe('TechnicianAreaAccessEditor', () => {
     expect(wrapper.emitted('continue')).toHaveLength(1)
   })
 
+  it('discards an unsaved edit when the dialog is closed', async () => {
+    const savedArea = { ...area, sinAcceso: true, sinAccesoDescripcion: 'Puerta cerrada',
+      sinAccesoFotoStoragePath: 'services/s/areas/a/no-access/existing.jpg' }
+    const wrapper = mount(TechnicianAreaAccessEditor, { props: {
+      area: savedArea, mutation: null, editable: true, syncing: false,
+    } })
+    await wrapper.get('.access-summary__actions button').trigger('click')
+    await wrapper.get('textarea').setValue('Motivo sin guardar')
+    await wrapper.get('.base-dialog__header button').trigger('click')
+    expect(wrapper.emitted('cancel')).toHaveLength(1)
+    expect(wrapper.emitted('save')).toBeUndefined()
+  })
+
   it('can open a stored conflict to resolve it and enable access', async () => {
     const mutation: TechnicianAreaAccessMutation = {
       schemaVersion: 1, requestId: '10000000-0000-4000-8000-000000000003', actorId: '10000000-0000-4000-8000-000000000004',

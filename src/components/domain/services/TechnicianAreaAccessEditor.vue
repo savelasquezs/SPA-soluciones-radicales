@@ -21,6 +21,7 @@ const emit = defineEmits<{
   continue: []
   retry: []
   useRemote: []
+  cancel: []
 }>()
 
 const dialogOpen = ref(false)
@@ -65,7 +66,7 @@ function closeException(): void {
   if (submitting.value) return
   dialogOpen.value = false
   completed.value = false
-  if (!props.area.sinAcceso) emit('draft', false, '', [])
+  emit('cancel')
 }
 
 function changedDescription(value: string): void {
