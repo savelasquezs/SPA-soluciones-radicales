@@ -1,0 +1,24 @@
+name: Workspace source snapshot
+
+on:
+  push:
+    branches:
+      - feature/technician-area-workspace
+    paths:
+      - .github/workflows/workspace-source.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: technician-workspace-source
+          path: .
+          include-hidden-files: true
+          retention-days: 1
