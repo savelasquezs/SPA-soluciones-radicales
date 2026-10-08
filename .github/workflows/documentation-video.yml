@@ -1,9 +1,6 @@
 name: Documentation video · Gestión de productos V4
 
 on:
-  push:
-    branches:
-      - codex/documentation-video-products-v4
   workflow_dispatch:
     inputs:
       voice:
@@ -13,7 +10,7 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
   id-token: write
 
 concurrency:
@@ -31,8 +28,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref_name }}
 
       - uses: actions/setup-node@v4
         with:
@@ -81,23 +76,6 @@ jobs:
 
       - name: Render and validate final video
         run: npm run docs:render
-
-      - name: Publish versioned video in the repository
-        if: github.event_name == 'push'
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p docs-media/published
-          cp docs-media/final/mip-gestion-productos-v4.mp4 docs-media/published/mip-gestion-productos-v4.mp4
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f docs-media/published/mip-gestion-productos-v4.mp4
-          if git diff --cached --quiet; then
-            echo "El video publicado ya está actualizado."
-          else
-            git commit -m "docs: publish product management video v4 [skip ci]"
-            git push origin HEAD:${GITHUB_REF_NAME}
-          fi
 
       - uses: actions/upload-artifact@v4
         if: always()
