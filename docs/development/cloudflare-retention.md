@@ -1,6 +1,6 @@
 # Retención automática de archivos: Cloudflare Cron
 
-**Estado:** diseño aprobado; **no desplegado**. Política funcional: [Conservación de evidencias y documentos MIP](../product/file-retention.md).
+**Estado:** migración aplicada en Neon `desarrollo` y Worker `sr-storage-retention-dev` creado en Cloudflare. **Sin secreto, sin Cron activado y sin despliegue de API actualizado: no hay borrado activo.** Política funcional: [Conservación de evidencias y documentos MIP](../product/file-retention.md).
 
 ## Decisión de infraestructura
 
@@ -22,24 +22,15 @@ Nombres propuestos:
 6. Dry-run inicial obligatorio: registrar candidatos y volumen previsto; verificar visualmente los tipos y plazos antes de autorizar eliminación.
 7. Aplicar límites por ejecución (por ejemplo, 20–50 objetos) y continuar al día siguiente o en lotes adicionales controlados. Poner alarmas si el backlog de objetos expirados o el almacenamiento total aumenta.
 
-### Borradores de configuración (no activados)
+### Configuración real en desarrollo
 
-Para un Worker independiente administrado con Wrangler, utilizar una configuración de este estilo:
-
-```jsonc
-{
-  "name": "sr-storage-retention",
-  "main": "./src/index.ts",
-  "compatibility_date": "2026-10-08",
-  "triggers": { "crons": ["0 7 * * *"] },
-  "r2_buckets": [
-    { "binding": "SERVICE_MEDIA", "bucket_name": "sr-service-media" },
-    { "binding": "GENERATED_DOCUMENTS", "bucket_name": "sr-generated-documents" }
-  ]
-}
-```
-
-No incluir `R2_ACCESS_KEY_ID` o `R2_SECRET_ACCESS_KEY` en este Worker: los bindings R2 evitan distribuir credenciales. El token del endpoint privado debe declararse como **secreto**, no como `vars` ni `VITE_*`. No publicar un endpoint HTTP de eliminación al público.
+- Directorio versionado: `cloudflare/storage-retention/`.
+- Worker remoto creado: `sr-storage-retention-dev`. Desplegado como módulo aislado, con `RETENTION_MODE=dry-run` y URL de Neon Functions desarrollo.
+- `wrangler.jsonc` contiene el cron previsto `0 7 * * *`, pero el Cron Trigger **aún no está instalado en Cloudflare**. Esto evita ejecuciones fallidas mientras el endpoint de Neon no haya sido desplegado y autorizado.
+- El secreto compartido no se configura desde conversaciones ni se registra en Git. Ejecutar **localmente** `node scripts/cloudflare/setup-retention-secret.mjs` sobre la rama Neon `desarrollo` autorizada; instala el secreto en el Worker y su SHA-256 en PostgreSQL.
+- Desplegar la versión actualizada de la función Neon `api` usando `npx -y neon@6.2.4 deploy --env <archivo-local>`, conservando las variables actuales. No usar `--env` con un archivo sin todas las credenciales existentes.
+- Con el endpoint operativo y dry-run validado, activar el trigger desde el directorio del Worker con `npx wrangler deploy --config cloudflare/storage-retention/wrangler.jsonc`. Mantener `RETENTION_MODE=dry-run` en la primera prueba. Para activar borrado, cambiar la configuración versionada a `delete`, desplegar de nuevo y comprobar logs. No activar sin verificar las referencias de R2 y la compatibilidad de Neon.
+- La migración `20261008_002_storage_retention.sql` se aplicó en Neon `desarrollo`; el esquema aún no está en production.
 
 ### Datos y compatibilidad actual
 
