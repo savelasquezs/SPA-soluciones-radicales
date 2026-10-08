@@ -34,5 +34,23 @@
     "output": "mip-gestion-criterios-v1.mp4",
     "artifact": "documentation-video-mip-gestion-criterios-v1",
     "metadataTitle": "Gestión de criterios MIP · Manual de usuario"
+  },
+  "clientes-gestion-clientes-v1": {
+    "id": "clientes-gestion-clientes-v1",
+    "narration": "e2e/documentation/clients.narration.json",
+    "spec": "e2e/documentation/clients.docs.spec.ts",
+    "storyboard": "e2e/documentation/clients.storyboard.md",
+    "output": "clientes-gestion-clientes-v1.mp4",
+    "artifact": "documentation-video-clientes-gestion-clientes-v1",
+    "metadataTitle": "Gestión de clientes · Manual de usuario"
+  },
+  "clientes-gestion-sedes-v1": {
+    "id": "clientes-gestion-sedes-v1",
+    "narration": "e2e/documentation/sites.narration.json",
+    "spec": "e2e/documentation/sites.docs.spec.ts",
+    "storyboard": "e2e/documentation/sites.storyboard.md",
+    "output": "clientes-gestion-sedes-v1.mp4",
+    "artifact": "documentation-video-clientes-gestion-sedes-v1",
+    "metadataTitle": "Gestión de sedes · Manual de usuario"
   }
 }
