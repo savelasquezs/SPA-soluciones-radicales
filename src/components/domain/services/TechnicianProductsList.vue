@@ -13,7 +13,7 @@ function dateLabel(value: string | null): string {
 
 <template>
   <section class="technician-section" aria-labelledby="technician-products-title">
-    <header><div class="technician-section__icon"><FlaskConical :size="20" aria-hidden="true" /></div><div><h2 id="technician-products-title">Productos a aplicar</h2><p>Información definida por el Administrador. No es editable.</p></div></header>
+    <header><div class="technician-section__icon"><FlaskConical :size="20" aria-hidden="true" /></div><div><h2 id="technician-products-title">Productos a aplicar</h2><p>Lote y vencimiento definidos para la visita; dosis y métodos tomados del catálogo.</p></div></header>
     <p v-if="!products.length" class="technician-empty">No hay productos asignados.</p>
     <div v-else class="technician-products">
       <article v-for="product in products" :key="product.id">
@@ -22,9 +22,8 @@ function dateLabel(value: string | null): string {
         <dl>
           <div><dt>Lote</dt><dd>{{ product.lote }}</dd></div>
           <div><dt>Dosis</dt><dd>{{ product.dosis }}</dd></div>
-          <div><dt>Método</dt><dd>{{ product.metodoAplicacion }}</dd></div>
+          <div><dt>Métodos</dt><dd>{{ product.metodoAplicacion }}</dd></div>
           <div><dt>Registro sanitario</dt><dd>{{ product.registroSanitario || 'No informado' }}</dd></div>
-          <div><dt>Dosis de referencia</dt><dd>{{ product.dosisReferencia || 'No informada' }}</dd></div>
           <div><dt>Vencimiento</dt><dd>{{ dateLabel(product.fechaVencimiento) }}</dd></div>
         </dl>
       </article>
