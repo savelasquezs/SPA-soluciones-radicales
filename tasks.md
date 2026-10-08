@@ -25,6 +25,18 @@
 - [x] Implementar carga directa autorizada, reemplazo, eliminación y lectura firmada para planos de Sede y plantillas de certificados en Cloudflare R2.
 - [ ] Configurar en Neon Functions las credenciales privadas R2 del runtime y ejecutar la validación real contra `sr-master-files`.
 
+## Retención de evidencias e informes
+
+- [x] Aprobar y documentar la política de fotos ordinarias (3 meses), Hallazgos pendientes (máximo 1 año), Hallazgos cerrados (3 meses tras cierre para apertura y corrección) e informes PDF (12 meses), sin alterar el historial en PostgreSQL.
+- [x] Definir que la **programación automática se ejecuta en Cloudflare Workers Cron Triggers**, nunca mediante Neon scheduled triggers ni el Worker de la SPA.
+- [ ] Implementar registro idempotente de objetos, expiraciones, bloqueos de conservación, backfill de rutas existentes y estado de borrado (migración aditiva con tests).
+- [ ] Implementar protocolo seguro de consulta/reclamación y confirmación contra Neon PostgreSQL, Worker independiente `sr-storage-retention` con Cron diario y bindings R2; manejo de reintentos y errores sin borrados prematuros.
+- [ ] Añadir disponibilidad `SIN_FOTO/PENDIENTE/DISPONIBLE/VENCIDA` en las vistas de puestos, revisiones y hallazgos sin descargar miniaturas masivamente.
+- [ ] Validar dry-run en desarrollo, condiciones de carrera al cerrar hallazgos, 404/errores de R2, PDFs con imágenes incrustadas, alertas y presupuesto global de 8 GB.
+- [ ] Desplegar y habilitar Cloudflare Cron en entorno autorizado **solo después** de validar esquema/API/Worker y probar la limpieza real sobre archivos sintéticos; no activar de forma automática al documentar.
+
+Fuente: `docs/product/file-retention.md`; despliegue: `docs/development/cloudflare-retention.md`.
+
 ## Servicios residenciales
 
 - [ ] Definir valor, duración, programación e informe aplicables a Clientes Casa antes de incluir sus ubicaciones internas en el catálogo de programación.
