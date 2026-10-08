@@ -100,7 +100,7 @@ async function setup(page: Page, role: 'ADMINISTRADOR' | 'TECNICO'='ADMINISTRADO
       if(journal.has(body.requestId)) { await json(route,journal.get(body.requestId),201);return }
       const created=record(uid(counter++));created.solicitud=`SR-${counter}`;created.tecnicosColaboradoresIds=[]
       schedule(created,body.input.programacion);created.observaciones=body.input.observaciones
-      created.productos=body.input.productos.map(product=>({ ...product,id:uid(counter++),nombre:'Producto de prueba',metodoAplicacionNombre:'Aspersión',activo:true,aplicado:false }))
+      created.productos=body.input.productos.map(product=>({ ...product,id:uid(counter++),nombre:'Producto de prueba',dosis:'5 mL/L',metodoAplicacionNombre:'Aspersión',activo:true,aplicado:false }))
       created.pago={ ...created.pago,...body.input.cobro,estadoPago:body.input.cobro.metodoPago ? 'PENDIENTE' : 'SIN_REGISTRAR' }
       const child=record(uid(counter++),'REFUERZO');child.solicitud=`SR-${counter}`;child.servicioPrincipalId=created.id
       schedule(child,body.input.refuerzo ?? suggestReinforcement(body.input.programacion));records.push(created,child)
@@ -183,9 +183,9 @@ test('creates a complete reviewed pair with custom Refuerzo dates, products and 
   await page.getByRole('option',{ name:/Producto de prueba/ }).click()
   await page.getByRole('button',{ name:'Productos a utilizar',exact:true }).click()
   await page.locator('#producto-0-lote').fill('LOTE-2030')
-  await page.locator('#producto-0-dosis').fill('5 mL/L')
-  await page.locator('#producto-0-metodo').selectOption('ASPERSION')
-  await fillDate(page,'#producto-0-fabricacion','01/01/2026')
+  await expect(page.locator('#producto-0-dosis')).toHaveCount(0)
+  await expect(page.locator('#producto-0-metodo')).toHaveCount(0)
+  await expect(page.locator('#producto-0-fabricacion')).toHaveCount(0)
   await fillDate(page,'#producto-0-vencimiento','01/12/2035')
   await fillDate(page,'#refuerzo-inicio','04/11/2030 14:00')
   await page.locator('#servicio-metodo').selectOption('EFECTIVO')
@@ -201,8 +201,10 @@ test('creates a complete reviewed pair with custom Refuerzo dates, products and 
   const call=api.calls.find(value=>value.path==='/api/admin/services' && value.method==='POST')!
   expect(toBogotaInput(call.body!.input.refuerzo!.inicioProgramado)).toBe('2030-11-04T14:00')
   expect(call.body!.input.productos[0]?.lote).toBe('LOTE-2030')
-  expect(call.body!.input.productos[0]?.dosis).toBe('5 mL/L')
-  expect(call.body!.input.productos[0]?.metodoAplicacionCodigo).toBe('ASPERSION')
+  expect(call.body!.input.productos[0]?.fechaVencimiento).toBe('2035-12-01')
+  expect(call.body!.input.productos[0]).not.toHaveProperty('dosis')
+  expect(call.body!.input.productos[0]).not.toHaveProperty('metodoAplicacionCodigo')
+  expect(call.body!.input.productos[0]).not.toHaveProperty('fechaFabricacion')
   expect(call.body!.input.cobro.tecnicoRecaudoPrevistoId).toBe(ids.other)
   const created=api.records.find(value=>![ids.principal,ids.refuerzo].includes(value.id) && value.tipoServicio==='PRINCIPAL')!
   expect(created.valorServicio).toBe(300000);expect(created.pago.estadoPago).toBe('PENDIENTE');expect(created.pago.recaudadoPorId).toBeNull()

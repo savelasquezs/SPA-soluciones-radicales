@@ -13,7 +13,7 @@ Decisiones aprobadas con Santiago el 6 de octubre de 2026. Este documento especi
 
 El maestro sigue PRODUCTOS A APLICAR: nombre comercial, principio activo/composición, dosis de aplicación (texto con su unidad), registro sanitario, grado toxicológico, laboratorio/fabricante, antídoto y ficha técnica opcional.
 
-Nombre, principio activo, dosis, al menos un método y al menos una categoría o plaga son obligatorios. Lote y vencimiento no son atributos del catálogo: se registran en el Servicio. La dosis del catálogo es referencia para la futura aplicación, no evidencia de la cantidad efectivamente utilizada. No hay inventario.
+Nombre, principio activo, dosis, al menos un método y al menos una categoría o plaga son obligatorios. Lote y vencimiento no son atributos del catálogo: son los únicos datos del producto que el Administrador edita en cada Servicio. La dosis y todos los métodos asociados se consultan del catálogo durante la programación y se congelan al iniciar el Servicio; no se registran nuevamente por visita. La dosis del catálogo es referencia para la aplicación, no evidencia de la cantidad efectivamente utilizada. No hay inventario.
 
 Cada producto admite múltiples métodos y una cobertura compuesta por categorías completas y/o plagas específicas. La cobertura de productos no usa directamente la clasificación de monitoreo. Sus categorías son INSECTOS_RASTREROS, INSECTOS_VOLADORES y ROEDORES. Esta separación refleja PRODUCTOS A APLICAR: varios productos combaten «INSECTOS RASTREROS Y VOLADORES», mientras RATUNET PALET/KLERT combaten «ROEDORES» y GELFIPRON GW especifica «CUCARACHAS Y HORMIGAS».
 

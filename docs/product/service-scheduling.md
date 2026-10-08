@@ -49,6 +49,10 @@ Los 21 días son únicamente el valor predeterminado inicial. **No son una restr
 
 La disponibilidad del cliente tiene prioridad. El Administrador puede cambiar libremente la fecha y hora del Refuerzo antes o después de su creación mientras el Servicio continúe siendo reprogramable.
 
+## Productos previstos
+
+Al programar o editar un Servicio, el Administrador selecciona productos y solo informa lote y vencimiento por cada uno. La dosis y los métodos de aplicación son datos del catálogo MIP; se muestran como referencia, no se vuelven a capturar ni se validan como campos de la visita. Reprogramar una cita no elimina ni recalcula el lote y el vencimiento ya guardados. Al inicio de la ejecución se congelan los datos del catálogo; ver [Ejecución](./service-execution.md).
+
 ## Reprogramación
 
 ### Reprogramar un Principal

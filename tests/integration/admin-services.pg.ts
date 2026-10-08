@@ -35,7 +35,7 @@ async function fixture(reinforcement=true): Promise<Fixture> {
 }
 function input(f: Fixture,start='2030-10-06T09:00:00-05:00'): ServiceInput {
   return { sedeId:f.site,programacion:{ inicioProgramado:start,duracionMinutos:90,tecnicoResponsableId:f.responsible,tecnicosColaboradoresIds:[f.collaborator] },refuerzo:null,
-    productos:[{ productoId:f.product,lote:'CI-1',fechaFabricacion:'2026-01-01',fechaVencimiento:'2032-01-01',dosis:'5 mL/L',metodoAplicacionCodigo:f.methodCode }],cobro:{ metodoPago:'EFECTIVO',tecnicoRecaudoPrevistoId:f.responsible },observaciones:'Solo datos sintéticos' }
+    productos:[{ productoId:f.product,lote:'CI-1',fechaVencimiento:'2032-01-01' }],cobro:{ metodoPago:'EFECTIVO',tecnicoRecaudoPrevistoId:f.responsible },observaciones:'Solo datos sintéticos' }
 }
 async function create(f: Fixture,value=input(f),requestId=randomUUID()): Promise<ServiceMutation> {
   return transaction(client=>command(client,f.admin,requestId,'service:create',{ input:value },()=>createService(client,f.admin,value,false)))
@@ -72,7 +72,7 @@ describe('administrator services · real PostgreSQL',()=>{
     expect(r.servicioPrincipalId).toBe(p.id);expect(r.valorServicio).toBe(0)
     expect(p.valorServicio).toBe(300000);expect(p.pago.estadoPago).toBe('PENDIENTE')
     expect(p.pago.recaudadoPorId).toBeNull();expect(p.pago.tecnicoRecaudoPrevistoId).toBe(f.responsible)
-    expect(p.productos[0]?.lote).toBe('CI-1')
+    expect(p.productos[0]).toMatchObject({ lote:'CI-1',fechaVencimiento:'2032-01-01',dosis:'5 mL/L',metodoAplicacionNombre:`Aspersión ${f.methodCode}` })
     await pool.query('update public.sedes set valor_servicio=400000 where id=$1',[f.site])
     expect((await readService(p.id)).valorServicio).toBe(300000)
     expect(external.calendar).not.toHaveBeenCalled();expect(external.mail).not.toHaveBeenCalled()
@@ -100,7 +100,7 @@ describe('administrator services · real PostgreSQL',()=>{
       { version:r.version+1,schedule:{ ...scheduleFromRecord(r),inicioProgramado:addInstantDays(r.inicioProgramado,4) } }))).rejects.toMatchObject({ code:'VERSION_CONFLICT' })
     expect((await readService(p.id)).inicioProgramado).toBe(p.inicioProgramado)
     const edit=draftToServiceInput(serviceToDraft(p));edit.programacion.inicioProgramado=addInstantDays(p.inicioProgramado,2)
-    edit.productos=[{ productoId:randomUUID(),lote:'x',fechaFabricacion:null,fechaVencimiento:null,dosis:'x',metodoAplicacionCodigo:'ASPERSION' }]
+    edit.productos=[{ productoId:randomUUID(),lote:'x',fechaVencimiento:null }]
     await expect(transaction(client=>editService(client,f.admin,p.id,p.version,edit,true,r.version))).rejects.toMatchObject({ code:'VALIDATION' })
     expect((await readService(p.id)).version).toBe(p.version)
     expect((await readService(r.id)).version).toBe(r.version)

@@ -140,9 +140,9 @@ La lista aplicable debe quedar congelada o representada de forma históricamente
 
 Productos no forman parte de la evaluación de un Área.
 
-El Administrador selecciona los Productos y completa lote, dosis y método de aplicación al crear o editar el Servicio; fabricación y vencimiento se conservan cuando se informan. El Servicio no puede iniciar con un Producto previsto incompleto.
+El Administrador selecciona los Productos y edita únicamente el lote y la fecha de vencimiento de cada producto previsto. No selecciona dosis, método de aplicación ni fecha de fabricación por visita. La dosis y todos los métodos asociados se consultan directamente desde el catálogo MIP antes de iniciar. El inicio exige lote por producto y que el catálogo tenga dosis y al menos un método activo; si falta configuración en el catálogo, el mensaje lo indica explícitamente, sin pedir al Administrador rellenarla en el Servicio.
 
-El Técnico ve esos Productos en la pantalla principal del Servicio, en modo de solo lectura. No existe una pantalla técnica separada para seleccionarlos ni modificarlos. Al iniciar, el servidor marca el conjunto previsto como aplicado y congela nombre, principio activo, registro sanitario, dosis de referencia y nombre del método para que el histórico no dependa del catálogo vivo.
+El Técnico ve los Productos en solo lectura. La dosis y los métodos visibles antes del inicio reflejan el catálogo vigente; lote y vencimiento provienen del Servicio. Al iniciar, el servidor marca el conjunto previsto como aplicado y congela nombre, principio activo, registro sanitario, dosis del catálogo y nombres de todos los métodos asociados para que cambios posteriores del catálogo no reinterpreten el histórico. Los Servicios antiguos con dosis o método por visita vacíos también pueden iniciar si lote y catálogo están completos. No se sobrescribe la fabricación histórica almacenada.
 
 ## Hallazgos
 
