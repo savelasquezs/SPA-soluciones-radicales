@@ -70,12 +70,12 @@ export function serviceToDraft(record: AdminService): ServiceEditorDraft {
   return {
     sedeId: record.sedeId, programacion: scheduleToDraft(scheduleFromRecord(record)),
     refuerzo: record.refuerzo?.estado === 'PROGRAMADO' ? scheduleToDraft(scheduleFromRecord(record.refuerzo)) : null,
-    productos: record.productos.map(({ productoId, lote, fechaFabricacion, fechaVencimiento, dosis, metodoAplicacionCodigo }) => ({ productoId, lote, fechaFabricacion, fechaVencimiento, dosis, metodoAplicacionCodigo })),
+    productos: record.productos.map(({ productoId, lote, fechaVencimiento }) => ({ productoId, lote, fechaVencimiento })),
     cobro: { metodoPago: record.pago.metodoPago, tecnicoRecaudoPrevistoId: record.pago.tecnicoRecaudoPrevistoId }, observaciones: record.observaciones,
   }
 }
 export function draftToServiceInput(draft: ServiceEditorDraft): ServiceInput {
-  return { ...draft, programacion: scheduleFromDraft(draft.programacion), refuerzo: draft.refuerzo ? scheduleFromDraft(draft.refuerzo) : null, productos: draft.productos.map(product => ({ ...product, fechaFabricacion: product.fechaFabricacion || null, fechaVencimiento: product.fechaVencimiento || null })) }
+  return { ...draft, programacion: scheduleFromDraft(draft.programacion), refuerzo: draft.refuerzo ? scheduleFromDraft(draft.refuerzo) : null, productos: draft.productos.map(product => ({ productoId:product.productoId, lote:product.lote, fechaVencimiento:product.fechaVencimiento || null })) }
 }
 
 function object(value: unknown): Record<string, unknown> {
@@ -106,18 +106,12 @@ export function validateServiceInput(value: unknown): { value: ServiceInput; err
   const productos = products.slice(0, 100).map((raw, index) => {
     const product = object(raw), productoId = typeof product.productoId === 'string' ? product.productoId : ''
     const lote = typeof product.lote === 'string' ? product.lote.trim() : ''
-    const dosis = typeof product.dosis === 'string' ? product.dosis.trim() : ''
-    const metodoAplicacionCodigo = typeof product.metodoAplicacionCodigo === 'string' ? product.metodoAplicacionCodigo.trim() : ''
-    const fechaFabricacion = product.fechaFabricacion === '' || product.fechaFabricacion == null ? null : String(product.fechaFabricacion)
     const fechaVencimiento = product.fechaVencimiento === '' || product.fechaVencimiento == null ? null : String(product.fechaVencimiento)
     if (!isServiceId(productoId) || seen.has(productoId)) errors.productos = 'Selecciona productos válidos sin duplicarlos.'
     seen.add(productoId)
     if (!lote || lote.length > 120) errors[`productos.${index}.lote`] = lote ? 'El lote no puede superar 120 caracteres.' : 'Ingresa el lote previsto.'
-    if (!dosis || dosis.length > 240) errors[`productos.${index}.dosis`] = dosis ? 'La dosis no puede superar 240 caracteres.' : 'Ingresa la dosis prevista.'
-    if (!metodoAplicacionCodigo || metodoAplicacionCodigo.length > 120) errors[`productos.${index}.metodoAplicacionCodigo`] = 'Selecciona el método de aplicación.'
-    if (fechaFabricacion && !isDateOnly(fechaFabricacion)) errors[`productos.${index}.fechaFabricacion`] = 'Ingresa una fecha válida.'
-    if (fechaVencimiento && (!isDateOnly(fechaVencimiento) || (fechaFabricacion && fechaVencimiento < fechaFabricacion))) errors[`productos.${index}.fechaVencimiento`] = 'El vencimiento no puede ser anterior a la fabricación.'
-    return { productoId, lote, fechaFabricacion, fechaVencimiento, dosis, metodoAplicacionCodigo }
+    if (fechaVencimiento && !isDateOnly(fechaVencimiento)) errors[`productos.${index}.fechaVencimiento`] = 'Ingresa una fecha de vencimiento válida.'
+    return { productoId, lote, fechaVencimiento }
   })
   const cobro = object(input.cobro)
   const metodoPago = cobro.metodoPago === 'EFECTIVO' || cobro.metodoPago === 'TRANSFERENCIA' ? cobro.metodoPago : null
