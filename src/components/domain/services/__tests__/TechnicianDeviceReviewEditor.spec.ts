@@ -31,14 +31,14 @@ describe('TechnicianDeviceReviewEditor', () => {
     const latestDraft = draftsAfterPest[draftsAfterPest.length - 1]!
     expect((latestDraft[0] as { capturas: unknown[] }).capturas).toEqual([])
     await wrapper.get('input[type="number"]').setValue('3')
-    await wrapper.findAll('button').find(button => button.text() === 'Guardar revisión')!.trigger('click')
+    await wrapper.findAll('button').find(button => button.text() === 'Guardar puesto de monitoreo')!.trigger('click')
     expect(wrapper.text()).toContain('Adjunta una fotografía del cambio de estado.')
     expect(wrapper.emitted('save')).toBeUndefined()
 
     const photo = new File(['photo'], 'dano.jpg', { type: 'image/jpeg' })
     Object.defineProperty(wrapper.findAll('input[type="file"]')[0]!.element, 'files', { configurable: true, value: [photo] })
     await wrapper.findAll('input[type="file"]')[0]!.trigger('change')
-    await wrapper.findAll('button').find(button => button.text() === 'Guardar revisión')!.trigger('click')
+    await wrapper.findAll('button').find(button => button.text() === 'Guardar puesto de monitoreo')!.trigger('click')
     expect(wrapper.emitted('save')?.[0]).toEqual([expect.objectContaining({
       estadoObservado: 'DANADO',
       capturas: [{ plagaCodigo: 'CUCARACHA', cantidad: 3 }],
@@ -49,7 +49,7 @@ describe('TechnicianDeviceReviewEditor', () => {
     const wrapper = mount(TechnicianDeviceReviewEditor, { props: { device, mutation: null, editable: true, syncing: false, expanded: true } })
     await wrapper.findAll('.pest-chip')[0]!.trigger('click')
     await wrapper.get('input[type="number"]').setValue('0')
-    await wrapper.findAll('button').find(button => button.text() === 'Guardar revisión')!.trigger('click')
+    await wrapper.findAll('button').find(button => button.text() === 'Guardar puesto de monitoreo')!.trigger('click')
     expect(wrapper.emitted('save')?.[0]?.[0]).toMatchObject({ capturas: [] })
   })
 
@@ -61,7 +61,7 @@ describe('TechnicianDeviceReviewEditor', () => {
     expect(wrapper.text()).not.toContain('Producto químico')
     expect(wrapper.text()).not.toContain('Antídoto')
     expect(wrapper.text()).not.toContain('Consumo')
-    await wrapper.findAll('button').find(button => button.text() === 'Guardar revisión')!.trigger('click')
+    await wrapper.findAll('button').find(button => button.text() === 'Guardar puesto de monitoreo')!.trigger('click')
     expect(wrapper.emitted('save')?.[0]?.[0]).toMatchObject({ estadoObservado: 'DANADO', capturas: [] })
   })
 })

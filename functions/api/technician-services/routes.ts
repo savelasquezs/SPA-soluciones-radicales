@@ -154,17 +154,26 @@ technicianServiceRoutes.post('/:id/areas/:areaId/access', async context => {
   const expected = version(payload.version)
   if (typeof payload.withoutAccess !== 'boolean') throw new ApiError(422, 'El estado de acceso no es válido.', 'VALIDATION')
   const description = optionalString(payload.description)
-  const photoStoragePath = payload.photoStoragePath === null ? null : requiredString(payload.photoStoragePath, 'Adjunta una fotografía válida.', 1_000)
+  const photoStoragePaths = Array.isArray(payload.photoStoragePaths)
+    ? criterionEvidencePaths(payload.photoStoragePaths)
+    : payload.photoStoragePath == null ? [] : [requiredString(payload.photoStoragePath, 'Adjunta una fotografía válida.', 1_000)]
+  if (photoStoragePaths.length > 5) throw new ApiError(422, 'Adjunta máximo cinco fotografías.', 'VALIDATION')
   if (payload.withoutAccess) {
-    if (!description.trim() || !photoStoragePath) throw new ApiError(422, 'Describe la novedad y adjunta una fotografía.', 'VALIDATION')
-    assertAreaNoAccessStoragePath(photoStoragePath, serviceId, areaId)
+    if (!description.trim() || !photoStoragePaths.length) throw new ApiError(422, 'Describe la novedad y adjunta una fotografía.', 'VALIDATION')
     await read(context, (client, technician) => authorizeTechnicianAreaChange(client, technician.id, serviceId, deviceId, lockToken, areaId))
-    if (!await serviceMediaObjectExists(photoStoragePath, serviceId, areaId)) throw new ApiError(422, 'La fotografía todavía no está disponible. Vuelve a cargarla.', 'PHOTO_NOT_FOUND')
+    for (const storagePath of photoStoragePaths) {
+      assertAreaNoAccessStoragePath(storagePath, serviceId, areaId)
+      if (!await serviceMediaObjectExists(storagePath, serviceId, areaId)) {
+        throw new ApiError(422, 'Una fotografía todavía no está disponible. Vuelve a cargarla.', 'PHOTO_NOT_FOUND', { storagePath })
+      }
+    }
   }
-  const input = { deviceId, areaId, version: expected, withoutAccess: payload.withoutAccess, description, photoStoragePath }
+  const paths = payload.withoutAccess ? photoStoragePaths : []
+  const commandPayload = { deviceId, areaId, version: expected, withoutAccess: payload.withoutAccess, description, photoStoragePaths: paths }
   const saved = await read(context, (client, technician) => technicianCommand(client, technician.id, requestId, 'AREA_ACCESS', serviceId, expected,
-    input, () => saveTechnicianAreaAccess(client, technician.id, serviceId, deviceId, lockToken, areaId, expected, payload.withoutAccess as boolean, description, photoStoragePath)))
-  if (saved.replacedPhotoPath) await deleteAreaNoAccessObject(saved.replacedPhotoPath, serviceId, areaId)
+    commandPayload, () => saveTechnicianAreaAccess(client, technician.id, serviceId, deviceId, lockToken, areaId, expected,
+      payload.withoutAccess as boolean, description, paths[0] ?? null, paths)))
+  for (const removed of saved.removedPhotoPaths) await deleteAreaNoAccessObject(removed, serviceId, areaId)
   return context.json({ area: saved.area })
 })
 technicianServiceRoutes.post('/:id/areas/:areaId/media/delete', async context => {
@@ -177,7 +186,7 @@ technicianServiceRoutes.post('/:id/areas/:areaId/media/delete', async context =>
   assertAreaNoAccessStoragePath(storagePath, serviceId, areaId)
   await read(context, async (client, technician) => {
     await authorizeTechnicianAreaChange(client, technician.id, serviceId, deviceId, lockToken, areaId)
-    const referenced = (await client.query<{ found: boolean }>('select exists(select 1 from public.servicio_areas where servicio_id=$1 and sin_acceso_foto_storage_path=$2) as found', [serviceId, storagePath])).rows[0]?.found
+    const referenced = (await client.query<{ found: boolean }>('select exists(select 1 from public.servicio_areas where servicio_id=$1 and (sin_acceso_foto_storage_path=$2 or sin_acceso_evidencias_storage_paths ? $2)) as found', [serviceId, storagePath])).rows[0]?.found
     if (referenced) throw new ApiError(409, 'La fotografía está asociada al servicio y no puede eliminarse.', 'FILE_IN_USE')
   })
   await deleteAreaNoAccessObject(storagePath, serviceId, areaId)

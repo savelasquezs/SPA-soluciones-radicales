@@ -285,6 +285,40 @@ describe('technician services state', () => {
     expect(api.saveTechnicianAreaAccess).not.toHaveBeenCalled()
   })
 
+  it('keeps two no-access photos offline and syncs both without losing either', async () => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+    vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([executionCache()])
+    const photos = [new File(['first'], 'puerta.jpg', { type: 'image/jpeg' }), new File(['second'], 'cerradura.jpg', { type: 'image/jpeg' })]
+    const store = useTechnicianServicesStore()
+    await store.ensurePackage(serviceId)
+    expect(await store.applyAreaAccess(serviceId, areaIds[0]!, true, 'Acceso cerrado', photos)).toBe('pending')
+    expect(store.currentPackage?.areas[0]?.sinAccesoEvidenciasLocalIds).toHaveLength(2)
+    const localIds = store.currentPackage?.areas[0]?.sinAccesoEvidenciasLocalIds ?? []
+    expect(new Set(localIds).size).toBe(2)
+    expect(mediaService.saveTechnicianMedia).toHaveBeenCalledTimes(2)
+
+    vi.mocked(mediaService.loadTechnicianMedia).mockImplementation(async (_actor, mediaId) => {
+      const position = localIds.indexOf(mediaId)
+      const file = photos[position]!
+      return { schemaVersion: 1, id: mediaId, actorId, serviceId, areaId: areaIds[0]!,
+        fileName: file.name, contentType: file.type, size: file.size,
+        lastModified: file.lastModified, file, savedAt: '2026-10-07T13:30:00Z' }
+    })
+    const paths = photos.map((_, index) => `services/${serviceId}/areas/${areaIds[0]}/no-access/photo-${index}.jpg`)
+    vi.mocked(serviceMedia.uploadTechnicianAreaPhoto).mockResolvedValueOnce(paths[0]!).mockResolvedValueOnce(paths[1]!)
+    vi.mocked(api.saveTechnicianAreaAccess).mockResolvedValue({ area: {
+      id: areaIds[0]!, sinAcceso: true, sinAccesoDescripcion: 'Acceso cerrado',
+      sinAccesoFotoStoragePath: paths[0]!, sinAccesoEvidenciasStoragePaths: paths, version: 2,
+    } })
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: true })
+    expect(await store.syncPending(serviceId)).toBe('synced')
+    expect(api.saveTechnicianAreaAccess).toHaveBeenCalledWith(serviceId, areaIds[0], expect.any(String),
+      deviceId, lockToken, 1, true, 'Acceso cerrado', paths[0], paths)
+    expect(store.currentPackage?.areas[0]?.sinAccesoEvidenciasStoragePaths).toEqual(paths)
+    expect(store.currentPackage?.areas[0]?.sinAccesoEvidenciasLocalIds).toEqual([])
+    expect(mediaService.deleteTechnicianMedia).toHaveBeenCalledTimes(2)
+  })
+
   it('uploads and synchronizes an area access photo before saving the exception', async () => {
     vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([executionCache()])
     const photo = new File(['photo'], 'sin-acceso.jpg', { type: 'image/jpeg' })
@@ -301,7 +335,7 @@ describe('technician services state', () => {
     await store.ensurePackage(serviceId)
     expect(await store.applyAreaAccess(serviceId, areaIds[0]!, true, 'Puerta cerrada', photo)).toBe('synced')
     expect(serviceMedia.uploadTechnicianAreaPhoto).toHaveBeenCalledWith(serviceId, areaIds[0], deviceId, lockToken, photo)
-    expect(api.saveTechnicianAreaAccess).toHaveBeenCalledWith(serviceId, areaIds[0], expect.any(String), deviceId, lockToken, 1, true, 'Puerta cerrada', storagePath)
+    expect(api.saveTechnicianAreaAccess).toHaveBeenCalledWith(serviceId, areaIds[0], expect.any(String), deviceId, lockToken, 1, true, 'Puerta cerrada', storagePath, [storagePath])
     expect(mediaService.deleteTechnicianMedia).toHaveBeenCalled()
     expect(store.currentPackage?.areas[0]).toMatchObject({ sinAcceso: true, sinAccesoFotoStoragePath: storagePath, sinAccesoFotoLocalId: null, version: 2 })
     expect(store.pendingSyncCount).toBe(0)

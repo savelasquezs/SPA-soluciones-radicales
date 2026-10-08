@@ -180,7 +180,7 @@ function save(): void {
         <summary>Observaciones <span>Opcional</span></summary>
         <BaseTextarea :model-value="observations" :name="`device-observations-${device.id}`" label="Observaciones del puesto" :rows="3" maxlength="2000" :disabled="disabled" @update:model-value="observations = $event; changed()" />
       </details>
-      <BaseButton :disabled="disabled" @click="save">Guardar revisión</BaseButton>
+      <BaseButton :disabled="disabled" @click="save">Guardar puesto de monitoreo</BaseButton>
       <div v-if="mutation?.status === 'CONFLICT'" class="device-conflict">
         <p>{{ mutation.error ?? 'La revisión cambió. Elige cuál versión conservar.' }}</p>
         <div v-if="mutation.conflict" class="device-actions"><BaseButton variant="secondary" :disabled="syncing" @click="emit('useRemote')">Usar revisión sincronizada</BaseButton><BaseButton :loading="syncing" @click="emit('retry')">Reintentar mi revisión</BaseButton></div>

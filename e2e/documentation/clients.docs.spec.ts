@@ -133,6 +133,7 @@ async function setupDemo(page: Page) {
     }
 
     if (path === '/api/clients' && method === 'POST') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const body = request.postDataJSON() as any
       await new Promise(resolve => setTimeout(resolve, 500))
       const created: DemoClient = {
@@ -166,6 +167,7 @@ async function setupDemo(page: Page) {
         await route.fulfill({ status: 404, json: { error: 'Cliente no encontrado.' } })
         return
       }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const body = request.postDataJSON() as any
       Object.assign(row, body, { version: row.version + 1 })
       await route.fulfill({ json: row })
