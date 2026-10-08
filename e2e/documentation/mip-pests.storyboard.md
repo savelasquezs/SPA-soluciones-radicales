@@ -2,6 +2,7 @@
 
 **Módulo:** Configuración → Catálogos MIP → Plagas  
 **Salida:** `mip-gestion-plagas-v1.mp4`  
+**Video ID:** `mip-gestion-plagas-v1`  
 **Objetivo:** al terminar el video, el usuario podrá crear una plaga, comprender la diferencia entre monitoreo y categoría para productos, consultar y editar el registro, desactivarlo, reactivarlo y eliminarlo cuando no tenga relaciones ni historial.
 
 ## Reglas funcionales que debe enseñar
