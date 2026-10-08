@@ -10,7 +10,7 @@ const route = useRoute()
 const loading = ref(false)
 const error = ref<string | null>(null)
 
-async function login(): Promise<void> {
+async function login(selectAccount = false): Promise<void> {
   loading.value = true
   error.value = null
   try {
@@ -18,7 +18,7 @@ async function login(): Promise<void> {
     const redirect = requestedRedirect.startsWith('/') && !requestedRedirect.startsWith('//')
       ? requestedRedirect
       : '/'
-    await session.login(false, new URL(redirect, window.location.origin).toString())
+    await session.login(selectAccount, new URL(redirect, window.location.origin).toString())
   } catch (loginError) {
     error.value = loginError instanceof Error ? loginError.message : 'No fue posible iniciar sesión'
   } finally {
@@ -36,7 +36,8 @@ async function login(): Promise<void> {
       </div>
       <h1>Gestión MIP en un solo lugar</h1>
       <p class="intro">Programa servicios, coordina técnicos y conserva el histórico operativo con seguridad.</p>
-      <BaseButton :loading="loading" @click="login">Continuar con Google</BaseButton>
+      <BaseButton :loading="loading" @click="login(false)">Continuar con Google</BaseButton>
+      <BaseButton variant="ghost" :disabled="loading" @click="login(true)">Elegir otra cuenta</BaseButton>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
       <small>El acceso requiere una cuenta Google autorizada y activa.</small>
     </section>

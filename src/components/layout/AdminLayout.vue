@@ -16,7 +16,7 @@ type NavigationGroup = { label: string; items: NavigationItem[] }
 const auth = useAuthStore(), app = useAppStore(), notifications = useNotificationsStore()
 const { online } = useNetworkStatus()
 const route = useRoute(), router = useRouter()
-const navigationOpen = ref(false), switchingRole = ref(false)
+const navigationOpen = ref(false), switchingRole = ref(false), changingAccount = ref(false)
 const groups: NavigationGroup[] = [
   { label: 'OPERACIÓN', items: [
     { to: '/', label: 'Resumen', icon: Gauge }, { to: '/agenda', label: 'Agenda', icon: CalendarDays, admin: true }, { to: '/servicios', label: 'Servicios', icon: FileText },
@@ -46,6 +46,15 @@ async function logout(): Promise<void> {
   try { await auth.logout(); await router.replace('/acceso') }
   catch (error) { notifications.show(error instanceof Error ? error.message : 'No fue posible cerrar sesión', 'error') }
 }
+async function changeAccount(): Promise<void> {
+  if (changingAccount.value) return
+  changingAccount.value = true
+  try { await auth.useAnotherAccount() }
+  catch (error) {
+    changingAccount.value = false
+    notifications.show(error instanceof Error ? error.message : 'No fue posible cambiar de cuenta', 'error')
+  }
+}
 async function switchRole(role: ActiveRole): Promise<void> {
   if (auth.activeRole === role || switchingRole.value) return
   switchingRole.value = true
@@ -68,7 +77,7 @@ function setTheme(event: Event): void { app.setTheme((event.target as HTMLSelect
         <span class="sync-state" :class="{ 'sync-state--offline': !online }"><Wifi v-if="online" :size="16" aria-hidden="true" /><CloudOff v-else :size="16" aria-hidden="true" />{{ online ? 'En línea' : 'Sin conexión' }}</span>
         <label class="theme-select"><span class="sr-only">Apariencia</span><select :value="app.theme" @change="setTheme"><option value="light">Claro</option><option value="dark">Oscuro</option><option value="system">Sistema</option></select></label>
         <details class="account-menu"><summary><strong>{{ auth.profile?.nombreCompleto }}</strong><span>{{ auth.activeRole === 'ADMINISTRADOR' ? 'Administrador' : 'Técnico' }}</span><ChevronDown :size="16" aria-hidden="true" /></summary>
-          <div class="account-menu__panel"><p>{{ auth.authEmail }}</p><div v-if="auth.rolesAvailable.length > 1" class="role-options"><BaseButton v-for="role in auth.rolesAvailable" :key="role" variant="ghost" :disabled="switchingRole || auth.activeRole === role" @click="switchRole(role)"><Wrench v-if="role === 'TECNICO'" :size="17" /><Users v-else :size="17" />{{ role === 'ADMINISTRADOR' ? 'Administrador' : 'Técnico' }}</BaseButton></div><BaseButton variant="secondary" @click="logout"><LogOut :size="17" />Cerrar sesión</BaseButton></div>
+          <div class="account-menu__panel"><p>{{ auth.authEmail }}</p><div v-if="auth.rolesAvailable.length > 1" class="role-options"><BaseButton v-for="role in auth.rolesAvailable" :key="role" variant="ghost" :disabled="switchingRole || changingAccount || auth.activeRole === role" @click="switchRole(role)"><Wrench v-if="role === 'TECNICO'" :size="17" /><Users v-else :size="17" />{{ role === 'ADMINISTRADOR' ? 'Administrador' : 'Técnico' }}</BaseButton></div><BaseButton variant="ghost" :loading="changingAccount" @click="changeAccount"><Users :size="17" />Cambiar cuenta</BaseButton><BaseButton variant="secondary" :disabled="changingAccount" @click="logout"><LogOut :size="17" />Cerrar sesión</BaseButton></div>
         </details>
       </div>
       <BaseIconButton class="menu-button" :label="navigationOpen ? 'Cerrar navegación' : 'Abrir navegación'" aria-controls="admin-navigation" :aria-expanded="navigationOpen" @click="navigationOpen = !navigationOpen"><X v-if="navigationOpen" :size="22" /><Menu v-else :size="22" /></BaseIconButton>
@@ -77,7 +86,7 @@ function setTheme(event: Event): void { app.setTheme((event.target as HTMLSelect
       <button v-if="navigationOpen" type="button" class="drawer-backdrop" aria-label="Cerrar navegación" @click="navigationOpen = false"></button>
       <aside id="admin-navigation" class="sidebar" :class="{ 'sidebar--open': navigationOpen }">
         <nav aria-label="Navegación principal"><section v-for="group in visibleGroups" :key="group.label"><h2>{{ group.label }}</h2><RouterLink v-for="item in group.items" :key="item.to" :to="item.to" :class="{ 'nav-active': isActive(item.to) }" @click="navigationOpen = false"><component :is="item.icon" :size="17" aria-hidden="true" />{{ item.label }}</RouterLink></section></nav>
-        <div class="sidebar__footer"><div><span>Tu espacio de trabajo</span><strong>Soluciones Radicales</strong></div><a href="https://github.com/savelasquezs/SPA-soluciones-radicales/tree/main/docs" target="_blank" rel="noreferrer"><CircleHelp :size="17" aria-hidden="true" />Ayuda y documentación</a><BaseButton class="sidebar__logout" variant="ghost" @click="logout"><LogOut :size="17" aria-hidden="true" />Cerrar sesión</BaseButton></div>
+        <div class="sidebar__footer"><div><span>Tu espacio de trabajo</span><strong>Soluciones Radicales</strong></div><a href="https://github.com/savelasquezs/SPA-soluciones-radicales/tree/main/docs" target="_blank" rel="noreferrer"><CircleHelp :size="17" aria-hidden="true" />Ayuda y documentación</a><BaseButton class="sidebar__logout" variant="ghost" :loading="changingAccount" @click="changeAccount"><Users :size="17" aria-hidden="true" />Cambiar cuenta</BaseButton><BaseButton class="sidebar__logout" variant="ghost" :disabled="changingAccount" @click="logout"><LogOut :size="17" aria-hidden="true" />Cerrar sesión</BaseButton></div>
       </aside>
       <main class="content"><nav v-if="breadcrumbItems.length" class="breadcrumb" aria-label="Ruta de navegación"><template v-for="(item,index) in breadcrumbItems" :key="`${item.label}-${index}`"><RouterLink v-if="item.to" :to="item.to">{{ item.label }}</RouterLink><span v-else :aria-current="index===breadcrumbItems.length-1 ? 'page' : undefined">{{ item.label }}</span><span v-if="index<breadcrumbItems.length-1" class="breadcrumb__separator" aria-hidden="true">/</span></template></nav><RouterView /></main>
     </div>
