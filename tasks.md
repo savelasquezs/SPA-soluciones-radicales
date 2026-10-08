@@ -38,6 +38,7 @@
 - [ ] Extender el registro de disponibilidad de fotos en vistas de dispositivos/hallazgos e instrumentar proyección/alertas de capacidad R2.
 - [ ] Añadir disponibilidad `SIN_FOTO/PENDIENTE/DISPONIBLE/VENCIDA` en las vistas de puestos, revisiones y hallazgos sin descargar miniaturas masivamente.
 - [ ] Validar dry-run en desarrollo, condiciones de carrera al cerrar hallazgos, 404/errores de R2, PDFs con imágenes incrustadas, alertas y presupuesto global de 8 GB.
+- [x] Verificación externa de Neon API y prueba del Worker `node --test` en GitHub Actions: pasos superados; corregido `redirect: manual` para Cloudflare.
 - [ ] Probar la primera ejecución autorizada del Cron y un borrado real **sobre archivos sintéticos en un entorno aislado**; en la fecha de activación no existían archivos vencidos y no se ejecutó ninguna eliminación. Monitorear el primer cron y su observabilidad antes de promover a `production`.
 
 Fuente: `docs/product/file-retention.md`; despliegue: `docs/development/cloudflare-retention.md`.
