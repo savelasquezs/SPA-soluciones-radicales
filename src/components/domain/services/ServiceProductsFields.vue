@@ -32,7 +32,7 @@ function applied(id: string): boolean { return Boolean(props.previous.find(produ
       <div v-for="(product,index) in modelValue" :key="product.productoId" class="svc-product-row">
         <div><strong>{{ label(product.productoId) }}</strong><small v-if="applied(product.productoId)" class="svc-muted">Aplicación registrada</small><small v-else-if="product.fechaVencimiento && serviceDate && product.fechaVencimiento < serviceDate" class="svc-error">Vence antes de la visita</small></div>
         <BaseInput :model-value="product.lote" :name="`producto-${index}-lote`" label="Lote" maxlength="120" :disabled="disabled || applied(product.productoId)" :error="errors[`productos.${index}.lote`]" @update:model-value="change(index,'lote',$event)" @blur="emit('blur',`productos.${index}.lote`)" />
-        <BaseDateTimePicker :model-value="product.fechaVencimiento" mode="date" :name="`producto-${index}-vencimiento`" label="Vencimiento" clearable :disabled="disabled || applied(product.productoId)" :error="errors[`productos.${index}.fechaVencimiento`]" @update:model-value="change(index,'fechaVencimiento',$event)" />
+        <BaseDateTimePicker :model-value="product.fechaVencimiento" mode="date" :name="`producto-${index}-vencimiento`" label="Vencimiento" required :disabled="disabled || applied(product.productoId)" :error="errors[`productos.${index}.fechaVencimiento`]" @update:model-value="change(index,'fechaVencimiento',$event)" />
         <BaseIconButton :label="`Quitar ${label(product.productoId)}`" size="small" :disabled="disabled || applied(product.productoId)" @click="select(modelValue.filter(item=>item.productoId!==product.productoId).map(item=>item.productoId))"><X :size="16" /></BaseIconButton>
       </div>
     </div>
