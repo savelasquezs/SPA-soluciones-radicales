@@ -34,8 +34,8 @@ function reset(): void {
 function submit(): void {
   const input = { numero: numero.value.trim(), tipoCodigo: tipoCodigo.value, ubicacion: ubicacion.value.trim() }
   errors.value = {
-    ...(!input.numero ? { numero: 'Escribe el número del dispositivo.' } : {}),
-    ...(!input.tipoCodigo || !selectedType.value ? { tipoCodigo: 'Selecciona un tipo válido.' } : {}),
+    ...(!input.numero ? { numero: 'Escribe el número del puesto.' } : {}),
+    ...(!input.tipoCodigo || !selectedType.value ? { tipoCodigo: 'Selecciona una trampa válido.' } : {}),
     ...(!input.ubicacion ? { ubicacion: 'Describe dónde queda instalado.' } : {}),
   }
   if (Object.keys(errors.value).length) return
@@ -46,11 +46,11 @@ function submit(): void {
 <template>
   <form class="new-device" @submit.prevent="submit">
     <div>
-      <h3>{{ conflict ? 'Corregir alta del dispositivo' : 'Nuevo dispositivo' }}</h3>
+      <h3>{{ conflict ? 'Corregir alta del puesto' : 'Nuevo puesto' }}</h3>
       <p>Quedará activo y disponible en esta Área para los próximos servicios.</p>
     </div>
     <BaseInput v-model="numero" name="new-device-number" label="Número" required maxlength="100" :disabled="saving" :error="errors.numero" />
-    <BaseSelect v-model="tipoCodigo" name="new-device-type" label="Tipo" required :disabled="saving" :error="errors.tipoCodigo">
+    <BaseSelect v-model="tipoCodigo" name="new-device-type" label="Trampa" required :disabled="saving" :error="errors.tipoCodigo">
       <option value="" disabled>Selecciona un tipo</option>
       <option v-for="type in deviceTypes" :key="type.codigo" :value="type.codigo">{{ type.nombre }}</option>
     </BaseSelect>
@@ -58,7 +58,7 @@ function submit(): void {
     <BaseInput v-model="ubicacion" name="new-device-location" label="Ubicación" required maxlength="500" :disabled="saving" :error="errors.ubicacion" />
     <p v-if="conflict?.error" class="new-device__error" role="alert">{{ conflict.error }}</p>
     <div class="new-device__actions">
-      <BaseButton type="submit" :loading="saving">{{ conflict ? 'Guardar corrección' : 'Agregar dispositivo' }}</BaseButton>
+      <BaseButton type="submit" :loading="saving">{{ conflict ? 'Guardar corrección' : 'Agregar puesto' }}</BaseButton>
       <BaseButton variant="secondary" :disabled="saving" @click="emit('cancel')">Cancelar</BaseButton>
       <BaseButton v-if="conflict" variant="ghost" :disabled="saving" @click="emit('discard')">Descartar alta</BaseButton>
     </div>

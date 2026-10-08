@@ -19,7 +19,7 @@ La interfaz sigue las tareas reales de Administradores y Técnicos. Una tabla o 
 En desktop administrativo se prioriza la información operativa por encima de metadatos y decoración.
 
 - Encabezados, resúmenes y acciones secundarias deben consumir solo el espacio necesario para identificar el contexto.
-- Listas, Sedes, Áreas, Dispositivos e historiales deben dominar el viewport cuando sean la tarea principal.
+- Listas, Sedes, Áreas, Puestos de monitoreo e historiales deben dominar el viewport cuando sean la tarea principal.
 - Evitar varias cards grandes para datos breves que pueden convivir en una franja compacta.
 - En desktop se permiten controles visualmente compactos cuando preservan foco, legibilidad y semántica; en mobile las zonas táctiles continúan siendo de al menos 44 px.
 - Cuando una lista operativa se consulta repetidamente por periodos conocidos, ofrecer accesos rápidos inmediatamente asociados al selector de fechas. Los presets cambian el rango; no duplican ni alteran la lógica interna del datepicker.
@@ -42,14 +42,14 @@ La jerarquía operativa para clientes tipo Negocio es:
 Cliente Negocio
   └─ Sede
       ├─ Áreas
-      ├─ Dispositivos
+      ├─ Puestos de monitoreo
       ├─ Vehículos
       └─ Servicios
 ```
 
 - Sedes se administran dentro del contexto de Negocio.
 - Un Cliente Casa oculta la Sede residencial interna y no expone Áreas, formularios MIP, certificados ni vehículos.
-- Áreas, Dispositivos y Vehículos conservan el contexto de Sede.
+- Áreas, Puestos de monitoreo y Vehículos conservan el contexto de Sede.
 - Una ruta puede existir sin aparecer en el sidebar.
 - Usar breadcrumbs cuando la ruta tenga más de un nivel de contexto. Los niveles anteriores deben ser enlaces navegables; el nivel actual se muestra como texto.
 
@@ -178,3 +178,14 @@ Las pantallas del Técnico se diseñan primero para teléfono.
 ## Certificados y efectos externos
 
 La configuración de plantillas, la prueba sintética, la generación oficial y el envío son acciones distintas. Un PDF de prueba siempre se identifica como no válido. Regenerar o enviar requiere confirmación contextual; nunca se envía un correo por probar/guardar/generar. Una entrega incierta no habilita reintentos automáticos: primero se revisa Gmail. La vista conserva selección, Word y mensaje ante fallos, y aplica feedback local sin overlays globales.
+
+
+## Puestos de monitoreo en campo
+
+- El Técnico trabaja sobre el **Puesto de monitoreo**; Trampa y Producto de cebo son componentes del puesto, no sinónimos de la entidad.
+- En móvil, mantener un solo puesto expandido a la vez para evitar formularios largos apilados.
+- Las plagas se presentan como acciones compactas. No seleccionar una plaga equivale a cero/no evidenciada; al seleccionarla se edita su cantidad.
+- No crear un input permanente por cada plaga cuando la mayoría quedará en cero.
+- Producto químico y antídoto nunca se piden como texto libre durante la visita. Si el puesto tiene un Producto asociado, la interfaz usa su snapshot y muestra solo los datos operativos que el Técnico deba registrar.
+- La evidencia fotográfica del puesto ofrece Cámara y Galería. Puede adjuntarse en una revisión normal y es obligatoria cuando una regla funcional lo exija.
+- Observaciones opcionales permanecen plegadas hasta que hagan falta o ya contengan información.

@@ -1158,12 +1158,12 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     photo: File | null,
   ): Promise<'synced' | 'pending' | 'conflict'> {
     const cache = caches.value[serviceId]
-    if (!cache || cache.package.service.estado !== 'EN_PROCESO' || !cache.lock) throw new Error('Este celular no puede revisar los dispositivos del servicio.')
+    if (!cache || cache.package.service.estado !== 'EN_PROCESO' || !cache.lock) throw new Error('Este celular no puede revisar los puestos de monitoreo del servicio.')
     const area = cache.package.areas.find(item => item.id === areaId)
     const device = area?.dispositivos.find(item => item.id === serviceDeviceId)
-    if (!area || !device) throw new Error('El dispositivo no pertenece al Área seleccionada.')
-    if (area.sinAcceso) throw new Error('Habilita el acceso al Área antes de revisar sus dispositivos.')
-    if (!['ACTIVO', 'DANADO', 'FUERA_DE_USO'].includes(input.estadoObservado)) throw new Error('Selecciona un estado válido para el dispositivo.')
+    if (!area || !device) throw new Error('El puesto de monitoreo no pertenece al Área seleccionada.')
+    if (area.sinAcceso) throw new Error('Habilita el acceso al Área antes de revisar sus puestos de monitoreo.')
+    if (!['ACTIVO', 'DANADO', 'FUERA_DE_USO'].includes(input.estadoObservado)) throw new Error('Selecciona un estado válido para la trampa.')
     const pestCodes = new Set(device.plagas.map(pest => pest.codigo))
     const seen = new Set<string>()
     const captures = input.capturas.map(capture => {
@@ -1189,16 +1189,16 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     const existing = await reloadMutations(serviceId)
     if (existing.some(item => item.kind === 'DEVICE_REVIEW' && item.serviceDeviceId === serviceDeviceId && item.status === 'CONFLICT')) return 'conflict'
     if (existing.some(item => item.kind === 'DEVICE_REVIEW' && item.serviceDeviceId === serviceDeviceId && item.status === 'SENDING')) {
-      throw new Error('Espera a que termine la sincronización del dispositivo antes de cambiarlo.')
+      throw new Error('Espera a que termine la sincronización del puesto antes de cambiarlo.')
     }
     const reusable = [...existing].reverse().find((item): item is TechnicianDeviceReviewMutation => item.kind === 'DEVICE_REVIEW'
       && item.serviceDeviceId === serviceDeviceId && item.status === 'PENDING')
     const requiresPhoto = technicianDevicePhotoRequired(device.estadoAnterior, normalized.estadoObservado)
-    const newMediaId = photo && requiresPhoto ? crypto.randomUUID() : null
-    const photoMediaId = requiresPhoto ? newMediaId ?? reusable?.photoMediaId ?? device.revision?.fotoLocalId ?? null : null
-    const photoStoragePath = requiresPhoto && !newMediaId ? reusable?.photoStoragePath ?? device.revision?.fotoStoragePath ?? null : null
+    const newMediaId = photo ? crypto.randomUUID() : null
+    const photoMediaId = newMediaId ?? reusable?.photoMediaId ?? device.revision?.fotoLocalId ?? null
+    const photoStoragePath = !newMediaId ? reusable?.photoStoragePath ?? device.revision?.fotoStoragePath ?? null : null
     if (requiresPhoto && !photoMediaId && !photoStoragePath) {
-      throw new Error('Adjunta una fotografía del cambio de estado del dispositivo.')
+      throw new Error('Adjunta una fotografía del cambio de estado de la trampa.')
     }
     if (photo && newMediaId) {
       await saveTechnicianMedia({ schemaVersion: 1, id: newMediaId, actorId: actorId(), serviceId, areaId,
@@ -1244,7 +1244,7 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     const pending = await reloadMutations(serviceId)
     const conflicted = pending.find((item): item is TechnicianDeviceReviewMutation => item.kind === 'DEVICE_REVIEW'
       && item.serviceDeviceId === serviceDeviceId && item.status === 'CONFLICT' && Boolean(item.conflict))
-    if (!conflicted?.conflict) throw new Error('No hay una revisión sincronizada disponible para el dispositivo.')
+    if (!conflicted?.conflict) throw new Error('No hay una revisión sincronizada disponible para el puesto.')
     const affected = pending.filter((item): item is TechnicianDeviceReviewMutation => item.kind === 'DEVICE_REVIEW' && item.serviceDeviceId === serviceDeviceId)
     for (const operation of affected) {
       if (operation.photoStoragePath && operation.photoStoragePath !== conflicted.conflict.fotoStoragePath) {
@@ -1261,7 +1261,7 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     const pending = await reloadMutations(serviceId)
     const conflicted = pending.find((item): item is TechnicianDeviceReviewMutation => item.kind === 'DEVICE_REVIEW'
       && item.serviceDeviceId === serviceDeviceId && item.status === 'CONFLICT' && Boolean(item.conflict))
-    if (!conflicted?.conflict) throw new Error('No es posible reintentar la revisión del dispositivo.')
+    if (!conflicted?.conflict) throw new Error('No es posible reintentar la revisión del puesto.')
     for (const operation of pending.filter(item => item.kind === 'DEVICE_REVIEW' && item.serviceDeviceId === serviceDeviceId)) {
       await deleteTechnicianMutation(operation)
     }

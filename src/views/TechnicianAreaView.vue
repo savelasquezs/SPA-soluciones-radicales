@@ -34,6 +34,7 @@ const error = ref('')
 const saveError = ref('')
 const newDeviceOpen = ref(false)
 const newDeviceSaving = ref(false)
+const openDeviceId = ref('')
 const newFindingOpen = ref(false)
 const findingSavingId = ref('')
 const drafts = ref<Record<string, { evaluation: MipEvaluation | null; observation: string }>>({})
@@ -50,7 +51,7 @@ const creationConflict = computed(() => currentMutations.value.find((item): item
   && item.areaId === currentArea.value?.id && item.status === 'CONFLICT') ?? null)
 
 onMounted(load)
-watch(routeAreaId, value => { selectedAreaId.value = value; newDeviceOpen.value = false; newFindingOpen.value = false })
+watch(routeAreaId, value => { selectedAreaId.value = value; newDeviceOpen.value = false; newFindingOpen.value = false; openDeviceId.value = '' })
 watch(creationConflict, value => { if (value) newDeviceOpen.value = true })
 onBeforeRouteLeave(() => flushDrafts())
 onBeforeRouteUpdate(to => String(to.params.areaId ?? '') === routeAreaId.value || flushDrafts())
@@ -103,7 +104,7 @@ async function saveNewDevice(input: TechnicianDeviceCreationInput): Promise<void
       : await services.applyDeviceCreation(serviceId.value, currentArea.value.id, input)
     if (result !== 'conflict') newDeviceOpen.value = false
   } catch (failure) {
-    saveError.value = failure instanceof Error ? failure.message : 'No fue posible agregar el dispositivo.'
+    saveError.value = failure instanceof Error ? failure.message : 'No fue posible agregar el puesto de monitoreo.'
   } finally {
     newDeviceSaving.value = false
   }
@@ -117,7 +118,7 @@ async function discardNewDevice(): Promise<void> {
     await services.discardDeviceCreationConflict(serviceId.value, creationConflict.value.serviceDeviceId)
     newDeviceOpen.value = false
   } catch (failure) {
-    saveError.value = failure instanceof Error ? failure.message : 'No fue posible descartar el alta del dispositivo.'
+    saveError.value = failure instanceof Error ? failure.message : 'No fue posible descartar el alta del puesto de monitoreo.'
   } finally {
     newDeviceSaving.value = false
   }
@@ -258,7 +259,7 @@ async function saveDevice(serviceDeviceId: string, input: TechnicianDeviceReview
       clearDeviceDraft(serviceDeviceId, expected)
       return true
     } catch (failure) {
-      saveError.value = failure instanceof Error ? failure.message : 'No fue posible guardar la revisión del dispositivo.'
+      saveError.value = failure instanceof Error ? failure.message : 'No fue posible guardar la revisión del puesto de monitoreo.'
       return false
     }
   })
@@ -319,6 +320,14 @@ async function retryAccess(): Promise<void> {
   catch (failure) { saveError.value = failure instanceof Error ? failure.message : 'No fue posible reintentar la excepción del Área.' }
 }
 
+function toggleDevice(serviceDeviceId: string): void {
+  openDeviceId.value = openDeviceId.value === serviceDeviceId ? '' : serviceDeviceId
+}
+
+async function saveDeviceAndCollapse(serviceDeviceId: string, input: TechnicianDeviceReviewInput, photo: File | null): Promise<void> {
+  if (await saveDevice(serviceDeviceId, input, photo)) openDeviceId.value = ''
+}
+
 async function useRemoteDevice(serviceDeviceId: string): Promise<void> {
   saveError.value = ''
   try { await services.discardDeviceReviewConflict(serviceId.value, serviceDeviceId); clearDeviceDraft(serviceDeviceId) }
@@ -353,16 +362,16 @@ function goNext(): void {
         <header><div><h2 id="area-criteria-title">Condiciones del Área</h2><p>{{ currentArea.criterios.length }} criterios aplicables · guardado automático</p></div><StatusBadge :tone="technicianAreaResolved(currentArea) ? 'success' : 'neutral'"><Check v-if="technicianAreaResolved(currentArea)" :size="15" aria-hidden="true" /><MonitorCheck v-else :size="15" aria-hidden="true" />{{ technicianAreaResolved(currentArea) ? 'Resuelta' : 'Pendiente' }}</StatusBadge></header>
         <StatusPanel v-if="saveError" title="No fue posible guardar" :message="saveError" tone="danger" />
         <TechnicianAreaAccessEditor :area="currentArea" :mutation="accessMutation()" :editable="canEditRoute" :syncing="syncing" @draft="trackAccessDraft" @save="saveAccess" @use-remote="useRemoteAccess" @retry="retryAccess" />
-        <p v-if="currentArea.sinAcceso" class="area-no-access">Los criterios, dispositivos y cambios en Hallazgos quedan exceptuados porque no fue posible acceder al Área.</p>
+        <p v-if="currentArea.sinAcceso" class="area-no-access">Los criterios, puestos de monitoreo y cambios en Hallazgos quedan exceptuados porque no fue posible acceder al Área.</p>
         <div v-else class="criteria-list"><TechnicianCriterionEditor v-for="criterion in currentArea.criterios" :key="criterion.id" :criterion="criterion" :mutation="criterionMutation(criterion.id)" :editable="canEditRoute" :syncing="syncing" @draft="(evaluation, observation) => trackCriterionDraft(criterion.id, evaluation, observation)" @save="(evaluation, observation, files, retainedPaths) => saveCriterion(criterion.id, evaluation, observation, files, retainedPaths)" @use-remote="useRemoteCriterion(criterion.id)" @retry="retryCriterion(criterion.id)" /></div>
       </section>
       <details v-if="!currentArea.sinAcceso" class="area-panel area-collapsible">
-        <summary><span><strong>Dispositivos</strong><small>{{ currentArea.dispositivos.length }} puntos del servicio</small></span></summary>
-        <BaseButton v-if="canEditRoute && packageValue?.deviceTypes?.length" size="compact" variant="secondary" :disabled="newDeviceSaving" @click="newDeviceOpen = true"><Plus :size="17" aria-hidden="true" />Agregar dispositivo</BaseButton>
+        <summary><span><strong>Puestos de monitoreo</strong><small>{{ currentArea.dispositivos.length }} puestos del servicio</small></span></summary>
+        <BaseButton v-if="canEditRoute && packageValue?.deviceTypes?.length" size="compact" variant="secondary" :disabled="newDeviceSaving" @click="newDeviceOpen = true"><Plus :size="17" aria-hidden="true" />Agregar puesto</BaseButton>
         <TechnicianNewDeviceEditor v-if="newDeviceOpen" :device-types="packageValue?.deviceTypes ?? []" :conflict="creationConflict" :saving="newDeviceSaving" @save="saveNewDevice" @cancel="newDeviceOpen = false" @discard="discardNewDevice" />
-        <p v-else-if="canEditRoute && !packageValue?.deviceTypes?.length" class="area-empty">No hay tipos de dispositivo disponibles en el paquete del servicio.</p>
-        <p v-if="!currentArea.dispositivos.length" class="area-empty">Esta Área no tiene Dispositivos asignados.</p>
-        <div v-else class="device-list"><TechnicianDeviceReviewEditor v-for="device in currentArea.dispositivos" :key="device.id" :device="device" :creation-mutation="creationMutation(device.id)" :mutation="deviceMutation(device.id)" :editable="canEditRoute" :syncing="syncing" @draft="(input, photo) => trackDeviceDraft(device.id, input, photo)" @save="(input, photo) => saveDevice(device.id, input, photo)" @use-remote="useRemoteDevice(device.id)" @retry="retryDevice(device.id)" /></div>
+        <p v-else-if="canEditRoute && !packageValue?.deviceTypes?.length" class="area-empty">No hay trampas disponibles en el paquete del servicio.</p>
+        <p v-if="!currentArea.dispositivos.length" class="area-empty">Esta Área no tiene puestos de monitoreo asignados.</p>
+        <div v-else class="device-list"><TechnicianDeviceReviewEditor v-for="device in currentArea.dispositivos" :key="device.id" :device="device" :expanded="openDeviceId === device.id" :creation-mutation="creationMutation(device.id)" :mutation="deviceMutation(device.id)" :editable="canEditRoute" :syncing="syncing" @toggle="toggleDevice(device.id)" @draft="(input, photo) => trackDeviceDraft(device.id, input, photo)" @save="(input, photo) => saveDeviceAndCollapse(device.id, input, photo)" @use-remote="useRemoteDevice(device.id)" @retry="retryDevice(device.id)" /></div>
       </details>
       <details class="area-panel area-collapsible">
         <summary><span><strong>Hallazgos</strong><small>{{ findings.length }} registrados · {{ findings.filter(item => item.estado !== 'CERRADO').length }} pendientes</small></span></summary>
