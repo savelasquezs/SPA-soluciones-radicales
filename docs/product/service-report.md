@@ -24,6 +24,17 @@ El correo incluye un enlace de solo lectura a /informe/consulta/:token, vigente 
 - Gmail usa el outbox idempotente existente con un scope independiente. Cuando la entrega es incierta se avisa revisar Enviados antes de repetirla.
 - No se crea PDF de informe en Neon, Google Drive ni R2; los certificados mantienen su pipeline.
 
+## Tendencias en el informe y el PDF
+
+La sección **Evolución histórica de la sede** utiliza únicamente **dos gráficos SVG vectoriales**, sin Chart.js ni dependencias adicionales:
+
+- **Cumplimiento MIP:** línea cronológica con valores de 0 a 100 %. C=100 %, CP=50 %, NC=0 %; no se inventa 0 % cuando faltan evaluaciones. La línea se interrumpe si una visita no tiene cumplimiento registrado.
+- **Capturas totales:** columnas con la suma de los individuos capturados de **todas las especies de plagas**, en todos los puestos revisados durante cada visita. El backend ya agrega todas las entradas de las capturas de los dispositivos revisados para ese servicio. No se crean gráficos independientes por plaga.
+
+Ambos muestran hasta las seis últimas visitas finalizadas de tipo Principal de la misma sede, fechas reales, valores visibles y variaciones numéricas frente a la visita inmediatamente anterior. Son interactivos en la web: al mover el mouse aparece un detalle con fecha, solicitud, valor y variación; admiten pulsación táctil y foco del teclado. La impresión A4 conserva ejes, fechas, puntos, barras y valores **sin depender del tooltip**. Si existe una sola visita, se muestra el valor sin afirmar ninguna tendencia.
+
+**Interpretación:** la reducción de capturas no demuestra por sí sola menor presencia de plagas si cambia la cantidad o ubicación de los puestos monitoreados. No se inventan proyecciones.
+
 ## Entrega posterior
 
 Reutilizar el editor de correo en la acción de contacto de Clientes y en la finalización del técnico, tras definir los permisos y la confirmación del envío. El QR ya se genera y se envía en el propio correo; incorporarlo en las plantillas PDF de certificados requerirá definir dónde se imprime, por lo que queda separado de este cambio.
