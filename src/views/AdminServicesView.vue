@@ -11,6 +11,7 @@ import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import StatusPanel from '@/components/base/StatusPanel.vue'
 import ServicePage from '@/components/domain/services/ServicePage.vue'
 import ServiceRecords from '@/components/domain/services/ServiceRecords.vue'
+import ServiceResultsDialog from '@/components/domain/services/ServiceResultsDialog.vue'
 import UpcomingRecords from '@/components/domain/services/UpcomingRecords.vue'
 import ServiceWeek from '@/components/domain/services/ServiceWeek.vue'
 import ServicePagination from '@/components/domain/services/ServicePagination.vue'
@@ -48,6 +49,7 @@ const loadError=computed(()=>tab.value==='upcoming' ? store.upcomingError : stor
 const total=computed(()=>tab.value==='upcoming' ? store.upcomingTotal : store.total)
 const search=ref(q('query')), pendingAction=ref(false)
 const quick=ref<{ record: AdminService; mode: 'schedule' | 'team' | 'cancel' | 'payment' } | null>(null)
+const results=ref<AdminService|null>(null)
 const upcomingEditor=ref<{ record: UpcomingService; mode: 'manage' | 'email' } | null>(null)
 let searchTimer: ReturnType<typeof setTimeout> | undefined
 function setQuery(value: Record<string,string | undefined>): void { void router.replace({ query:{ ...route.query,...value } }) }
@@ -128,10 +130,11 @@ async function retryCalendar(record: AdminService): Promise<void> {
     </template>
     <template v-else>
       <ServiceWeek v-if="view==='week'" :from="from" :records="store.rows" />
-      <ServiceRecords v-else-if="store.rows.length" :records="store.rows" :busy="pendingAction" @schedule="openQuick($event,'schedule')" @team="openQuick($event,'team')" @payment="openQuick($event,'payment')" @edit="edit" @cancel="openQuick($event,'cancel')" @retry-calendar="retryCalendar" />
+      <ServiceRecords v-else-if="store.rows.length" :records="store.rows" :busy="pendingAction" @schedule="openQuick($event,'schedule')" @team="openQuick($event,'team')" @payment="openQuick($event,'payment')" @edit="edit" @cancel="openQuick($event,'cancel')" @retry-calendar="retryCalendar" @results="results=$event" />
       <StatusPanel v-else title="Sin servicios en este rango" message="Cambia las fechas o los filtros para consultar otra parte de la operación." />
     </template>
     <ServicePagination v-if="!rangeError && !loadError" :page="page" :page-size="pageSize" :total="total" :disabled="loading" @page="setQuery({ page:String($event) })" />
+    <ServiceResultsDialog v-if="results" :key="results.id" :service-id="results.id" :solicitud="results.solicitud" @close="results=null" />
     <ServiceQuickEditor v-if="quick" :key="`${quick.record.id}:${quick.mode}`" :record="quick.record" :mode="quick.mode" @close="quick=null" />
     <UpcomingEditor v-if="upcomingEditor" :key="`${upcomingEditor.record.id}:${upcomingEditor.mode}`" :record="upcomingEditor.record" :mode="upcomingEditor.mode" @close="upcomingEditor=null" />
   </ServicePage>
