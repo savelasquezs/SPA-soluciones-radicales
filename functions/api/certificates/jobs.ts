@@ -7,17 +7,18 @@ type JobPayload = { fingerprint: string; actorId: string; token?: string; result
 export type CertificateJob = { id: string; token: string; completed: boolean; result?: unknown }
 
 /** Durable idempotency, isolated from Calendar jobs; no in-memory locks. */
-export async function claimCertificateJob(kind: 'DOCUMENT' | 'EMAIL', requestId: string, input: unknown, actorId: string): Promise<CertificateJob> {
+export async function claimCertificateJob(kind: 'DOCUMENT' | 'EMAIL', requestId: string, input: unknown, actorId: string, scope: 'certificate' | 'report' = 'certificate'): Promise<CertificateJob> {
   const fingerprint = createHash('sha256').update(JSON.stringify(input)).digest('hex')
+  const key = scope + ':' + requestId
   return transaction(async (client) => {
     await client.query(
       `insert into private.integration_jobs (job_type, idempotency_key, payload)
        values ($1, $2, $3::jsonb) on conflict (job_type, idempotency_key) do nothing`,
-      [kind, `certificate:${requestId}`, JSON.stringify({ fingerprint, actorId, request: input })],
+      [kind, key, JSON.stringify({ fingerprint, actorId, request: input })],
     )
     const { rows } = await client.query<{ id: string; status: string; payload: JobPayload; leased: boolean }>(
       `select id, status, payload, coalesce(lease_until > now(), false) as leased
-       from private.integration_jobs where job_type = $1 and idempotency_key = $2 for update`, [kind, `certificate:${requestId}`],
+       from private.integration_jobs where job_type = $1 and idempotency_key = $2 for update`, [kind, key],
     )
     const row = rows[0]!
     if (row.payload.actorId !== actorId || row.payload.fingerprint !== fingerprint) throw new ApiError(409, 'Este intento pertenece a otra operación. Inicia una nueva acción.', 'IDEMPOTENCY_CONFLICT')

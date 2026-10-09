@@ -7,6 +7,7 @@ import { technicianServiceRoutes } from './technician-services/routes'
 import { runRetentionBatch, verifyRetentionToken } from './retention/cleanup'
 import { siteInsightsRoutes } from './site-insights/routes'
 import { serviceResultRoutes } from './service-results/routes'
+import { reportSharingRoutes, publicReportRoutes } from './service-results/sharing'
 
 // The existing app owns authorization, CORS and errors for every /api route.
 app.route('/api/mip', mipCatalogRoutes)
@@ -14,6 +15,8 @@ app.route('/api/admin/services', adminServiceRoutes)
 app.route('/api/technician/services', technicianServiceRoutes)
 app.route('/api/admin/sites', siteInsightsRoutes)
 app.route('/api/admin/services', serviceResultRoutes)
+app.route('/api/admin/services', reportSharingRoutes)
+app.route('/api/public/reports', publicReportRoutes)
 
 // Neon strips spoofed x-neon-* headers. The trigger parser verifies header/body
 // identity; this internal delivery path is deliberately outside browser JWT CORS.

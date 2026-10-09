@@ -147,3 +147,7 @@ body:has(.report-document) .report-workspace{display:block!important}
   .report-document__table td:nth-child(5)::before{content:'Dosis'}
   .report-document__table td:nth-child(6)::before{content:'Método(s)'}
 }
+
+.report-workspace--public{min-height:100vh;background:#f6f9fb;padding:clamp(.65rem,2vw,1.5rem)}
+.report-public-head{display:flex;justify-content:space-between;align-items:center;gap:.65rem;max-width:930px;width:100%;margin:0 auto;flex-wrap:wrap;color:var(--text-secondary);font-size:.8rem}
+@media print{.report-workspace--public{padding:0;background:#fff!important}.report-public-head{display:none!important}}

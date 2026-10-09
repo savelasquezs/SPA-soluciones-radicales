@@ -39,7 +39,7 @@ export function reportMetrics(data: ServiceResultsData) {
 export function reportEvidence(data: ServiceResultsData): ReportEvidence[] {
   const unique = new Map<string, string>()
   function add(path: string | null | undefined, caption: string): void {
-    if (path && path.startsWith('services/' + data.id + '/') && !unique.has(path)) unique.set(path, caption)
+    if (path && (path.startsWith('services/' + data.id + '/') || /^e:(0|[1-9]\d{0,3})$/.test(path)) && !unique.has(path)) unique.set(path, caption)
   }
   for (const area of data.areas) {
     area.fotos.forEach((path, i) => add(path, 'Área sin acceso · ' + area.nombre + ' · Foto ' + (i + 1)))

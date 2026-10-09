@@ -1,23 +1,28 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import { ArrowLeft, FileDown, RefreshCw } from 'lucide-vue-next'
+import { ArrowLeft, FileDown, RefreshCw, Send } from 'lucide-vue-next'
 import BaseButton from '@/components/base/BaseButton.vue'
 import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import StatusPanel from '@/components/base/StatusPanel.vue'
 import EvidenceLightbox from '@/components/base/EvidenceLightbox.vue'
 import ReportEvidence from '@/components/domain/services/ReportEvidence.vue'
+import SendReportDialog from '@/components/domain/services/SendReportDialog.vue'
 import {
   areaCompliance, bogotaDate, bogotaTime, elapsedMinutes,
   reportEvidence, reportMetrics, scoreText, type ReportEvidenceState,
 } from '@/helpers/serviceReport'
 import { fetchServiceResults, serviceEvidenceUrl } from '@/services/serviceResultsService'
+import { getReportShareOptions, resolvePublicServiceReport, publicReportPhotoUrl } from '@/services/reportSharingService'
+import type { ServiceReportShareOptions } from '@/types/reportSharing'
 import { useNotificationsStore } from '@/stores/notifications'
 import type { ServiceResultsData } from '@/types/serviceResults'
 import '@/components/domain/services/service-report.css'
 
 const route = useRoute()
 const notifications = useNotificationsStore()
+const publicView = computed(() => route.name === 'public-service-report')
+const publicToken = computed(() => String(route.params.token ?? ''))
 const serviceId = computed(() => String(route.params.id ?? ''))
 const report = ref<ServiceResultsData | null>(null)
 const loading = ref(true)
@@ -27,6 +32,8 @@ const printBusy = ref(false)
 const states = reactive<Record<string, ReportEvidenceState>>({})
 const urls = reactive<Record<string, string>>({})
 const selectedIndex = ref<number | null>(null)
+const sendOpen = ref(false)
+const shareOptions = ref<ServiceReportShareOptions | null>(null)
 let version = 0
 onBeforeUnmount(() => { version++ })
 
@@ -51,9 +58,10 @@ async function loadReport(): Promise<void> {
   for (const key of Object.keys(states)) delete states[key]
   for (const key of Object.keys(urls)) delete urls[key]
   try {
-    const response = await fetchServiceResults(serviceId.value)
+    const response = publicView.value ? await resolvePublicServiceReport(publicToken.value) : await fetchServiceResults(serviceId.value)
     if (stamp !== version) return
     report.value = response.data
+    if (!publicView.value) void loadShareSummary(stamp)
   } catch (failure) {
     if (stamp === version) error.value = failure instanceof Error ? failure.message : 'No fue posible cargar el informe.'
   } finally {
@@ -68,7 +76,7 @@ async function loadImage(path: string, force: boolean, stamp: number): Promise<v
   if (stamp !== version || (!force && states[path] === 'AVAILABLE')) return
   states[path] = 'LOADING'
   try {
-    const url = await serviceEvidenceUrl(serviceId.value, path)
+    const url = publicView.value ? await publicReportPhotoUrl(publicToken.value,path) : await serviceEvidenceUrl(serviceId.value, path)
     const loaded = await new Promise<boolean>(resolve => {
       const picture = new Image()
       let done = false
@@ -138,6 +146,16 @@ async function printReport(): Promise<void> {
   }
 }
 
+async function loadShareSummary(stamp=version): Promise<void> {
+  try {
+    const value = await getReportShareOptions(serviceId.value)
+    if (stamp === version) shareOptions.value = value
+  } catch { if (stamp === version) shareOptions.value = null }
+}
+function onShared(): void {
+  sendOpen.value = false
+  void loadShareSummary()
+}
 function photoState(path: string): ReportEvidenceState { return states[path] ?? 'IDLE' }
 function openImage(path: string): void {
   const index = images.value.findIndex(item => item.path === path)
@@ -151,18 +169,23 @@ function retryImage(): void {
   if (activeImage.value) void loadImage(activeImage.value.path, true, version)
 }
 const grade: Record<string, string> = { C: 'Cumple', CP: 'Cumple parcialmente', NC: 'No cumple', NA: 'No aplica' }
-watch(serviceId, () => { void loadReport() }, { immediate: true })
+watch(() => [serviceId.value, publicToken.value], () => { void loadReport() }, { immediate: true })
 </script>
 
 <template>
-  <div class="report-workspace">
-    <div class="report-toolbar">
+  <div class="report-workspace" :class="{ 'report-workspace--public': publicView }">
+    <div v-if="!publicView" class="report-toolbar">
       <RouterLink class="report-toolbar__back" to="/servicios?tab=history"><ArrowLeft :size="15" /> Volver a Historial</RouterLink>
-      <span class="report-toolbar__hint">Vista administrativa · No compartida con el cliente</span>
+      <span class="report-toolbar__hint">{{ shareOptions?.activeLinks ? 'Compartido · ' + shareOptions.activeLinks + ' enlace(s) vigente(s)' : 'Vista administrativa · Sin compartir' }}</span>
       <div class="report-toolbar__actions">
         <BaseButton size="compact" variant="secondary" :disabled="loading || mediaBusy || printBusy" @click="loadReport"><RefreshCw :size="15" /> Actualizar</BaseButton>
+        <BaseButton size="compact" variant="secondary" :disabled="loading || !report" @click="sendOpen=true"><Send :size="15" /> Enviar informe</BaseButton>
         <BaseButton size="compact" :disabled="loading || mediaBusy || !report" :loading="printBusy" @click="printReport"><FileDown :size="15" /> Imprimir / Guardar PDF</BaseButton>
       </div>
+    </div>
+    <div v-else class="report-public-head">
+      <span>Soluciones Radicales · Informe técnico de servicio</span>
+      <BaseButton size="compact" variant="secondary" :disabled="loading || mediaBusy || !report" :loading="printBusy" @click="printReport"><FileDown :size="15" /> Guardar PDF</BaseButton>
     </div>
     <LoadingSkeleton v-if="loading" :rows="8" />
     <StatusPanel v-else-if="error" title="No se pudo preparar el informe" :message="error" tone="danger">
@@ -330,6 +353,7 @@ watch(serviceId, () => { void loadReport() }, { immediate: true })
         </footer>
       </article>
     </template>
+    <SendReportDialog v-if="sendOpen && !publicView && report" :service-id="report.id" :solicitud="report.solicitud" @close="sendOpen=false" @sent="onShared" />
     <EvidenceLightbox v-if="activeImage && selectedIndex !== null" :open="true" :index="selectedIndex" :total="images.length"
       :title="activeImage.caption" :caption="activeImage.caption" :url="urls[activeImage.path] || null"
       :state="activeImageState" @close="selectedIndex=null" @select="selectedIndex=$event"
