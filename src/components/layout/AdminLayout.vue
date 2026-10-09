@@ -10,6 +10,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useTechnicianReportEmailStore } from '@/stores/technicianReportEmails'
+import { useTechnicianServicesStore } from '@/stores/technicianServices'
 import type { ActiveRole, ThemePreference } from '@/types/domain'
 
 type NavigationItem = { to: string; label: string; icon: typeof Gauge; admin?: boolean }
@@ -17,17 +18,42 @@ type NavigationGroup = { label: string; items: NavigationItem[] }
 const auth = useAuthStore(), app = useAppStore(), notifications = useNotificationsStore()
 const { online } = useNetworkStatus()
 const reportEmails = useTechnicianReportEmailStore()
-function resumePendingEmails(): void {
-  if (online.value && auth.activeRole === 'TECNICO') void reportEmails.flushAll().catch(() => undefined)
+const technicianServices = useTechnicianServicesStore()
+let resuming = false
+async function resumePendingWork(): Promise<void> {
+  if (!online.value || auth.activeRole !== 'TECNICO' || resuming) return
+  resuming = true
+  try {
+    await technicianServices.hydrateCaches()
+    // Sync local service changes and the finalization BEFORE attempting the email outbox.
+    for (const [serviceId, operations] of Object.entries(technicianServices.mutations)) {
+      if (!navigator.onLine || auth.activeRole !== 'TECNICO') break
+      if (operations.length && !operations.some(item => item.status === 'CONFLICT')) {
+        try { await technicianServices.syncPending(serviceId) } catch { /* keep cached mutations for next reconnect */ }
+      }
+    }
+    await reportEmails.flushAll()
+  } catch { /* Offline operations remain durable; the next focus/reconnection retries. */ }
+  finally { resuming = false }
 }
-function onVisibilityChange(): void { if (document.visibilityState === 'visible') resumePendingEmails() }
-watch([online, () => auth.activeRole], resumePendingEmails, { immediate: true })
+function resumePendingWorkNow(): void { void resumePendingWork() }
+function onVisibilityChange(): void { if (document.visibilityState === 'visible') resumePendingWorkNow() }
+watch([online, () => auth.activeRole], resumePendingWorkNow, { immediate:true })
+watch(() => reportEmails.pendingCount, count => { if (count) resumePendingWorkNow() })
+let retryTimer: ReturnType<typeof setInterval> | null = null
 onMounted(() => {
-  window.addEventListener('focus', resumePendingEmails)
+  window.addEventListener('focus', resumePendingWorkNow)
   document.addEventListener('visibilitychange', onVisibilityChange)
+  // Retry deferred deliveries in the foreground without polling Gmail when there is no outbox.
+  retryTimer = setInterval(() => {
+    const pendingServiceChanges = Object.values(technicianServices.mutations)
+      .some(items => items.length > 0 && !items.some(item => item.status === 'CONFLICT'))
+    if (reportEmails.pendingCount || pendingServiceChanges) resumePendingWorkNow()
+  }, 60_000)
 })
 onUnmounted(() => {
-  window.removeEventListener('focus', resumePendingEmails)
+  if (retryTimer !== null) clearInterval(retryTimer)
+  window.removeEventListener('focus', resumePendingWorkNow)
   document.removeEventListener('visibilitychange', onVisibilityChange)
 })
 const route = useRoute(), router = useRouter()

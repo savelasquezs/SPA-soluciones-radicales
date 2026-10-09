@@ -25,21 +25,21 @@ const mutations: { [id:string]: TechnicianMutation[] } = reactive({})
 const mockServices = {
   caches:cached,
   mutations,
-  hydrateCaches:vi.fn(async () => undefined),
-  syncPending:vi.fn(async (_id:string) => 'synced' as const),
+  hydrateCaches:vi.fn<() => Promise<void>>(async () => undefined),
+  syncPending:vi.fn<(_id:string) => Promise<'synced' | 'pending' | 'conflict'>>(async () => 'synced'),
 }
 
 vi.mock('@/stores/technicianServices', () => ({ useTechnicianServicesStore: () => mockServices }))
 vi.mock('@/services/technicianReportEmailOutbox', () => ({
-  listTechnicianReportEmails: vi.fn(async (actor:string) => items.filter(x => x.actorId === actor).map(x => structuredClone(x))),
-  saveTechnicianReportEmail: vi.fn(async (v: TechnicianReportEmailIntent) => { items = [...items.filter(x => x.requestId !== v.requestId),structuredClone(v)] }),
-  deleteTechnicianReportEmail: vi.fn(async (v: TechnicianReportEmailIntent) => { items = items.filter(x => x.requestId !== v.requestId) }),
+  listTechnicianReportEmails: vi.fn<typeof outbox.listTechnicianReportEmails>(async (actor:string) => items.filter(x => x.actorId === actor).map(x => JSON.parse(JSON.stringify(x)) as TechnicianReportEmailIntent)),
+  saveTechnicianReportEmail: vi.fn<typeof outbox.saveTechnicianReportEmail>(async (v: TechnicianReportEmailIntent) => { items = [...items.filter(x => x.requestId !== v.requestId),JSON.parse(JSON.stringify(v)) as TechnicianReportEmailIntent] }),
+  deleteTechnicianReportEmail: vi.fn<typeof outbox.deleteTechnicianReportEmail>(async (v: TechnicianReportEmailIntent) => { items = items.filter(x => x.requestId !== v.requestId) }),
   sameReportEmailRequest: (a: typeof payload,b: typeof payload) => JSON.stringify(a.recipients) === JSON.stringify(b.recipients)
     && JSON.stringify(a.certificateIds) === JSON.stringify(b.certificateIds) && a.origin === b.origin
     && a.subject === b.subject && a.message === b.message,
 }))
-vi.mock('@/services/reportSharingService', () => ({ sendTechnicianServiceReport:vi.fn() }))
-vi.mock('@/services/servicesService', () => ({ fetchTechnicianPackage:vi.fn() }))
+vi.mock('@/services/reportSharingService', () => ({ sendTechnicianServiceReport:vi.fn<typeof sharing.sendTechnicianServiceReport>() }))
+vi.mock('@/services/servicesService', () => ({ fetchTechnicianPackage:vi.fn<typeof services.fetchTechnicianPackage>() }))
 
 beforeEach(() => {
   setActivePinia(createPinia())
