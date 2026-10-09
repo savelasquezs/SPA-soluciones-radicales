@@ -1,7 +1,7 @@
 import { createHash, createHmac, randomUUID } from 'node:crypto'
 
 import { ApiError } from './auth'
-import { readBounded, MAX_PDF_BYTES } from './certificates/generator'
+import { readBounded, MAX_PDF_BYTES } from './documents/limits'
 
 export const MASTER_FILE_KINDS = [
   'USER_CERTIFICATE',
