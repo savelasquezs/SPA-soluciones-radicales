@@ -7,10 +7,9 @@ import { transaction } from '../db'
 import { sendGmailMessage, upsertCalendarEvent } from '../google'
 import { audit } from './commands'
 import { getCalendarSnapshot } from './queries'
-import { generateReportForService } from '../reports/pipeline'
 
 interface JobPayload {
-  scope: 'ADMIN_SERVICES' | 'SERVICE_REPORT'
+  scope: 'ADMIN_SERVICES'
   actorId: string
   serviceId?: string
   revision?: number
@@ -18,7 +17,7 @@ interface JobPayload {
   email?: ConfirmationEmail
   dispatched?: boolean
 }
-interface ServiceJob { id: string; job_type: 'CALENDAR' | 'EMAIL' | 'DOCUMENT'; attempts: number; payload: JobPayload }
+interface ServiceJob { id: string; job_type: 'CALENDAR' | 'EMAIL'; attempts: number; payload: JobPayload }
 
 /** Durable queue: callers invoke this only after the business transaction commits. */
 export function kickServiceJobs(): void {
@@ -28,8 +27,7 @@ export function kickServiceJobs(): void {
 async function claimJob(): Promise<ServiceJob | null> {
   return transaction(async client => {
     const { rows } = await client.query<ServiceJob>(`select id,job_type,attempts,payload from private.integration_jobs
-      where ((payload ->> 'scope' = 'ADMIN_SERVICES' and job_type in ('CALENDAR','EMAIL'))
-       or (payload ->> 'scope' = 'SERVICE_REPORT' and job_type = 'DOCUMENT'))
+      where payload ->> 'scope' = 'ADMIN_SERVICES' and job_type in ('CALENDAR','EMAIL')
         and ((status in ('PENDING','FAILED') and attempts < 5 and run_after <= now())
           or (status='RUNNING' and lease_until < now()))
       order by run_after,created_at,id for update skip locked limit 1`)
@@ -134,22 +132,6 @@ async function processEmail(job: ServiceJob): Promise<void> {
     await recordEmailOutcome(job,mailFailureState(dispatched,error))
   }
 }
-async function processReport(job: ServiceJob): Promise<void> {
-  const serviceId = job.payload.serviceId
-  if (!isServiceId(serviceId)) throw new Error('Invalid durable report job')
-  try {
-    const outcome = await generateReportForService(serviceId, job.id)
-    await transaction(client => complete(client, job, outcome))
-  } catch (error) {
-    const code = error instanceof ApiError ? error.code ?? 'REPORT_GENERATION_ERROR' : 'REPORT_GENERATION_ERROR'
-    await transaction(async client => {
-      await client.query(`update private.integration_jobs set status='FAILED',lease_until=null,last_error=$2,
-        run_after=now()+make_interval(secs => least(3600,60*power(2,least(attempts,6)))::integer)
-        where id=$1`,[job.id,code])
-    })
-    console.error('SERVICE_REPORT_JOB_FAILED',{jobId:job.id,code})
-  }
-}
 export async function drainServiceJobs(limit = 6): Promise<{ processed: number }> {
   let processed = 0
   const boundedLimit = Math.max(1,Math.min(10,Math.trunc(limit)))
@@ -158,8 +140,7 @@ export async function drainServiceJobs(limit = 6): Promise<{ processed: number }
     if (!job) break
     try {
       if (job.job_type === 'CALENDAR') await processCalendar(job)
-      else if (job.job_type === 'EMAIL') await processEmail(job)
-      else await processReport(job)
+      else await processEmail(job)
     } catch {
       // Leave the lease for recovery. In particular, never blindly retry an email
       // whose outcome could not be persisted after dispatch.

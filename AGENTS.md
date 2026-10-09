@@ -110,7 +110,7 @@ No inventar requisitos. Ante una contradicción, detener únicamente la parte af
 - R2 es el almacén de archivos; PostgreSQL guarda claves/rutas y metadatos, no blobs.
 - Buckets privados: `sr-master-files`, `sr-service-media`, `sr-generated-documents`.
 - Imágenes operativas: eliminar siete días después de validar el documento final.
-- PDF generados: conservar hasta un año.
+- Los PDF corresponden a certificados. Los informes MIP serán páginas web imprimibles; no generar PDF de informes en backend.
 - Archivos maestros: conservar mientras estén activos.
 - Acceso y firma de URLs ocurren en backend; nunca exponer credenciales R2 al navegador.
 

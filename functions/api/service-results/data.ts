@@ -1,21 +1,21 @@
 import type { PoolClient } from 'pg'
 import { ApiError } from '../auth'
 
-export interface ReportCriterion { nombre: string; evaluacion: 'C'|'CP'|'NC'|'NA'|null; observacion: string|null; fotos: string[] }
-export interface ReportPoint { numero: string; ubicacion: string; tipo: string; estado: string|null; capturas: Array<{plagaNombreSnapshot:string; cantidad:number}>; observaciones:string|null; foto:string|null }
-export interface ReportFinding { descripcion:string; recomendacion:string; estado:string; responsable:string; fotos:string[] }
-export interface ReportArea { id:string; nombre:string; sinAcceso:boolean; motivo:string|null; fotos:string[]; criterios:ReportCriterion[]; puntos:ReportPoint[]; hallazgos:ReportFinding[] }
-export interface ReportData {
+export interface ServiceCriterion { nombre: string; evaluacion: 'C'|'CP'|'NC'|'NA'|null; observacion: string|null; fotos: string[] }
+export interface ServicePoint { numero: string; ubicacion: string; tipo: string; estado: string|null; capturas: Array<{plagaNombreSnapshot:string; cantidad:number}>; observaciones:string|null; foto:string|null }
+export interface ServiceFinding { descripcion:string; recomendacion:string; estado:string; responsable:string; fotos:string[] }
+export interface ServiceArea { id:string; nombre:string; sinAcceso:boolean; motivo:string|null; fotos:string[]; criterios:ServiceCriterion[]; puntos:ServicePoint[]; hallazgos:ServiceFinding[] }
+export interface ServiceResultsData {
   id:string; solicitud:string; cliente:string; nit:string; sede:string; direccion:string; tecnico:string
   firmanteCliente:string; firmaTecnico:string; firmaCliente:string
   inicioProgramado:string; inicioReal:string; finReal:string
   productos:Array<{nombre:string;principio:string;registro:string;lote:string;dosis:string;metodos:string}>
-  areas:ReportArea[]
+  areas:ServiceArea[]
   historico:Array<{solicitud:string;fecha:string;cumplimiento:number|null;capturas:number}>
 }
 const arr=(v:unknown):string[]=>Array.isArray(v)?v.filter((x):x is string=>typeof x==='string'&&x.length>0):[]
 
-export async function loadReportData(client:PoolClient,serviceId:string):Promise<ReportData>{
+export async function loadServiceResultsData(client:PoolClient,serviceId:string):Promise<ServiceResultsData>{
   const sv=(await client.query<{
     id:string;solicitud:string;estado:string;tipo:string;sedeTipo:string;sedeId:string;cliente:string;nit:string;sede:string;direccion:string;tecnico:string
     firmanteCliente:string|null;firmaTecnico:string|null;firmaCliente:string|null;inicioProgramado:Date;inicioReal:Date|null;finReal:Date|null
@@ -36,15 +36,15 @@ export async function loadReportData(client:PoolClient,serviceId:string):Promise
         when sin_acceso_foto_storage_path is not null then jsonb_build_array(sin_acceso_foto_storage_path)
         else '[]'::jsonb end as fotos
     from public.servicio_areas sa where servicio_id=$1 order by posicion_recorrido,id`,[serviceId])).rows
-    .map((a):ReportArea=>({id:a.id,nombre:a.nombre,sinAcceso:a.sinAcceso,motivo:a.motivo,fotos:arr(a.fotos),criterios:[],puntos:[],hallazgos:[]}))
+    .map((a):ServiceArea=>({id:a.id,nombre:a.nombre,sinAcceso:a.sinAcceso,motivo:a.motivo,fotos:arr(a.fotos),criterios:[],puntos:[],hallazgos:[]}))
   const byId=new Map(areas.map(a=>[a.id,a]))
-  const criteria=(await client.query<{areaId:string;nombre:string;evaluacion:ReportCriterion['evaluacion'];observacion:string|null;fotos:unknown}>(`
+  const criteria=(await client.query<{areaId:string;nombre:string;evaluacion:ServiceCriterion['evaluacion'];observacion:string|null;fotos:unknown}>(`
     select servicio_area_id as "areaId",criterio_nombre_snapshot as nombre,evaluacion,observacion,
       coalesce(evidencias_storage_paths,'[]'::jsonb) as fotos
     from public.evaluaciones_mip_area where servicio_id=$1
     order by servicio_area_id,lower(criterio_nombre_snapshot),id`,[serviceId])).rows
   for(const c of criteria)byId.get(c.areaId)?.criterios.push({nombre:c.nombre,evaluacion:c.evaluacion,observacion:c.observacion,fotos:arr(c.fotos)})
-  const points=(await client.query<{areaId:string;numero:string;ubicacion:string;tipo:string;estado:string|null;capturas:ReportPoint['capturas']|null;observaciones:string|null;foto:string|null}>(`
+  const points=(await client.query<{areaId:string;numero:string;ubicacion:string;tipo:string;estado:string|null;capturas:ServicePoint['capturas']|null;observaciones:string|null;foto:string|null}>(`
     select sd.servicio_area_id as "areaId",sd.numero_snapshot as numero,sd.ubicacion_snapshot as ubicacion,
       sd.tipo_dispositivo_nombre_snapshot as tipo,r.estado_observado as estado,
       coalesce(r.capturas_json,'[]'::jsonb) as capturas,r.observaciones,r.foto_storage_path as foto
@@ -62,7 +62,7 @@ export async function loadReportData(client:PoolClient,serviceId:string):Promise
     from public.hallazgos h join public.servicio_areas sa on sa.area_id=h.area_id and sa.servicio_id=$1
     where h.servicio_apertura_id=$1 or h.servicio_cierre_id=$1 order by sa.posicion_recorrido,h.fecha_apertura,h.id`,[serviceId])).rows
   for(const h of findings)byId.get(h.areaId)?.hallazgos.push({descripcion:h.descripcion,recomendacion:h.recomendacion,estado:h.estado,responsable:h.responsable,fotos:arr(h.fotos)})
-  const productos=(await client.query<ReportData['productos'][number]>(`
+  const productos=(await client.query<ServiceResultsData['productos'][number]>(`
     select coalesce(pa.producto_nombre_snapshot,p.nombre) as nombre,
       coalesce(pa.principio_activo_snapshot,p.principio_activo_composicion,'') as principio,
       coalesce(pa.registro_sanitario_snapshot,'') as registro,coalesce(pa.lote,'') as lote,

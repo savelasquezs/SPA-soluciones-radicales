@@ -1,16 +1,17 @@
-# Conversión documental compartida por Google Drive
+# Documentos PDF: certificados únicamente
 
-Google Drive es el único conversor DOCX → PDF. La función convertDocumentToPdfWithGoogleDrive en functions/api/google.ts reutiliza OAuth empresarial y drive.file; functions/api/documents/limits.ts concentra los límites de lectura y PDF.
+## Conversión existente que se conserva
 
-## Consumidores
-- Certificados: certificates/docx.ts valida y rellena plantillas Word configurables; certificates/generator.ts llama al conversor. pdf-lib permanece solo para validación y marca de agua de vista previa.
-- Informe MIP: reports/docx.ts prepara Word con datos históricos, evidencia fotográfica y firmas; reports/pipeline.ts llama al mismo conversor. No dibuja páginas PDF en código.
-- Los PDF terminados se persisten en R2 privado; los DOCX temporales no se conservan en Google Drive.
+`functions/api/certificates/docx.ts` valida y completa las plantillas Word de certificados; `functions/api/certificates/generator.ts` convierte su DOCX mediante `convertDocumentToPdfWithGoogleDrive` en `functions/api/google.ts`, usando OAuth empresarial y el scope `drive.file`.
 
-## Seguridad
-La conversión crea un Google Doc temporal, exporta PDF con límite de 15 MiB y elimina el temporal. Si la eliminación falla se encola STORAGE_CLEANUP y no se publica un resultado incompleto. No se crea otra integración OAuth ni se exponen credenciales.
+El documento temporal se importa como Google Docs, se exporta a PDF y se elimina. Si falla la limpieza, se registra un trabajo `STORAGE_CLEANUP`. Las salidas son privadas en R2 `sr-generated-documents`. El módulo `functions/api/documents/limits.ts` aplica límites de lectura y tamaño. `pdf-lib` continúa para comprobar certificados, marcación de pruebas y optimización de archivos en el navegador.
 
-sharp continúa en informes solo para convertir WebP/JPG/PNG a JPEG embebible en Word y acotar resolución/tamaño. No renderiza PDF. La integración sigue requiriendo validación real en Neon desarrollo.
+## Informes técnicos MIP
 
-## Entrega
-No hay migraciones nuevas. Verificar unitarias, build y salida visual real del PDF, regenerar bundle Neon desde develop actualizado y desplegar solo en desarrollo. Los artefactos temporales anteriores son obsoletos.
+Ya no hay PDF de informe ni transformación de fotos en la API. La información del Servicio sigue consultable desde `functions/api/service-results/` con medios privados. La página pública imprimible se implementará en una entrega posterior.
+
+No instalar un conversor nativo, `sharp`, `libvips` o un nuevo procesador de PDF en Neon.
+
+## Despliegue
+
+`npx -y neon@6.2.4 deploy` es el procedimiento estándar sobre Neon `desarrollo`. No versionar ZIP de funciones, fragmentos Base64 ni binarios generados. Conservar secretos privados, configuración de R2 y Google, y el Cron `services-outbox` para Calendar/Gmail.

@@ -25,9 +25,9 @@
 - [x] Implementar carga directa autorizada, reemplazo, eliminación y lectura firmada para planos de Sede y plantillas de certificados en Cloudflare R2.
 - [ ] Configurar en Neon Functions las credenciales privadas R2 del runtime y ejecutar la validación real contra `sr-master-files`.
 
-## Retención de evidencias e informes
+## Retención de evidencias
 
-- [x] Aprobar y documentar la política de fotos ordinarias (3 meses), Hallazgos pendientes (máximo 1 año), Hallazgos cerrados (3 meses tras cierre para apertura y corrección) e informes PDF (12 meses), sin alterar el historial en PostgreSQL.
+- [x] Aprobar y documentar la política de fotos ordinarias (3 meses), Hallazgos pendientes (máximo 1 año), Hallazgos cerrados (3 meses tras cierre para apertura y corrección) sin alterar el historial en PostgreSQL. La política anterior de PDF de informes fue descartada el 2026-10-09.
 - [x] Definir que la **programación automática se ejecuta en Cloudflare Workers Cron Triggers**, nunca mediante Neon scheduled triggers ni el Worker de la SPA.
 - [x] Añadir y aplicar migración aditiva `20261008_002_storage_retention.sql` en Neon `desarrollo` con vista privada de vencimientos, auditoría de borrados, excepciones, fallos y hash del secreto; checksum `c0b13513430b55c238cd16f3acaf891e3d9be3fd288deb25632de2c540e69420`. Verificación: 13 referencias, ninguna vencida, 0 borrados.
 - [x] Añadir ruta privada `POST /jobs/retention` y ejecución protegida por bloqueo de registros, con `dry-run` por defecto, resultados auditados y reintentos. Desplegada en Neon `desarrollo` (versión 33) conservando las variables privadas.
@@ -37,7 +37,7 @@
 - [x] Activar Cron Trigger de Cloudflare en `desarrollo` (02:00 Colombia), vincular secreto privado a Neon y habilitar modo `delete`. Comprobada lectura posterior de horario, URL, modo y secret binding. Candidatos vencidos actualmente: cero.
 - [ ] Extender el registro de disponibilidad de fotos en vistas de dispositivos/hallazgos e instrumentar proyección/alertas de capacidad R2.
 - [ ] Añadir disponibilidad `SIN_FOTO/PENDIENTE/DISPONIBLE/VENCIDA` en las vistas de puestos, revisiones y hallazgos sin descargar miniaturas masivamente.
-- [ ] Validar dry-run en desarrollo, condiciones de carrera al cerrar hallazgos, 404/errores de R2, PDFs con imágenes incrustadas, alertas y presupuesto global de 8 GB.
+- [ ] Validar dry-run en desarrollo, condiciones de carrera al cerrar hallazgos, 404/errores de R2, alertas y presupuesto global de 8 GB.
 - [x] Verificación externa de Neon API y prueba del Worker `node --test` en GitHub Actions: pasos superados; corregido `redirect: manual` para Cloudflare.
 - [ ] Probar la primera ejecución autorizada del Cron y un borrado real **sobre archivos sintéticos en un entorno aislado**; en la fecha de activación no existían archivos vencidos y no se ejecutó ninguna eliminación. Monitorear el primer cron y su observabilidad antes de promover a `production`.
 
@@ -63,11 +63,13 @@ Fuente: `docs/product/file-retention.md`; despliegue: `docs/development/cloudfla
 
 ## Informes técnicos MIP
 
-- [x] V1: generación de informe desde servicio finalizado, fotos compactas, firmas, comparativo histórico de Sede, almacenamiento privado y visor administrativo.
-- [ ] Validar despliegue en desarrollo con R2 real, fotos no disponibles y límites de tamaño.
-- [ ] Envío opcional y selección offline de correos desde el cierre, historial y reenvío protegido contra duplicados.
-- [ ] Conectar certificados automáticos al cierre sin sustituir su generador actual.
-- [ ] Portal público/QR y regeneración a partir de snapshots documentales.
+- [x] Conservar consultas administrativas de resultados, criterios, puestos, hallazgos, firmas y URLs privadas para evidencias.
+- [x] Descartar la generación automática de PDF de informes y limpiar código backend/frontend, datos PDF y dependencias nativas.
+- [ ] Verificar despliegue convencional de la API Neon desarrollo con las rutas existentes, Calendar/Gmail, certificados y R2.
+- [ ] Implementar después página pública HTML de informe por enlace de solo lectura revocable y con vencimiento.
+- [ ] Diseñar impresión A4 por CSS y botón «Guardar como PDF» usando la impresión del navegador, sin almacenar PDF de informe.
+- [ ] Definir UX de fotografías vencidas en informe público conforme a retención de R2.
+- [ ] Conectar certificados automáticos al cierre únicamente en una entrega separada y aprobada.
 
 ## Certificados
 

@@ -1,6 +1,6 @@
-# Conservación de evidencias y documentos MIP
+# Conservación de evidencias MIP
 
-**Estado:** política funcional aprobada el 2026-10-08. **Implementación y despliegue:** pendientes; no confundir estas reglas con una limpieza ya activa.
+**Estado:** política de evidencias vigente; Worker Cron de desarrollo activo. Las pruebas de eliminación sintética siguen pendientes. Los informes PDF fueron retirados del alcance el 2026-10-09.
 
 ## Objetivo
 
@@ -14,7 +14,6 @@ Conservar evidencias durante plazos predecibles, mantener el historial estructur
 | Fotografías de áreas sin acceso y criterios MIP | 3 meses calendario | `servicios.fin_real`, tras finalizar el Servicio |
 | Fotografías de apertura de Hallazgo `ABIERTO`/`EN_PROCESO` | Máximo 1 año calendario | `hallazgos.fecha_apertura`, aunque siga pendiente |
 | Fotografías de Hallazgo `CERRADO` (apertura **y** cierre) | 3 meses calendario | `hallazgos.fecha_cierre` |
-| Informe PDF de servicio | 12 meses calendario | `servicios.informe_generado_at` |
 | Datos estructurados de servicios, revisiones y hallazgos | Sin vencimiento automático | No se borran durante estas limpiezas |
 
 Los plazos se calculan a partir de eventos del dominio registrados en PostgreSQL, no desde el último acceso, una reprogramación, el nombre del archivo o la fecha de ejecución del cron. «Mes» y «año» significan meses/años calendario, no 30/365 días fijos. El cron diario ejecuta la limpieza **a partir** del vencimiento, no antes; puede haber retrasos si fallan proveedor o job.
@@ -32,12 +31,12 @@ Los plazos se calculan a partir de eventos del dominio registrados en PostgreSQL
 - Apertura 2027-01-15; cierre 2027-11-10: fotos iniciales y de cierre vencen 2028-02-10.
 - Apertura 2027-01-15; fotos eliminadas 2028-01-15; cierre 2028-03-05: las fotos nuevas vencen 2028-06-05; las originales siguen ausentes.
 
-## Informes PDF y otros documentos
+## Documentos y futura página de informes
 
-- El informe PDF ya emitido se conserva 12 meses desde su generación. Puede **contener copias incrustadas de fotografías** ya eliminadas como archivos individuales: su propio vencimiento continúa siendo el del PDF.
-- No regenerar un PDF histórico a partir de catálogos o datos actuales para eludir su expiración. Los informes deben tener versión/snapshot documental si se implementa la regeneración o reemisión.
-- **Fuera del alcance de esta política:** certificados, plantillas, fichas técnicas, planos, archivos maestros, comprobantes, firmas y cualquier documento con un plazo contractual o legal especial. Nunca incluir estos objetos en una regla global de borrado del bucket.
-- Requisitos de conservación contractuales, sanitarios, litigios u órdenes de preservación prevalecen sobre esta política: registrar una retención/bloqueo explícito antes de permitir el borrado.
+- El informe MIP será HTML consultable, no un PDF almacenado. Al imprimirlo, el navegador genera una copia local a petición del usuario, sin subirla a R2.
+- Los datos estructurados se conservan aunque las fotografías de evidencia caduquen. En el informe web se deberá señalar que una imagen venció; no regenerarla.
+- **Fuera del alcance de esta política:** certificados PDF, plantillas, fichas técnicas, planos, archivos maestros, comprobantes, firmas y documentos con plazos legales especiales. Nunca eliminarlos por una regla global del bucket.
+- Conservaciones contractuales, sanitarias o legales deben respetarse con bloqueos explícitos.
 
 ## Comportamiento de interfaz
 
@@ -50,9 +49,9 @@ Los plazos se calculan a partir de eventos del dominio registrados en PostgreSQL
 
 ## Límites de almacenamiento y estimaciones
 
-R2 Standard incluye 10 GB-mes de almacenamiento gratuito; **presupuesto operativo**: 8 GB, con alertas antes de alcanzarlo (70 % y 85 % del presupuesto). Se evalúa el espacio **total de los buckets de R2** usados por el proyecto, no solamente `sr-service-media`. Las fotos se comprimen antes de subir y los PDF se optimizan por separado.
+R2 Standard incluye 10 GB-mes de almacenamiento gratuito; **presupuesto operativo**: 8 GB, con alertas antes de alcanzarlo (70 % y 85 % del presupuesto). Se evalúa el espacio **total de los buckets de R2** usados por el proyecto, no solamente `sr-service-media`. Las fotos se comprimen antes de subir; los certificados y demás archivos maestros siguen sus políticas separadas.
 
-Con 7 servicios/día, 6 días/semana (promedio 182 servicios/mes), 15–20 fotos de 200 kB por servicio, PDF de 1,5 MB y eliminación puntual: fotos ordinarias de los últimos 3 meses ≈1,64–2,18 GB; informes de los últimos 12 meses ≈3,28 GB; conjunto ≈4,9–5,5 GB **más** hallazgos pendientes, evidencias de cierre, certificados, maestros y otros archivos. Es una proyección, no una garantía: tamaños reales y acumulación de hallazgos pueden elevarla.
+Con 7 servicios/día, 6 días/semana (aprox. 182 servicios/mes) y 15–20 fotos de 200 kB, las fotos ordinarias de los últimos 3 meses pueden ocupar aproximadamente 1,64–2,18 GB, más hallazgos pendientes, evidencias de cierre, certificados y archivos maestros. Es una proyección, no una garantía.
 
 ## Diseño obligatorio de automatización
 
@@ -73,7 +72,7 @@ Con 7 servicios/día, 6 días/semana (promedio 182 servicios/mes), 15–20 fotos
 3. Hallazgo cerrado a los 11 meses retiene las fotos iniciales y de cierre hasta tres meses después del cierre.
 4. Hallazgo cerrado tras vencimiento: fotos antiguas eliminadas no reaparecen; fotos nuevas vencen tres meses después.
 5. Cierre concurrente con la limpieza: revalidación impide borrar fotos iniciales cuyo plazo se amplió.
-6. Informe PDF caduca al año, sin borrar certificados ni plantillas; el PDF puede incluir fotos previamente vencidas.
+6. El informe web conserva resultados históricos aunque las fotografías individuales hayan vencido; nunca elimina certificados ni plantillas.
 7. Archivo que falta en R2 se trata idempotentemente; fallo parcial se reintenta sin duplicar log.
 8. Dos runs del cron simultáneos no eliminan dos veces ni alteran registros vigentes.
 9. La interfaz diferencia foto nunca capturada de evidencia expirada.
