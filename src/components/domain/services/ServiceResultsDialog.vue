@@ -6,7 +6,7 @@ import BaseDialog from '@/components/base/BaseDialog.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import StatusPanel from '@/components/base/StatusPanel.vue'
-import { fetchServiceResults, queueServiceReport, serviceEvidenceUrl } from '@/services/serviceResultsService'
+import { fetchServiceResults, fetchServiceReport, queueServiceReport, serviceEvidenceUrl } from '@/services/serviceResultsService'
 import { downloadLink } from '@/helpers/certificates'
 import { useNotificationsStore } from '@/stores/notifications'
 import type { ServiceResultsResponse } from '@/types/serviceResults'
@@ -52,9 +52,17 @@ async function generate():Promise<void>{
   }catch(e){notifications.show(e instanceof Error?e.message:'No fue posible solicitar el informe.','error')}
   finally{busy.value=false}
 }
-function download():void{
-  const url=report.value?.url
-  if(url)downloadLink(url)
+async function download():Promise<void>{
+  if(busy.value)return
+  busy.value=true
+  try{
+    // R2 links expire after five minutes. Obtain a fresh authorized URL on click.
+    const latest=await fetchServiceReport(props.serviceId)
+    if(current.value)current.value.report=latest
+    if(!latest.url)throw new Error('El informe aún no está disponible.')
+    downloadLink(latest.url)
+  }catch(e){notifications.show(e instanceof Error?e.message:'No fue posible descargar el informe.','error')}
+  finally{busy.value=false}
 }
 async function openEvidence(path:string):Promise<void>{
   const windowRef=window.open('about:blank','_blank')
