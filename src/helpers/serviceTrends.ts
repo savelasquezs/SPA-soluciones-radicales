@@ -31,10 +31,13 @@ export const safeCaptures = (value: number): number =>
 
 export function visitDateLabel(iso: string): string {
   const date = new Date(iso)
-  return Number.isFinite(date.getTime())
-    ? new Intl.DateTimeFormat('es-CO', {
-      timeZone:'America/Bogota',day:'2-digit',month:'short',
-    }).format(date).replace('.', '') : '—'
+  if (!Number.isFinite(date.getTime())) return '—'
+  const parts = new Intl.DateTimeFormat('es-CO', {
+    timeZone:'America/Bogota',day:'numeric',month:'short',
+  }).formatToParts(date)
+  const day = (parts.find(part => part.type === 'day')?.value ?? '').padStart(2, '0')
+  const month = (parts.find(part => part.type === 'month')?.value ?? '').replace('.', '').toLowerCase()
+  return day + ' ' + month
 }
 
 export function chartX(index: number, length: number): number {

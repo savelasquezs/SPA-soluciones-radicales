@@ -96,7 +96,8 @@ const locale = new Intl.NumberFormat('es-CO')
         <div v-if="lineSelection" class="report-trend__tooltip" data-testid="mip-compliance-tooltip" role="status">
           <strong>{{ lineSelection.solicitud }} · {{ bogotaDate(lineSelection.fecha) }}</strong>
           <span>{{ lineSelection.cumplimiento === null ? 'Sin evaluación registrada' : 'Cumplimiento: ' + scoreText(lineSelection.cumplimiento) }}</span>
-          <small>{{ signedTrend(lineSelection.complianceDelta, 'pp') }} respecto a la visita anterior</small>
+          <small v-if="lineSelection.complianceDelta !== null">{{ signedTrend(lineSelection.complianceDelta, 'pp') }} respecto a la visita anterior</small>
+          <small v-else>Sin comparación con la visita anterior</small>
         </div>
       </div>
       <figcaption>C = 100 %, CP = 50 %, NC = 0 %; sin acceso y NA excluidos.</figcaption>
@@ -141,7 +142,8 @@ const locale = new Intl.NumberFormat('es-CO')
         <div v-if="capturesSelection" class="report-trend__tooltip" data-testid="mip-captures-tooltip" role="status">
           <strong>{{ capturesSelection.solicitud }} · {{ bogotaDate(capturesSelection.fecha) }}</strong>
           <span>Total: {{ locale.format(capturesSelection.captures) }} capturas</span>
-          <small>{{ signedTrend(capturesSelection.capturesDelta, 'capturas') }} respecto a la visita anterior</small>
+          <small v-if="capturesSelection.capturesDelta !== null">{{ signedTrend(capturesSelection.capturesDelta, 'capturas') }} respecto a la visita anterior</small>
+          <small v-else>Sin comparación con la visita anterior</small>
         </div>
       </div>
       <figcaption>Suma de todas las plagas capturadas en los puestos revisados.</figcaption>
