@@ -31,7 +31,7 @@ const initialService = {
   direccion:'Calle 10, Medellín',inicioProgramado:'2026-10-09T14:00:00Z',
   finProgramado:'2026-10-09T16:00:00Z',estado:'PROGRAMADO',
   calendar:{estado:'PENDIENTE'},
-} as AdminService
+} as unknown as AdminService
 
 beforeEach(() => {
   state.query.mockReset()
