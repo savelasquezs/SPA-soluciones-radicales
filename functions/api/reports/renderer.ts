@@ -18,7 +18,8 @@ export async function renderMipReport(input:ReportData,photos:ReportPhoto[],sign
   pdf.setAuthor('Soluciones Radicales')
   const normal=await pdf.embedFont(StandardFonts.Helvetica)
   const bold=await pdf.embedFont(StandardFonts.HelveticaBold)
-  let page:PDFPage, y=0
+  let page!:PDFPage
+  let y=0
 
   function fresh():void{
     page=pdf.addPage([PW,PH]);y=PH-86
