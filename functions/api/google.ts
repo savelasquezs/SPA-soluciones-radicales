@@ -151,11 +151,12 @@ async function readGoogleFile(response: Response, maxBytes: number): Promise<Buf
   return Buffer.concat(chunks)
 }
 
-export async function convertDocxToPdfWithGoogleDrive(docx: Uint8Array, maxBytes: number): Promise<Buffer> {
+/** Shared DOCX-to-PDF conversion for certificates, reports and future documents. */
+export async function convertDocumentToPdfWithGoogleDrive(docx: Uint8Array, maxBytes: number): Promise<Buffer> {
   const accessToken = await getAccessToken()
   const boundary = `sr-${randomBytes(18).toString('hex')}`
   const metadata = JSON.stringify({
-    name: `certificado-temporal-${randomBytes(12).toString('hex')}.docx`,
+    name: `documento-temporal-${randomBytes(12).toString('hex')}.docx`,
     mimeType: 'application/vnd.google-apps.document',
   })
   const body = Buffer.concat([
@@ -185,7 +186,7 @@ export async function convertDocxToPdfWithGoogleDrive(docx: Uint8Array, maxBytes
     )
     if (!exported.ok || !exported.headers.get('content-type')?.toLowerCase().includes('application/pdf')) {
       await exported.body?.cancel()
-      throw new ApiError(502, 'Google Drive no pudo exportar el certificado como PDF')
+      throw new ApiError(502, 'Google Drive no pudo exportar el documento como PDF')
     }
     result = await readGoogleFile(exported, maxBytes)
   } catch (error) {
@@ -203,7 +204,7 @@ export async function convertDocxToPdfWithGoogleDrive(docx: Uint8Array, maxBytes
 
   if (failure) {
     if (failure instanceof ApiError) throw failure
-    throw new ApiError(502, 'No fue posible convertir el Word a PDF mediante Google Drive')
+    throw new ApiError(502, 'No fue posible convertir el documento Word a PDF mediante Google Drive')
   }
   return result!
 }
