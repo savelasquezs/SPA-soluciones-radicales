@@ -69,7 +69,7 @@ test('Historial ofrece informe solo administrativo y A4 con fotografías y ambas
   await expect(page).toHaveURL(new RegExp('/servicios/' + serviceId + '/informe'))
   await expect(page.getByRole('heading',{name:'Informe técnico de servicio'})).toBeVisible()
   await expect(page.getByText('Producto A')).toBeVisible()
-  await expect(page.getByText('Control de residuos')).toBeVisible()
+  await expect(page.getByText('Control de residuos', { exact:true })).toBeVisible()
   await expect(page.getByText('Abertura')).toBeVisible()
   await expect(page.getByRole('img',{name:'Firma del técnico'})).toBeVisible()
   await expect(page.getByRole('img',{name:'Firma de conformidad del cliente'})).toBeVisible()
