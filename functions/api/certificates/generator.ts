@@ -37,8 +37,8 @@ export async function generateCertificatePdf(input: {
 }): Promise<Buffer> {
   const word = renderCertificateDocx(input.template, input.type, input.data)
   try {
-    const { convertDocxToPdfWithGoogleDrive } = await import('../google')
-    const bytes = await convertDocxToPdfWithGoogleDrive(word, MAX_PDF_BYTES)
+    const { convertDocumentToPdfWithGoogleDrive } = await import('../google')
+    const bytes = await convertDocumentToPdfWithGoogleDrive(word, MAX_PDF_BYTES)
     if (bytes.subarray(0, 5).toString() !== '%PDF-') throw new ApiError(502, 'El conversor no devolvió un PDF válido')
     const document = await PDFDocument.load(bytes, { updateMetadata: false })
     if (!document.getPageCount() || document.getPageCount() > 30) throw new ApiError(422, 'El certificado debe tener entre 1 y 30 páginas')
