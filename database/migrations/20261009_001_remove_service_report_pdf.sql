@@ -92,6 +92,32 @@ where nullif(btrim(f.storage_path),'') is not null
       and x.retry_after > now()
   );
 
+-- La función pública histórica dependía de informe_pdf_storage_path.
+-- Mantener token hasheado, revocación y expiración; retirar solo el indicador PDF.
+create or replace function public.get_public_service(p_token text)
+returns jsonb
+language sql stable security definer
+set search_path = ''
+as $function$
+  select jsonb_build_object(
+    'solicitud', s.solicitud,
+    'tipoServicio', s.tipo_servicio,
+    'fechaFinalizacion', s.fin_real,
+    'negocio', n.nombre,
+    'sede', se.nombre
+  )
+  from public.servicios s
+  join public.sedes se on se.id = s.sede_id
+  join public.negocios n on n.id = se.negocio_id
+  where s.token_publico_hash = encode(
+      extensions.digest(coalesce(p_token, ''), 'sha256'),
+      'hex'
+    )
+    and not s.token_revocado
+    and s.token_expira_at > now()
+    and s.estado = 'FINALIZADO'
+$function$;
+
 -- Las cinco columnas fueron creadas para el informe PDF descartado.
 alter table public.servicios
   drop column if exists informe_pdf_storage_path,
