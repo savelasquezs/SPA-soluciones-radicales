@@ -3,6 +3,7 @@ import type { PoolClient } from 'pg'
 
 import { ApiError } from './auth'
 import { pool, transaction } from './db'
+import { readBounded } from './documents/limits'
 import { buildMailMessage, type MailInput } from './mailMessage'
 import { writeCalendarEvent, type CalendarEventInput } from './calendarClient'
 
@@ -126,32 +127,6 @@ export async function deleteGoogleDriveTemporaryFile(fileId: string, accessToken
   }
 }
 
-async function readGoogleFile(response: Response, maxBytes: number): Promise<Buffer> {
-  if (Number(response.headers.get('content-length')) > maxBytes) {
-    await response.body?.cancel()
-    throw new ApiError(422, 'El documento supera el tamaño permitido')
-  }
-  const reader = response.body?.getReader()
-  if (!reader) throw new ApiError(502, 'Google Drive devolvió un documento vacío')
-  const chunks: Uint8Array[] = []
-  let length = 0
-  try {
-    while (true) {
-      const { value, done } = await reader.read()
-      if (done) break
-      length += value.length
-      if (length > maxBytes) {
-        await reader.cancel()
-        throw new ApiError(422, 'El documento supera el tamaño permitido')
-      }
-      chunks.push(value)
-    }
-  } finally { reader.releaseLock() }
-  if (!length) throw new ApiError(502, 'Google Drive devolvió un documento vacío')
-  return Buffer.concat(chunks)
-}
-
-/** Shared DOCX-to-PDF conversion for certificates, reports and future documents. */
 export async function convertDocumentToPdfWithGoogleDrive(docx: Uint8Array, maxBytes: number): Promise<Buffer> {
   const accessToken = await getAccessToken()
   const boundary = `sr-${randomBytes(18).toString('hex')}`
@@ -188,7 +163,8 @@ export async function convertDocumentToPdfWithGoogleDrive(docx: Uint8Array, maxB
       await exported.body?.cancel()
       throw new ApiError(502, 'Google Drive no pudo exportar el documento como PDF')
     }
-    result = await readGoogleFile(exported, maxBytes)
+    result = await readBounded(exported, maxBytes)
+    if (result.subarray(0, 5).toString() !== '%PDF-') throw new ApiError(502, 'Google Drive devolvió un PDF no válido')
   } catch (error) {
     failure = error
   }
