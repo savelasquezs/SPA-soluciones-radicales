@@ -58,7 +58,7 @@ jobs:
         if: always() && steps.install.outcome == 'success'
       - name: Administrator and Technician service flows and responsive review
         if: always() && steps.install.outcome == 'success'
-        run: npx playwright test e2e/admin-services.spec.ts e2e/technician-services.spec.ts e2e/site-insights.spec.ts --project=chromium --retries=0
+        run: npx playwright test e2e/admin-services.spec.ts e2e/admin-service-report.spec.ts e2e/technician-services.spec.ts e2e/site-insights.spec.ts --project=chromium --retries=0
       - uses: actions/upload-artifact@v4
         if: always()
         with:

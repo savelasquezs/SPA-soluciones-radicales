@@ -130,7 +130,7 @@ async function retryCalendar(record: AdminService): Promise<void> {
     </template>
     <template v-else>
       <ServiceWeek v-if="view==='week'" :from="from" :records="store.rows" />
-      <ServiceRecords v-else-if="store.rows.length" :records="store.rows" :busy="pendingAction" @schedule="openQuick($event,'schedule')" @team="openQuick($event,'team')" @payment="openQuick($event,'payment')" @edit="edit" @cancel="openQuick($event,'cancel')" @retry-calendar="retryCalendar" @results="results=$event" />
+      <ServiceRecords v-else-if="store.rows.length" :records="store.rows" :history="tab==='history'" :busy="pendingAction" @schedule="openQuick($event,'schedule')" @team="openQuick($event,'team')" @payment="openQuick($event,'payment')" @edit="edit" @cancel="openQuick($event,'cancel')" @retry-calendar="retryCalendar" @results="results=$event" />
       <StatusPanel v-else title="Sin servicios en este rango" message="Cambia las fechas o los filtros para consultar otra parte de la operación." />
     </template>
     <ServicePagination v-if="!rangeError && !loadError" :page="page" :page-size="pageSize" :total="total" :disabled="loading" @page="setQuery({ page:String($event) })" />
