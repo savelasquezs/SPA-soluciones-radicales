@@ -23,3 +23,32 @@ describe('certificate email MIME', () => {
     expect(buildMailMessage({ ...message, attachments: [{ name: 'a"\r\nBcc.pdf', bytes: new Uint8Array(1) }] }, 'a@example.test')).toContain('filename="a---Bcc.pdf"')
   })
 })
+
+describe('rich report email MIME', () => {
+  const png = Buffer.from([137,80,78,71,13,10,26,10,1,2,3])
+  const qr = { contentId:'report-qr@solucionesradicales.invalid',name:'codigo-qr.png',bytes:png }
+  it('builds a multipart alternative email with an inline QR and preserves certificate attachments', () => {
+    const html = '<html><a href="https://example.test/secure">Abrir aquí</a><img src="cid:report-qr@solucionesradicales.invalid"></html>'
+    const mime = buildMailMessage({
+      to:'cliente@example.test',subject:'Informe de servicio',text:'Enlace: https://example.test/secure',
+      html,inlineImages:[qr],attachments:[{name:'certificado.pdf',bytes:Buffer.from('%PDF-') }],
+    },'empresa@example.test')
+    expect(mime).toContain('Content-Type: multipart/related')
+    expect(mime).toContain('Content-Type: multipart/alternative')
+    expect(mime).toContain('Content-Type: text/html; charset=UTF-8')
+    expect(mime).toContain('Content-Type: text/plain; charset=UTF-8')
+    expect(mime.replace(/\r\n/g, '')).toContain(Buffer.from(html).toString('base64'))
+    expect(mime).toContain('Content-ID: <report-qr@solucionesradicales.invalid>')
+    expect(mime).toContain('Content-Disposition: inline; filename="codigo-qr.png"')
+    expect(mime).toContain('Content-Disposition: attachment; filename="certificado.pdf"')
+  })
+  it('rejects unsafe CID values and inline QR images without HTML', () => {
+    expect(() => buildMailMessage({
+      to:'cliente@example.test',subject:'Test',text:'Body',html:'<p>Ok</p>',
+      inlineImages:[{...qr,contentId:'evil\\r\\nBcc:bad@example.com'}],
+    },'sender@example.test')).toThrow('imágenes')
+    expect(() => buildMailMessage({
+      to:'cliente@example.test',subject:'Test',text:'Body',inlineImages:[qr],
+    },'sender@example.test')).toThrow('imágenes')
+  })
+})

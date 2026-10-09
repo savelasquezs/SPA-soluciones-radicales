@@ -353,7 +353,7 @@ watch(() => [serviceId.value, publicToken.value], () => { void loadReport() }, {
         </footer>
       </article>
     </template>
-    <SendReportDialog v-if="sendOpen && !publicView && report" :service-id="report.id" :solicitud="report.solicitud" @close="sendOpen=false" @sent="onShared" />
+    <SendReportDialog v-if="sendOpen && !publicView && report" :service-id="report.id" :solicitud="report.solicitud" :cliente="report.cliente" :sede="report.sede" @close="sendOpen=false" @sent="onShared" />
     <EvidenceLightbox v-if="activeImage && selectedIndex !== null" :open="true" :index="selectedIndex" :total="images.length"
       :title="activeImage.caption" :caption="activeImage.caption" :url="urls[activeImage.path] || null"
       :state="activeImageState" @close="selectedIndex=null" @select="selectedIndex=$event"

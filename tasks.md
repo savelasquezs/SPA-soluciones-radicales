@@ -71,7 +71,8 @@ Fuente: `docs/product/file-retention.md`; despliegue: `docs/development/cloudfla
 - [x] Implementar el informe HTML administrativo desde Servicios → Historial, con fotografías contextualizadas, imágenes de las dos firmas, indicadores, histórico e impresión A4/Guardar PDF del navegador. No guardar PDFs en R2.
 - [x] Permitir envío desde el informe administrativo: seleccionar correos de cliente/sede, añadir destinatarios y adjuntar certificados ya generados del servicio (opcional).
 - [x] Incorporar página pública de solo lectura mediante enlace de 90 días, revocable, fotos y firmas protegidas; correo Gmail auditado e idempotente.
-- [ ] Incorporar después el QR embebido en el certificado, reutilizando el enlace público del informe.
+- [x] Incorporar QR PNG en el correo junto al botón HTML «Abrir aquí», mensaje y asunto editables en componente reutilizable compacto.
+- [ ] Integrar posteriormente el QR en las plantillas PDF de certificado, la finalización del técnico y el contacto genérico de Clientes.
 - [ ] Ejecutar smoke real autorizado del envío y acceso público en Neon desarrollo.
 - [ ] Definir UX de fotografías vencidas en informe público conforme a retención de R2.
 - [ ] Conectar certificados automáticos al cierre únicamente en una entrega separada y aprobada.
