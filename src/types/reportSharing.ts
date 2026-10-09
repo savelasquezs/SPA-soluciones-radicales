@@ -17,6 +17,9 @@ export interface SendServiceReportInput {
   certificateIds: string[]
   /** Exact SPA origin; validated against ALLOWED_ORIGINS on the server. */
   origin: string
+  /** Editable message; null uses backend defaults for existing clients. */
+  subject: string | null
+  message: string | null
 }
 export interface SendServiceReportResult {
   sent: boolean

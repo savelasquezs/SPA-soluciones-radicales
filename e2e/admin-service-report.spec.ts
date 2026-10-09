@@ -106,6 +106,14 @@ test('El administrador selecciona emails registrados, agrega otro y adjunta un c
   await page.getByRole('button',{name:'Enviar informe'}).click()
   await expect(page.getByRole('heading',{name:'Enviar informe'})).toBeVisible()
   await expect(page.getByText('sede@example.test')).toBeVisible()
+  const editor = page.locator('details.email-composer')
+  await expect(editor).not.toHaveAttribute('open', '')
+  await editor.locator('summary').click()
+  await expect(editor).toHaveAttribute('open', '')
+  await page.getByLabel('Asunto', { exact:true }).fill('Informe MIP personalizado')
+  await page.getByLabel('Mensaje', { exact:true }).fill('Buenas tardes, compartimos su informe.')
+  await editor.locator('summary').click()
+  await expect(editor).not.toHaveAttribute('open', '')
   await page.getByLabel('sede@example.test').check()
   await page.getByLabel('Agregar otro correo').fill('Extra@Example.test')
   await page.getByRole('button',{name:'Añadir'}).click()
@@ -117,6 +125,8 @@ test('El administrador selecciona emails registrados, agrega otro y adjunta un c
     recipients:['extra@example.test','sede@example.test'],
     certificateIds:[certificateId],
     origin:new URL(page.url()).origin,
+    subject:'Informe MIP personalizado',
+    message:'Buenas tardes, compartimos su informe.',
   })
 })
 

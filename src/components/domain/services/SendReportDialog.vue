@@ -5,13 +5,14 @@ import BaseDialog from '@/components/base/BaseDialog.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import StatusPanel from '@/components/base/StatusPanel.vue'
+import EmailComposerFields from '@/components/base/EmailComposerFields.vue'
 import {
   getReportShareOptions, sendServiceReport, revokeServiceReportLinks,
 } from '@/services/reportSharingService'
 import { useNotificationsStore } from '@/stores/notifications'
 import type { SendServiceReportResult, ServiceReportShareOptions } from '@/types/reportSharing'
 
-const props = defineProps<{ serviceId: string; solicitud: string }>()
+const props = defineProps<{ serviceId: string; solicitud: string; cliente: string; sede: string }>()
 const emit = defineEmits<{ close: []; sent: [result: SendServiceReportResult] }>()
 const notify = useNotificationsStore()
 const loading = ref(true)
@@ -22,12 +23,18 @@ const extraEmails = ref<string[]>([])
 const extraInput = ref('')
 const emailError = ref('')
 const selectedCertificates = ref<string[]>([])
+const subject = ref('Informe técnico MIP · ' + props.solicitud + ' · ' + props.sede)
+const message = ref('Buen día,\n\nCompartimos el informe técnico de la visita realizada. Gracias por confiar en Soluciones Radicales.')
+const subjectError = computed(() => !subject.value.trim() || /[\r\n]/.test(subject.value) || subject.value.length > 200
+  ? 'Revisa el asunto del correo.' : '')
+const messageError = computed(() => !message.value.trim() || message.value.length > 4000
+  ? 'El mensaje no puede estar vacío y debe tener máximo 4000 caracteres.' : '')
 const sending = ref(false)
 const revoking = ref(false)
 const confirmRevoke = ref(false)
 const deliveryUncertain = ref(false)
 const recipients = computed(() => [...new Set([...checkedEmails.value,...extraEmails.value])].sort())
-const ready = computed(() => !!options.value?.gmailConnected && recipients.value.length > 0 && !sending.value && !revoking.value && !deliveryUncertain.value)
+const ready = computed(() => !!options.value?.gmailConnected && recipients.value.length > 0 && !subjectError.value && !messageError.value && !sending.value && !revoking.value && !deliveryUncertain.value)
 const validEmail = (value: string) => /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(value) && value.length <= 254
 let attempt: { fingerprint: string; requestId: string } | null = null
 
@@ -68,7 +75,7 @@ function addEmail(): void {
 }
 async function send(): Promise<void> {
   if (!ready.value || !options.value) return
-  const fingerprint = JSON.stringify([recipients.value, [...selectedCertificates.value].sort(), window.location.origin])
+  const fingerprint = JSON.stringify([recipients.value, [...selectedCertificates.value].sort(), window.location.origin, subject.value.trim(), message.value.trim()])
   if (!attempt || attempt.fingerprint !== fingerprint) attempt = { fingerprint, requestId: crypto.randomUUID() }
   sending.value = true
   error.value = ''
@@ -78,6 +85,8 @@ async function send(): Promise<void> {
       recipients: recipients.value,
       certificateIds: [...selectedCertificates.value].sort(),
       origin: window.location.origin,
+      subject: subject.value.trim(),
+      message: message.value.trim(),
     })
     notify.show('Informe enviado por Gmail a ' + recipients.value.length + ' destinatario(s).','success')
     emit('sent',result)
@@ -147,7 +156,9 @@ async function revoke(): Promise<void> {
           </div>
           <p v-else class="send-report__empty">Todavía no hay certificados generados. Puedes enviar únicamente el informe.</p>
         </div>
-        <div class="send-report__info"><ShieldCheck :size="17" aria-hidden="true" /><p>El correo incluirá un enlace de solo lectura al informe, con fotografías y ambas firmas. Vence en 90 días; no se adjuntará un PDF del informe.</p></div>
+        <EmailComposerFields v-model:subject="subject" v-model:message="message" :disabled="sending"
+          :subject-error="subjectError" :message-error="messageError" />
+        <div class="send-report__info"><ShieldCheck :size="17" aria-hidden="true" /><p>El correo incluye «Abrir aquí» y un código QR para ver el informe. El enlace vence en 90 días y no se adjunta un PDF del informe.</p></div>
         <div v-if="options.activeLinks" class="send-report__previous">
           <span><Check :size="14" /> {{ options.activeLinks }} enlace(s) vigente(s)</span>
           <button v-if="!confirmRevoke" type="button" :disabled="sending" @click="confirmRevoke=true"><Trash2 :size="14" /> Revocar enlaces</button>

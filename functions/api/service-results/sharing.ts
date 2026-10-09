@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import QRCode from 'qrcode'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import { bodyLimit } from 'hono/body-limit'
 import type { PoolClient } from 'pg'
@@ -13,6 +14,7 @@ import { loadServiceResultsData } from './data'
 import { isServiceId } from '../../../src/helpers/adminServices'
 import { publicReportData, reportPaths, newReportToken, reportTokenHash, validReportToken } from './public'
 import type { ServiceReportShareOptions, SendServiceReportInput } from '../../../src/types/reportSharing'
+import { buildReportEmailContent } from './email'
 
 type Env = { Variables: { identity: Identity } }
 export const reportSharingRoutes = new Hono<Env>()
@@ -52,7 +54,20 @@ export function parseReportSend(body: Record<string, unknown>, origins: string):
   }
   const certificateIds = [...new Set(body.certificateIds as string[])].sort()
   if (certificateIds.length !== body.certificateIds.length) throw new ApiError(422, 'Hay certificados repetidos')
-  return { requestId: body.requestId, recipients, certificateIds, origin: assertReportOrigin(body.origin, origins) }
+  const subject = body.subject === undefined ? null : body.subject
+  const message = body.message === undefined ? null : body.message
+  if (subject !== null && (typeof subject !== 'string' || !subject.trim() || subject.length > 200 || /[\r\n]/.test(subject))) {
+    throw new ApiError(422, 'El asunto debe tener entre 1 y 200 caracteres y no contener saltos de línea', 'VALIDATION')
+  }
+  if (message !== null && (typeof message !== 'string' || !message.trim() || message.length > 4000)) {
+    throw new ApiError(422, 'El mensaje debe tener entre 1 y 4000 caracteres', 'VALIDATION')
+  }
+  return {
+    requestId: body.requestId, recipients, certificateIds,
+    origin: assertReportOrigin(body.origin, origins),
+    subject: subject === null ? null : (subject as string).trim(),
+    message: message === null ? null : (message as string).trim(),
+  }
 }
 
 type ShareCertificate = { id: string; label: string; type: 'ESTABLECIMIENTO' | 'VEHICULO'; expiresOn: string; path: string }
@@ -155,6 +170,26 @@ reportSharingRoutes.post('/:id/report-sharing/send', async context => {
     const token = newReportToken()
     const expiresAt = new Date(Date.now() + REPORT_LINK_DAYS * 86400_000).toISOString()
     const reportLink = input.origin + '/informe/consulta/' + encodeURIComponent(token)
+    const subject = input.subject ?? 'Informe técnico MIP · ' + selected.ready.solicitud + ' · ' + selected.ready.sede
+    const personalMessage = input.message ?? 'Buen día,\n\nCompartimos el informe técnico de la visita realizada. Gracias por confiar en Soluciones Radicales.'
+    const contentId = 'report-qr@solucionesradicales.invalid'
+    const mail = buildReportEmailContent({
+      message: personalMessage,
+      solicitud: selected.ready.solicitud,
+      cliente: selected.ready.cliente,
+      sede: selected.ready.sede,
+      link: reportLink,
+      expiresOn: new Intl.DateTimeFormat('es-CO', {
+        timeZone:'America/Bogota',day:'2-digit',month:'long',year:'numeric',
+      }).format(new Date(expiresAt)),
+      certificateCount: attachments.length,
+      qrContentId: contentId,
+    })
+    // Pure JS QR: no external service receives the private URL, no native image packages.
+    const qr = await QRCode.toBuffer(reportLink, {
+      type:'png',errorCorrectionLevel:'M',width:192,margin:2,
+      color:{ dark:'#17324d',light:'#ffffff' },
+    })
     shareId = await transaction(async client => {
       await lockCertificateJob(client, job)
       const { rows } = await client.query<{ id: string }>(
@@ -164,22 +199,13 @@ reportSharingRoutes.post('/:id/report-sharing/send', async context => {
       [id,job.id,reportTokenHash(token),expiresAt,actor.id])
       return rows[0]!.id
     })
-    const date = new Intl.DateTimeFormat('es-CO', { timeZone:'America/Bogota',day:'2-digit',month:'long',year:'numeric' }).format(new Date(expiresAt))
-    const mailBody = [
-      'Buen día,', '',
-      'Soluciones Radicales comparte el informe técnico de manejo integrado de plagas del servicio ' + selected.ready.solicitud + '.',
-      'Cliente: ' + selected.ready.cliente,
-      'Sede: ' + selected.ready.sede, '',
-      'Consulta el informe, las fotografías y las firmas de conformidad en:',
-      reportLink, '',
-      'Este enlace de solo lectura estará disponible hasta el ' + date + '.',
-      attachments.length ? 'Se adjunta(n) ' + attachments.length + ' certificado(s) correspondiente(s) a este servicio.' : '',
-      '', 'Soluciones Radicales', 'Manejo Integrado de Plagas',
-    ].join('\n')
     const messageId = await sendGmailMessage({
       to: input.recipients,
-      subject: 'Informe técnico MIP · ' + selected.ready.solicitud + ' · ' + selected.ready.sede,
-      text: mailBody, attachments,
+      subject, text: mail.text, html: mail.html,
+      inlineImages: [{
+        contentId,bytes:qr,name:'codigo-qr-' + selected.ready.solicitud + '.png',
+      }],
+      attachments,
       messageId: job.id + '@informes.solucionesradicales.invalid',
       onDispatch: async () => {
         await transaction(async client => {
