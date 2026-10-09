@@ -16,6 +16,7 @@ export default defineConfig({
       source: "./functions/api/index.ts",
       env: {
         ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS!,
+        ...(process.env.CALENDAR_APP_ORIGIN ? { CALENDAR_APP_ORIGIN: process.env.CALENDAR_APP_ORIGIN } : {}),
         GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID!,
         GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET!,
         GOOGLE_OAUTH_REDIRECT_URI: process.env.GOOGLE_OAUTH_REDIRECT_URI!,

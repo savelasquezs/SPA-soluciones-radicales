@@ -7,6 +7,7 @@ import { transaction } from '../db'
 import { sendGmailMessage, upsertCalendarEvent } from '../google'
 import { audit } from './commands'
 import { getCalendarSnapshot } from './queries'
+import { calendarServiceDescription, resolveCalendarAppOrigin } from './calendarLinks'
 
 interface JobPayload {
   scope: 'ADMIN_SERVICES'
@@ -63,10 +64,15 @@ async function processCalendar(job: ServiceJob): Promise<void> {
         await complete(client, job, 'ALREADY_SYNCHRONIZED')
         return
       }
+      const calendarOrigin = resolveCalendarAppOrigin(
+        process.env.ALLOWED_ORIGINS ?? 'http://localhost:5173',
+        process.env.CALENDAR_APP_ORIGIN,
+      )
+      if (!calendarOrigin) console.warn('SERVICE_CALENDAR_APP_ORIGIN_UNRESOLVED')
       const eventId = await upsertCalendarEvent({
         serviceId, eventId:metadata.calendar_event_id,
         summary:`${service.tipoServicio === 'REFUERZO' ? 'Refuerzo' : 'MIP'} · ${service.clienteNombre} · ${service.sedeNombre}`,
-        description:`${service.solicitud}\nResponsable: ${service.responsable.nombreCompleto}\nColaboradores: ${service.colaboradores.map(person=>person.nombreCompleto).join(', ') || 'Sin colaboradores'}\nTipo: ${service.tipoServicio}`,
+        description:calendarServiceDescription(service, calendarOrigin),
         location:service.direccion, start:service.inicioProgramado, end:service.finProgramado,
         attendees:[service.responsable.correoGoogle, ...service.colaboradores.map(person=>person.correoGoogle)],
         cancelled:service.estado === 'CANCELADO',

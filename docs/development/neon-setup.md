@@ -174,6 +174,8 @@ Usar el CLI directamente desde el checkout de `develop` enlazado a la rama Neon 
 
 `ALLOWED_ORIGINS` debe incluir solo los orígenes locales, productivos y de preview realmente autorizados.
 
+Para vincular cada invitación de **Google Calendar** con el servicio en la SPA, configurar opcionalmente `CALENDAR_APP_ORIGIN` con la **URL estable del entorno** (solo origen HTTPS, sin rutas, incluida en `ALLOWED_ORIGINS`). Esto es especialmente importante al tener varios dominios permitidos. Por ejemplo, en la rama de desarrollo: `https://develop-soluciones-radicales.solucionesradicales1.workers.dev`. No utilizar URLs de previews efímeros ni URLs de Neon Functions. Esta variable es opcional para no borrar valores privados en despliegues existentes; el backend puede resolver automáticamente una sola URL estable conocida si está en la allowlist.
+
 La Function requiere estos nombres de configuración de servidor:
 
 ```text

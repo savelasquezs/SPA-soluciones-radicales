@@ -72,6 +72,16 @@ El guardado interno de Principal y Refuerzo se realiza como una sola operación 
 
 La sincronización posterior con Google Calendar sigue las reglas generales de integraciones: es asíncrona, idempotente y reintentable. Un fallo de Calendar no revierte el cambio ya confirmado en la base de datos.
 
+**Acceso directo desde Calendar.** La descripción de la invitación conserva solicitud, responsable, colaboradores y tipo de servicio, y añade un enlace HTTPS a la SPA:
+- En **Servicio Principal**, «Abrir servicio en Soluciones Radicales» lleva a la pantalla de trabajo del técnico, usando el UUID de ese servicio.
+- En **Refuerzo**, «Ver mis servicios» lleva al listado mientras la ejecución de refuerzos no esté habilitada en la app técnica; evita enlazar una ruta no compatible.
+- El técnico debe iniciar sesión con Google y mantener el rol Técnico activo. La SPA conserva la dirección original al autenticarse y al seleccionar el rol, sin exponer datos privados por el enlace.
+- Google Calendar reconoce el enlace como clicable en la descripción. El evento conserva fecha, ubicación y asistentes, sin generar eventos duplicados.
+- El servidor usa CALENDAR_APP_ORIGIN cuando se configuró, validado contra ALLOWED_ORIGINS. Sin variable explícita, solo admite una única URL estable de Cloudflare (desarrollo o producción) presente en ALLOWED_ORIGINS; nunca utiliza un preview con identificador temporal. Cuando no puede resolver un origen seguro, conserva la invitación sin enlace y registra una advertencia, para no interrumpir la programación.
+- El nuevo enlace aparece en los eventos que se **crean, reprograman o sincronizan de nuevo**. No se reenvían masivamente invitaciones existentes, para evitar notificaciones innecesarias. Para actualizar una existente, el administrador puede solicitar el reintento de Calendar.
+
+
+
 ### Reprogramar un Refuerzo
 
 El Refuerzo también puede reprogramarse directamente.

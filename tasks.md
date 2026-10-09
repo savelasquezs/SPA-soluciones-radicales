@@ -127,3 +127,5 @@ Detalle técnico y comandos de verificación: `docs/architecture/admin-services.
 
 - [x] Envío opcional del informe desde cierre técnico con correos precargados offline, editor reutilizado, outbox IndexedDB, sincronización posterior al cierre confirmado y reintento idempotente al reconectar; estados pendientes y revisión de entrega incierta.
 - [ ] Verificar un correo real controlado desde cierre técnico en desarrollo, incluyendo prueba sin internet y reconexión, antes del uso con clientes.
+
+- [x] Incluir en la descripción de los eventos de Google Calendar un enlace al servicio Principal del técnico (y listado de servicios para Refuerzo), conservando el destino tras login y rol; URL de SPA estable y validada por entorno, sin cambiar fechas, asistentes ni eventos anteriores automáticamente.
