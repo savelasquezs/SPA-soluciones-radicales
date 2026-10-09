@@ -170,6 +170,8 @@ La Function `api` centraliza operaciones privilegiadas, Google OAuth, Gmail y Ca
 npx -y neon@6.2.4 deploy
 ```
 
+Usar el CLI directamente desde el checkout de `develop` enlazado a la rama Neon `desarrollo`. No subir ZIP, Base64 ni binarios al repositorio: el CLI realiza el empaquetado necesario. La API no usa dependencias nativas `sharp`/`libvips`.
+
 `ALLOWED_ORIGINS` debe incluir solo los orígenes locales, productivos y de preview realmente autorizados.
 
 La Function requiere estos nombres de configuración de servidor:

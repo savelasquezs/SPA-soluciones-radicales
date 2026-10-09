@@ -164,7 +164,7 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 
 ### Informes y acceso público
 
-La generación asíncrona del informe MIP con fotos y el acceso administrativo están definidos en [service-report.md](service-report.md).
+La consulta administrativa de resultados MIP permanece disponible. La futura página pública HTML imprimible está definida en [service-report.md](service-report.md); no se generan PDF de informe.
 
 
 - Los documentos se generan desde el histórico persistido.
@@ -185,7 +185,7 @@ La generación asíncrona del informe MIP con fotos y el acceso administrativo e
 
 - Datos estructurados: conservación indefinida.
 - Fotografías y firmas operativas: siete días después de validar el documento final.
-- Informes y certificados PDF: un año.
+- Los informes MIP son HTML, sin PDF persistido. Los certificados PDF conservan su política independiente.
 - Archivos maestros: mientras estén activos.
 
 ## Exclusiones vigentes

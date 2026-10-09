@@ -132,17 +132,17 @@ Cloudflare R2 reemplaza a Supabase Storage. Los buckets privados son:
 
 - `sr-master-files`: planos, fichas, plantillas y certificados vigentes de técnicos.
 - `sr-service-media`: fotografías, evidencias y firmas operativas.
-- `sr-generated-documents`: informes y certificados generados.
+- `sr-generated-documents`: certificados PDF generados; no informes MIP.
 
 PostgreSQL almacena únicamente claves/rutas, metadatos y estado del archivo.
 
-Las imágenes se optimizan antes de persistir y los PDF se generan comprimidos.
+Las imágenes se optimizan en el navegador antes de subirlas. Los certificados se convierten a PDF mediante Google Drive; los informes MIP son datos estructurados para HTML.
 
 Retención:
 
 - fotografías de revisiones, áreas y criterios: tres meses después de finalizar el Servicio;
 - fotografías de Hallazgos pendientes: un año máximo desde apertura; tras cierre, tres meses desde cierre para apertura y corrección si siguen disponibles;
-- informes PDF: doce meses desde generación;
+- informes MIP: no se persiste ningún PDF; las evidencias fotográficas siguen la retención propia;
 - certificados, firmas y maestros: políticas separadas, sin borrado por esta regla;
 - registros históricos estructurados: permanentes.
 
