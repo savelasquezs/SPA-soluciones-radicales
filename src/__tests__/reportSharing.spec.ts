@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { newReportToken, reportTokenHash, publicReportData, reportPaths, validReportToken } from '../../../functions/api/service-results/public'
+import { newReportToken, reportTokenHash, publicReportData, reportPaths, validReportToken } from '../../functions/api/service-results/public'
 import type { ServiceResultsData } from '@/types/serviceResults'
 
 const serviceId = '10000000-0000-4000-8000-000000000010'

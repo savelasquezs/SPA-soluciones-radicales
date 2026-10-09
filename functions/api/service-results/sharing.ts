@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import { bodyLimit } from 'hono/body-limit'
 import type { PoolClient } from 'pg'
 import { ApiError, requireAdmin, type Identity } from '../auth'
@@ -263,10 +264,13 @@ publicReportRoutes.post('/media', async context => {
   return context.json(result)
 })
 
-function handleReportError(error: Error, context: { json: (data: Record<string,unknown>, status: number) => Response }): Response {
-  if (error instanceof ApiError) return context.json({ error:error.message,code:error.code }, error.status)
+reportSharingRoutes.onError((error, context) => {
+  if (error instanceof ApiError) return context.json({ error:error.message,code:error.code },error.status as ContentfulStatusCode)
   console.error('SERVICE_REPORT_SHARING_ERROR')
   return context.json({ error:'No fue posible realizar la operación' },500)
-}
-reportSharingRoutes.onError((error, context) => handleReportError(error, context))
-publicReportRoutes.onError((error, context) => handleReportError(error, context))
+})
+publicReportRoutes.onError((error, context) => {
+  if (error instanceof ApiError) return context.json({ error:error.message,code:error.code },error.status as ContentfulStatusCode)
+  console.error('PUBLIC_SERVICE_REPORT_ERROR')
+  return context.json({ error:'No fue posible consultar el informe' },500)
+})

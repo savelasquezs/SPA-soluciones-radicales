@@ -116,7 +116,7 @@ test('El administrador selecciona emails registrados, agrega otro y adjunta un c
   expect(requests[0]).toMatchObject({
     recipients:['extra@example.test','sede@example.test'],
     certificateIds:[certificateId],
-    origin:'http://localhost:4173',
+    origin:new URL(page.url()).origin,
   })
 })
 
