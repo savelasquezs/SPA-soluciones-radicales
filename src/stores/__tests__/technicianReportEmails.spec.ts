@@ -33,7 +33,7 @@ vi.mock('@/stores/technicianServices', () => ({ useTechnicianServicesStore: () =
 vi.mock('@/services/technicianReportEmailOutbox', () => ({
   listTechnicianReportEmails: vi.fn<typeof outbox.listTechnicianReportEmails>(async (actor:string) => items.filter(x => x.actorId === actor).map(x => JSON.parse(JSON.stringify(x)) as TechnicianReportEmailIntent)),
   saveTechnicianReportEmail: vi.fn<typeof outbox.saveTechnicianReportEmail>(async (v: TechnicianReportEmailIntent) => { items = [...items.filter(x => x.requestId !== v.requestId),JSON.parse(JSON.stringify(v)) as TechnicianReportEmailIntent] }),
-  deleteTechnicianReportEmail: vi.fn<typeof outbox.deleteTechnicianReportEmail>(async (v: TechnicianReportEmailIntent) => { items = items.filter(x => x.requestId !== v.requestId) }),
+  deleteTechnicianReportEmail: vi.fn<typeof outbox.deleteTechnicianReportEmail>(async (v: Pick<TechnicianReportEmailIntent, 'actorId' | 'serviceId' | 'requestId'>) => { items = items.filter(x => x.requestId !== v.requestId) }),
   sameReportEmailRequest: (a: typeof payload,b: typeof payload) => JSON.stringify(a.recipients) === JSON.stringify(b.recipients)
     && JSON.stringify(a.certificateIds) === JSON.stringify(b.certificateIds) && a.origin === b.origin
     && a.subject === b.subject && a.message === b.message,
