@@ -1,0 +1,31 @@
+name: Temporary update QR dependency
+on:
+  push:
+    branches: [feature/report-email-html-qr-composer]
+    paths: ['.github/workflows/temporary-add-qr-dependency.yml']
+permissions:
+  contents: write
+jobs:
+  dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Add pure JS QR generation without native binaries
+        run: |
+          npm install --save-exact qrcode@1.5.4
+          npm install --save-dev --save-exact @types/qrcode@1.5.5
+          npm ci
+      - name: Commit manifest and lockfile
+        run: |
+          git config user.name "sr-ci-bot"
+          git config user.email "sr-ci-bot@users.noreply.github.com"
+          git add package.json package-lock.json
+          git diff --cached --quiet || git commit -m "build: add pure JS QR generator for report emails"
+          git push origin HEAD:feature/report-email-html-qr-composer
