@@ -19,7 +19,7 @@ const props = withDefaults(defineProps<{
   cachedEmails?: string[]
   completionConfirmed?: boolean
 }>(), { mode: 'ADMINISTRADOR', cachedEmails: () => [], completionConfirmed: true })
-const emit = defineEmits<{ close: []; sent: [result: SendServiceReportResult]; queued: [] }>()
+const emit = defineEmits<{ close: []; sent: [result: SendServiceReportResult]; queued: [result: 'sent' | 'pending' | 'needs_review'] }>()
 const notify = useNotificationsStore()
 const emailOutbox = useTechnicianReportEmailStore()
 const technicianMode = computed(() => props.mode === 'TECNICO')
@@ -124,7 +124,7 @@ async function send(): Promise<void> {
           ? 'El correo necesita revisión antes de un nuevo intento.'
           : 'Envío guardado. Se enviará cuando el servicio esté sincronizado y haya conexión.',
         result === 'needs_review' ? 'warning' : 'success')
-      emit('queued')
+      emit('queued',result)
       emit('close')
     } else {
       const result = await sendServiceReport(props.serviceId,{ ...input,requestId:attempt.requestId })

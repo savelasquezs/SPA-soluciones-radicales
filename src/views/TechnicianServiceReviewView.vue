@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { Mail } from 'lucide-vue-next'
 import { useRoute, useRouter } from 'vue-router'
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -45,16 +45,27 @@ const cachedContactEmails = computed(() => {
   const available = [...(service?.contactEmails ?? []),service?.contactoPrincipalCorreo]
   return [...new Set(available.filter((email): email is string => typeof email === 'string' && !!email.trim()))]
 })
-function onReportQueued(): void {
-  emailInfo.value = 'El informe quedó guardado para enviarse. Se procesará cuando el cierre esté confirmado y haya conexión.'
+function onReportQueued(outcome: 'sent' | 'pending' | 'needs_review'): void {
+  emailInfo.value = outcome === 'sent'
+    ? 'Informe enviado al cliente.'
+    : outcome === 'needs_review'
+      ? 'Este correo necesita revisión antes de volver a intentarlo.'
+      : 'El informe quedó guardado y se enviará cuando el cierre esté confirmado y haya conexión.'
   void emails.refresh()
 }
+watch(pendingEmailItems, (current, previous) => {
+  if (current.some(mail => mail.status === 'NEEDS_REVIEW')) {
+    emailInfo.value = 'Un correo necesita revisión. No se reenviará automáticamente.'
+  } else if (previous.length && !current.length) {
+    emailInfo.value = 'Informe enviado al cliente.'
+  }
+})
 
 onMounted(async () => {
   try {
     const loaded = await services.ensurePackage(serviceId.value)
     clientName.value = loaded.signatures?.clientName ?? ''
-    await emails.hydrate()
+    await emails.hydrate().catch(() => undefined)
   }
   catch (failure) { error.value = failure instanceof Error ? failure.message : 'No fue posible revisar el servicio.' }
   finally { loading.value = false }
