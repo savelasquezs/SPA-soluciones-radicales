@@ -122,3 +122,5 @@ Fuente: `docs/product/file-retention.md`; despliegue: `docs/development/cloudfla
 - [ ] Retirar `tecnico_que_recauda_id` en una migración posterior cuando la versión con `recaudado_por_id` esté estable en los entornos desplegados; hasta entonces se mantiene espejada solo para rollback.
 
 Detalle técnico y comandos de verificación: `docs/architecture/admin-services.md`.
+
+- [x] Reemplazar las barras horizontales del informe MIP por tendencias SVG interactivas: cumplimiento en línea y suma de capturas de todas las plagas en columnas, con valores, fechas, hover/touch y PDF A4 legible; sin nuevas dependencias ni cambios de DB.

@@ -8,6 +8,7 @@ import StatusPanel from '@/components/base/StatusPanel.vue'
 import EvidenceLightbox from '@/components/base/EvidenceLightbox.vue'
 import ReportEvidence from '@/components/domain/services/ReportEvidence.vue'
 import SendReportDialog from '@/components/domain/services/SendReportDialog.vue'
+import ServiceTrendCharts from '@/components/domain/services/ServiceTrendCharts.vue'
 import {
   areaCompliance, bogotaDate, bogotaTime, elapsedMinutes,
   reportEvidence, reportMetrics, scoreText, type ReportEvidenceState,
@@ -43,8 +44,6 @@ const missingImages = computed(() => images.value.filter(item => ['MISSING','ERR
 const availableSignatures = computed(() => report.value !== null
   && states[report.value.firmaTecnico] === 'AVAILABLE'
   && states[report.value.firmaCliente] === 'AVAILABLE')
-const history = computed(() => report.value?.historico ?? [])
-const maxHistoryCaptures = computed(() => Math.max(1, ...history.value.map(item => item.capturas)))
 const activeImage = computed(() => selectedIndex.value === null ? null : images.value[selectedIndex.value] ?? null)
 const activeImageState = computed((): ReportEvidenceState => activeImage.value ? states[activeImage.value.path] ?? 'IDLE' : 'IDLE')
 
@@ -313,24 +312,8 @@ watch(() => [serviceId.value, publicToken.value], () => { void loadReport() }, {
 
         <section class="report-document__section" aria-labelledby="report-history-title">
           <header class="report-document__heading"><span class="report-document__number">06</span><h2 id="report-history-title">Evolución histórica de la sede</h2></header>
-          <p class="report-document__section-intro">Comparativo de hasta seis servicios principales finalizados, incluido el actual, basado en las evaluaciones registradas.</p>
-          <p v-if="!history.length" class="report-document__empty">Aún no hay visitas históricas para comparar.</p>
-          <div v-else class="report-charts">
-            <div class="report-chart"><h3>Cumplimiento por visita</h3>
-              <div v-for="visit in history" :key="visit.solicitud" class="report-chart__row">
-                <time :title="bogotaDate(visit.fecha)">{{ visit.solicitud }}</time>
-                <span class="report-chart__track" role="img" :aria-label="'Cumplimiento: ' + scoreText(visit.cumplimiento)"><span class="report-chart__bar" :style="{ width: Math.max(0, Math.min(100, visit.cumplimiento ?? 0)) + '%' }"></span></span>
-                <strong>{{ scoreText(visit.cumplimiento) }}</strong>
-              </div>
-            </div>
-            <div class="report-chart"><h3>Capturas por visita</h3>
-              <div v-for="visit in history" :key="visit.solicitud" class="report-chart__row">
-                <time :title="bogotaDate(visit.fecha)">{{ visit.solicitud }}</time>
-                <span class="report-chart__track" role="img" :aria-label="'Capturas: ' + visit.capturas"><span class="report-chart__bar" :style="{ width: (visit.capturas / maxHistoryCaptures * 100) + '%' }"></span></span>
-                <strong>{{ visit.capturas }}</strong>
-              </div>
-            </div>
-          </div>
+          <p class="report-document__section-intro">Hasta seis visitas finalizadas de esta sede, ordenadas por fecha. Pasa el mouse o toca cada punto o barra para consultar sus valores y la variación frente a la visita anterior.</p>
+          <ServiceTrendCharts :visits="report.historico" />
         </section>
 
         <section class="report-document__section" aria-labelledby="report-signatures-title">

@@ -23,7 +23,11 @@ const result: ServiceResultsData = {
     puntos:[{numero:'01',ubicacion:'Acceso',tipo:'Trampa adhesiva',estado:'BUENO',capturas:[{plagaNombreSnapshot:'Moscas',cantidad:2}],observaciones:'Correcto',foto:photo('devices/d1/review/image.png')}],
     hallazgos:[{descripcion:'Abertura',recomendacion:'Sellar',estado:'ABIERTO',responsable:'Cliente',fotos:[photo('findings/f1/opening/image.png')]}],
   }],
-  historico:[{solicitud:'SR-00000008',fecha:'2026-10-09T15:00:00.000Z',cumplimiento:50,capturas:2}],
+  historico:[
+    {solicitud:'SR-00000006',fecha:'2026-09-09T15:00:00.000Z',cumplimiento:60,capturas:5},
+    {solicitud:'SR-00000007',fecha:'2026-09-23T15:00:00.000Z',cumplimiento:75,capturas:3},
+    {solicitud:'SR-00000008',fecha:'2026-10-09T15:00:00.000Z',cumplimiento:80,capturas:2},
+  ],
 }
 function service(): AdminService {
   return {
@@ -92,6 +96,32 @@ test('Historial ofrece informe solo administrativo y A4 con fotografías y ambas
   await expect(page.getByText('QR')).toHaveCount(0)
 })
 
+test('las tendencias interactivas muestran cifras y variación por mouse, teclado y toque sin alterar el A4', async ({page}) => {
+  await setup(page, 'ADMINISTRADOR')
+  await page.goto('/servicios/' + serviceId + '/informe')
+  const complianceChart = page.getByTestId('mip-compliance-chart')
+  const capturesChart = page.getByTestId('mip-captures-chart')
+  await expect(complianceChart).toBeVisible()
+  await expect(capturesChart).toBeVisible()
+  await expect(page.getByTestId('mip-compliance-delta')).toHaveText('+5 pp')
+  await expect(page.getByTestId('mip-captures-delta')).toHaveText('-1 captura')
+  await page.getByTestId('mip-compliance-visit-2').hover()
+  await expect(page.getByTestId('mip-compliance-tooltip')).toContainText('80 %')
+  await expect(page.getByTestId('mip-compliance-tooltip')).toContainText('+5 pp')
+  await page.getByTestId('mip-captures-visit-0').focus()
+  await expect(page.getByTestId('mip-captures-tooltip')).toContainText('5 capturas')
+  await page.getByTestId('mip-captures-visit-2').hover()
+  await expect(page.getByTestId('mip-captures-tooltip')).toContainText('2 capturas')
+  await expect(page.getByTestId('mip-captures-tooltip')).toContainText('-1 captura')
+  await page.setViewportSize({width:390,height:844})
+  await page.getByTestId('mip-captures-visit-1').click()
+  await expect(page.getByTestId('mip-captures-tooltip')).toContainText('3 capturas')
+  await page.emulateMedia({media:'print'})
+  await expect(page.getByTestId('mip-compliance-chart').locator('.report-trend__value').filter({hasText:'80 %'})).toBeVisible()
+  await expect(page.getByTestId('mip-captures-chart').locator('.report-trend__value').filter({hasText:'2'}).last()).toBeVisible()
+  await expect(page.getByTestId('mip-captures-tooltip')).toBeHidden()
+})
+
 test('un técnico no puede abrir el informe administrativo por URL', async ({page}) => {
   await setup(page, 'TECNICO')
   await page.goto('/servicios/' + serviceId + '/informe')
@@ -137,6 +167,8 @@ test('el enlace público se abre sin sesión y no solicita autorización ni mues
   await expect(page.getByRole('img',{name:'Firma del técnico'})).toBeVisible()
   await expect(page.getByRole('img',{name:'Firma de conformidad del cliente'})).toBeVisible()
   await expect(page.getByRole('button',{name:'Guardar PDF'})).toBeVisible()
+  await expect(page.getByTestId('mip-compliance-chart')).toBeVisible()
+  await expect(page.getByTestId('mip-captures-chart')).toBeVisible()
   await expect(page.getByRole('button',{name:'Enviar informe'})).toHaveCount(0)
   expect(state.publicHasAuthorization()).toBe(false)
 })
