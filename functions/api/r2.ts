@@ -342,3 +342,13 @@ export async function putReportObject(storagePath: string, serviceId: string, by
   })
   if (!response.ok) throw new ApiError(502, 'No fue posible almacenar el informe.')
 }
+
+
+/** Only call for a path proven to be referenced by this finalized service. */
+export function createReportMediaReadUrl(storagePath:string,serviceId:string):string{
+  if(!/^[0-9a-f-]{36}$/i.test(serviceId) ||
+    !storagePath.startsWith('services/'+serviceId+'/') ||
+    !/^services\/[0-9a-f-]{36}\/(?:areas\/[0-9a-f-]{36}\/no-access|criteria\/[0-9a-f-]{36}\/evidence|devices\/[0-9a-f-]{36}\/review|findings\/[0-9a-f-]{36}\/(?:opening|closure)|signatures\/(?:client|technician))\/[^/]+\.(?:png|jpe?g|webp)$/i.test(storagePath) ||
+    storagePath.includes('..')) throw new ApiError(422,'Ruta no válida')
+  return presign('GET',storagePath,undefined,serviceMediaBucket(),{'response-cache-control':'private, no-store'})
+}
