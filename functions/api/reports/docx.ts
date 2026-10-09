@@ -15,7 +15,7 @@ const PICTURE_NS = 'http://schemas.openxmlformats.org/drawingml/2006/picture'
 const WP_NS = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing'
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }
 const escapeXml = (value: unknown): string => String(value ?? '').replace(/[&<>"']/g, (char) => ESC[char]!)
-  .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, ' ')
+  .replace(/\p{Cc}/gu, ' ')
 const clean = (value: unknown): string => String(value ?? '').replace(/\s+/g, ' ').trim()
 const date = (value: string): string => new Intl.DateTimeFormat('es-CO', {
   timeZone: 'America/Bogota', day: '2-digit', month: '2-digit', year: 'numeric',
