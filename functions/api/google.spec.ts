@@ -45,7 +45,7 @@ describe('Google Drive DOCX conversion', () => {
       .mockResolvedValueOnce(new Response(null, { status: 204 }))
     vi.stubGlobal('fetch', remote)
 
-    await expect(module.convertDocxToPdfWithGoogleDrive(Buffer.from('docx'), 1024 * 1024)).resolves.toEqual(output)
+    await expect(module.convertDocumentToPdfWithGoogleDrive(Buffer.from('docx'), 1024 * 1024)).resolves.toEqual(output)
     expect(remote.mock.calls[1]?.[0]).toContain('/upload/drive/v3/files?uploadType=multipart')
     expect(remote.mock.calls[2]?.[0]).toContain('/temporary-id/export?mimeType=application%2Fpdf')
     expect(remote.mock.calls[3]).toMatchObject(['https://www.googleapis.com/drive/v3/files/temporary-id', { method: 'DELETE' }])
@@ -61,7 +61,7 @@ describe('Google Drive DOCX conversion', () => {
       .mockResolvedValueOnce(new Response('error', { status: 503 }))
     vi.stubGlobal('fetch', remote)
 
-    await expect(module.convertDocxToPdfWithGoogleDrive(Buffer.from('docx'), 1024 * 1024))
+    await expect(module.convertDocumentToPdfWithGoogleDrive(Buffer.from('docx'), 1024 * 1024))
       .rejects.toThrow('no fue posible eliminar el archivo temporal')
     const cleanupJob = db.query.mock.calls.find(([sql]) => String(sql).includes("values ('STORAGE_CLEANUP'"))
     expect(cleanupJob).toBeDefined()
@@ -80,7 +80,7 @@ describe('Google Drive DOCX conversion', () => {
       .mockResolvedValueOnce(new Response(null, { status: 204 }))
     vi.stubGlobal('fetch', remote)
 
-    await expect(module.convertDocxToPdfWithGoogleDrive(Buffer.from('docx'), 1024)).rejects.toThrow('Google Drive no pudo exportar')
+    await expect(module.convertDocumentToPdfWithGoogleDrive(Buffer.from('docx'), 1024)).rejects.toThrow('Google Drive no pudo exportar')
     expect(remote.mock.calls[3]).toMatchObject(['https://www.googleapis.com/drive/v3/files/temporary-id', { method: 'DELETE' }])
   })
 })
