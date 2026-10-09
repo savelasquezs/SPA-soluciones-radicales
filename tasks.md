@@ -124,3 +124,6 @@ Fuente: `docs/product/file-retention.md`; despliegue: `docs/development/cloudfla
 Detalle técnico y comandos de verificación: `docs/architecture/admin-services.md`.
 
 - [x] Reemplazar las barras horizontales del informe MIP por tendencias SVG interactivas: cumplimiento en línea y suma de capturas de todas las plagas en columnas, con valores, fechas, hover/touch y PDF A4 legible; sin nuevas dependencias ni cambios de DB.
+
+- [x] Envío opcional del informe desde cierre técnico con correos precargados offline, editor reutilizado, outbox IndexedDB, sincronización posterior al cierre confirmado y reintento idempotente al reconectar; estados pendientes y revisión de entrega incierta.
+- [ ] Verificar un correo real controlado desde cierre técnico en desarrollo, incluyendo prueba sin internet y reconexión, antes del uso con clientes.

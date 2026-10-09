@@ -28,3 +28,8 @@ export const resolvePublicServiceReport = (token: string) =>
   publicRequest<ServiceResultsResponse>('api/public/reports/resolve',{ token })
 export const publicReportPhotoUrl = async (token: string, mediaId: string): Promise<string> =>
   (await publicRequest<{ url: string }>('api/public/reports/media',{ token,mediaId })).url
+
+const technicianRoot = (id: string) => 'api/technician/services/' + encodeURIComponent(id) + '/report-sharing'
+export const getTechnicianReportShareOptions = (id: string) => apiRequest<ServiceReportShareOptions>(technicianRoot(id))
+export const sendTechnicianServiceReport = (id: string, data: SendServiceReportInput) =>
+  apiRequest<SendServiceReportResult>(technicianRoot(id) + '/send', json(data))

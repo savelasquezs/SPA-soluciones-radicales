@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Building2, CalendarDays, ChevronDown, CircleHelp, CloudOff, FileText, Gauge, LogOut, Menu, Search, Settings2, Users, WalletCards, Wifi, Wrench, X } from 'lucide-vue-next'
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -9,12 +9,27 @@ import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import { useNotificationsStore } from '@/stores/notifications'
+import { useTechnicianReportEmailStore } from '@/stores/technicianReportEmails'
 import type { ActiveRole, ThemePreference } from '@/types/domain'
 
 type NavigationItem = { to: string; label: string; icon: typeof Gauge; admin?: boolean }
 type NavigationGroup = { label: string; items: NavigationItem[] }
 const auth = useAuthStore(), app = useAppStore(), notifications = useNotificationsStore()
 const { online } = useNetworkStatus()
+const reportEmails = useTechnicianReportEmailStore()
+function resumePendingEmails(): void {
+  if (online.value && auth.activeRole === 'TECNICO') void reportEmails.flushAll().catch(() => undefined)
+}
+function onVisibilityChange(): void { if (document.visibilityState === 'visible') resumePendingEmails() }
+watch([online, () => auth.activeRole], resumePendingEmails, { immediate: true })
+onMounted(() => {
+  window.addEventListener('focus', resumePendingEmails)
+  document.addEventListener('visibilitychange', onVisibilityChange)
+})
+onUnmounted(() => {
+  window.removeEventListener('focus', resumePendingEmails)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+})
 const route = useRoute(), router = useRouter()
 const navigationOpen = ref(false), switchingRole = ref(false), changingAccount = ref(false)
 const groups: NavigationGroup[] = [

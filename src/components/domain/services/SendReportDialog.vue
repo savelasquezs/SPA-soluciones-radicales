@@ -6,15 +6,25 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import StatusPanel from '@/components/base/StatusPanel.vue'
 import EmailComposerFields from '@/components/base/EmailComposerFields.vue'
+import { useTechnicianReportEmailStore } from '@/stores/technicianReportEmails'
 import {
-  getReportShareOptions, sendServiceReport, revokeServiceReportLinks,
+  getReportShareOptions, getTechnicianReportShareOptions, sendServiceReport, revokeServiceReportLinks,
 } from '@/services/reportSharingService'
 import { useNotificationsStore } from '@/stores/notifications'
 import type { SendServiceReportResult, ServiceReportShareOptions } from '@/types/reportSharing'
 
-const props = defineProps<{ serviceId: string; solicitud: string; cliente: string; sede: string }>()
-const emit = defineEmits<{ close: []; sent: [result: SendServiceReportResult] }>()
+const props = withDefaults(defineProps<{
+  serviceId: string; solicitud: string; cliente: string; sede: string
+  mode?: 'ADMINISTRADOR' | 'TECNICO'
+  cachedEmails?: string[]
+  completionConfirmed?: boolean
+}>(), { mode: 'ADMINISTRADOR', cachedEmails: () => [], completionConfirmed: true })
+const emit = defineEmits<{ close: []; sent: [result: SendServiceReportResult]; queued: [] }>()
 const notify = useNotificationsStore()
+const emailOutbox = useTechnicianReportEmailStore()
+const technicianMode = computed(() => props.mode === 'TECNICO')
+const queuedOffline = computed(() => technicianMode.value && (!navigator.onLine || !props.completionConfirmed))
+const fallbackNotice = ref('')
 const loading = ref(true)
 const error = ref('')
 const options = ref<ServiceReportShareOptions | null>(null)
@@ -38,13 +48,32 @@ const ready = computed(() => !!options.value?.gmailConnected && recipients.value
 const validEmail = (value: string) => /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(value) && value.length <= 254
 let attempt: { fingerprint: string; requestId: string } | null = null
 
+function fallbackOptions(): ServiceReportShareOptions {
+  const emails = [...new Set((props.cachedEmails ?? [])
+    .filter((value): value is string => typeof value === 'string')
+    .map(value => value.trim().toLowerCase())
+    .filter(validEmail))].sort()
+  return { registeredEmails:emails,certificates:[],activeLinks:0,lastSharedAt:null,gmailConnected:true }
+}
 async function load(): Promise<void> {
   loading.value = true
   error.value = ''
+  fallbackNotice.value = ''
   try {
-    options.value = await getReportShareOptions(props.serviceId)
+    if (technicianMode.value && (!navigator.onLine || !props.completionConfirmed)) {
+      options.value = fallbackOptions()
+    } else {
+      options.value = await (technicianMode.value
+        ? getTechnicianReportShareOptions(props.serviceId)
+        : getReportShareOptions(props.serviceId))
+    }
   } catch (failure) {
-    error.value = failure instanceof Error ? failure.message : 'No pudimos cargar los destinatarios.'
+    if (technicianMode.value) {
+      options.value = fallbackOptions()
+      fallbackNotice.value = 'No pudimos consultar los certificados. Puedes guardar el envío del informe; se intentará al tener conexión.'
+    } else {
+      error.value = failure instanceof Error ? failure.message : 'No pudimos cargar los destinatarios.'
+    }
   } finally { loading.value = false }
 }
 onMounted(() => { void load() })
@@ -80,17 +109,29 @@ async function send(): Promise<void> {
   sending.value = true
   error.value = ''
   try {
-    const result = await sendServiceReport(props.serviceId,{
-      requestId: attempt.requestId,
-      recipients: recipients.value,
-      certificateIds: [...selectedCertificates.value].sort(),
-      origin: window.location.origin,
-      subject: subject.value.trim(),
-      message: message.value.trim(),
-    })
-    notify.show('Informe enviado por Gmail a ' + recipients.value.length + ' destinatario(s).','success')
-    emit('sent',result)
-    emit('close')
+    const input = {
+      recipients:recipients.value,
+      certificateIds:[...selectedCertificates.value].sort(),
+      origin:window.location.origin,
+      subject:subject.value.trim(),
+      message:message.value.trim(),
+    }
+    if (technicianMode.value) {
+      const result = await emailOutbox.queue(props.serviceId,input)
+      notify.show(result === 'sent'
+        ? 'Informe enviado correctamente.'
+        : result === 'needs_review'
+          ? 'El correo necesita revisión antes de un nuevo intento.'
+          : 'Envío guardado. Se enviará cuando el servicio esté sincronizado y haya conexión.',
+        result === 'needs_review' ? 'warning' : 'success')
+      emit('queued')
+      emit('close')
+    } else {
+      const result = await sendServiceReport(props.serviceId,{ ...input,requestId:attempt.requestId })
+      notify.show('Informe enviado por Gmail a ' + recipients.value.length + ' destinatario(s).','success')
+      emit('sent',result)
+      emit('close')
+    }
   } catch (failure) {
     error.value = failure instanceof Error ? failure.message : 'No fue posible enviar el informe.'
     if (failure && typeof failure === 'object' && 'code' in failure &&
@@ -158,8 +199,9 @@ async function revoke(): Promise<void> {
         </div>
         <EmailComposerFields v-model:subject="subject" v-model:message="message" :disabled="sending"
           :subject-error="subjectError" :message-error="messageError" />
-        <div class="send-report__info"><ShieldCheck :size="17" aria-hidden="true" /><p>El correo incluye «Abrir aquí» y un código QR para ver el informe. El enlace vence en 90 días y no se adjunta un PDF del informe.</p></div>
-        <div v-if="options.activeLinks" class="send-report__previous">
+        <p v-if="fallbackNotice" class="send-report__empty" role="status">{{ fallbackNotice }}</p>
+        <div class="send-report__info"><ShieldCheck :size="17" aria-hidden="true" /><p v-if="queuedOffline">El correo quedará guardado en este celular hasta que el servicio esté finalizado en el servidor y haya internet. El certificado podrá adjuntarse después, cuando esté generado.</p><p v-else>El correo incluye «Abrir aquí» y un código QR para ver el informe. El enlace vence en 90 días y no se adjunta un PDF del informe.</p></div>
+        <div v-if="!technicianMode && options.activeLinks" class="send-report__previous">
           <span><Check :size="14" /> {{ options.activeLinks }} enlace(s) vigente(s)</span>
           <button v-if="!confirmRevoke" type="button" :disabled="sending" @click="confirmRevoke=true"><Trash2 :size="14" /> Revocar enlaces</button>
           <div v-else class="send-report__confirm">
@@ -168,14 +210,14 @@ async function revoke(): Promise<void> {
             <BaseButton size="compact" variant="danger" :loading="revoking" @click="revoke">Revocar</BaseButton>
           </div>
         </div>
-        <p v-if="!options.gmailConnected" class="send-report__validation" role="alert">Debes conectar Gmail en Integraciones antes de enviar el informe.</p>
+        <p v-if="!options.gmailConnected" class="send-report__validation" role="alert">No hay una cuenta de Gmail conectada para enviar el informe.</p>
         <p v-if="error" class="send-report__validation" role="alert">{{ error }}</p>
         <p v-if="deliveryUncertain" class="send-report__empty">El envío quedó sin confirmación. Revisa Gmail → Enviados antes de intentarlo nuevamente.</p>
       </template>
     </div>
     <template #footer>
       <BaseButton variant="secondary" :disabled="sending" @click="emit('close')">Cancelar</BaseButton>
-      <BaseButton :disabled="loading || !ready || !!extraInput.trim()" :loading="sending" @click="send"><Mail :size="16" /> Enviar informe</BaseButton>
+      <BaseButton :disabled="loading || !ready || !!extraInput.trim()" :loading="sending" @click="send"><Mail :size="16" /> {{ queuedOffline ? 'Guardar envío' : 'Enviar informe' }}</BaseButton>
     </template>
   </BaseDialog>
 </template>
