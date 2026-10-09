@@ -1,0 +1,53 @@
+name: Temporary Neon compact API handoff
+on:
+  push:
+    branches: [cleanup/remove-service-report-pdf-and-sharp]
+    paths: ['.github/workflows/neon-compact-handoff.yml']
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Bundle API without native packages
+        run: |
+          npm install --no-save --package-lock=false --legacy-peer-deps esbuild@0.28.2
+          mkdir -p .neon-build
+          node --input-type=module <<'NODE'
+          import { build } from 'esbuild';
+          await build({
+            entryPoints: ['functions/api/index.ts'],
+            outfile: '.neon-build/index.mjs',
+            bundle: true,
+            platform: 'node',
+            target: 'node24',
+            format: 'esm',
+            conditions: ['node'],
+            banner: {js:'import { createRequire as __createRequire } from "node:module"; const require = __createRequire(import.meta.url);'},
+            logLevel: 'info',
+          });
+          NODE
+          node --check .neon-build/index.mjs
+          cd .neon-build
+          zip -9 -q neon-api.zip index.mjs
+          sha256sum neon-api.zip
+          ls -lh index.mjs neon-api.zip
+          test $(wc -c < neon-api.zip) -lt 1600000
+      - uses: actions/upload-artifact@v4
+        with:
+          name: neon-api-compact
+          path: .neon-build/neon-api.zip
+          retention-days: 1
+          if-no-files-found: error
+      - name: Temporary connector handoff (bundle only, never secrets)
+        run: |
+          echo "__NEON_B64_START__"
+          base64 -w0 .neon-build/neon-api.zip | fold -w 8192 | sed 's/^/B64:/'
+          echo "__NEON_B64_END__"
