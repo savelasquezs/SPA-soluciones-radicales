@@ -18,6 +18,7 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
+      - run: npm install --no-save --package-lock=false --legacy-peer-deps esbuild@0.28.2
       - name: Bundle native-free Function
         run: |
           mkdir -p .neon-bundle
