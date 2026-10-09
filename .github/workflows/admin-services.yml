@@ -1,5 +1,7 @@
 name: Services verification
 on:
+  push:
+    branches: [ci/verify-site-contact-findings]
   pull_request:
     branches: [develop]
     paths: ['src/**','functions/api/**','database/**','scripts/database/**','e2e/**','tests/**','vitest.services.config.ts','neon.ts','package*.json','.github/workflows/admin-services.yml']
