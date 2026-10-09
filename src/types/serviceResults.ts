@@ -4,7 +4,7 @@ export interface ServiceFindingResult{descripcion:string;recomendacion:string;es
 export interface ServiceAreaResult{id:string;nombre:string;sinAcceso:boolean;motivo:string|null;fotos:string[];criterios:ServiceCriterionResult[];puntos:ServicePointResult[];hallazgos:ServiceFindingResult[]}
 export interface ServiceResultsData{
   id:string;solicitud:string;cliente:string;nit:string;sede:string;direccion:string;tecnico:string;firmanteCliente:string;firmaTecnico:string;firmaCliente:string;
-  inicioProgramado:string;inicioReal:string;finReal:string;productos:Array<{nombre:string;principio:string;registro:string;lote:string;dosis:string;metodos:string}>;
+  inicioProgramado:string;inicioReal:string;finReal:string;productos:Array<{nombre:string;principio:string;registro:string;lote:string;dosis:string;metodos:string;fichaTecnicaDisponible?:boolean}>;
   areas:ServiceAreaResult[];historico:Array<{solicitud:string;fecha:string;cumplimiento:number|null;capturas:number}>
 }
 export interface ServiceResultsResponse{data:ServiceResultsData}

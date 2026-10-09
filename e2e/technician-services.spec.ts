@@ -37,6 +37,7 @@ const servicePackage = (state: TechnicianServiceSummary['estado'] = 'PROGRAMADO'
     fechaVencimiento: '2028-01-10',
     dosis: '1 gota/m²',
     metodoAplicacion: 'Aplicación de gel',
+    fichaTecnicaDisponible: true,
   }],
   deviceTypes: [{ codigo: 'TRAMPA_ADHESIVA', nombre: 'Trampa adhesiva', clasificacion: 'RASTREROS', plagas: [{ codigo: 'CUCARACHA', nombre: 'Cucaracha' }] }],
   areas: [{
@@ -99,6 +100,10 @@ async function setup(page: Page, withPriorFinding = false, failFirstPackage = fa
     if (request.method() === 'OPTIONS') { await route.fulfill({ status: 204 }); return }
     if (path === '/api/session') {
       await json(route, { id: ids.actor, nombreCompleto: 'Técnico de prueba', correoGoogle: 'santyvan974@gmail.com', esAdmin: false, esTecnico: true, rolActivo: 'TECNICO', requiereSeleccionRol: false })
+      return
+    }
+    if (path === '/api/technician/services/' + ids.service + '/products/' + ids.product + '/technical-sheet') {
+      await json(route,{url:'https://r2.example.test/producto.pdf'})
       return
     }
     if (path === '/api/technician/services/' + ids.service + '/report-sharing' && request.method() === 'GET') {
@@ -543,4 +548,19 @@ test('técnico guarda correo offline y lo envía una sola vez al reconectar', as
   await expect(page.getByText('Envío pendiente')).toHaveCount(0)
   await page.evaluate(() => window.dispatchEvent(new Event('online')))
   await expect.poll(() => api.reportSends.length).toBe(1)
+})
+
+
+test('el técnico puede abrir la ficha técnica del producto asignado sin exponer su ruta R2',async({page})=>{
+  await setup(page)
+  await page.context().route('https://r2.example.test/**', route=>route.fulfill({status:200,contentType:'text/html',body:'Ficha técnica de prueba'}))
+  await page.goto('/servicios/'+ids.service+'/trabajo')
+  await page.getByText('Productos previstos (1)').click()
+  const sheet=page.getByRole('button',{name:'Ver ficha técnica de Gel insecticida'})
+  await expect(sheet).toBeVisible()
+  const pending=page.waitForEvent('popup')
+  await sheet.click()
+  const popup=await pending
+  await expect.poll(()=>popup.url()).toContain('r2.example.test/producto.pdf')
+  await popup.close()
 })

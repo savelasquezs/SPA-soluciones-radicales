@@ -120,7 +120,7 @@ function openReview(): void {
           <div v-else class="technician-work-actions"><BaseButton @click="openAreas"><Map :size="18" aria-hidden="true" />Ir a las Áreas</BaseButton><BaseButton variant="secondary" @click="openReview"><ClipboardCheck :size="18" aria-hidden="true" />Revisar cierre</BaseButton></div>
         </div>
       </section>
-      <details class="technician-summary"><summary>Productos previstos ({{ packageValue.products.length }})</summary><TechnicianProductsList :products="packageValue.products" /></details>
+      <details class="technician-summary"><summary>Productos previstos ({{ packageValue.products.length }})</summary><TechnicianProductsList :products="packageValue.products" :service-id="serviceId" /></details>
     </template>
   </ServicePage>
 </template>

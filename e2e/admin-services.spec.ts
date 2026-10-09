@@ -101,7 +101,11 @@ async function setup(page: Page, role: 'ADMINISTRADOR' | 'TECNICO'='ADMINISTRADO
       const created=record(uid(counter++));created.solicitud=`SR-${counter}`;created.tecnicosColaboradoresIds=[]
       schedule(created,body.input.programacion);created.observaciones=body.input.observaciones
       created.productos=body.input.productos.map(product=>({ ...product,id:uid(counter++),nombre:'Producto de prueba',dosis:'5 mL/L',metodoAplicacionNombre:'Aspersión',activo:true,aplicado:false }))
-      created.pago={ ...created.pago,...body.input.cobro,estadoPago:body.input.cobro.metodoPago ? 'PENDIENTE' : 'SIN_REGISTRAR' }
+      created.pago={ ...created.pago,...body.input.cobro,
+        estadoPago:body.input.cobro.pagado ? 'CONFIRMADO' : body.input.cobro.metodoPago ? 'PENDIENTE' : 'SIN_REGISTRAR',
+        recaudadoPorId:body.input.cobro.pagado ? body.input.cobro.recaudadoPorId ?? null : null,
+        recaudadoPorNombre:body.input.cobro.pagado && body.input.cobro.recaudadoPorId===ids.admin ? 'Admin de prueba' : null,
+      }
       const child=record(uid(counter++),'REFUERZO');child.solicitud=`SR-${counter}`;child.servicioPrincipalId=created.id
       schedule(child,body.input.refuerzo ?? suggestReinforcement(body.input.programacion));records.push(created,child)
       if(body.upcoming) next={ ...next,estado:'CONFIRMADO',servicioAgendadoId:created.id,version:next.version+1 }
@@ -154,7 +158,9 @@ async function fillDate(page: Page,selector: string,value: string): Promise<void
   await input.blur()
 }
 async function selectSiteAndTeam(page: Page): Promise<void> {
-  await page.getByLabel('Cliente y sede',{ exact:false }).selectOption(ids.site)
+  await page.locator('#servicio-cliente').fill('Casa')
+  await page.getByRole('listbox',{name:'Cliente'}).getByRole('option',{name:'Casa Verde'}).click()
+  await page.locator('#servicio-sede').selectOption(ids.site)
   await page.locator('#programacion-responsable').selectOption(ids.tech)
 }
 
@@ -180,8 +186,9 @@ test('creates a complete reviewed pair with custom Refuerzo dates, products and 
   await expect(page.locator('#servicio-sede')).toHaveAttribute('aria-invalid','true')
   await selectSiteAndTeam(page)
   await page.getByRole('button',{ name:'Productos a utilizar',exact:true }).click()
+  await page.getByRole('searchbox',{name:'Buscar productos'}).fill('Prueba')
   await page.getByRole('option',{ name:/Producto de prueba/ }).click()
-  await page.getByRole('button',{ name:'Productos a utilizar',exact:true }).click()
+  await page.getByRole('button',{ name:'Aceptar',exact:true }).click()
   await page.locator('#producto-0-lote').fill('LOTE-2030')
   await expect(page.locator('#producto-0-dosis')).toHaveCount(0)
   await expect(page.locator('#producto-0-metodo')).toHaveCount(0)
@@ -208,6 +215,37 @@ test('creates a complete reviewed pair with custom Refuerzo dates, products and 
   expect(call.body!.input.cobro.tecnicoRecaudoPrevistoId).toBe(ids.other)
   const created=api.records.find(value=>![ids.principal,ids.refuerzo].includes(value.id) && value.tipoServicio==='PRINCIPAL')!
   expect(created.valorServicio).toBe(300000);expect(created.pago.estadoPago).toBe('PENDIENTE');expect(created.pago.recaudadoPorId).toBeNull()
+})
+
+test('crea servicio ya pagado en efectivo con receptor Administrador, sin confirmación adicional',async({page})=>{
+  const api=await setup(page)
+  await page.goto(listUrl)
+  await page.getByRole('button',{name:'Programar servicio',exact:true}).click()
+  await selectSiteAndTeam(page)
+  await page.locator('#servicio-ya-pago').selectOption('SI')
+  await page.locator('#servicio-metodo').selectOption('EFECTIVO')
+  await expect(page.locator('#servicio-recibio')).toBeVisible()
+  await page.locator('#servicio-recibio').selectOption(ids.admin)
+  await page.getByRole('button',{name:'Agendar servicio',exact:true}).first().click()
+  await expect(page).toHaveURL(url=>url.pathname==='/servicios')
+  const call=api.calls.find(x=>x.path==='/api/admin/services'&&x.method==='POST')
+  expect(call?.body?.input.cobro).toMatchObject({
+    metodoPago:'EFECTIVO',pagado:true,recaudadoPorId:ids.admin,tecnicoRecaudoPrevistoId:null,
+  })
+  const service=api.records.find(x=>![ids.principal,ids.refuerzo].includes(x.id)&&x.tipoServicio==='PRINCIPAL')
+  expect(service?.pago.estadoPago).toBe('CONFIRMADO')
+})
+
+test('valida una fecha pasada al programar sin enviar la solicitud al backend',async({page})=>{
+  const api=await setup(page)
+  await page.goto(listUrl)
+  await page.getByRole('button',{name:'Programar servicio',exact:true}).click()
+  await selectSiteAndTeam(page)
+  await page.locator('#programacion-inicio').fill('01/01/2024 · 10:00')
+  await page.locator('#programacion-inicio').blur()
+  await expect(page.locator('#programacion-inicio')).toHaveAttribute('aria-invalid','true')
+  await page.getByRole('button',{name:'Agendar servicio',exact:true}).first().click()
+  expect(api.calls.filter(x=>x.path==='/api/admin/services'&&x.method==='POST')).toHaveLength(0)
 })
 
 test('joint reprogramming and independent Refuerzo reprogramming keep separate dates',async({ page })=>{

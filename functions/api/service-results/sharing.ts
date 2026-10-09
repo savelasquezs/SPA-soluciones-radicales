@@ -11,6 +11,7 @@ import {
   claimCertificateJob, completeCertificateJob, failCertificateJob, lockCertificateJob, markEmailDispatching,
 } from '../certificates/jobs'
 import { loadServiceResultsData } from './data'
+import { productSheetIndex, reportProductSheetUrl } from './productSheets'
 import { assignedServiceState } from '../technician-services/queries'
 import { isServiceId } from '../../../src/helpers/adminServices'
 import { publicReportData, reportPaths, newReportToken, reportTokenHash, validReportToken } from './public'
@@ -325,6 +326,16 @@ technicianReportSharingRoutes.onError((error, context) => {
   if (error instanceof ApiError) return context.json({ error:error.message,code:error.code },error.status as ContentfulStatusCode)
   console.error('TECHNICIAN_REPORT_SHARING_ERROR')
   return context.json({ error:'No fue posible enviar el informe' },500)
+})
+publicReportRoutes.post('/product-sheet', async context => {
+  const body = await context.req.json().catch(() => ({})) as {token?:unknown;index?:unknown}
+  const index=productSheetIndex(body.index)
+  const url=await transaction(async client=>{
+    const id=await lookupPublicReport(client,body.token)
+    await loadServiceResultsData(client,id)
+    return reportProductSheetUrl(client,id,index)
+  })
+  return context.json({url})
 })
 publicReportRoutes.onError((error, context) => {
   if (error instanceof ApiError) return context.json({ error:error.message,code:error.code },error.status as ContentfulStatusCode)

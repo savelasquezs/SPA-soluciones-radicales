@@ -98,3 +98,7 @@ Quedan para la implementación del primer Servicio: snapshots de evaluación por
 Figma `AWHeFImzH9BHPjEydCKJZT`: Productos 9:14 / 9:15; formulario 20:1164 / 177:16416; Configuración 13:931 / 13:2264. Reutilizar los tokens y el estilo compacto del `develop` actual. Formularios reales, no variables internas del prototipo.
 
 La suite `e2e/mip-catalogs.spec.ts` utiliza datos sintéticos y simula únicamente la frontera HTTP. Comprueba formularios reales, categorías y plagas, edición sin GET redundante, activos/inactivos, conflictos, métodos auxiliares, rol, reintento y responsive. Sus capturas quedan en el artefacto `mip-catalogs-qa`. Las pruebas de API y SQL se ejecutan por separado; no presentar estos E2E como una prueba de conexión a Neon/R2 real.
+
+## Formatos de ficha técnica
+
+BaseFileUpload permite documentos PDF e imágenes JPG, PNG o WebP. Se agrega el tipo MIME explícito application/pdf para ofrecer el selector de documentos de Android, conservando la validación y compresión de archivos existente. No hay nuevas entidades ni duplicación de documentos.

@@ -36,6 +36,7 @@ export interface TechnicianProduct {
   fechaVencimiento: string | null
   dosis: string
   metodoAplicacion: string
+  fichaTecnicaDisponible?: boolean
 }
 
 export interface TechnicianCriterion {

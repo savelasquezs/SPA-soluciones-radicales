@@ -212,3 +212,7 @@ La ejecución móvil presenta el Área actual mediante un selector y distribuye 
 La excepción «No fue posible acceder» se diligencia en un diálogo. «Habilitar Área» está disponible inmediatamente, incluso antes de completar datos; mientras el Área está guardada como sin acceso, no se muestran criterios, puestos ni hallazgos editables. Se exige descripción y entre 1 y 5 evidencias privadas, con fotografía local durable y sincronización individual. La columna histórica `sin_acceso_foto_storage_path` sigue reflejando la primera evidencia por compatibilidad; `sin_acceso_evidencias_storage_paths` guarda el conjunto en una nueva migración. Tras guardar, la acción de continuar abre otra Área que aún requiera trabajo o la pantalla de revisión/cierre, no firma sin validar.
 
 No se incluyen en esta entrega los cambios estructurales del Puesto de monitoreo (numeración automática, Trampa/Cebo opcionales y edición del alta). Se implementarán con migración y validaciones backend separadas para no alterar los snapshots históricos del servicio.
+
+## Fichas técnicas para técnicos
+
+En Productos a aplicar cada producto que tenga ficha técnica puede abrirla mediante URL firmada de R2 generada solo cuando se pulsa. El backend verifica la asignación del técnico y la pertenencia del producto al servicio. Si no existe ficha, no se muestra enlace. El trabajo offline no intenta descargar PDFs completos.

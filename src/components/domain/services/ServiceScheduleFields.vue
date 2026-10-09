@@ -4,12 +4,13 @@ import BaseDateTimePicker from '@/components/base/BaseDateTimePicker.vue'
 import BaseInput from '@/components/base/BaseInput.vue'
 import BaseSelect from '@/components/base/BaseSelect.vue'
 import BaseMultiSelect from '@/components/base/BaseMultiSelect.vue'
-import { formatServiceDate, scheduleEnd, scheduleFromDraft } from '@/helpers/adminServices'
+import { formatServiceDate, scheduleEnd, scheduleFromDraft, toBogotaInput } from '@/helpers/adminServices'
 import type { ServiceErrors, ServiceScheduleDraft, ServiceTechnician } from '@/types/adminServices'
 
-const props=withDefaults(defineProps<{ modelValue: ServiceScheduleDraft; technicians: ServiceTechnician[]; prefix?: string; disabled?: boolean; errors?: ServiceErrors; showDates?: boolean; showTeam?: boolean }>(),{ prefix:'programacion',disabled:false,errors:()=>({}),showDates:true,showTeam:true })
+const props=withDefaults(defineProps<{ modelValue: ServiceScheduleDraft; technicians: ServiceTechnician[]; prefix?: string; disabled?: boolean; errors?: ServiceErrors; showDates?: boolean; showTeam?: boolean; futureOnly?: boolean }>(),{ prefix:'programacion',disabled:false,errors:()=>({}),showDates:true,showTeam:true,futureOnly:false })
 const emit=defineEmits<{ 'update:modelValue': [value: ServiceScheduleDraft]; blur: [field: string] }>()
 const end=computed(()=>scheduleEnd(scheduleFromDraft(props.modelValue)))
+const currentMin=()=>props.futureOnly ? toBogotaInput(new Date().toISOString()) : undefined
 const options=computed(()=>props.technicians.filter(person=>person.id!==props.modelValue.tecnicoResponsableId).map(person=>({ id:person.id,label:person.nombreCompleto,description:person.activo ? undefined : 'Actualmente inactivo' })))
 function invalidResponsible(person: ServiceTechnician): boolean {
   return !person.activo || (person.tieneCertificado && (!person.certificadoFechaVencimiento || (Boolean(props.modelValue.inicioProgramado) && person.certificadoFechaVencimiento < props.modelValue.inicioProgramado.slice(0,10))))
@@ -28,7 +29,7 @@ function change<K extends keyof ServiceScheduleDraft>(key: K, value: ServiceSche
 <template>
   <div class="svc-dialog-stack">
     <div v-if="showDates" class="svc-form-grid svc-form-grid--schedule">
-      <BaseDateTimePicker :model-value="modelValue.inicioProgramado" mode="datetime" :name="`${prefix}-inicio`" label="Fecha y hora" required :minute-step="1" :disabled="disabled" :error="errors[`${prefix}.inicioProgramado`]" @update:model-value="change('inicioProgramado',$event ?? '')" @blur="emit('blur',`${prefix}.inicioProgramado`)" />
+      <BaseDateTimePicker :model-value="modelValue.inicioProgramado" mode="datetime" :name="`${prefix}-inicio`" label="Fecha y hora" required :minute-step="1" :min="currentMin()" :disabled="disabled" :error="errors[`${prefix}.inicioProgramado`]" @update:model-value="change('inicioProgramado',$event ?? '')" @blur="emit('blur',`${prefix}.inicioProgramado`)" />
       <BaseInput :model-value="modelValue.duracionMinutos" :name="`${prefix}-duracion`" label="Duración (min)" type="number" inputmode="numeric" min="1" max="10080" required :disabled="disabled" :error="errors[`${prefix}.duracionMinutos`]" @update:model-value="change('duracionMinutos',$event)" @blur="emit('blur',`${prefix}.duracionMinutos`)" />
       <small v-if="end" class="svc-muted svc-full">Fin estimado: {{ formatServiceDate(end) }} · {{ formatServiceDate(end,true) }}</small>
     </div>

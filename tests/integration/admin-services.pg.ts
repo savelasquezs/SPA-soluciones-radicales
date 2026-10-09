@@ -65,6 +65,33 @@ beforeEach(async()=>{
 afterAll(async()=>{ await pool.end() })
 
 describe('administrator services · real PostgreSQL',()=>{
+
+  it('confirma efectivo recibido por administrador durante el alta, de forma atómica',async()=>{
+    const f=await fixture()
+    const value=input(f)
+    value.cobro={metodoPago:'EFECTIVO',tecnicoRecaudoPrevistoId:null,pagado:true,recaudadoPorId:f.admin}
+    const created=principal(await create(f,value))
+    expect(created.pago).toMatchObject({metodoPago:'EFECTIVO',estadoPago:'CONFIRMADO',recaudadoPorId:f.admin})
+    const row=(await pool.query<{pago_fecha:Date|null;pago_confirmado_por_id:string|null;pago_registrado_por_id:string|null}>(
+      'select pago_fecha,pago_confirmado_por_id,pago_registrado_por_id from public.servicios where id=$1',[created.id])).rows[0]!
+    expect(row.pago_fecha).toBeTruthy()
+    expect(row.pago_confirmado_por_id).toBe(f.admin)
+    expect(row.pago_registrado_por_id).toBe(f.admin)
+    expect(created.refuerzo?.tipoServicio).toBe('REFUERZO')
+  })
+  it('confirma transferencia al crear sin exigir un receptor de efectivo',async()=>{
+    const f=await fixture(false)
+    const value=input(f)
+    value.cobro={metodoPago:'TRANSFERENCIA',tecnicoRecaudoPrevistoId:null,pagado:true,recaudadoPorId:null}
+    const created=principal(await create(f,value))
+    expect(created.pago).toMatchObject({metodoPago:'TRANSFERENCIA',estadoPago:'CONFIRMADO',recaudadoPorId:null})
+  })
+  it('rechaza crear servicios en el pasado incluso cuando el cliente modifica la petición',async()=>{
+    const f=await fixture(false)
+    await expect(create(f,input(f,'2024-01-01T09:00:00-05:00'))).rejects.toMatchObject({code:'VALIDATION'})
+    expect((await pool.query('select count(*)::integer as total from public.servicios where sede_id=$1',[f.site])).rows[0].total).toBe(0)
+  })
+
   it('creates one Principal and one +21-day Refuerzo, preserves price and never confirms planned cash',async()=>{
     const f=await fixture(), result=await create(f), p=principal(result), r=child(result)
     expect(result.services).toHaveLength(2)

@@ -72,6 +72,7 @@ async function products(client: PoolClient, serviceId: string, frozen: boolean):
     'dosisReferencia',${frozen ? "coalesce(pa.dosis_referencia_snapshot,'')" : "coalesce(p.dosis_aplicacion,'')"},
     'lote',coalesce(pa.lote,''),'fechaFabricacion',pa.fecha_fabricacion,'fechaVencimiento',pa.fecha_vencimiento,
     'dosis',${frozen ? "coalesce(pa.dosis_referencia_snapshot,p.dosis_aplicacion,'')" : "coalesce(p.dosis_aplicacion,'')"},
+    'fichaTecnicaDisponible',p.ficha_tecnica_storage_path like 'products/technical-sheets/%',
     'metodoAplicacion',${frozen
       ? "coalesce(pa.metodo_aplicacion_nombre_snapshot,'')"
       : "(select coalesce(string_agg(c.nombre,', ' order by coalesce(c.orden,2147483647),c.nombre,c.id),'') from public.producto_metodos pm join public.configuracion c on c.id=pm.metodo_id where pm.producto_id=p.id and c.categoria='METODO_APLICACION' and c.activo)"}) as record

@@ -215,3 +215,12 @@ El Técnico previsto para recaudar durante la visita y la persona que finalmente
 - El receptor real del efectivo se registra como Usuario y puede ser el Técnico o el Administrador que está registrando el pago.
 - Si el Administrador recibe directamente el efectivo, el pago no debe quedar atribuido al Técnico.
 - Registrar quién recibió el efectivo no equivale a registrar una entrega de caja entre Técnico y Administrador; esa operación pertenece al módulo de caja.
+
+## Programación compacta y cobro confirmado desde el alta
+
+- **Cliente** usa búsqueda normalizada (incluye nombres con acentos) sobre las sedes ya cargadas en el espacio de trabajo; **Sede** sigue siendo el selector nativo, filtrado por el cliente. Al cambiar de cliente se borra la sede previa y se recalculan duración y refuerzo; se conserva la selección al editar o reabrir el borrador.
+- **Fecha/hora** utiliza BaseDateTimePicker con mínimo de la hora actual en Bogotá para un servicio **nuevo**. El validador y el backend comprueban nuevamente que las visitas principal y de refuerzo estén en el futuro en el momento del guardado. La edición de registros históricos no se bloquea por su fecha anterior.
+- **Productos a utilizar** reutiliza BaseMultiSelect con búsqueda activada y botón «Aceptar» para cerrar. ServiceProductsFields sigue mostrando los seleccionados con su X, lote y vencimiento. La búsqueda y confirmación son opcionales y no alteran los otros formularios.
+- **Pago** permite indicar durante el alta si el cliente ya pagó. Si no pagó, se conserva el cobro previsto. Si pagó, se exige método; para efectivo es obligatorio indicar el receptor, que puede ser el administrador que está programando o un técnico activo. Transferencia confirmada no exige receptor de efectivo. La confirmación se registra en la misma transacción que crea el servicio con fecha, actor y receptor. Las correcciones posteriores siguen desde «Registrar pago».
+- No se crean tablas ni migraciones adicionales.
+

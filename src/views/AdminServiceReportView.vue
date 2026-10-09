@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import { ArrowLeft, FileDown, RefreshCw, Send } from 'lucide-vue-next'
+import { ArrowLeft, FileDown, RefreshCw, Send, ExternalLink } from 'lucide-vue-next'
 import BaseButton from '@/components/base/BaseButton.vue'
 import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import StatusPanel from '@/components/base/StatusPanel.vue'
@@ -13,8 +13,9 @@ import {
   areaCompliance, bogotaDate, bogotaTime, elapsedMinutes,
   reportEvidence, reportMetrics, scoreText, type ReportEvidenceState,
 } from '@/helpers/serviceReport'
-import { fetchServiceResults, serviceEvidenceUrl } from '@/services/serviceResultsService'
-import { getReportShareOptions, resolvePublicServiceReport, publicReportPhotoUrl } from '@/services/reportSharingService'
+import { fetchServiceResults, serviceEvidenceUrl, adminProductSheetUrl } from '@/services/serviceResultsService'
+import { getReportShareOptions, resolvePublicServiceReport, publicReportPhotoUrl, publicProductSheetUrl } from '@/services/reportSharingService'
+import { openProtectedDocument } from '@/helpers/openProtectedDocument'
 import type { ServiceReportShareOptions } from '@/types/reportSharing'
 import { useNotificationsStore } from '@/stores/notifications'
 import type { ServiceResultsData } from '@/types/serviceResults'
@@ -30,6 +31,7 @@ const loading = ref(true)
 const error = ref('')
 const mediaBusy = ref(false)
 const printBusy = ref(false)
+const activeSheet = ref<number | null>(null)
 const states = reactive<Record<string, ReportEvidenceState>>({})
 const urls = reactive<Record<string, string>>({})
 const selectedIndex = ref<number | null>(null)
@@ -155,6 +157,17 @@ function onShared(): void {
   sendOpen.value = false
   void loadShareSummary()
 }
+async function openSheet(index:number):Promise<void>{
+  if(activeSheet.value !== null)return
+  activeSheet.value=index
+  try{
+    await openProtectedDocument(()=>publicView.value
+      ? publicProductSheetUrl(publicToken.value,index)
+      : adminProductSheetUrl(serviceId.value,index))
+  }catch(error){
+    notifications.show(error instanceof Error ? error.message : 'No fue posible consultar la ficha técnica.','error')
+  }finally{activeSheet.value=null}
+}
 function photoState(path: string): ReportEvidenceState { return states[path] ?? 'IDLE' }
 function openImage(path: string): void {
   const index = images.value.findIndex(item => item.path === path)
@@ -242,7 +255,10 @@ watch(() => [serviceId.value, publicToken.value], () => { void loadReport() }, {
           <table v-else class="report-document__table">
             <thead><tr><th style="width:20%">Producto</th><th style="width:21%">Principio activo</th><th style="width:16%">Registro sanitario</th><th style="width:12%">Lote</th><th style="width:13%">Dosis</th><th style="width:18%">Método(s)</th></tr></thead>
             <tbody><tr v-for="(product,index) in report.productos" :key="index">
-              <td><strong>{{ product.nombre }}</strong></td><td>{{ product.principio || '—' }}</td><td>{{ product.registro || '—' }}</td>
+              <td><strong>{{ product.nombre }}</strong><button v-if="product.fichaTecnicaDisponible" type="button"
+                  class="report-sheet-link" :disabled="activeSheet!==null" :aria-label="'Ver ficha técnica de '+product.nombre"
+                  @click="openSheet(index)">Ficha técnica <ExternalLink :size="12" aria-hidden="true" /></button></td>
+              <td>{{ product.principio || '—' }}</td><td>{{ product.registro || '—' }}</td>
               <td>{{ product.lote || '—' }}</td><td>{{ product.dosis || '—' }}</td><td>{{ product.metodos || '—' }}</td>
             </tr></tbody>
           </table>

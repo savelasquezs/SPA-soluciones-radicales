@@ -71,8 +71,8 @@ async function write<T>(context: Context<Environment>, payload: Record<string,un
   kickServiceJobs()
   return result
 }
-function serviceInput(value: unknown) {
-  const parsed = validateServiceInput(value)
+function serviceInput(value: unknown, requireFuture = false) {
+  const parsed = validateServiceInput(value,requireFuture)
   if (Object.keys(parsed.errors).length) throw new ApiError(422,'Revisa los campos marcados.','VALIDATION',{ fields:parsed.errors })
   return parsed.value
 }
@@ -124,7 +124,7 @@ adminServiceRoutes.get('/:id/audit',async context => {
   return context.json(result)
 })
 adminServiceRoutes.post('/',async context => {
-  const payload=await body(context.req.raw), input=serviceInput(payload.input)
+  const payload=await body(context.req.raw), input=serviceInput(payload.input,true)
   const proposal=payload.upcoming == null ? null : object(payload.upcoming)
   return context.json(await write(context,payload,'service:create',(client,admin)=>createService(client,admin.id,input,payload.allowConflicts === true,proposal ? { id:id(proposal.id),version:version(proposal.version),confirmed:proposal.confirmed === true } : undefined)),201)
 })

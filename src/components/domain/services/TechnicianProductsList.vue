@@ -1,8 +1,23 @@
 <script setup lang="ts">
-import { FlaskConical } from 'lucide-vue-next'
+import { FlaskConical, ExternalLink } from 'lucide-vue-next'
 import type { TechnicianProduct } from '@/types/technicianServices'
+import { ref } from 'vue'
+import { technicianProductSheetUrl } from '@/services/servicesService'
+import { openProtectedDocument } from '@/helpers/openProtectedDocument'
+import { useNotificationsStore } from '@/stores/notifications'
 
-defineProps<{ products: TechnicianProduct[] }>()
+const props=defineProps<{ products: TechnicianProduct[]; serviceId: string }>()
+const notifications=useNotificationsStore()
+const activeSheet=ref<string | null>(null)
+async function openSheet(id:string):Promise<void>{
+  if(activeSheet.value)return
+  activeSheet.value=id
+  try{
+    await openProtectedDocument(()=>technicianProductSheetUrl(props.serviceId,id))
+  }catch(error){
+    notifications.show(error instanceof Error ? error.message : 'No fue posible abrir la ficha técnica.','error')
+  }finally{activeSheet.value=null}
+}
 
 function dateLabel(value: string | null): string {
   if (!value) return 'No informada'
@@ -18,6 +33,9 @@ function dateLabel(value: string | null): string {
     <div v-else class="technician-products">
       <article v-for="product in products" :key="product.id">
         <h3>{{ product.nombre }}</h3>
+        <button v-if="product.fichaTecnicaDisponible" type="button" class="technical-sheet-link"
+          :disabled="activeSheet!==null" :aria-label="'Ver ficha técnica de '+product.nombre"
+          @click="openSheet(product.id)">Ver ficha técnica <ExternalLink :size="14" aria-hidden="true" /></button>
         <p>{{ product.principioActivo }}</p>
         <dl>
           <div><dt>Lote</dt><dd>{{ product.lote || 'No informado' }}</dd></div>
@@ -41,6 +59,9 @@ header p, article > p { margin-top:0.2rem; color:var(--text-secondary); font-siz
 .technician-products { display:grid; gap:0.75rem; }
 article { display:grid; gap:0.75rem; border:1px solid var(--border); border-radius:var(--radius); padding:0.9rem; }
 h3 { font-size:0.9375rem; }
+.technical-sheet-link{display:inline-flex;align-items:center;gap:.3rem;width:fit-content;padding:.1rem 0;border:0;background:none;color:var(--text);font-size:.79rem;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.technical-sheet-link:hover{color:var(--accent)}
+.technical-sheet-link:disabled{opacity:.65;cursor:wait}
 dl { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.65rem 1rem; }
 dt { color:var(--text-secondary); font-size:0.72rem; font-weight:600; }
 dd { overflow-wrap:anywhere; font-size:0.875rem; }
