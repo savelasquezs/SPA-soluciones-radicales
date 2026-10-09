@@ -100,8 +100,6 @@ function validMutation(value: unknown, actorId?: string, serviceId?: string): va
     && isServiceId(record.findingId)
     && typeof record.descripcion === 'string' && record.descripcion.trim().length > 0 && record.descripcion.length <= 2_000
     && typeof record.recomendacionAccion === 'string' && record.recomendacionAccion.trim().length > 0 && record.recomendacionAccion.length <= 2_000
-    && typeof record.responsableNombre === 'string' && record.responsableNombre.trim().length > 0 && record.responsableNombre.length <= 200
-    && typeof record.responsableCorreo === 'string' && record.responsableCorreo.length <= 320
     && validFindingEvidences(record.evidences)
   if (record.kind === 'FINDING_STATUS') return isServiceId(record.areaId)
     && isServiceId(record.findingId)
