@@ -37,7 +37,7 @@ describe('rich report email MIME', () => {
     expect(mime).toContain('Content-Type: multipart/alternative')
     expect(mime).toContain('Content-Type: text/html; charset=UTF-8')
     expect(mime).toContain('Content-Type: text/plain; charset=UTF-8')
-    expect(mime).toContain(Buffer.from(html).toString('base64'))
+    expect(mime.replace(/\r\n/g, '')).toContain(Buffer.from(html).toString('base64'))
     expect(mime).toContain('Content-ID: <report-qr@solucionesradicales.invalid>')
     expect(mime).toContain('Content-Disposition: inline; filename="codigo-qr.png"')
     expect(mime).toContain('Content-Disposition: attachment; filename="certificado.pdf"')
