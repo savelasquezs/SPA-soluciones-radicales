@@ -1,0 +1,71 @@
+name: Bundle compact Neon API for deployment
+on:
+  push:
+    branches: [chore/neon-compact-api-deploy]
+    paths: ['.github/workflows/neon-api-compact.yml']
+permissions:
+  contents: write
+jobs:
+  bundle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Build compact zip preserving ARM64 runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save --package-lock=false --legacy-peer-deps esbuild@0.28.2
+          mkdir -p .neon-compact
+          node --input-type=module <<'NODE'
+          import { build } from 'esbuild'
+          await build({
+            entryPoints: ['functions/api/index.ts'],
+            outfile: '.neon-compact/index.mjs',
+            bundle: true,
+            external: ['sharp'],
+            platform: 'node',
+            target: 'node24',
+            format: 'esm',
+            conditions: ['node'],
+            banner: { js: 'import { createRequire as __createRequire } from "node:module"; const require = __createRequire(import.meta.url);' },
+          })
+          NODE
+          node --check .neon-compact/index.mjs
+          npm install --no-save --package-lock=false --ignore-scripts --prefix .neon-compact --os=linux --cpu=arm64 --libc=glibc sharp@0.34.5
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq binutils-aarch64-linux-gnu
+          echo "Library before strip:"
+          ls -lh .neon-compact/node_modules/@img/sharp-libvips-linux-arm64/lib/libvips-cpp.so.*
+          aarch64-linux-gnu-strip --strip-unneeded .neon-compact/node_modules/@img/sharp-libvips-linux-arm64/lib/libvips-cpp.so.*
+          aarch64-linux-gnu-strip --strip-unneeded .neon-compact/node_modules/@img/sharp-linux-arm64/lib/sharp-linux-arm64.node
+          echo "Libraries after strip:"
+          ls -lh .neon-compact/node_modules/@img/sharp-libvips-linux-arm64/lib/libvips-cpp.so.*
+          find .neon-compact/node_modules -type f \( -name '*.d.ts' -o -name '*.md' -o -name '*.map' \) -delete
+          rm -rf .neon-compact/node_modules/sharp/src
+          cd .neon-compact
+          zip -9 -rq neon-api.zip index.mjs node_modules
+          echo "Bundle size:"
+          ls -lh neon-api.zip
+          sha256sum neon-api.zip
+          base64 -w0 neon-api.zip > neon-api.zip.b64
+          echo "Base64 bytes: $(wc -c < neon-api.zip.b64)"
+          if test "$(wc -c < neon-api.zip.b64)" -gt 9600000; then
+            echo "Compact zip still exceeds conservative upload limit; no repository artifact published."
+            exit 0
+          fi
+          mkdir -p ../.github/compact-generated
+          fold -w 700000 neon-api.zip.b64 | awk '{ print > sprintf("../.github/compact-generated/neon-api.zip.b64.%03d", NR) }'
+          cd ..
+          git config user.name "sr-neon-compact-bundle"
+          git config user.email "sr-neon-compact-bundle@users.noreply.github.com"
+          git add -A .github/compact-generated
+          git commit -m "build: temporary compact Neon API deploy bundle"
+          git push origin HEAD:chore/neon-compact-api-deploy
