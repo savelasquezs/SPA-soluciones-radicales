@@ -1,0 +1,74 @@
+name: Deploy Neon API from develop
+on:
+  push:
+    branches: [chore/neon-compact-api-deploy]
+    paths: ['.github/workflows/neon-api-deploy-once.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+    steps:
+      - name: Confirm deployment credential
+        shell: bash
+        run: |
+          if test -z "$NEON_API_KEY"; then
+            echo "::error::Configure NEON_API_KEY under repository Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Bundle full native ARM64 API from develop
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Deploying source commit: $(git rev-parse HEAD)"
+          npm ci
+          npm install --no-save --package-lock=false --legacy-peer-deps esbuild@0.28.2
+          mkdir -p .neon-deploy
+          node --input-type=module <<'NODE'
+          import { build } from 'esbuild'
+          await build({
+            entryPoints: ['functions/api/index.ts'],
+            outfile: '.neon-deploy/index.mjs',
+            bundle: true,
+            external: ['sharp'],
+            platform: 'node',
+            target: 'node24',
+            format: 'esm',
+            conditions: ['node'],
+            banner: { js: 'import { createRequire as __createRequire } from "node:module"; const require = __createRequire(import.meta.url);' },
+            logLevel: 'info',
+          })
+          NODE
+          node --check .neon-deploy/index.mjs
+          npm install --no-save --package-lock=false --ignore-scripts --prefix .neon-deploy --os=linux --cpu=arm64 --libc=glibc sharp@0.34.5
+          test -d .neon-deploy/node_modules/@img/sharp-linux-arm64
+          test -d .neon-deploy/node_modules/@img/sharp-libvips-linux-arm64
+          (cd .neon-deploy && zip -9 -r -q neon-api.zip index.mjs node_modules)
+          sha256sum .neon-deploy/neon-api.zip
+      - name: Upload and deploy to Neon desarrollo (keep all existing Function env vars)
+        shell: bash
+        run: |
+          set -euo pipefail
+          status=$(curl --silent --show-error --max-time 200 --output "$RUNNER_TEMP/neon-deploy-result.json" --write-out '%{http_code}' \
+            -H "Authorization: Bearer $NEON_API_KEY" \
+            -F "zip=@.neon-deploy/neon-api.zip;type=application/zip" \
+            -F "runtime=nodejs24" \
+            "https://console.neon.tech/api/v2/projects/patient-pine-80293508/branches/br-nameless-violet-b7y48a5v/functions/api/deployments")
+          if test "$status" != 201; then
+            echo "::error::Neon deployment returned HTTP $status"
+            cat "$RUNNER_TEMP/neon-deploy-result.json"
+            exit 1
+          fi
+          node -e "const x=require(process.argv[1]); console.log('Neon deployment id:', x.id ?? x.result?.id, 'status:', x.status ?? x.result?.status)" "$RUNNER_TEMP/neon-deploy-result.json"
