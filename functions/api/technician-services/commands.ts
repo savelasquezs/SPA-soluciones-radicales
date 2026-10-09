@@ -682,10 +682,6 @@ export async function finalizeTechnicianService(
     firma_tecnico_storage_path=$2,firma_tecnico_usuario_id=$3,
     firma_cliente_storage_path=$4,firma_cliente_nombre=$5,firma_cliente_at=now()
     where id=$1`, [serviceId, technicianStoragePath, userId, clientStoragePath, normalizedClientName])
-  // The outbox entry commits atomically with FINALIZADO; offline retries cannot duplicate it.
-  await client.query(`insert into private.integration_jobs(job_type,idempotency_key,payload)
-    values ('DOCUMENT',$1,$2::jsonb) on conflict(job_type,idempotency_key) do nothing`,
-    ['mip-report:'+serviceId, JSON.stringify({ scope:'SERVICE_REPORT', serviceId, actorId:userId })])
   await client.query('delete from private.service_execution_locks where service_id=$1', [serviceId])
   await audit(client, userId, 'SERVICIO_FINALIZADO', serviceId, { deviceId, clientSigner: normalizedClientName })
   return { package: await getTechnicianPackage(client, userId, serviceId) }

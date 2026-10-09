@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Download, ExternalLink, FileText, RefreshCw } from 'lucide-vue-next'
+import { ExternalLink, FileText } from 'lucide-vue-next'
 import BaseDialog from '@/components/base/BaseDialog.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import StatusPanel from '@/components/base/StatusPanel.vue'
-import { fetchServiceResults, fetchServiceReport, queueServiceReport, serviceEvidenceUrl } from '@/services/serviceResultsService'
-import { downloadLink } from '@/helpers/certificates'
+import { fetchServiceResults, serviceEvidenceUrl } from '@/services/serviceResultsService'
 import { useNotificationsStore } from '@/stores/notifications'
 import type { ServiceResultsResponse } from '@/types/serviceResults'
 
@@ -15,7 +14,7 @@ const props=defineProps<{serviceId:string;solicitud:string}>()
 const emit=defineEmits<{close:[]}>()
 const router=useRouter(),notifications=useNotificationsStore()
 const current=ref<ServiceResultsResponse|null>(null)
-const loading=ref(true),busy=ref(false),error=ref('')
+const loading=ref(true),error=ref('')
 const tab=ref<'criterios'|'hallazgos'|'puestos'|'detalles'>('criterios')
 const tabs=[
   {id:'criterios',label:'Criterios'}, {id:'hallazgos',label:'Hallazgos'},
@@ -24,11 +23,6 @@ const tabs=[
 const areas=computed(()=>current.value?.data.areas??[])
 const findings=computed(()=>areas.value.flatMap(a=>a.hallazgos.map(h=>({...h,area:a.nombre}))))
 const points=computed(()=>areas.value.flatMap(a=>a.puntos.map(p=>({...p,area:a.nombre}))))
-const report=computed(()=>current.value?.report??null)
-const status:Record<string,string>={
-  NO_GENERADO:'Sin generar',PENDIENTE:'Pendiente',GENERANDO:'Generando',
-  DISPONIBLE:'Disponible',ERROR:'Error',
-}
 const evaluation:Record<string,string>={C:'Cumple',CP:'Parcial',NC:'No cumple',NA:'No aplica'}
 const fmt=(date:string)=>new Intl.DateTimeFormat('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',year:'numeric'}).format(new Date(date))
 const hour=(date:string)=>new Intl.DateTimeFormat('es-CO',{timeZone:'America/Bogota',hour:'2-digit',minute:'2-digit',hour12:true}).format(new Date(date))
@@ -42,28 +36,6 @@ async function load():Promise<void>{
 }
 onMounted(()=>{void load()})
 
-async function generate():Promise<void>{
-  if(busy.value)return
-  busy.value=true
-  try{
-    const state=await queueServiceReport(props.serviceId)
-    if(current.value)current.value.report=state
-    notifications.show('Generación del informe solicitada.','success')
-  }catch(e){notifications.show(e instanceof Error?e.message:'No fue posible solicitar el informe.','error')}
-  finally{busy.value=false}
-}
-async function download():Promise<void>{
-  if(busy.value)return
-  busy.value=true
-  try{
-    // R2 links expire after five minutes. Obtain a fresh authorized URL on click.
-    const latest=await fetchServiceReport(props.serviceId)
-    if(current.value)current.value.report=latest
-    if(!latest.url)throw new Error('El informe aún no está disponible.')
-    downloadLink(latest.url)
-  }catch(e){notifications.show(e instanceof Error?e.message:'No fue posible descargar el informe.','error')}
-  finally{busy.value=false}
-}
 async function openEvidence(path:string):Promise<void>{
   const windowRef=window.open('about:blank','_blank')
   if(windowRef)windowRef.opener=null
@@ -146,15 +118,6 @@ function certificates():void{
         </section>
         <section class="result-section">
           <h3>Documentos</h3>
-          <div class="document-row">
-            <span class="document-title"><FileText :size="16"/> Informe técnico <small>{{ status[report?.estado??'NO_GENERADO'] }}</small></span>
-            <div class="document-actions">
-              <BaseButton v-if="report?.estado==='DISPONIBLE'" variant="secondary" size="compact" @click="download"><Download :size="14"/> PDF</BaseButton>
-              <BaseButton v-else-if="report?.estado==='NO_GENERADO'||report?.estado==='ERROR'" variant="secondary" size="compact" :loading="busy" @click="generate">{{ report?.estado==='ERROR'?'Reintentar':'Generar' }}</BaseButton>
-              <BaseButton v-else variant="ghost" size="compact" :disabled="loading" @click="load"><RefreshCw :size="14"/> Actualizar</BaseButton>
-            </div>
-          </div>
-          <p v-if="report?.error" class="muted">{{ report.error }}</p>
           <div class="document-row"><span class="document-title"><FileText :size="16"/> Certificados</span><BaseButton variant="ghost" size="compact" @click="certificates">Consultar <ExternalLink :size="14"/></BaseButton></div>
         </section>
       </div>
@@ -183,6 +146,5 @@ function certificates():void{
 .document-row{display:flex;align-items:center;justify-content:space-between;gap:1rem;min-height:2.6rem;border-bottom:1px solid var(--border)}
 .document-row>button{display:flex;align-items:center;gap:.3rem}
 .document-title{display:flex;align-items:center;gap:.5rem;font-size:.83rem}
-.document-actions{display:flex;align-items:center;gap:.35rem}
 @media(max-width:640px){.details-grid{grid-template-columns:repeat(2,1fr)}.results-tabs{gap:.8rem}.results-table{min-width:530px}.result-section:has(.results-table){overflow-x:auto}}
 </style>

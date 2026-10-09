@@ -1,11 +1,11 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { pool, transaction } from '../db'
-import { deleteRetainedServicePhoto, deleteRetainedServiceReport } from '../r2'
+import { deleteRetainedServicePhoto } from '../r2'
 import type { PoolClient } from 'pg'
 
 type RetentionCandidate = {
-  bucket: 'sr-service-media' | 'sr-generated-documents'
-  category: 'DEVICE_REVIEW' | 'AREA_NO_ACCESS' | 'CRITERION' | 'FINDING_OPENING' | 'FINDING_CLOSURE' | 'SERVICE_REPORT'
+  bucket: 'sr-service-media'
+  category: 'DEVICE_REVIEW' | 'AREA_NO_ACCESS' | 'CRITERION' | 'FINDING_OPENING' | 'FINDING_CLOSURE'
   source_id: string
   storage_path: string
   expires_at: string
@@ -70,8 +70,6 @@ async function lockSourceRow(client: PoolClient, item: RetentionCandidate): Prom
   // A row lock on Hallazgo serializes deletion against CERRADO transitions.
   if (item.category === 'FINDING_OPENING' || item.category === 'FINDING_CLOSURE') {
     await client.query('select id from public.hallazgos where id=$1 for update', [item.source_id])
-  } else if (item.category === 'SERVICE_REPORT') {
-    await client.query('select id from public.servicios where id=$1 for update', [item.source_id])
   } else {
     const relation = item.category === 'DEVICE_REVIEW' ? 'revisiones_dispositivos'
       : item.category === 'CRITERION' ? 'evaluaciones_mip_area' : 'servicio_areas'
@@ -96,10 +94,8 @@ async function deleteEligibleObject(item: RetentionCandidate): Promise<boolean> 
     )
     const current = refreshed.rows[0]
     if (!current) return false
-    if (item.bucket === 'sr-service-media') await deleteRetainedServicePhoto(item.storage_path)
-    else if (item.bucket === 'sr-generated-documents' && item.category === 'SERVICE_REPORT') {
-      await deleteRetainedServiceReport(item.storage_path, item.source_id)
-    } else throw new Error('Categoría de retención no autorizada')
+    if (item.bucket !== 'sr-service-media') throw new Error('Categoría de retención no autorizada')
+    await deleteRetainedServicePhoto(item.storage_path)
     await client.query(
       `insert into private.storage_retention_deleted (bucket,storage_path,category,source_id,expired_at)
        values ($1,$2,$3,$4,$5) on conflict(bucket,storage_path) do nothing`,
