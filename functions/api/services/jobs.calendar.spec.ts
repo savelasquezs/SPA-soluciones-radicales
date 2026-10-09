@@ -8,13 +8,13 @@ const state = vi.hoisted(() => ({
   calendar: vi.fn<(event: CalendarEventInput) => Promise<string>>(),
   snapshot: vi.fn<() => Promise<unknown>>(),
 }))
-vi.mock('@neon/functions', () => ({ waitUntil: vi.fn() }))
+vi.mock('@neon/functions', () => ({ waitUntil: vi.fn<(promise: Promise<unknown>) => void>() }))
 vi.mock('../db', () => ({
   transaction: (work: (client: { query: typeof state.query }) => Promise<unknown>) => work({ query: state.query }),
 }))
 vi.mock('../google', () => ({
   upsertCalendarEvent: state.calendar,
-  sendGmailMessage: vi.fn(),
+  sendGmailMessage: vi.fn<() => Promise<string>>(),
 }))
 vi.mock('./queries', () => ({ getCalendarSnapshot: state.snapshot }))
 vi.mock('./commands', () => ({ audit: vi.fn<() => Promise<void>>().mockResolvedValue(undefined) }))
