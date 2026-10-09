@@ -47,6 +47,7 @@
     "pg": "^8.23.1",
     "pinia": "^4.0.3",
     "pizzip": "3.3.0",
+    "qrcode": "1.5.4",
     "vue": "^3.5.42",
     "vue-router": "^5.3.1"
   },
@@ -56,6 +57,7 @@
     "@types/jsdom": "^30.0.0",
     "@types/node": "^24.13.4",
     "@types/pg": "^8.23.1",
+    "@types/qrcode": "1.5.5",
     "@vitejs/plugin-vue": "^6.0.8",
     "@vitest/eslint-plugin": "^1.6.27",
     "@vue/eslint-config-typescript": "^14.9.0",
