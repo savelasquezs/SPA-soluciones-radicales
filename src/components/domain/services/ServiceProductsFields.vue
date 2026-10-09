@@ -78,6 +78,7 @@ function applied(id: string): boolean {
       :options="options"
       label="Productos a utilizar"
       name="servicio-productos"
+      searchable confirmable
       item-label="producto"
       items-label="productos"
       placeholder="Agregar productos"

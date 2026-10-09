@@ -33,3 +33,6 @@ const technicianRoot = (id: string) => 'api/technician/services/' + encodeURICom
 export const getTechnicianReportShareOptions = (id: string) => apiRequest<ServiceReportShareOptions>(technicianRoot(id))
 export const sendTechnicianServiceReport = (id: string, data: SendServiceReportInput) =>
   apiRequest<SendServiceReportResult>(technicianRoot(id) + '/send', json(data))
+
+export const publicProductSheetUrl=async(token:string,index:number):Promise<string> =>
+  (await publicRequest<{url:string}>('api/public/reports/product-sheet',{token,index})).url

@@ -69,6 +69,9 @@ export interface ServiceScheduleDraft extends Omit<ServiceSchedule, 'duracionMin
 export interface ServiceCollectionPlan {
   metodoPago: PaymentMethod | null
   tecnicoRecaudoPrevistoId: string | null
+  /** Only for new services: persist payment confirmation atomically. */
+  pagado?: boolean
+  recaudadoPorId?: string | null
 }
 export interface ServiceInput {
   sedeId: string

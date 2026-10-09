@@ -34,3 +34,6 @@ export const finalizeTechnicianService = (serviceId: string, requestId: string, 
   technicianStoragePath: string, clientStoragePath: string, clientName: string) =>
   apiRequest<{ package: TechnicianServicePackage }>(`${base}/${serviceId}/finalize`,
     json({ requestId, deviceId, lockToken, technicianStoragePath, clientStoragePath, clientName }))
+
+export const technicianProductSheetUrl=async(serviceId:string,appliedProductId:string):Promise<string> =>
+  (await apiRequest<{url:string}>(base+'/'+encodeURIComponent(serviceId)+'/products/'+encodeURIComponent(appliedProductId)+'/technical-sheet')).url

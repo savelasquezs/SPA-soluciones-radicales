@@ -115,7 +115,7 @@ async function save(): Promise<void> {
   if(completed.value || saving.value || loading.value) return
   const invalidDate=document.querySelector<HTMLElement>('#admin-service-form .date-time-control input[aria-invalid="true"]')
   if(invalidDate) { invalidDate.focus(); notifications.show('Revisa las fechas y horas antes de guardar.','error'); return }
-  const parsed=validateServiceInput(draftToServiceInput(draft.value))
+  const parsed=validateServiceInput(draftToServiceInput(draft.value),!editing.value)
   if(upcoming.value && !confirmed.value) parsed.errors.confirmed='Confirma que el cliente aceptó este horario.'
   if(Object.keys(parsed.errors).length) { await invalid(parsed.errors); return }
   if(!editing.value) await persistDraft()

@@ -8,7 +8,8 @@ import { transaction } from '../db'
 import { kickServiceJobs } from '../services/jobs'
 import { assertAreaNoAccessStoragePath, assertCriterionEvidenceStoragePath, assertDeviceReviewStoragePath, assertFindingEvidenceStoragePath, assertServiceSignatureStoragePath, createAreaNoAccessUploadUrl, createCriterionEvidenceUploadUrl, createDeviceReviewUploadUrl, createFindingEvidenceUploadUrl, createServiceSignatureUploadUrl, criterionEvidenceObjectExists, deleteAreaNoAccessObject, deleteCriterionEvidenceObject, deleteDeviceReviewObject, deleteFindingEvidenceObject, deviceReviewMediaObjectExists, findingEvidenceObjectExists, serviceMediaObjectExists, serviceSignatureObjectExists, type FindingEvidencePhase, type ServiceSignatureRole } from '../r2'
 import { authorizeTechnicianAreaChange, authorizeTechnicianDeviceChange, authorizeTechnicianFindingChange, authorizeTechnicianServiceChange, claimTechnicianService, createTechnicianDevice, createTechnicianFinding, finalizeTechnicianService, saveTechnicianAreaAccess, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, saveTechnicianFindingStatus, startTechnicianService, technicianCommand } from './commands'
-import { getTechnicianPackage, listTechnicianServices } from './queries'
+import { getTechnicianPackage, listTechnicianServices, assignedServiceState } from './queries'
+import { technicianProductSheetUrl } from '../service-results/productSheets'
 
 type Environment = { Variables: { identity: Identity } }
 export const technicianServiceRoutes = new Hono<Environment>()
@@ -69,6 +70,16 @@ async function read<T>(context: Context<Environment>, work: (client: PoolClient,
 
 technicianServiceRoutes.get('/', async context => context.json(await read(context, (client, technician) => listTechnicianServices(client, technician.id))))
 technicianServiceRoutes.get('/:id/package', async context => context.json(await read(context, (client, technician) => getTechnicianPackage(client, technician.id, id(context.req.param('id'))))))
+technicianServiceRoutes.get('/:id/products/:productId/technical-sheet',async context=>{
+  const serviceId=id(context.req.param('id'))
+  const productId=id(context.req.param('productId'))
+  const url=await read(context,async(client,technician)=>{
+    await assignedServiceState(client,technician.id,serviceId)
+    return technicianProductSheetUrl(client,serviceId,productId)
+  })
+  context.header('Cache-Control','no-store')
+  return context.json({url})
+})
 technicianServiceRoutes.post('/:id/start', async context => {
   const payload = await body(context.req.raw), serviceId = id(context.req.param('id')), requestId = id(payload.requestId), deviceId = id(payload.deviceId), expected = version(payload.version)
   return context.json(await read(context, (client, technician) => technicianCommand(client, technician.id, requestId, 'SERVICE_START', serviceId, expected,

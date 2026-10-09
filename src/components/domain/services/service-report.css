@@ -143,3 +143,10 @@ body:has(.report-document) .report-workspace{display:block!important}
 .report-workspace--public{min-height:100vh;background:#f6f9fb;padding:clamp(.65rem,2vw,1.5rem)}
 .report-public-head{display:flex;justify-content:space-between;align-items:center;gap:.65rem;max-width:930px;width:100%;margin:0 auto;flex-wrap:wrap;color:var(--text-secondary);font-size:.8rem}
 @media print{.report-workspace--public{padding:0;background:#fff!important}.report-public-head{display:none!important}}
+
+/* The signed URL is resolved on demand; do not print a nonfunctional button into a PDF. */
+.report-sheet-link{display:inline-flex;align-items:center;gap:.2rem;margin-top:.18rem;padding:.05rem 0;border:0;background:none;color:var(--report-accent);font:inherit;font-size:.72rem;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+.report-sheet-link:hover{color:var(--report-ink)}
+.report-sheet-link:focus-visible{outline:2px solid var(--report-accent);outline-offset:2px}
+.report-sheet-link:disabled{opacity:.65;cursor:wait}
+@media print{.report-sheet-link{display:none!important}}

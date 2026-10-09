@@ -129,3 +129,7 @@ Detalle técnico y comandos de verificación: `docs/architecture/admin-services.
 - [ ] Verificar un correo real controlado desde cierre técnico en desarrollo, incluyendo prueba sin internet y reconexión, antes del uso con clientes.
 
 - [x] Incluir en la descripción de los eventos de Google Calendar un enlace al servicio Principal del técnico (y listado de servicios para Refuerzo), conservando el destino tras login y rol; URL de SPA estable y validada por entorno, sin cambiar fechas, asistentes ni eventos anteriores automáticamente.
+
+
+- [x] Reutilizar multiselector con búsqueda y Aceptar para productos; cliente buscable con sede filtrada; fecha de servicio futura; cobro confirmado al crear con receptor administrador o técnico.
+- [x] Enlaces privados temporales de fichas técnicas de productos para técnico e informe público, habilitar PDF en selector de archivos Android, sin duplicar storage.

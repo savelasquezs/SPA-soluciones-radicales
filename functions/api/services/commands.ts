@@ -58,20 +58,20 @@ async function validatePlannedCollector(client: PoolClient, id: string | null): 
   if (!id) return
   if (!(await client.query('select id from public.usuarios where id=$1 and es_tecnico and activo', [id])).rowCount) throw new ApiError(422, 'Selecciona un técnico válido para el recaudo previsto.', 'VALIDATION', { fields: { 'cobro.tecnicoRecaudoPrevistoId': 'El técnico seleccionado no está disponible.' } })
 }
-async function validatePaymentReceiver(client: PoolClient, id: string | null, actorId: string, previousId: string | null): Promise<void> {
+async function validatePaymentReceiver(client: PoolClient, id: string | null, actorId: string, previousId: string | null, field = 'recaudadoPorId'): Promise<void> {
   if (!id) return
   const receiver=(await client.query<{ id: string; es_tecnico: boolean; es_admin: boolean; activo: boolean }>(
     'select id,es_tecnico,es_admin,activo from public.usuarios where id=$1',
     [id],
   )).rows[0]
   const currentAdmin=receiver?.id===actorId && receiver.es_admin && receiver.activo
-  const technician=Boolean(receiver?.es_tecnico)
+  const technician=Boolean(receiver?.es_tecnico && receiver.activo)
   const historicalAdmin=receiver?.id===previousId && receiver.es_admin
   if (!receiver || (!currentAdmin && !technician && !historicalAdmin)) throw new ApiError(
     422,
     'Selecciona quién recibió realmente el efectivo.',
     'VALIDATION',
-    { fields: { recaudadoPorId: 'Selecciona un técnico o el administrador que está registrando el pago.' } },
+    { fields: { [field]: 'Selecciona un técnico o el administrador que está registrando el pago.' } },
   )
 }
 export async function checkSchedules(client: PoolClient, schedules: ServiceSchedule[], ignoreIds: string[], accepted: boolean): Promise<ScheduleConflict[]> {
@@ -142,14 +142,34 @@ export async function createService(client: PoolClient, actorId: string, input: 
   }
   if (!site.maneja_refuerzo && input.refuerzo) throw new ApiError(422, 'Esta sede no maneja Refuerzo.', 'VALIDATION')
   const reinforcement = site.maneja_refuerzo ? input.refuerzo ?? suggestReinforcement(input.programacion) : null
+  for (const [prefix,schedule] of [['programacion',input.programacion],['refuerzo',reinforcement]] as const) {
+    if (schedule && new Date(schedule.inicioProgramado).getTime() <= Date.now()) throw new ApiError(
+      422,'La visita debe programarse para una fecha y hora futuras.','VALIDATION',
+      {fields:{[prefix+'.inicioProgramado']:'Selecciona una fecha y hora posteriores al momento actual.'}},
+    )
+  }
+  if(input.cobro.pagado && !input.cobro.metodoPago)throw new ApiError(422,'Selecciona cómo pagó el cliente.','VALIDATION',{fields:{'cobro.metodoPago':'Selecciona un método de pago.'}})
+  if(input.cobro.pagado && input.cobro.metodoPago==='EFECTIVO') {
+    if(!input.cobro.recaudadoPorId)throw new ApiError(422,'Indica quién recibió el efectivo.','VALIDATION',{fields:{'cobro.recaudadoPorId':'Selecciona quién recibió el efectivo.'}})
+    await validatePaymentReceiver(client,input.cobro.recaudadoPorId,actorId,null,'cobro.recaudadoPorId')
+  }
   const overlaps = await checkSchedules(client,[input.programacion,...reinforcement ? [reinforcement] : []],[],accepted)
   await validatePlannedCollector(client,input.cobro.tecnicoRecaudoPrevistoId)
   const id = randomUUID(), ids = [id]
   const schedule = input.programacion
+  const wasPaid=input.cobro.pagado===true
+  const cashRecipient=wasPaid && input.cobro.metodoPago==='EFECTIVO' ? input.cobro.recaudadoPorId ?? null : null
   await client.query(`insert into public.servicios(id,sede_id,tipo_servicio,inicio_programado,fin_programado,creado_por_id,
-    tecnico_responsable_id,tecnicos_colaboradores_ids_json,valor_servicio,observaciones,metodo_pago,estado_pago,tecnico_recaudo_previsto_id)
-    values($1,$2,'PRINCIPAL',$3,$4,$5,$6,$7::jsonb,0,$8,$9,$10,$11)`,
-  [id,input.sedeId,schedule.inicioProgramado,scheduleEnd(schedule),actorId,schedule.tecnicoResponsableId,JSON.stringify(schedule.tecnicosColaboradoresIds),input.observaciones,input.cobro.metodoPago,input.cobro.metodoPago ? 'PENDIENTE' : 'SIN_REGISTRAR',input.cobro.tecnicoRecaudoPrevistoId])
+    tecnico_responsable_id,tecnicos_colaboradores_ids_json,valor_servicio,observaciones,metodo_pago,estado_pago,tecnico_recaudo_previsto_id,
+    recaudado_por_id,tecnico_que_recauda_id,pago_fecha,pago_registrado_por_id,pago_confirmado_por_id,pago_confirmado_at)
+    values($1,$2,'PRINCIPAL',$3,$4,$5,$6,$7::jsonb,0,$8,$9,$10,$11,$12,$12,
+      case when $13::boolean then now() else null end,
+      case when $13::boolean then $5::uuid else null end,
+      case when $13::boolean then $5::uuid else null end,
+      case when $13::boolean then now() else null end)`,
+  [id,input.sedeId,schedule.inicioProgramado,scheduleEnd(schedule),actorId,schedule.tecnicoResponsableId,JSON.stringify(schedule.tecnicosColaboradoresIds),
+    input.observaciones,input.cobro.metodoPago,wasPaid ? 'CONFIRMADO' : input.cobro.metodoPago ? 'PENDIENTE' : 'SIN_REGISTRAR',
+    input.cobro.tecnicoRecaudoPrevistoId,cashRecipient,wasPaid])
   if (reinforcement) {
     const reinforcementId=randomUUID(); ids.push(reinforcementId)
     await client.query(`insert into public.servicios(id,sede_id,tipo_servicio,servicio_principal_id,inicio_programado,fin_programado,

@@ -17,7 +17,7 @@ const result: ServiceResultsData = {
   firmanteCliente:'Camila Cliente', firmaTecnico:photo('signatures/technician/tech.png'),
   firmaCliente:photo('signatures/client/client.png'),
   inicioProgramado:now,inicioReal:now,finReal:'2026-10-09T15:00:00.000Z',
-  productos:[{nombre:'Producto A',principio:'Ingrediente A',registro:'Registro 1',lote:'L-1',dosis:'5 mL/L',metodos:'Aspersión'}],
+  productos:[{nombre:'Producto A',principio:'Ingrediente A',registro:'Registro 1',lote:'L-1',dosis:'5 mL/L',metodos:'Aspersión',fichaTecnicaDisponible:true}],
   areas:[{id:areaId,nombre:'Cocina',sinAcceso:false,motivo:null,fotos:[],
     criterios:[{nombre:'Control de residuos',evaluacion:'CP',observacion:'Mejorar disposición',fotos:[photo('criteria/e1/evidence.png')]}],
     puntos:[{numero:'01',ubicacion:'Acceso',tipo:'Trampa adhesiva',estado:'BUENO',capturas:[{plagaNombreSnapshot:'Moscas',cantidad:2}],observaciones:'Correcto',foto:photo('devices/d1/review/image.png')}],
@@ -66,6 +66,8 @@ async function setup(page: Page, role: 'ADMINISTRADOR' | 'TECNICO') {
     if (url.pathname === '/api/admin/services/' + serviceId + '/report-sharing/send') { requests.push(route.request().postDataJSON()); return route.fulfill({json:{sent:true,linkExpiresAt:'2027-01-09T00:00:00Z',attachmentCount:1}}) }
     if (url.pathname === '/api/admin/services/' + serviceId + '/report-sharing/revoke') return route.fulfill({json:{revoked:1}})
     if (url.pathname === '/api/public/reports/resolve') {publicHasAuthorization ||= !!route.request().headers()['authorization'];return route.fulfill({json:{data:publicReportData(result)}})}
+    if (url.pathname === '/api/public/reports/product-sheet') {publicHasAuthorization ||= !!route.request().headers()['authorization'];return route.fulfill({json:{url:'https://r2.example.test/ficha.pdf'}})}
+    if (url.pathname === '/api/admin/services/' + serviceId + '/results/product-sheet') return route.fulfill({json:{url:'https://r2.example.test/ficha.pdf'}})
     if (url.pathname === '/api/public/reports/media') {publicHasAuthorization ||= !!route.request().headers()['authorization'];return route.fulfill({json:{url:'https://r2.example.test/opaque.png'}})}
     if (url.pathname === '/api/admin/services/' + serviceId + '/results') return route.fulfill({json:{data:result}})
     if (url.pathname === '/api/admin/services/' + serviceId + '/media/read-url') return route.fulfill({json:{url:'https://r2.example.test/' + encodeURIComponent(url.searchParams.get('path') || '') + '.png'}})
@@ -170,5 +172,26 @@ test('el enlace público se abre sin sesión y no solicita autorización ni mues
   await expect(page.getByTestId('mip-compliance-chart')).toBeVisible()
   await expect(page.getByTestId('mip-captures-chart')).toBeVisible()
   await expect(page.getByRole('button',{name:'Enviar informe'})).toHaveCount(0)
+  expect(state.publicHasAuthorization()).toBe(false)
+})
+
+
+test('el informe administrativo y el cliente muestran enlace de ficha técnica solo cuando existe',async({page})=>{
+  const state=await setup(page,'ADMINISTRADOR')
+  await page.goto('/servicios/'+serviceId+'/informe')
+  const sheet=page.getByRole('button',{name:'Ver ficha técnica de Producto A'})
+  await expect(sheet).toBeVisible()
+  const pending=page.waitForEvent('popup')
+  await sheet.click()
+  const popup=await pending
+  await expect.poll(()=>popup.url()).toContain('r2.example.test/ficha.pdf')
+  await popup.close()
+  await page.goto('/informe/consulta/'+publicToken)
+  await expect(sheet).toBeVisible()
+  const publicPopup=page.waitForEvent('popup')
+  await sheet.click()
+  const publicTab=await publicPopup
+  await expect.poll(()=>publicTab.url()).toContain('r2.example.test/ficha.pdf')
+  await publicTab.close()
   expect(state.publicHasAuthorization()).toBe(false)
 })

@@ -61,3 +61,13 @@ Reutilizar el editor de correo en la acción de contacto de Clientes y en la fin
 4. Smoke controlado en desarrollo con cuenta de prueba, validación de datos reales, R2, revocación y Gmail. Nunca enviar correos reales a clientes durante pruebas sin revisar los destinatarios.
 
 Relacionado: [conservación de evidencias](file-retention.md).
+
+## Fichas técnicas de los productos
+
+Se conserva el campo productos.ficha_tecnica_storage_path y la carga original de archivos maestros en R2, sin duplicar documentos.
+
+- La ficha se ofrece solo cuando existe; puede ser PDF, JPG, PNG o WebP (máximo 10 MB). El formulario ya soporta PDF; se explicita el MIME para que Android también muestre documentos PDF.
+- En «Productos a aplicar» del técnico y la tabla «Productos aplicados» del informe administrativo/público aparece «Ver ficha técnica». Al pulsar solicita una URL temporal firmada.
+- La API valida la asignación del técnico y la pertenencia del producto al servicio. El informe exige un servicio finalizado/firmado y el enlace del cliente exige token válido, no vencido ni revocado. El público no recibe rutas privadas de R2 ni IDs de producto.
+- En el informe público se usa un índice de producto vinculado al servicio. El PDF A4 oculta el botón de consulta (la URL firmada es temporal). La ficha se almacena y edita únicamente en el catálogo.
+

@@ -64,14 +64,14 @@ export function emptyServiceDraft(site?: ServiceSite, now = new Date()): Service
     inicioProgramado: fromBogotaInput(`${addDateDays(todayBogota(now), 1)}T09:00`),
     duracionMinutos: site?.duracionServicioMinutos ?? 90, tecnicoResponsableId: '', tecnicosColaboradoresIds: [],
   }
-  return { sedeId: site?.id ?? '', programacion: scheduleToDraft(schedule), refuerzo: site?.manejaRefuerzo ? scheduleToDraft(suggestReinforcement(schedule)) : null, productos: [], cobro: { metodoPago: null, tecnicoRecaudoPrevistoId: null }, observaciones: '' }
+  return { sedeId: site?.id ?? '', programacion: scheduleToDraft(schedule), refuerzo: site?.manejaRefuerzo ? scheduleToDraft(suggestReinforcement(schedule)) : null, productos: [], cobro: { metodoPago: null, tecnicoRecaudoPrevistoId: null, pagado:false,recaudadoPorId:null }, observaciones: '' }
 }
 export function serviceToDraft(record: AdminService): ServiceEditorDraft {
   return {
     sedeId: record.sedeId, programacion: scheduleToDraft(scheduleFromRecord(record)),
     refuerzo: record.refuerzo?.estado === 'PROGRAMADO' ? scheduleToDraft(scheduleFromRecord(record.refuerzo)) : null,
     productos: record.productos.map(({ productoId, lote, fechaVencimiento }) => ({ productoId, lote, fechaVencimiento })),
-    cobro: { metodoPago: record.pago.metodoPago, tecnicoRecaudoPrevistoId: record.pago.tecnicoRecaudoPrevistoId }, observaciones: record.observaciones,
+    cobro: { metodoPago: record.pago.metodoPago, tecnicoRecaudoPrevistoId: record.pago.tecnicoRecaudoPrevistoId, pagado:record.pago.estadoPago==='CONFIRMADO',recaudadoPorId:record.pago.recaudadoPorId }, observaciones: record.observaciones,
   }
 }
 export function draftToServiceInput(draft: ServiceEditorDraft): ServiceInput {
@@ -94,10 +94,17 @@ export function validateSchedule(value: unknown, prefix = 'programacion'): { val
   else if (new Set(collaborators).size !== collaborators.length || collaborators.includes(responsible)) errors[`${prefix}.tecnicosColaboradoresIds`] = 'El responsable no se repite como colaborador; cada técnico se selecciona una sola vez.'
   return { value: { inicioProgramado: isZonedInstant(start) ? new Date(start).toISOString() : '', duracionMinutos: duration, tecnicoResponsableId: responsible, tecnicosColaboradoresIds: collaborators.filter(isServiceId) }, errors }
 }
-export function validateServiceInput(value: unknown): { value: ServiceInput; errors: ServiceErrors } {
+export function validateServiceInput(value: unknown, requireFuture = false, now = new Date()): { value: ServiceInput; errors: ServiceErrors } {
   const input = object(value), parsed = validateSchedule(input.programacion), errors: ServiceErrors = { ...parsed.errors }
   const refuerzo = input.refuerzo == null ? null : validateSchedule(input.refuerzo, 'refuerzo')
   if (refuerzo) Object.assign(errors, refuerzo.errors)
+  if (requireFuture) {
+    for (const [prefix,schedule] of [['programacion',parsed.value],['refuerzo',refuerzo?.value]] as const) {
+      if (schedule?.inicioProgramado && new Date(schedule.inicioProgramado).getTime() <= now.getTime()) {
+        errors[prefix+'.inicioProgramado'] = 'Selecciona una fecha y hora posteriores al momento actual.'
+      }
+    }
+  }
   const sedeId = typeof input.sedeId === 'string' ? input.sedeId : ''
   if (!isServiceId(sedeId)) errors.sedeId = 'Selecciona una sede.'
   const products = Array.isArray(input.productos) ? input.productos : []
@@ -119,9 +126,17 @@ export function validateServiceInput(value: unknown): { value: ServiceInput; err
   const tecnicoRecaudoPrevistoId = typeof cobro.tecnicoRecaudoPrevistoId === 'string' && cobro.tecnicoRecaudoPrevistoId ? cobro.tecnicoRecaudoPrevistoId : null
   if (tecnicoRecaudoPrevistoId && !isServiceId(tecnicoRecaudoPrevistoId)) errors['cobro.tecnicoRecaudoPrevistoId'] = 'Selecciona quién recaudará.'
   if (metodoPago !== 'EFECTIVO' && tecnicoRecaudoPrevistoId) errors['cobro.tecnicoRecaudoPrevistoId'] = 'El recaudo técnico solo aplica a efectivo.'
+  if (cobro.pagado !== undefined && typeof cobro.pagado !== 'boolean') errors['cobro.pagado'] = 'Confirma si el cliente ya pagó.'
+  const pagado = cobro.pagado === true
+  const recaudadoPorId = typeof cobro.recaudadoPorId === 'string' && cobro.recaudadoPorId ? cobro.recaudadoPorId : null
+  if (pagado && !metodoPago) errors['cobro.metodoPago'] = 'Selecciona cómo pagó el cliente.'
+  if (pagado && metodoPago === 'EFECTIVO' && !recaudadoPorId) errors['cobro.recaudadoPorId'] = 'Selecciona quién recibió el efectivo.'
+  if (recaudadoPorId && !isServiceId(recaudadoPorId)) errors['cobro.recaudadoPorId'] = 'Selecciona quién recibió el efectivo.'
+  if ((metodoPago !== 'EFECTIVO' || !pagado) && recaudadoPorId) errors['cobro.recaudadoPorId'] = 'El receptor solo se registra para efectivo pagado.'
+  if (pagado && tecnicoRecaudoPrevistoId) errors['cobro.tecnicoRecaudoPrevistoId'] = 'Un pago confirmado no necesita recaudador previsto.'
   const observaciones = typeof input.observaciones === 'string' ? input.observaciones.trim() : ''
   if (observaciones.length > 5_000) errors.observaciones = 'Usa máximo 5.000 caracteres.'
-  return { value: { sedeId, programacion: parsed.value, refuerzo: refuerzo?.value ?? null, productos, cobro: { metodoPago, tecnicoRecaudoPrevistoId }, observaciones }, errors }
+  return { value: { sedeId, programacion: parsed.value, refuerzo: refuerzo?.value ?? null, productos, cobro: { metodoPago, tecnicoRecaudoPrevistoId, pagado, recaudadoPorId }, observaciones }, errors }
 }
 export function normalizeServiceSearch(value: string): string {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLocaleLowerCase('es')

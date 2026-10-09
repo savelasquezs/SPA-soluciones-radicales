@@ -9,7 +9,7 @@ export interface ServiceResultsData {
   id:string; solicitud:string; cliente:string; nit:string; sede:string; direccion:string; tecnico:string
   firmanteCliente:string; firmaTecnico:string; firmaCliente:string
   inicioProgramado:string; inicioReal:string; finReal:string
-  productos:Array<{nombre:string;principio:string;registro:string;lote:string;dosis:string;metodos:string}>
+  productos:Array<{nombre:string;principio:string;registro:string;lote:string;dosis:string;metodos:string;fichaTecnicaDisponible:boolean}>
   areas:ServiceArea[]
   historico:Array<{solicitud:string;fecha:string;cumplimiento:number|null;capturas:number}>
 }
@@ -66,7 +66,8 @@ export async function loadServiceResultsData(client:PoolClient,serviceId:string)
     select coalesce(pa.producto_nombre_snapshot,p.nombre) as nombre,
       coalesce(pa.principio_activo_snapshot,p.principio_activo_composicion,'') as principio,
       coalesce(pa.registro_sanitario_snapshot,'') as registro,coalesce(pa.lote,'') as lote,
-      coalesce(pa.dosis_referencia_snapshot,'') as dosis,coalesce(pa.metodo_aplicacion_nombre_snapshot,'') as metodos
+      coalesce(pa.dosis_referencia_snapshot,'') as dosis,coalesce(pa.metodo_aplicacion_nombre_snapshot,'') as metodos,
+      (p.ficha_tecnica_storage_path like 'products/technical-sheets/%') as "fichaTecnicaDisponible"
     from public.productos_aplicados pa join public.productos p on p.id=pa.producto_id
     where pa.servicio_id=$1 and pa.aplicado
     order by coalesce(pa.producto_nombre_snapshot,p.nombre),pa.id`,[serviceId])).rows

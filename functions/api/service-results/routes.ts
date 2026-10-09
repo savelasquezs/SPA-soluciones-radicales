@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { ApiError, requireAdmin, type Identity } from '../auth'
 import { transaction } from '../db'
 import { createServiceResultMediaReadUrl } from '../r2'
+import { productSheetIndex, reportProductSheetUrl } from './productSheets'
 import { loadServiceResultsData } from './data'
 import { isServiceId } from '../../../src/helpers/adminServices'
 
@@ -37,6 +38,15 @@ serviceResultRoutes.get('/:id/media/read-url',async context=>{
   return context.json({url:createServiceResultMediaReadUrl(path,serviceId)})
 })
 
+serviceResultRoutes.get('/:id/results/product-sheet',async context=>{
+  const serviceId=id(context.req.param('id'))
+  const index=productSheetIndex(context.req.query('index'))
+  const url=await transaction(async client=>{
+    await loadServiceResultsData(client,serviceId)
+    return reportProductSheetUrl(client,serviceId,index)
+  })
+  return context.json({url})
+})
 serviceResultRoutes.onError((error,context)=>{
   if(error instanceof ApiError)return context.json({error:error.message,code:error.code},error.status as 400|401|403|404|409|422|500)
   console.error('ADMIN_REPORTS_ERROR')
