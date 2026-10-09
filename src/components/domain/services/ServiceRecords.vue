@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { Pencil, RotateCcw, X, CloudOff, Clock3, Eye } from 'lucide-vue-next'
+import { Pencil, RotateCcw, X, CloudOff, Clock3, Eye, FileCheck2 } from 'lucide-vue-next'
 import { RouterLink } from 'vue-router'
 import BaseIconButton from '@/components/base/BaseIconButton.vue'
 import ServiceContactActions from './ServiceContactActions.vue'
 import { formatServiceDate, formatServiceMoney, PAYMENT_LABELS, SERVICE_STATE_LABELS } from '@/helpers/adminServices'
 import type { AdminService } from '@/types/adminServices'
-defineProps<{ records: AdminService[]; busy?: boolean }>()
+defineProps<{ records: AdminService[]; busy?: boolean; history?: boolean }>()
 const emit=defineEmits<{ schedule: [record: AdminService]; team: [record: AdminService]; payment: [record: AdminService]; edit: [record: AdminService]; cancel: [record: AdminService]; retryCalendar: [record: AdminService]; results: [record: AdminService] }>()
 </script>
 <template>
@@ -22,6 +22,7 @@ const emit=defineEmits<{ schedule: [record: AdminService]; team: [record: AdminS
           <td data-label="Pago"><span v-if="record.tipoServicio==='REFUERZO'">{{ formatServiceMoney(0) }}<small>Gratuito</small></span><button v-else class="svc-cell-button" :disabled="busy" :aria-label="`Registrar pago de ${record.solicitud}`" @click="emit('payment',record)">{{ formatServiceMoney(record.valorServicio) }}<small>{{ record.pago.metodoPago === 'EFECTIVO' ? 'Efectivo' : record.pago.metodoPago === 'TRANSFERENCIA' ? 'Transferencia' : 'Sin método' }} · {{ PAYMENT_LABELS[record.pago.estadoPago] }}</small><small v-if="record.pago.recaudadoPorNombre">Recibió {{ record.pago.recaudadoPorNombre }}</small></button></td>
           <td data-label="Estado"><span class="svc-state" :class="`svc-state--${record.estado}`">{{ SERVICE_STATE_LABELS[record.estado] }}</span><small v-if="record.calendar.estado==='PENDIENTE'"><Clock3 :size="12" aria-hidden="true" /> Calendar pendiente</small><small v-if="record.calendar.estado==='ERROR'"><CloudOff :size="12" aria-hidden="true" /> Sin sincronizar</small></td>
           <td data-label="Acciones"><span class="svc-actions">
+            <RouterLink v-if="history && record.estado==='FINALIZADO' && record.tipoServicio==='PRINCIPAL'" class="svc-report-link" :to="{ name:'admin-service-report', params:{ id:record.id } }" :aria-label="'Abrir informe de ' + record.solicitud"><FileCheck2 :size="15" aria-hidden="true" /> Informe</RouterLink>
             <BaseIconButton v-if="record.estado==='FINALIZADO' && record.tipoServicio==='PRINCIPAL'" :label="`Ver resultados de ${record.solicitud}`" size="small" :disabled="busy" @click="emit('results',record)"><Eye :size="16" /></BaseIconButton>
             <BaseIconButton v-if="record.estado==='PROGRAMADO'" :label="`Editar ${record.solicitud}`" size="small" :disabled="busy" @click="emit('edit',record)"><Pencil :size="16" /></BaseIconButton>
             <BaseIconButton v-if="record.estado==='PROGRAMADO' || record.estado==='EN_PROCESO'" :label="`Cancelar ${record.solicitud}`" size="small" :disabled="busy" @click="emit('cancel',record)"><X :size="16" /></BaseIconButton>
@@ -32,3 +33,10 @@ const emit=defineEmits<{ schedule: [record: AdminService]; team: [record: AdminS
     </table>
   </div>
 </template>
+
+<style scoped>
+.svc-report-link{display:inline-flex;align-items:center;justify-content:center;gap:.35rem;min-height:32px;padding:.25rem .45rem;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);text-decoration:none;font-size:.75rem;white-space:nowrap}
+.svc-report-link:hover{background:var(--hover);border-color:var(--border-strong)}
+.svc-report-link:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media(max-width:680px){.svc-report-link{min-height:44px;padding:.4rem .65rem}}
+</style>

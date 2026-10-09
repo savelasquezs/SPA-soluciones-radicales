@@ -27,6 +27,7 @@ const router = createRouter({
         { path: 'servicios/:id/trabajo/areas/orden', name: 'technician-service-area-order', component: () => import('@/views/TechnicianAreaOrderView.vue'), meta: { roles: technicianOnly, breadcrumb: [{ label: 'Servicios', to: '/servicios' }, { label: 'Trabajo de campo' }] } },
         { path: 'servicios/:id/trabajo/areas/:areaId', name: 'technician-service-area', component: () => import('@/views/TechnicianAreaView.vue'), meta: { roles: technicianOnly, breadcrumb: [{ label: 'Servicios', to: '/servicios' }, { label: 'Trabajo de campo' }] } },
         { path: 'servicios/:id/trabajo/revision', name: 'technician-service-review', component: () => import('@/views/TechnicianServiceReviewView.vue'), meta: { roles: technicianOnly, breadcrumb: [{ label: 'Servicios', to: '/servicios' }, { label: 'Trabajo de campo' }] } },
+        { path: 'servicios/:id/informe', name: 'admin-service-report', component: () => import('@/views/AdminServiceReportView.vue'), meta: { roles: adminOnly, breadcrumb: [{ label: 'Servicios', to: '/servicios?tab=history' }, { label: 'Informe técnico' }] } },
         { path: 'servicios/:id', name: 'service-detail', component: () => import('@/views/ServiceDetailView.vue'), meta: { roles: adminOnly, breadcrumb: [{ label: 'Servicios', to: '/servicios' }, { label: 'Detalle' }] } },
         { path: 'negocios', redirect: '/clientes' },
         { path: 'clientes', name: 'clients', component: () => import('@/views/ClientsView.vue'), meta: { roles: adminOnly, breadcrumb: 'Clientes' } },
