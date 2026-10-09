@@ -10,7 +10,7 @@ const props = withDefaults(defineProps<{
   description?: string
   closeLabel?: string
   closeOnEscape?: boolean
-  size?: 'default' | 'compact'
+  size?: 'default' | 'compact' | 'wide'
 }>(), { description: undefined, closeLabel: 'Cerrar', closeOnEscape: true, size: 'default' })
 
 const emit = defineEmits<{ 'update:modelValue': [value: boolean]; closed: [] }>()
@@ -94,6 +94,7 @@ onBeforeUnmount(() => {
 .base-dialog__body { min-height: 0; overflow-y: auto; padding: 1.5rem 2rem; }
 .base-dialog__footer { display: flex; flex-wrap: wrap; gap: 0.75rem; padding: 0 2rem 2rem; }
 
+.base-dialog--wide { width: min(60rem, calc(100vw - 2rem)); }
 .base-dialog--compact { width: min(22rem, calc(100vw - 2rem)); }
 .base-dialog--compact .base-dialog__header { align-items: center; gap: 0.75rem; padding: 1rem 1rem 0; }
 .base-dialog--compact .base-dialog__header h2 { font-size: 1rem; line-height: 1.5rem; }

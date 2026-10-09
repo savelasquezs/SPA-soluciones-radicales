@@ -30,6 +30,7 @@ jobs:
             entryPoints: ['functions/api/index.ts'],
             outfile: '.neon-bundle/index.mjs',
             bundle: true,
+            external: ['sharp'],
             platform: 'node',
             target: 'node24',
             format: 'esm',
@@ -39,8 +40,12 @@ jobs:
           });
           NODE
           node --check .neon-bundle/index.mjs
+          # Neon Functions executes linux-arm64/glibc. Never ship the runner's x64 native binary.
+          npm install --no-save --package-lock=false --ignore-scripts --prefix .neon-bundle --os=linux --cpu=arm64 --libc=glibc sharp@0.34.5
+          test -d .neon-bundle/node_modules/@img/sharp-linux-arm64
+          test -d .neon-bundle/node_modules/@img/sharp-libvips-linux-arm64
           cd .neon-bundle
-          zip -9 -q neon-api.zip index.mjs
+          zip -9 -r -q neon-api.zip index.mjs node_modules
           sha256sum neon-api.zip
           ls -lh neon-api.zip
       - name: Publish ephemeral base64 artifact in repo for deploy connector

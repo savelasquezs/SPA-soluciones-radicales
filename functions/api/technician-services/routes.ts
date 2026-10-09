@@ -5,6 +5,7 @@ import type { PoolClient } from 'pg'
 import { isServiceId } from '../../../src/helpers/adminServices'
 import { ApiError, requireTechnician, type DomainProfile, type Identity } from '../auth'
 import { transaction } from '../db'
+import { kickServiceJobs } from '../services/jobs'
 import { assertAreaNoAccessStoragePath, assertCriterionEvidenceStoragePath, assertDeviceReviewStoragePath, assertFindingEvidenceStoragePath, assertServiceSignatureStoragePath, createAreaNoAccessUploadUrl, createCriterionEvidenceUploadUrl, createDeviceReviewUploadUrl, createFindingEvidenceUploadUrl, createServiceSignatureUploadUrl, criterionEvidenceObjectExists, deleteAreaNoAccessObject, deleteCriterionEvidenceObject, deleteDeviceReviewObject, deleteFindingEvidenceObject, deviceReviewMediaObjectExists, findingEvidenceObjectExists, serviceMediaObjectExists, serviceSignatureObjectExists, type FindingEvidencePhase, type ServiceSignatureRole } from '../r2'
 import { authorizeTechnicianAreaChange, authorizeTechnicianDeviceChange, authorizeTechnicianFindingChange, authorizeTechnicianServiceChange, claimTechnicianService, createTechnicianDevice, createTechnicianFinding, finalizeTechnicianService, saveTechnicianAreaAccess, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, saveTechnicianFindingStatus, startTechnicianService, technicianCommand } from './commands'
 import { getTechnicianPackage, listTechnicianServices } from './queries'
@@ -103,7 +104,7 @@ technicianServiceRoutes.post('/:id/finalize', async context => {
   assertServiceSignatureStoragePath(technicianStoragePath, serviceId, 'TECHNICIAN')
   assertServiceSignatureStoragePath(clientStoragePath, serviceId, 'CLIENT')
   const commandPayload = { deviceId, technicianStoragePath, clientStoragePath, clientName }
-  return context.json(await read(context, (client, technician) => technicianCommand(client, technician.id, requestId, 'SERVICE_FINALIZE', serviceId, null,
+  const result = await read(context, (client, technician) => technicianCommand(client, technician.id, requestId, 'SERVICE_FINALIZE', serviceId, null,
     commandPayload, async () => {
       const [technicianExists, clientExists] = await Promise.all([
         serviceSignatureObjectExists(technicianStoragePath, serviceId, 'TECHNICIAN'),
@@ -112,7 +113,9 @@ technicianServiceRoutes.post('/:id/finalize', async context => {
       if (!technicianExists || !clientExists) throw new ApiError(422, 'Una firma todavía no está disponible. Vuelve a intentarlo.', 'SIGNATURE_NOT_FOUND')
       return finalizeTechnicianService(client, technician.id, serviceId, deviceId, lockToken,
         technicianStoragePath, clientStoragePath, clientName)
-    })))
+    }))
+  kickServiceJobs()
+  return context.json(result)
 })
 technicianServiceRoutes.post('/:id/areas/order', async context => {
   const payload = await body(context.req.raw)

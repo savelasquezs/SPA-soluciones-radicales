@@ -164,6 +164,9 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 
 ### Informes y acceso público
 
+La generación asíncrona del informe MIP con fotos y el acceso administrativo están definidos en [service-report.md](service-report.md).
+
+
 - Los documentos se generan desde el histórico persistido.
 - Regenerar no duplica el resultado ni rompe el enlace público.
 - El token público es aleatorio, se almacena como hash, puede revocarse y vence un año después de finalizar.
