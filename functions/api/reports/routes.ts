@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { randomUUID } from 'node:crypto'
 import { ApiError, requireAdmin, type Identity } from '../auth'
 import { transaction } from '../db'
-import { createReportReadUrl } from '../r2'
+import { createReportReadUrl, createReportMediaReadUrl } from '../r2'
 import { kickServiceJobs } from '../services/jobs'
 import { loadReportData } from './data'
 import { isServiceId } from '../../../src/helpers/adminServices'
@@ -44,6 +44,22 @@ reportRoutes.get('/:id/results',async context=>{
   return context.json({data,report})
 })
 reportRoutes.get('/:id/report',async context=>context.json(await reportStatus(id(context.req.param('id')))))
+reportRoutes.get('/:id/media/read-url',async context=>{
+  const serviceId=id(context.req.param('id'))
+  const path=context.req.query('path')
+  if(!path||path.length>1000)throw new ApiError(422,'Ruta de evidencia no válida.','VALIDATION')
+  const data=await transaction(client=>loadReportData(client,serviceId))
+  const authorized=new Set<string>([data.firmaTecnico,data.firmaCliente])
+  for(const area of data.areas){
+    for(const item of area.fotos)authorized.add(item)
+    for(const criterion of area.criterios)for(const item of criterion.fotos)authorized.add(item)
+    for(const point of area.puntos)if(point.foto)authorized.add(point.foto)
+    for(const finding of area.hallazgos)for(const item of finding.fotos)authorized.add(item)
+  }
+  if(!authorized.has(path))throw new ApiError(404,'Evidencia no disponible.','EVIDENCE_NOT_FOUND')
+  return context.json({url:createReportMediaReadUrl(path,serviceId)})
+})
+
 reportRoutes.post('/:id/report/queue',async context=>{
   const serviceId=id(context.req.param('id'))
   await transaction(async client=>{
