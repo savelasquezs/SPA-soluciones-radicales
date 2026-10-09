@@ -452,6 +452,7 @@ test('both full-screen signatures and the closure intention survive offline relo
   await page.goto(`/servicios/${ids.service}/trabajo`)
   await page.getByRole('button', { name: 'Iniciar servicio' }).click()
   await page.getByRole('button', { name: 'Cumple', exact: true }).click()
+  await expect(page.locator('[aria-label="Guardado"]')).toBeVisible()
   await page.locator('.area-tabs').getByRole('button', { name: /Puestos/ }).click()
   await page.getByRole('button', { name: /D-01/ }).click()
   await page.getByRole('button', { name: 'Guardar puesto de monitoreo' }).click()
@@ -459,6 +460,7 @@ test('both full-screen signatures and the closure intention survive offline relo
   await expect(page.locator('#technician-area-selector')).toHaveValue(ids.area2)
   await page.locator('.area-tabs').getByRole('button', { name: /Criterios/ }).click()
   await page.getByRole('button', { name: 'Cumple', exact: true }).click()
+  await expect(page.locator('[aria-label="Guardado"]')).toBeVisible()
   await page.locator('.service-navigation').getByRole('button', { name: 'Cierre' }).click()
   for (const label of ['Técnico', 'Responsable del cliente']) {
     await page.getByRole('article').filter({ hasText: label }).getByRole('button', { name: 'Firmar', exact: true }).click()
@@ -475,6 +477,7 @@ test('both full-screen signatures and the closure intention survive offline relo
     await expect(page.getByRole('dialog')).toHaveCount(0)
   }
   await page.getByLabel('Nombre de quien firma por el cliente').fill('Responsable local')
+  await expect(page.getByRole('button', { name: 'Finalizar servicio' })).toBeEnabled()
   await page.evaluate(() => {
     Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false })
     window.dispatchEvent(new Event('offline'))
