@@ -9,7 +9,7 @@ import StatusPanel from '@/components/base/StatusPanel.vue'
 import { fetchServiceResults, queueServiceReport, serviceEvidenceUrl } from '@/services/serviceResultsService'
 import { downloadLink } from '@/helpers/certificates'
 import { useNotificationsStore } from '@/stores/notifications'
-import type { ServiceResultsResponse, ServiceAreaResult, ServiceReportStatus } from '@/types/serviceResults'
+import type { ServiceResultsResponse } from '@/types/serviceResults'
 
 const props=defineProps<{serviceId:string;solicitud:string}>()
 const emit=defineEmits<{close:[]}>()
@@ -40,6 +40,8 @@ async function load():Promise<void>{
   catch(e){error.value=e instanceof Error?e.message:'No fue posible cargar los resultados.'}
   finally{loading.value=false}
 }
+onMounted(()=>{void load()})
+
 async function generate():Promise<void>{
   if(busy.value)return
   busy.value=true
