@@ -83,7 +83,7 @@ export async function renderMipReport(input:ReportData,photos:ReportPhoto[],sign
     y-=80
   }
   function chart():void{
-    heading('Evolucion de cumplimiento - misma sede')
+    heading('Evolución de cumplimiento - misma sede')
     if(!input.historico.length){text('Sin visitas comparables.');return}
     ensure(194)
     const height=125,w=CW-24,ox=M+12,oy=y-140
@@ -107,11 +107,11 @@ export async function renderMipReport(input:ReportData,photos:ReportPhoto[],sign
       page.drawText(date(r.fecha).slice(0,5),{x:x-2,y:oy-27,font:normal,size:7,color:MUTED})
     }
     y=oy-42
-    text('Porcentaje promedio de areas evaluadas. Se excluyen las areas sin acceso y los criterios No aplica.',{size:7.8,color:MUTED})
+    text('Porcentaje promedio de áreas evaluadas. Se excluyen las áreas sin acceso y los criterios No aplica.',{size:7.8,color:MUTED})
   }
   fresh()
   y-=13
-  text('INFORME TECNICO DEL SERVICIO',{size:19,font:bold,color:NAVY,leading:27,gap:4})
+  text('INFORME TÉCNICO DEL SERVICIO',{size:19,font:bold,color:NAVY,leading:27,gap:4})
   text(input.solicitud,{size:12,color:BLUE,gap:18})
   ensure(83)
   const top=y
@@ -121,8 +121,8 @@ export async function renderMipReport(input:ReportData,photos:ReportPhoto[],sign
   kv('NIT',input.nit,M,CW*.55)
   kv('Fecha programada',date(input.inicioProgramado),M+CW*.56,CW*.42)
   y=top-92
-  row('Direccion',input.direccion)
-  row('Tecnico responsable',input.tecnico)
+  row('Dirección',input.direccion)
+  row('Técnico responsable',input.tecnico)
   row('Ejecucion real',date(input.inicioReal)+'  '+hour(input.inicioReal)+' - '+hour(input.finReal))
   y-=15
   const accessible=input.areas.filter(a=>!a.sinAcceso)
@@ -131,13 +131,13 @@ export async function renderMipReport(input:ReportData,photos:ReportPhoto[],sign
   const captures=input.areas.flatMap(a=>a.puntos).flatMap(p=>p.capturas).reduce((n,c)=>n+c.cantidad,0)
   const current=input.historico.find(h=>h.solicitud===input.solicitud)
   gridBoxes([{label:'Cumplimiento',value:pct(current?.cumplimiento??null)},
-    {label:'Areas evaluadas',value:String(accessible.length)+' / '+input.areas.length},
+    {label:'Áreas evaluadas',value:String(accessible.length)+' / '+input.areas.length},
     {label:'Puestos revisados',value:String(points)},
     {label:'Hallazgos',value:String(findings)}])
   chart()
   heading('Resultados generales')
   text('Capturas registradas en esta visita: '+num(captures)+'. Los conteos pertenecen a los puestos revisados y no representan por si solos una tendencia uniforme entre tipos de dispositivo.')
-  if(input.areas.some(a=>a.sinAcceso))text('Areas sin acceso: '+input.areas.filter(a=>a.sinAcceso).map(a=>a.nombre).join(', ')+'. No participan en el porcentaje de cumplimiento.',{size:8.5,color:MUTED})
+  if(input.areas.some(a=>a.sinAcceso))text('Áreas sin acceso: '+input.areas.filter(a=>a.sinAcceso).map(a=>a.nombre).join(', ')+'. No participan en el porcentaje de cumplimiento.',{size:8.5,color:MUTED})
 
   heading('Productos aplicados')
   if(!input.productos.length)text('No se registraron productos aplicados.')
@@ -145,19 +145,19 @@ export async function renderMipReport(input:ReportData,photos:ReportPhoto[],sign
     ensure(62)
     text(p.nombre,{size:9.5,font:bold,color:NAVY,gap:0})
     text('Principio activo: '+p.principio+'  |  Registro: '+(p.registro||'No registrado'),{size:8,gap:0})
-    text('Lote: '+p.lote+'  |  Dosis: '+p.dosis+'  |  Metodo(s): '+p.metodos,{size:8,gap:7})
+    text('Lote: '+p.lote+'  |  Dosis: '+p.dosis+'  |  Método(s): '+p.metodos,{size:8,gap:7})
   }
-  heading('Evaluacion de condiciones locativas')
+  heading('Evaluación de condiciones locativas')
   for(const a of input.areas){
     ensure(52)
     text(a.nombre,{size:10,font:bold,color:NAVY,gap:2})
     if(a.sinAcceso){
-      text('Sin acceso. Motivo: '+(a.motivo||'No registrado')+'. Los criterios historicos asociados no se utilizan para calcular cumplimiento.',{size:8,color:MUTED,gap:7})
+      text('Sin acceso. Motivo: '+(a.motivo||'No registrado')+'. Los criterios históricos asociados no se utilizan para calcular cumplimiento.',{size:8,color:MUTED,gap:7})
       continue
     }
     for(const c of a.criterios){
       row(c.nombre,({C:'Cumple',CP:'Cumple parcialmente',NC:'No cumple',NA:'No aplica'} as Record<string,string>)[c.evaluacion??'']||'Sin evaluacion')
-      if(c.observacion)text('Observacion: '+c.observacion,{size:8,color:MUTED})
+      if(c.observacion)text('Observación: '+c.observacion,{size:8,color:MUTED})
     }
     y-=12
   }
@@ -170,9 +170,9 @@ export async function renderMipReport(input:ReportData,photos:ReportPhoto[],sign
   for(const a of input.areas)for(const p of a.puntos){
     ensure(64)
     text(a.nombre+'  /  Puesto '+p.numero+' - '+p.tipo,{font:bold,size:9.2,color:NAVY,gap:1})
-    text('Ubicacion: '+p.ubicacion+'  |  Estado: '+(p.estado||'No registrado'),{size:8.4,gap:1})
+    text('Ubicación: '+p.ubicacion+'  |  Estado: '+(p.estado||'No registrado'),{size:8.4,gap:1})
     text('Capturas: '+(p.capturas.length?p.capturas.map(c=>safe(c.plagaNombreSnapshot)+': '+num(c.cantidad)).join('  |  '):'Sin capturas registradas'),{size:8.4,gap:5})
-    if(p.observaciones)text('Observacion: '+p.observaciones,{size:8})
+    if(p.observaciones)text('Observación: '+p.observaciones,{size:8})
   }
   if(pests.size){
     heading('Capturas por plaga - esta visita')
@@ -189,12 +189,12 @@ export async function renderMipReport(input:ReportData,photos:ReportPhoto[],sign
     ensure(70)
     text(a.nombre+'  -  '+h.estado,{size:9.2,font:bold,color:NAVY,gap:2})
     text('Hallazgo: '+h.descripcion,{size:8.7,gap:2})
-    text('Accion recomendada: '+h.recomendacion,{size:8.7,gap:2})
+    text('Acción recomendada: '+h.recomendacion,{size:8.7,gap:2})
     text('Responsable: '+h.responsable,{size:8,color:MUTED,gap:9})
   }
 
   // Images are positioned in uniform cells; the original aspect ratio is preserved.
-  heading('Registro fotografico')
+  heading('Registro fotográfico')
   if(!photos.length)text('No se asociaron evidencias fotograficas a esta visita.')
   let lastArea=''
   const iw=(CW-20)/3, ih=118,gap=10
@@ -216,7 +216,7 @@ export async function renderMipReport(input:ReportData,photos:ReportPhoto[],sign
   }
   heading('Firmas y conformidad')
   ensure(130)
-  const sigs=[{title:'Tecnico responsable',name:input.tecnico,bytes:signatures.tecnico},
+  const sigs=[{title:'Técnico responsable',name:input.tecnico,bytes:signatures.tecnico},
     {title:'Responsable del cliente',name:input.firmanteCliente,bytes:signatures.cliente}]
   for(let i=0;i<2;i++){
     const x=M+i*(CW/2+5),w=CW/2-5,s=sigs[i]!
