@@ -5,7 +5,7 @@ import { putReportObject, readReportMedia } from '../r2'
 import { loadReportData } from './data'
 import { renderMipReportDocx, type ReportPhoto } from './docx'
 import { convertDocumentToPdfWithGoogleDrive } from '../google'
-import { MAX_PDF_BYTES } from '../certificates/generator'
+import { MAX_PDF_BYTES } from '../documents/limits'
 
 const IMAGE_LIMIT = 80
 async function jpeg(path:string,serviceId:string,signature=false):Promise<Uint8Array>{
