@@ -42,7 +42,7 @@ jobs:
           npm install --no-save --package-lock=false --ignore-scripts --prefix .neon-compact --os=linux --cpu=arm64 --libc=glibc sharp@0.34.5
           find .neon-compact/node_modules -type f \( -name '*.d.ts' -o -name '*.md' -o -name '*.map' \) -delete
           rm -rf .neon-compact/node_modules/sharp/src
-          tar --format=ustar --dereference -cf .neon-compact/payload.tar -C .neon-compact index.mjs node_modules
+          tar --format=ustar --dereference --hard-dereference -cf .neon-compact/payload.tar -C .neon-compact index.mjs node_modules
           node --input-type=module <<'NODE'
           import { readFileSync, writeFileSync } from 'node:fs'
           import { brotliCompressSync, constants } from 'node:zlib'
