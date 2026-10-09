@@ -1,35 +1,9 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import { ApiError } from '../auth'
 import { renderCertificateDocx } from './docx'
+import { MAX_PDF_BYTES } from '../documents/limits'
+export { readBounded } from '../documents/limits'
 import type { CertificateData, CertificateType } from '../../../src/types/certificates'
-
-export const MAX_PDF_BYTES = 15 * 1024 * 1024
-
-/** Also bounds responses without Content-Length. Never buffers unbounded remote content. */
-export async function readBounded(response: Response, maxBytes: number): Promise<Buffer> {
-  if (Number(response.headers.get('content-length')) > maxBytes) {
-    await response.body?.cancel()
-    throw new ApiError(422, 'El documento supera el tamaño permitido')
-  }
-  const reader = response.body?.getReader()
-  if (!reader) throw new ApiError(502, 'El proveedor devolvió un documento vacío')
-  const chunks: Uint8Array[] = []
-  let length = 0
-  try {
-    while (true) {
-      const { value, done } = await reader.read()
-      if (done) break
-      length += value.length
-      if (length > maxBytes) {
-        await reader.cancel()
-        throw new ApiError(422, 'El documento supera el tamaño permitido')
-      }
-      chunks.push(value)
-    }
-  } finally { reader.releaseLock() }
-  if (!length) throw new ApiError(502, 'El proveedor devolvió un documento vacío')
-  return Buffer.concat(chunks)
-}
 
 /** One pipeline for synthetic previews and persisted certificates. No browser converter. */
 export async function generateCertificatePdf(input: {
