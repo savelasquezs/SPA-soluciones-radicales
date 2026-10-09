@@ -307,3 +307,38 @@ export async function deleteRetainedServiceReport(storagePath: string, serviceId
   })
   if (!response.ok && response.status !== 404) throw new ApiError(502, 'No fue posible limpiar el informe de R2')
 }
+
+
+/** Only registered service evidence/signature keys are accepted for report rendering. */
+export async function readReportMedia(storagePath: string, serviceId: string): Promise<Buffer> {
+  if (!/^[0-9a-f-]{36}$/i.test(serviceId) ||
+      !storagePath.startsWith('services/' + serviceId + '/') ||
+      !/^services\/[0-9a-f-]{36}\/(?:areas\/[0-9a-f-]{36}\/no-access|criteria\/[0-9a-f-]{36}\/evidence|devices\/[0-9a-f-]{36}\/review|findings\/[0-9a-f-]{36}\/(?:opening|closure)|signatures\/(?:client|technician))\/[^/]+\.(?:png|jpe?g|webp)$/i.test(storagePath) ||
+      storagePath.includes('..')) throw new ApiError(422, 'La ruta de evidencia del informe no es válida.')
+  const response = await fetch(presign('GET', storagePath, undefined, serviceMediaBucket()), {
+    signal: AbortSignal.timeout(20_000), redirect: 'error',
+  })
+  if (!response.ok) throw new ApiError(502, 'No fue posible recuperar una evidencia del servicio.', 'REPORT_PHOTO_UNAVAILABLE')
+  return readBounded(response, SERVICE_PHOTO_MAX_BYTES)
+}
+function validateReportPath(storagePath: string, serviceId: string): void {
+  if (!/^[0-9a-f-]{36}$/i.test(serviceId) ||
+      !new RegExp('^reports/' + serviceId + '/[0-9a-f-]{36}\\.pdf$','i').test(storagePath)) {
+    throw new ApiError(422, 'La ruta del informe no es válida.')
+  }
+}
+export function createReportReadUrl(storagePath: string, serviceId: string): string {
+  validateReportPath(storagePath, serviceId)
+  return presign('GET', storagePath, undefined, generatedBucket(), {
+    'response-content-disposition': 'attachment; filename="informe-mip.pdf"',
+  })
+}
+export async function putReportObject(storagePath: string, serviceId: string, bytes: Uint8Array): Promise<void> {
+  validateReportPath(storagePath, serviceId)
+  if (!bytes.length || bytes.length > MAX_PDF_BYTES) throw new ApiError(422, 'El informe supera el límite de 15 MB.')
+  const response = await fetch(presign('PUT', storagePath, 'application/pdf', generatedBucket()), {
+    method: 'PUT', headers: { 'Content-Type': 'application/pdf' },
+    body: new Uint8Array(bytes), signal: AbortSignal.timeout(45_000), redirect: 'error',
+  })
+  if (!response.ok) throw new ApiError(502, 'No fue posible almacenar el informe.')
+}
