@@ -73,7 +73,7 @@ export async function loadReportData(client:PoolClient,serviceId:string):Promise
   const historico=(await client.query<{solicitud:string;fecha:Date;cumplimiento:number|null;capturas:string}>(`
     with visitas as (
       select id,solicitud,fin_real from public.servicios
-      where sede_id=$1 and estado='FINALIZADO' and tipo_servicio='PRINCIPAL' and fin_real <= $2
+      where sede_id=$1 and estado='FINALIZADO' and tipo_servicio='PRINCIPAL' and fin_real <= (select fin_real from public.servicios where id=$2)
       order by fin_real desc,id desc limit 6
     ), area_scores as (
       select v.id,sa.id as area_id,
@@ -89,7 +89,7 @@ export async function loadReportData(client:PoolClient,serviceId:string):Promise
          cross join lateral jsonb_array_elements(coalesce(r.capturas_json,'[]'::jsonb)) c(item)
          where r.servicio_id=v.id) as capturas
     from visitas v left join area_scores a on a.id=v.id
-    group by v.id,v.solicitud,v.fin_real order by v.fin_real,v.id`,[sv.sedeId,sv.finReal])).rows
+    group by v.id,v.solicitud,v.fin_real order by v.fin_real,v.id`,[sv.sedeId,sv.id])).rows
   return {id:sv.id,solicitud:sv.solicitud,cliente:sv.cliente,nit:sv.nit,sede:sv.sede,direccion:sv.direccion,tecnico:sv.tecnico,
     firmanteCliente:sv.firmanteCliente||'',firmaTecnico:sv.firmaTecnico,firmaCliente:sv.firmaCliente,
     inicioProgramado:sv.inicioProgramado.toISOString(),inicioReal:sv.inicioReal.toISOString(),finReal:sv.finReal.toISOString(),
