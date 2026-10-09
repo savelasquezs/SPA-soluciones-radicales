@@ -73,6 +73,8 @@ const summary = (estado: TechnicianServiceSummary['estado'] = 'PROGRAMADO'): Tec
   inicioReal: estado === 'PROGRAMADO' ? null : '2026-10-07T13:30:00Z',
   clienteNombre: 'Cliente de prueba',
   sedeNombre: 'Sede de prueba',
+  contactoPrincipalNombre: 'Contacto real de la sede',
+  contactoPrincipalCorreo: 'contacto@example.invalid',
   direccion: 'Dirección sintética',
   autoPrepareEligible: estado === 'EN_PROCESO',
 })
@@ -397,12 +399,15 @@ describe('technician services state', () => {
     ]
     expect(await store.applyFindingCreate(serviceId, areaIds[0]!, {
       descripcion: 'Abertura junto al muro', recomendacionAccion: 'Sellar el paso',
-      responsableNombre: 'Mantenimiento', responsableCorreo: 'mantenimiento@example.invalid',
     }, files)).toBe('pending')
     expect(mutationRecords[0]).toMatchObject({ kind: 'FINDING_CREATE', areaId: areaIds[0], status: 'PENDING', evidences: [{ storagePath: null }, { storagePath: null }] })
+    expect(mutationRecords[0]).not.toHaveProperty('responsableNombre')
+    expect(mutationRecords[0]).not.toHaveProperty('responsableCorreo')
     expect(mediaService.saveTechnicianMedia).toHaveBeenCalledTimes(2)
     expect(store.currentPackage?.areas[0]?.hallazgos[0]).toMatchObject({
-      descripcion: 'Abertura junto al muro', estado: 'ABIERTO', evidenciasAperturaLocalIds: [expect.any(String), expect.any(String)],
+      descripcion: 'Abertura junto al muro', estado: 'ABIERTO',
+      responsableNombre: 'Contacto real de la sede', responsableCorreo: 'contacto@example.invalid',
+      evidenciasAperturaLocalIds: [expect.any(String), expect.any(String)],
     })
     expect(api.createTechnicianFinding).not.toHaveBeenCalled()
   })

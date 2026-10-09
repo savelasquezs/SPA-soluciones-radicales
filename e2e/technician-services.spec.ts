@@ -14,6 +14,8 @@ const summary = (state: TechnicianServiceSummary['estado'] = 'PROGRAMADO'): Tech
   inicioReal: state === 'PROGRAMADO' ? null : '2026-10-07T15:30:00Z',
   clienteNombre: 'Casa Verde',
   sedeNombre: 'Laureles',
+  contactoPrincipalNombre: 'Contacto Laureles',
+  contactoPrincipalCorreo: 'contacto@example.invalid',
   direccion: 'Calle 10 # 20-30, Medellín',
   autoPrepareEligible: true,
 })
@@ -379,7 +381,7 @@ test('a finding with several evidence photos survives an offline reload', async 
   await findings.getByRole('button', { name: 'Agregar hallazgo' }).click()
   await findings.getByLabel('Descripción').fill('Abertura junto al muro')
   await findings.getByLabel('Recomendación o acción correctiva').fill('Sellar el paso')
-  await findings.locator('input[name="finding-responsible-name"]').fill('Mantenimiento')
+  await expect(findings.locator('input[name^="finding-responsible"]')).toHaveCount(0)
   await findings.locator('input[type="file"]:not([capture])').setInputFiles([
     { name: 'hallazgo-1.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('synthetic-finding-photo-1') },
     { name: 'hallazgo-2.png', mimeType: 'image/png', buffer: Buffer.from('synthetic-finding-photo-2') },
@@ -392,6 +394,7 @@ test('a finding with several evidence photos survives an offline reload', async 
   await page.locator('.area-tabs').getByRole('button', { name: /Hallazgos/ }).click()
   await findings.getByRole('button', { name: /Abertura junto al muro/ }).click()
   await expect(findings.getByText('2 evidencias de apertura')).toBeVisible()
+  await expect(findings.getByText('Contacto Laureles')).toBeVisible()
   await expect(findings.getByText('Guardado en este dispositivo · pendiente de sincronizar')).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 })

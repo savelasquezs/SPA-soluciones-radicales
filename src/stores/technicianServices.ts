@@ -466,8 +466,7 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
             sending = findingOperation
             const result = await createTechnicianFinding(serviceId, findingOperation.areaId, findingOperation.requestId,
               findingOperation.deviceId, findingOperation.lockToken, findingOperation.findingId,
-              { descripcion: findingOperation.descripcion, recomendacionAccion: findingOperation.recomendacionAccion,
-                responsableNombre: findingOperation.responsableNombre, responsableCorreo: findingOperation.responsableCorreo },
+              { descripcion: findingOperation.descripcion, recomendacionAccion: findingOperation.recomendacionAccion },
               findingOperation.evidences.flatMap(evidence => evidence.storagePath ? [evidence.storagePath] : []))
             await deleteTechnicianMutation(findingOperation)
             for (const evidence of findingOperation.evidences) await deleteTechnicianMedia(findingOperation.actorId, evidence.mediaId)
@@ -1050,15 +1049,10 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     const normalized = {
       descripcion: input.descripcion.trim(),
       recomendacionAccion: input.recomendacionAccion.trim(),
-      responsableNombre: input.responsableNombre.trim(),
-      responsableCorreo: input.responsableCorreo.trim().toLowerCase(),
     }
     if (!normalized.descripcion || normalized.descripcion.length > 2_000 || !normalized.recomendacionAccion
-      || normalized.recomendacionAccion.length > 2_000 || !normalized.responsableNombre || normalized.responsableNombre.length > 200) {
-      throw new Error('Completa la descripción, la acción recomendada y el responsable del Hallazgo.')
-    }
-    if (normalized.responsableCorreo && (normalized.responsableCorreo.length > 320 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(normalized.responsableCorreo))) {
-      throw new Error('El correo del responsable no es válido.')
+      || normalized.recomendacionAccion.length > 2_000) {
+      throw new Error('Completa la descripción y la acción recomendada del Hallazgo.')
     }
     const mediaIds = await saveFindingMedia(serviceId, areaId, files)
     const now = new Date().toISOString(), findingId = crypto.randomUUID()
@@ -1075,8 +1069,11 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
       id: findingId, servicioAperturaId: serviceId, fechaApertura: now,
       descripcion: normalized.descripcion, recomendacionAccion: normalized.recomendacionAccion,
       evidenciasAperturaStoragePaths: [], evidenciasAperturaLocalIds: mediaIds,
-      estado: 'ABIERTO', responsableNombre: normalized.responsableNombre,
-      responsableCorreo: normalized.responsableCorreo || null, servicioCierreId: null, fechaCierre: null,
+      estado: 'ABIERTO',
+      // Solo para la vista offline: al sincronizar se guarda el snapshot definitivo del servidor.
+      responsableNombre: cache.package.service.contactoPrincipalNombre?.trim() || 'Contacto de la sede',
+      responsableCorreo: cache.package.service.contactoPrincipalCorreo?.trim().toLowerCase() || null,
+      servicioCierreId: null, fechaCierre: null,
       evidenciasCierreStoragePaths: [], observacionCierre: null, version: 1,
     })
     return onlineNow() ? syncPending(serviceId) : 'pending'

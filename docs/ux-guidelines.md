@@ -199,3 +199,5 @@ La configuración de plantillas, la prueba sintética, la generación oficial y 
 - La excepción exige un motivo y entre una y cinco fotografías; después de guardar ofrece continuar a otra Área incompleta o ir al cierre. No inicia firmas automáticamente ni da por completo el servicio.
 - Las evidencias nuevas se ven como miniaturas con visor antes de guardar. La cámara integrada permite capturar, repetir, usar foto y «Usar y tomar otra»; cuando el permiso/cámara no está disponible, utiliza el selector nativo.
 - La persistencia de fotografías funciona mediante cola local e identificadores de medio; la sincronización por archivo no debe perder los restantes ni reiniciar un envío ya confirmado.
+
+- Al abrir un Hallazgo, el formulario técnico pide solamente descripción, recomendación/acción y evidencias; la responsabilidad la determina el backend desde el contacto principal de la Sede. Se muestra en el detalle, no se edita en campo.

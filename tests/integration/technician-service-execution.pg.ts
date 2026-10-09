@@ -5,7 +5,7 @@ import type { PoolClient } from 'pg'
 vi.mock('@neon/functions', () => ({ attachDatabasePool: vi.fn<() => void>(), waitUntil: vi.fn<() => void>() }))
 
 import { pool, transaction } from '../../functions/api/db'
-import { claimTechnicianService, createTechnicianDevice, releaseTechnicianServiceLock, saveTechnicianAreaAccess, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, startTechnicianService, technicianCommand } from '../../functions/api/technician-services/commands'
+import { claimTechnicianService, createTechnicianDevice, createTechnicianFinding, releaseTechnicianServiceLock, saveTechnicianAreaAccess, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, startTechnicianService, technicianCommand } from '../../functions/api/technician-services/commands'
 import type { DeviceState } from '../../src/types/technicianServices'
 import { getTechnicianPackage } from '../../functions/api/technician-services/queries'
 
@@ -117,6 +117,24 @@ describe('technician service execution · real PostgreSQL', () => {
     expect(frozen.areas.flatMap(area => area.criterios).some(criterion => criterion.nombre === 'Criterio renombrado')).toBe(false)
     expect(frozen.areas.flatMap(area => area.dispositivos)[0]?.numero).toBe('D-01')
     expect((await pool.query('select aplicado from public.productos_aplicados where servicio_id=$1', [value.service])).rows[0].aplicado).toBe(true)
+  })
+
+
+  it('assigns the current Site contact, rejects spoofed responsible data and preserves the historical snapshot', async () => {
+    const value = await fixture(), deviceId = randomUUID(), findingId = randomUUID()
+    const session = await transaction(client => startTechnicianService(client, value.technician, value.service, 1, deviceId))
+    const area = session.package.areas.find(item => item.areaId === value.internalArea)!
+    await pool.query(`update public.sedes set contacto_principal_nombre='Responsable vigente',
+      contacto_principal_correo='vigente@example.com' where id=(select sede_id from public.servicios where id=$1)`, [value.service])
+    const spoofedInput = { descripcion: 'Grieta en muro', recomendacionAccion: 'Sellar abertura',
+      responsableNombre: 'Persona falsificada', responsableCorreo: 'falso@example.com' }
+    const created = await transaction(client => createTechnicianFinding(client, value.technician, value.service, deviceId,
+      session.lock.token, area.id, findingId, spoofedInput, []))
+    expect(created.finding).toMatchObject({ responsableNombre: 'Responsable vigente', responsableCorreo: 'vigente@example.com' })
+    await pool.query(`update public.sedes set contacto_principal_nombre='Nuevo contacto',
+      contacto_principal_correo='nuevo@example.com' where id=(select sede_id from public.servicios where id=$1)`, [value.service])
+    const historic = await pool.query('select responsable_nombre, responsable_correo from public.hallazgos where id=$1', [findingId])
+    expect(historic.rows[0]).toMatchObject({ responsable_nombre: 'Responsable vigente', responsable_correo: 'vigente@example.com' })
   })
 
   it('uses all catalogue methods without requiring per-visit dose or method', async () => {

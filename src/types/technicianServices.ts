@@ -16,6 +16,9 @@ export interface TechnicianServiceSummary {
   inicioReal: string | null
   clienteNombre: string
   sedeNombre: string
+  // Datos para el borrador local; el backend decide el contacto al persistir.
+  contactoPrincipalNombre?: string
+  contactoPrincipalCorreo?: string | null
   direccion: string
   autoPrepareEligible: boolean
 }
@@ -129,8 +132,6 @@ export interface TechnicianFinding {
 export interface TechnicianFindingCreateInput {
   descripcion: string
   recomendacionAccion: string
-  responsableNombre: string
-  responsableCorreo: string
 }
 
 export interface TechnicianFindingStatusInput {

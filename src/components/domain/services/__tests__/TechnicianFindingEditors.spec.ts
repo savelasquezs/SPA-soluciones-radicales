@@ -46,9 +46,10 @@ describe('technician finding editors', () => {
     const textareas = wrapper.findAll('textarea')
     await textareas[0]!.setValue('Abertura junto al muro')
     await textareas[1]!.setValue('Sellar el paso')
-    await wrapper.get('input[name="finding-responsible-name"]').setValue('Mantenimiento')
+    expect(wrapper.find('input[name="finding-responsible-name"]').exists()).toBe(false)
+    expect(wrapper.find('input[name="finding-responsible-email"]').exists()).toBe(false)
     await wrapper.get('form').trigger('submit')
-    expect(wrapper.emitted('save')?.[0]?.[0]).toMatchObject({ descripcion: 'Abertura junto al muro', recomendacionAccion: 'Sellar el paso', responsableNombre: 'Mantenimiento' })
+    expect(wrapper.emitted('save')?.[0]?.[0]).toEqual({ descripcion: 'Abertura junto al muro', recomendacionAccion: 'Sellar el paso' })
   })
 
   it('allows following up a prior finding and requires evidence to close it', async () => {

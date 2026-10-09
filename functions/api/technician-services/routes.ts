@@ -324,8 +324,6 @@ technicianServiceRoutes.post('/:id/areas/:areaId/findings', async context => {
   const input = {
     descripcion: requiredString(payload.descripcion, 'Describe el Hallazgo.'),
     recomendacionAccion: requiredString(payload.recomendacionAccion, 'Describe la recomendación o acción correctiva.'),
-    responsableNombre: requiredString(payload.responsableNombre, 'Indica el responsable.', 200),
-    responsableCorreo: optionalString(payload.responsableCorreo, 320),
   }
   const evidenceStoragePaths = findingEvidencePaths(payload.evidenceStoragePaths)
   for (const storagePath of evidenceStoragePaths) {

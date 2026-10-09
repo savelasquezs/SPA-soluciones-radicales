@@ -372,12 +372,19 @@ export async function createTechnicianFinding(
 ): Promise<TechnicianFindingResult> {
   const context = await editableFindingArea(client, userId, serviceId, deviceId, lockToken, areaId)
   const descripcion = input.descripcion.trim(), recomendacion = input.recomendacionAccion.trim()
-  const responsableNombre = input.responsableNombre.trim(), responsableCorreo = input.responsableCorreo.trim().toLowerCase()
-  if (!descripcion || descripcion.length > 2_000 || !recomendacion || recomendacion.length > 2_000 || !responsableNombre || responsableNombre.length > 200) {
-    throw new ApiError(422, 'Completa la descripción, la acción recomendada y el responsable del Hallazgo.', 'VALIDATION')
+  if (!descripcion || descripcion.length > 2_000 || !recomendacion || recomendacion.length > 2_000) {
+    throw new ApiError(422, 'Completa la descripción y la acción recomendada del Hallazgo.', 'VALIDATION')
   }
-  if (responsableCorreo && (responsableCorreo.length > 320 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(responsableCorreo))) {
-    throw new ApiError(422, 'El correo del responsable no es válido.', 'VALIDATION')
+  // La responsabilidad la determina el contacto de la Sede, nunca un valor enviado por el Técnico.
+  const contact = (await client.query<{ nombre: string; correo: string | null }>(
+    `select contacto_principal_nombre as nombre, contacto_principal_correo as correo
+      from public.sedes where id=$1`, [context.siteId]
+  )).rows[0]
+  const responsableNombre = contact?.nombre.trim() ?? ''
+  const responsableCorreo = contact?.correo?.trim().toLowerCase() || null
+  if (!responsableNombre || responsableNombre.length > 200 || (responsableCorreo &&
+    (responsableCorreo.length > 320 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(responsableCorreo)))) {
+    throw new ApiError(409, 'Configura el contacto principal de la Sede antes de registrar Hallazgos.', 'SITE_CONTACT_INVALID')
   }
   if (evidenceStoragePaths.length > 10 || new Set(evidenceStoragePaths).size !== evidenceStoragePaths.length) {
     throw new ApiError(422, 'Las evidencias del Hallazgo no son válidas.', 'VALIDATION')
@@ -386,7 +393,7 @@ export async function createTechnicianFinding(
     recomendacion_accion,evidencias_apertura_storage_paths,estado,responsable_nombre,responsable_correo)
     values($1,$2,$3,$4,now(),$5,$6,$7::jsonb,'ABIERTO',$8,$9)`,
   [findingId, context.siteId, context.sourceAreaId, serviceId, descripcion, recomendacion,
-    JSON.stringify(evidenceStoragePaths), responsableNombre, responsableCorreo || null])
+    JSON.stringify(evidenceStoragePaths), responsableNombre, responsableCorreo])
   const finding = await getFinding(client, findingId)
   if (!finding) throw new ApiError(500, 'No fue posible recuperar el Hallazgo creado.', 'UNEXPECTED')
   await audit(client, userId, 'SERVICIO_HALLAZGO_CREADO', serviceId, { areaId, findingId, evidenceCount: evidenceStoragePaths.length })
