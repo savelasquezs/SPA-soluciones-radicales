@@ -1,4 +1,5 @@
 name: Bundle Neon API for controlled deployment
+# Rebuild after shared Google Drive DOCX -> PDF pipeline was merged.
 on:
   push:
     branches: [develop]
