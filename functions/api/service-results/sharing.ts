@@ -1,9 +1,9 @@
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import QRCode from 'qrcode'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import { bodyLimit } from 'hono/body-limit'
 import type { PoolClient } from 'pg'
-import { ApiError, requireAdmin, type Identity } from '../auth'
+import { ApiError, requireAdmin, requireTechnician, type Identity, type DomainProfile } from '../auth'
 import { transaction } from '../db'
 import { sendGmailMessage, getGoogleStatus } from '../google'
 import { readCertificateObject, createServiceResultMediaReadUrl } from '../r2'
@@ -11,6 +11,7 @@ import {
   claimCertificateJob, completeCertificateJob, failCertificateJob, lockCertificateJob, markEmailDispatching,
 } from '../certificates/jobs'
 import { loadServiceResultsData } from './data'
+import { assignedServiceState } from '../technician-services/queries'
 import { isServiceId } from '../../../src/helpers/adminServices'
 import { publicReportData, reportPaths, newReportToken, reportTokenHash, validReportToken } from './public'
 import type { ServiceReportShareOptions, SendServiceReportInput } from '../../../src/types/reportSharing'
@@ -18,6 +19,7 @@ import { buildReportEmailContent } from './email'
 
 type Env = { Variables: { identity: Identity } }
 export const reportSharingRoutes = new Hono<Env>()
+export const technicianReportSharingRoutes = new Hono<Env>()
 export const publicReportRoutes = new Hono()
 const EMAIL = /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -96,15 +98,35 @@ async function loadSharingContext(client: PoolClient, id: string): Promise<Share
   return { solicitud:report.solicitud, cliente:report.cliente, sede:report.sede, registeredEmails, documents }
 }
 
-reportSharingRoutes.use('*', bodyLimit({ maxSize: 7_000, onError: c => c.json({ error:'Solicitud demasiado grande' }, 413) }))
-reportSharingRoutes.use('*', async (context, next) => {
-  await transaction(client => requireAdmin(client, context.get('identity')))
-  context.header('Cache-Control', 'no-store')
-  await next()
-})
+type ShareMode = 'ADMINISTRADOR' | 'TECNICO'
 
-reportSharingRoutes.get('/:id/report-sharing', async context => {
+async function authorizeSharing(client: PoolClient, identity: Identity, id: string, mode: ShareMode): Promise<DomainProfile> {
+  if (mode === 'ADMINISTRADOR') return requireAdmin(client, identity)
+  const technician = await requireTechnician(client, identity)
+  const assigned = await assignedServiceState(client, technician.id, id)
+  if (assigned.estado !== 'FINALIZADO' || assigned.tipo_servicio !== 'PRINCIPAL') {
+    throw new ApiError(409, 'El informe solo puede enviarse después de confirmar la finalización del servicio.', 'SERVICE_NOT_FINALIZED')
+  }
+  return technician
+}
+
+for (const [routes, mode] of [
+  [reportSharingRoutes, 'ADMINISTRADOR'],
+  [technicianReportSharingRoutes, 'TECNICO'],
+] as const) {
+  routes.use('*', bodyLimit({ maxSize: 7_000, onError: c => c.json({ error:'Solicitud demasiado grande' }, 413) }))
+  routes.use('*', async (context, next) => {
+    await transaction(client => mode === 'TECNICO'
+      ? requireTechnician(client, context.get('identity'))
+      : requireAdmin(client, context.get('identity')))
+    context.header('Cache-Control', 'no-store')
+    await next()
+  })
+}
+
+async function reportShareOptions(context: Context<Env>, mode: ShareMode) {
   const id = serviceId(context.req.param('id'))
+  await transaction(client => authorizeSharing(client, context.get('identity'), id, mode))
   const [options, sharing, google] = await Promise.all([
     transaction(client => loadSharingContext(client, id)),
     transaction(async client => (await client.query<{ activeLinks: number; lastSharedAt: string | null }>(
@@ -120,7 +142,9 @@ reportSharingRoutes.get('/:id/report-sharing', async context => {
     gmailConnected: google.connected,
   }
   return context.json(response)
-})
+}
+reportSharingRoutes.get('/:id/report-sharing', c => reportShareOptions(c, 'ADMINISTRADOR'))
+technicianReportSharingRoutes.get('/:id/report-sharing', c => reportShareOptions(c, 'TECNICO'))
 
 reportSharingRoutes.post('/:id/report-sharing/revoke', async context => {
   const id = serviceId(context.req.param('id'))
@@ -140,11 +164,11 @@ reportSharingRoutes.post('/:id/report-sharing/revoke', async context => {
   return context.json({ revoked: count })
 })
 
-reportSharingRoutes.post('/:id/report-sharing/send', async context => {
+async function sendReportWithRole(context: Context<Env>, mode: ShareMode) {
   const id = serviceId(context.req.param('id'))
   const body = await context.req.json().catch(() => ({})) as Record<string, unknown>
   const input = parseReportSend(body, process.env.ALLOWED_ORIGINS ?? 'http://localhost:5173')
-  const actor = await transaction(client => requireAdmin(client, context.get('identity')))
+  const actor = await transaction(client => authorizeSharing(client, context.get('identity'), id, mode))
   const job = await claimCertificateJob('EMAIL', input.requestId, { serviceId:id, ...input }, actor.id, 'report')
   if (job.completed) return context.json(job.result)
   let dispatching = false
@@ -209,7 +233,7 @@ reportSharingRoutes.post('/:id/report-sharing/send', async context => {
       messageId: job.id + '@informes.solucionesradicales.invalid',
       onDispatch: async () => {
         await transaction(async client => {
-          await requireAdmin(client, context.get('identity'))
+          await authorizeSharing(client, context.get('identity'), id, mode)
           await loadSharingContext(client, id)
           if (input.certificateIds.length) {
             const latest = await client.query<{ id: string; path: string }>(
@@ -251,7 +275,9 @@ reportSharingRoutes.post('/:id/report-sharing/send', async context => {
     if (uncertain) throw new ApiError(502,'No se pudo confirmar el envío. Revisa la carpeta Enviados antes de repetirlo.','EMAIL_DELIVERY_UNKNOWN')
     throw error
   }
-})
+}
+reportSharingRoutes.post('/:id/report-sharing/send', c => sendReportWithRole(c, 'ADMINISTRADOR'))
+technicianReportSharingRoutes.post('/:id/report-sharing/send', c => sendReportWithRole(c, 'TECNICO'))
 
 // Tokens travel in POST bodies to avoid exposing them in API path or query logs.
 publicReportRoutes.use('*', bodyLimit({ maxSize: 2_000, onError: c => c.json({ error:'Solicitud demasiado grande' }, 413) }))
@@ -294,6 +320,11 @@ reportSharingRoutes.onError((error, context) => {
   if (error instanceof ApiError) return context.json({ error:error.message,code:error.code },error.status as ContentfulStatusCode)
   console.error('SERVICE_REPORT_SHARING_ERROR')
   return context.json({ error:'No fue posible realizar la operación' },500)
+})
+technicianReportSharingRoutes.onError((error, context) => {
+  if (error instanceof ApiError) return context.json({ error:error.message,code:error.code },error.status as ContentfulStatusCode)
+  console.error('TECHNICIAN_REPORT_SHARING_ERROR')
+  return context.json({ error:'No fue posible enviar el informe' },500)
 })
 publicReportRoutes.onError((error, context) => {
   if (error instanceof ApiError) return context.json({ error:error.message,code:error.code },error.status as ContentfulStatusCode)

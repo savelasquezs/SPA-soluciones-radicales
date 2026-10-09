@@ -25,6 +25,8 @@ const summaryJson = `jsonb_build_object('id',s.id,'solicitud',s.solicitud,'tipoS
   'version',s.version,'inicioProgramado',s.inicio_programado,'finProgramado',s.fin_programado,'inicioReal',s.inicio_real,
   'clienteNombre',n.nombre,'sedeNombre',se.nombre,'direccion',se.direccion,
   'contactoPrincipalNombre',se.contacto_principal_nombre,'contactoPrincipalCorreo',se.contacto_principal_correo,
+  'contactEmails',coalesce(n.correos_json,'[]'::jsonb) || coalesce(se.correos_json,'[]'::jsonb)
+    || case when se.contacto_principal_correo is not null then jsonb_build_array(se.contacto_principal_correo) else '[]'::jsonb end,
   'autoPrepareEligible',(s.estado='EN_PROCESO' or (s.estado='PROGRAMADO' and s.tipo_servicio='PRINCIPAL' and se.tipo_sede='NEGOCIO' and now() >= s.inicio_programado-interval '1 hour')))`
 
 export async function listTechnicianServices(client: PoolClient, userId: string): Promise<TechnicianServiceSummary[]> {

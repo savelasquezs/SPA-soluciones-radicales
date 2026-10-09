@@ -35,6 +35,19 @@ Ambos muestran hasta las seis últimas visitas finalizadas de tipo Principal de 
 
 **Interpretación:** la reducción de capturas no demuestra por sí sola menor presencia de plagas si cambia la cantidad o ubicación de los puestos monitoreados. No se inventan proyecciones.
 
+## Envío opcional al finalizar el servicio técnico
+
+El Técnico asignado abre **Trabajo de campo → Revisión y cierre**, completa las evaluaciones y las **dos firmas** y finaliza. A continuación aparece **Enviar informe**, tanto si el cierre ya se confirmó como si está guardado localmente por ausencia de red. El envío **no es obligatorio** ni bloquea el cierre.
+
+- Reutiliza el modal compacto con correos registrados en la sede y en el negocio, posibilidad de agregar destinatarios y personalización desplegable de asunto/mensaje. Las direcciones se preparan dentro del paquete offline. El backend valida que sea un Técnico activo **asignado al servicio**, de tipo Principal y realmente finalizado. El Administrador conserva su flujo y la revocación de enlaces; el Técnico no obtiene el permiso de revocación.
+- Con conexión y cierre confirmado, el mensaje puede enviarse inmediatamente. Sin internet, o mientras se sincroniza el cierre, la **intención de envío** (destinatarios, mensaje, certificados seleccionados y UUID de solicitud) se guarda de forma duradera en IndexedDB, aislada por usuario y servicio. El envío **solo** sale después de que la API confirma la finalización.
+- En la aplicación abierta, el reintento se ejecuta al recuperar conexión, al reabrir una vista o al volver a ella. Si el navegador está cerrado, no se garantiza envío en segundo plano: el proceso se reanuda cuando la aplicación vuelva a abrirse con el usuario autenticado y conexión.
+- Los intentos usan **el mismo UUID** para evitar correos duplicados ante reintentos o cierres inesperados. Fallos transitorios conservan la cola con retraso progresivo; fallos de permisos/validación y entregas con resultado **incierto** se marcan **Necesita revisión** y no se reenvían automáticamente.
+- Los certificados PDF siguen siendo opcionales **solo si ya están generados y disponibles al seleccionar el correo con internet**. Cuando el técnico trabaja offline o el cierre no está confirmado todavía, puede guardar el envío del informe **sin certificado**; no se promete adjuntar certificados que todavía no existen.
+- El correo mantiene el botón HTML **Abrir aquí**, QR local, evidencias y firmas originales del informe y vínculo de lectura de 90 días. El mensaje editable nunca permite omitir el enlace seguro.
+
+**No hay migraciones SQL nuevas**. Solo aumenta la versión de almacenamiento IndexedDB para incluir la nueva cola local de correos. Los correos nunca se envían automáticamente por el mero hecho de finalizar; el Técnico confirma expresamente su envío.
+
 ## Entrega posterior
 
 Reutilizar el editor de correo en la acción de contacto de Clientes y en la finalización del técnico, tras definir los permisos y la confirmación del envío. El QR ya se genera y se envía en el propio correo; incorporarlo en las plantillas PDF de certificados requerirá definir dónde se imprime, por lo que queda separado de este cambio.

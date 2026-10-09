@@ -5,13 +5,15 @@ interface OfflineDatabase extends DBSchema {
   technicianPackages: { key: string; value: unknown }
   technicianMutations: { key: string; value: unknown }
   technicianMedia: { key: string; value: unknown }
+  technicianReportEmails: { key: string; value: unknown }
 }
 
-export const offlineDatabase = openDB<OfflineDatabase>('soluciones-radicales-offline', 4, {
+export const offlineDatabase = openDB<OfflineDatabase>('soluciones-radicales-offline', 5, {
   upgrade(database) {
     if (!database.objectStoreNames.contains('drafts')) database.createObjectStore('drafts')
     if (!database.objectStoreNames.contains('technicianPackages')) database.createObjectStore('technicianPackages')
     if (!database.objectStoreNames.contains('technicianMutations')) database.createObjectStore('technicianMutations')
     if (!database.objectStoreNames.contains('technicianMedia')) database.createObjectStore('technicianMedia')
+    if (!database.objectStoreNames.contains('technicianReportEmails')) database.createObjectStore('technicianReportEmails')
   },
 })

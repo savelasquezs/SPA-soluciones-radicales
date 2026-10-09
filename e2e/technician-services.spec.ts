@@ -16,6 +16,7 @@ const summary = (state: TechnicianServiceSummary['estado'] = 'PROGRAMADO'): Tech
   sedeNombre: 'Laureles',
   contactoPrincipalNombre: 'Contacto Laureles',
   contactoPrincipalCorreo: 'contacto@example.invalid',
+  contactEmails: ['contacto@example.invalid','gerencia@example.invalid'],
   direccion: 'Calle 10 # 20-30, Medellín',
   autoPrepareEligible: true,
 })
@@ -79,13 +80,14 @@ const servicePackage = (state: TechnicianServiceSummary['estado'] = 'PROGRAMADO'
   signatures: { technicianStoragePath: null, technicianUserId: null, clientStoragePath: null, clientName: null, clientSignedAt: null },
 })
 
-async function setup(page: Page, withPriorFinding = false, failFirstPackage = false) {
-  let current = servicePackage('PROGRAMADO', withPriorFinding)
+async function setup(page: Page, withPriorFinding = false, failFirstPackage = false, initialState: TechnicianServiceSummary['estado'] = 'PROGRAMADO') {
+  let current = servicePackage(initialState, withPriorFinding)
   let packageReads = 0
   const starts: Array<Record<string, unknown>> = []
   const orders: Array<Record<string, unknown>> = []
   const evaluations: Array<Record<string, unknown>> = []
   const deviceCreations: Array<Record<string, unknown>> = []
+  const reportSends: Array<Record<string, unknown>> = []
   await page.route('**/get-session', route => route.fulfill({ json: {
     session: { id: 'session', userId: 'auth-tech', token: 'e2e-token', expiresAt: '2099-01-01T00:00:00.000Z', createdAt: '2026-10-04T00:00:00.000Z', updatedAt: '2026-10-04T00:00:00.000Z' },
     user: { id: 'auth-tech', name: 'Técnico de prueba', email: 'santyvan974@gmail.com', emailVerified: true, createdAt: '2026-10-04T00:00:00.000Z', updatedAt: '2026-10-04T00:00:00.000Z' },
@@ -97,6 +99,18 @@ async function setup(page: Page, withPriorFinding = false, failFirstPackage = fa
     if (request.method() === 'OPTIONS') { await route.fulfill({ status: 204 }); return }
     if (path === '/api/session') {
       await json(route, { id: ids.actor, nombreCompleto: 'Técnico de prueba', correoGoogle: 'santyvan974@gmail.com', esAdmin: false, esTecnico: true, rolActivo: 'TECNICO', requiereSeleccionRol: false })
+      return
+    }
+    if (path === '/api/technician/services/' + ids.service + '/report-sharing' && request.method() === 'GET') {
+      await json(route,{registeredEmails:['contacto@example.invalid','gerencia@example.invalid'],
+        certificates:[],activeLinks:0,lastSharedAt:null,gmailConnected:true})
+      return
+    }
+    if (path === '/api/technician/services/' + ids.service + '/report-sharing/send') {
+      const input = request.postDataJSON() as Record<string, unknown>
+      reportSends.push(input)
+      if (current.service.estado !== 'FINALIZADO') { await json(route,{error:'Servicio no finalizado'},409); return }
+      await json(route,{sent:true,linkExpiresAt:'2027-01-09T15:00:00.000Z',attachmentCount:0})
       return
     }
     if (path === '/api/technician/services' && request.method() === 'GET') { await json(route, [current.service]); return }
@@ -159,7 +173,7 @@ async function setup(page: Page, withPriorFinding = false, failFirstPackage = fa
     }
     await json(route, { error: `Unexpected technician endpoint: ${path}` }, 404)
   })
-  return { starts, orders, evaluations, deviceCreations, get packageReads() { return packageReads } }
+  return { starts, orders, evaluations, deviceCreations, reportSends, get packageReads() { return packageReads } }
 }
 
 test('technician prepares and starts the service from a mobile-first read-only surface', async ({ page }) => {
@@ -489,4 +503,44 @@ test('both full-screen signatures and the closure intention survive offline relo
   await expect(page.getByText('Firma guardada')).toHaveCount(2)
   await expect(page.getByRole('button', { name: 'Cierre pendiente' })).toBeDisabled()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})
+
+
+test('técnico guarda correo offline y lo envía una sola vez al reconectar', async ({ page }) => {
+  await page.setViewportSize({ width:390, height:844 })
+  const api = await setup(page,false,false,'FINALIZADO')
+  await page.goto('/servicios/' + ids.service + '/trabajo/revision')
+  await expect(page.getByRole('button', { name:'Enviar informe' })).toBeVisible()
+  await page.evaluate(() => {
+    Object.defineProperty(navigator,'onLine',{configurable:true,get:() => false})
+    window.dispatchEvent(new Event('offline'))
+  })
+  await page.getByRole('button', { name:'Enviar informe' }).click()
+  const dialog = page.getByRole('dialog',{name:'Enviar informe'})
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByText('gerencia@example.invalid')).toBeVisible()
+  await dialog.getByLabel('contacto@example.invalid').check()
+  await dialog.getByLabel('Agregar otro correo').fill('adicional@example.invalid')
+  await dialog.getByRole('button',{name:'Añadir'}).click()
+  await dialog.getByRole('button',{name:'Guardar envío'}).click()
+  await expect(dialog).toHaveCount(0)
+  await expect(page.getByText('Envío pendiente')).toBeVisible()
+  expect(api.reportSends).toHaveLength(0)
+  await page.addInitScript(() => Object.defineProperty(navigator,'onLine',{configurable:true,get:() => false}))
+  await page.reload()
+  await expect(page.getByText('Envío pendiente')).toBeVisible()
+  expect(api.reportSends).toHaveLength(0)
+  await page.evaluate(() => {
+    Object.defineProperty(navigator,'onLine',{configurable:true,get:() => true})
+    window.dispatchEvent(new Event('online'))
+  })
+  await expect.poll(() => api.reportSends.length).toBe(1)
+  expect(api.reportSends[0]).toMatchObject({
+    recipients:['adicional@example.invalid','contacto@example.invalid'],
+    certificateIds:[],
+  })
+  expect(api.reportSends[0]?.requestId).toMatch(/^[0-9a-f-]{36}$/)
+  await expect(page.getByText('Envío pendiente')).toHaveCount(0)
+  await page.evaluate(() => window.dispatchEvent(new Event('online')))
+  await expect.poll(() => api.reportSends.length).toBe(1)
 })
