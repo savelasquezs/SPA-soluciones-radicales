@@ -158,7 +158,7 @@ async function fillDate(page: Page,selector: string,value: string): Promise<void
   await input.blur()
 }
 async function selectSiteAndTeam(page: Page): Promise<void> {
-  await page.getByLabel('Cliente',{exact:true}).fill('Casa')
+  await page.locator('#servicio-cliente').fill('Casa')
   await page.getByRole('listbox',{name:'Cliente'}).getByRole('option',{name:'Casa Verde'}).click()
   await page.locator('#servicio-sede').selectOption(ids.site)
   await page.locator('#programacion-responsable').selectOption(ids.tech)

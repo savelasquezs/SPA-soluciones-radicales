@@ -553,7 +553,7 @@ test('técnico guarda correo offline y lo envía una sola vez al reconectar', as
 
 test('el técnico puede abrir la ficha técnica del producto asignado sin exponer su ruta R2',async({page})=>{
   await setup(page)
-  await page.route('https://r2.example.test/**', route=>route.fulfill({status:200,contentType:'application/pdf',body:Buffer.from('%PDF-1.5')}))
+  await page.context().route('https://r2.example.test/**', route=>route.fulfill({status:200,contentType:'text/html',body:'Ficha técnica de prueba'}))
   await page.goto('/servicios/'+ids.service+'/trabajo')
   await page.getByText('Productos previstos (1)').click()
   const sheet=page.getByRole('button',{name:'Ver ficha técnica de Gel insecticida'})

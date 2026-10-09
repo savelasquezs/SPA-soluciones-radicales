@@ -51,7 +51,9 @@ async function setup(page: Page, role: 'ADMINISTRADOR' | 'TECNICO') {
     session:{id:'session',userId:'auth-1',token:'test-token',expiresAt:'2099-01-01T00:00:00.000Z',createdAt:now,updatedAt:now},
     user:{id:'auth-1',name:'Admin',email:'admin@example.test',emailVerified:true,createdAt:now,updatedAt:now},
   }}))
-  await page.route('https://r2.example.test/**', route => route.fulfill({status:200,contentType:'image/png',body:png}))
+  await page.context().route('https://r2.example.test/**', route => route.request().url().endsWith('.pdf')
+    ? route.fulfill({status:200,contentType:'text/html',body:'Ficha técnica de prueba'})
+    : route.fulfill({status:200,contentType:'image/png',body:png}))
   await page.route('https://api.example.test/api/**', async (route: Route) => {
     const url = new URL(route.request().url())
     if (route.request().method() === 'OPTIONS') return route.fulfill({status:204})
