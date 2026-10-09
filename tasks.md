@@ -61,6 +61,14 @@ Fuente: `docs/product/file-retention.md`; despliegue: `docs/development/cloudfla
 - [x] Implementar evaluación `C/CP/NC/NA` y observación por Criterio MIP con autosave, outbox offline compartida, bloqueo del celular, idempotencia y resolución explícita de conflicto de versión.
 - [x] Implementar la excepción de Área sin acceso con descripción y fotografía obligatorias, persistencia offline del archivo, carga autorizada a `sr-service-media`, idempotencia, concurrencia y limpieza de reemplazos.
 
+## Informes técnicos MIP
+
+- [x] V1: generación de informe desde servicio finalizado, fotos compactas, firmas, comparativo histórico de Sede, almacenamiento privado y visor administrativo.
+- [ ] Validar despliegue en desarrollo con R2 real, fotos no disponibles y límites de tamaño.
+- [ ] Envío opcional y selección offline de correos desde el cierre, historial y reenvío protegido contra duplicados.
+- [ ] Conectar certificados automáticos al cierre sin sustituir su generador actual.
+- [ ] Portal público/QR y regeneración a partir de snapshots documentales.
+
 ## Certificados
 
 - [x] Configuración por tipo, catálogo de variables, prueba PDF sintética y operación manual con correo editable.
