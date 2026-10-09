@@ -65,7 +65,8 @@ Fuente: `docs/product/file-retention.md`; despliegue: `docs/development/cloudfla
 
 - [x] Conservar consultas administrativas de resultados, criterios, puestos, hallazgos, firmas y URLs privadas para evidencias.
 - [x] Descartar la generación automática de PDF de informes y limpiar código backend/frontend, datos PDF y dependencias nativas.
-- [ ] Verificar despliegue convencional de la API Neon desarrollo con las rutas existentes, Calendar/Gmail, certificados y R2.
+- [x] Publicar API sin `sharp`/`libvips` en Neon `desarrollo`: deployment 36 activo (2026-10-09), 10 variables privadas preservadas; `/health` OK y acceso administrativo sin JWT responde 401. Migración `20261009_001_remove_service_report_pdf.sql` aplicada, 10 Servicios y 1 certificado conservados.
+- [ ] Ejecutar smoke autenticado de resultados, integración real de Gmail/Calendar, certificados y R2 tras este despliegue; no enviar correo ni modificar objetos sin autorización de prueba.
 - [ ] Implementar después página pública HTML de informe por enlace de solo lectura revocable y con vencimiento.
 - [ ] Diseñar impresión A4 por CSS y botón «Guardar como PDF» usando la impresión del navegador, sin almacenar PDF de informe.
 - [ ] Definir UX de fotografías vencidas en informe público conforme a retención de R2.
