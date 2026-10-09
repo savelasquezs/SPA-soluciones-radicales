@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import { RefreshCw } from 'lucide-vue-next'
+import { RefreshCw, Eye } from 'lucide-vue-next'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseIconButton from '@/components/base/BaseIconButton.vue'
 import ConfirmDialog from '@/components/base/ConfirmDialog.vue'
@@ -10,6 +10,7 @@ import StatusPanel from '@/components/base/StatusPanel.vue'
 import WhatsAppPhoneLink from '@/components/base/WhatsAppPhoneLink.vue'
 import ServicePage from '@/components/domain/services/ServicePage.vue'
 import ServiceQuickEditor from '@/components/domain/services/ServiceQuickEditor.vue'
+import ServiceResultsDialog from '@/components/domain/services/ServiceResultsDialog.vue'
 import ServicePagination from '@/components/domain/services/ServicePagination.vue'
 import { useAdminServicesStore } from '@/stores/adminServices'
 import { useNotificationsStore } from '@/stores/notifications'
@@ -20,7 +21,7 @@ import type { AdminService } from '@/types/adminServices'
 
 const route=useRoute(), router=useRouter(), store=useAdminServicesStore(), notifications=useNotificationsStore()
 const id=computed(()=>String(route.params.id)), record=computed(()=>store.records[id.value] ?? null)
-const loading=ref(true), loadError=ref(''), busy=ref(false), releaseOpen=ref(false)
+const loading=ref(true), loadError=ref(''), busy=ref(false), releaseOpen=ref(false), resultsOpen=ref(false)
 const quick=ref<{ record: AdminService; mode: 'schedule' | 'team' | 'cancel' | 'payment' } | null>(null)
 const auditOpen=ref(false), auditRows=ref<ServiceAuditEntry[]>([]), auditLoading=ref(false), auditError=ref(''), auditPage=ref(1), auditTotal=ref(0)
 let generation=0
@@ -84,6 +85,7 @@ function certificates(): void {
     <StatusPanel v-else-if="loadError" title="No fue posible cargar el servicio" :message="loadError" tone="danger"><BaseButton size="compact" variant="secondary" @click="load(true)">Reintentar</BaseButton></StatusPanel>
     <template v-else-if="record">
       <div class="svc-toolbar"><div class="svc-actions"><span class="svc-state" :class="`svc-state--${record.estado}`">{{ SERVICE_STATE_LABELS[record.estado] }}</span><span class="svc-muted svc-small">{{ record.tipoServicio==='REFUERZO' ? 'Refuerzo gratuito' : 'Servicio Principal' }}</span></div><div class="svc-actions"><BaseButton v-if="record.estado==='PROGRAMADO'" variant="secondary" size="compact" :disabled="busy" @click="open('schedule')">Reprogramar</BaseButton><BaseButton v-if="record.estado==='PROGRAMADO'" variant="secondary" size="compact" :disabled="busy" @click="open('team')">Cambiar equipo</BaseButton><BaseButton v-if="record.executionLock" variant="secondary" size="compact" :disabled="busy" @click="releaseOpen=true">Liberar acceso técnico</BaseButton><BaseButton v-if="['PROGRAMADO','EN_PROCESO'].includes(record.estado)" variant="ghost" size="compact" :disabled="busy" @click="open('cancel')">Cancelar servicio</BaseButton></div></div>
+      <div v-if="record.tipoServicio==='PRINCIPAL' && record.estado==='FINALIZADO'" class="svc-toolbar"><BaseButton variant="secondary" size="compact" @click="resultsOpen=true"><Eye :size="15" /> Ver resultados</BaseButton></div>
       <div v-if="record.motivoCancelacion" class="svc-notice"><span>Cancelado: {{ record.motivoCancelacion }}</span><small v-if="record.canceladoAt" class="svc-muted">{{ formatServiceDate(record.canceladoAt) }}</small></div>
       <div class="svc-editor-layout">
         <div class="svc-form-main">
@@ -108,6 +110,7 @@ function certificates(): void {
           <section class="svc-card"><h2>Calendar</h2><p class="svc-small">{{ record.calendar.estado==='SINCRONIZADO' ? 'Sincronizado' : record.calendar.estado==='ERROR' ? 'No se pudo sincronizar' : record.calendar.estado==='PENDIENTE' ? 'Sincronización pendiente' : 'Sin evento' }}</p><p v-if="record.calendar.error" class="svc-muted svc-small">{{ record.calendar.error }}</p><BaseButton v-if="record.calendar.estado==='ERROR'" size="compact" variant="secondary" :loading="busy" @click="retryCalendar">Reintentar sincronización</BaseButton></section>
         </aside>
       </div>
+      <ServiceResultsDialog v-if="resultsOpen" :key="record.id" :service-id="record.id" :solicitud="record.solicitud" @close="resultsOpen=false" />
       <ServiceQuickEditor v-if="quick" :key="`${quick.record.id}:${quick.mode}`" :record="quick.record" :mode="quick.mode" @close="quick=null" @saved="auditRows=[]; auditOpen=false" />
       <ConfirmDialog
         :open="releaseOpen"
