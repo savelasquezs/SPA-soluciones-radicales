@@ -44,6 +44,16 @@ jobs:
           npm install --no-save --package-lock=false --ignore-scripts --prefix .neon-bundle --os=linux --cpu=arm64 --libc=glibc sharp@0.34.5
           test -d .neon-bundle/node_modules/@img/sharp-linux-arm64
           test -d .neon-bundle/node_modules/@img/sharp-libvips-linux-arm64
+          # Strip unused AArch64 symbols: keep every runtime dependency intact.
+          # The full prebuilt libvips shared library otherwise makes connector deploy oversized.
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq binutils-aarch64-linux-gnu
+          echo "Before stripping:"
+          ls -lh .neon-bundle/node_modules/@img/sharp-libvips-linux-arm64/lib/libvips-cpp.so.*
+          aarch64-linux-gnu-strip --strip-unneeded .neon-bundle/node_modules/@img/sharp-libvips-linux-arm64/lib/libvips-cpp.so.*
+          aarch64-linux-gnu-strip --strip-unneeded .neon-bundle/node_modules/@img/sharp-linux-arm64/lib/sharp-linux-arm64.node
+          echo "After stripping:"
+          ls -lh .neon-bundle/node_modules/@img/sharp-libvips-linux-arm64/lib/libvips-cpp.so.*
           cd .neon-bundle
           zip -9 -r -q neon-api.zip index.mjs node_modules
           sha256sum neon-api.zip
