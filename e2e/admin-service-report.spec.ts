@@ -2,10 +2,13 @@ import { expect, test, type Page, type Route } from '@playwright/test'
 import type { AdminService } from '../src/types/adminServices'
 import type { ServiceResultsData } from '../src/types/serviceResults'
 import { todayBogota } from '../src/helpers/adminServices'
+import { publicReportData } from '../functions/api/service-results/public'
 
 const serviceId = '10000000-0000-4000-8000-000000000008'
 const areaId = '10000000-0000-4000-8000-000000000009'
 const now = '2026-10-09T14:00:00.000Z'
+const certificateId = '10000000-0000-4000-8000-000000000014'
+const publicToken = 'a'.repeat(43)
 const photo = (value: string) => 'services/' + serviceId + '/' + value
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jLZsAAAAASUVORK5CYII=', 'base64')
 const result: ServiceResultsData = {
@@ -35,6 +38,8 @@ function service(): AdminService {
   }
 }
 async function setup(page: Page, role: 'ADMINISTRADOR' | 'TECNICO') {
+  const requests: Record<string, unknown>[] = []
+  let publicHasAuthorization = false
   await page.addInitScript(() => {
     window.print = () => document.body.setAttribute('data-report-printed', 'true')
   })
@@ -53,10 +58,16 @@ async function setup(page: Page, role: 'ADMINISTRADOR' | 'TECNICO') {
     if (url.pathname === '/api/admin/services/workspace') return route.fulfill({json:{sedes:[],tecnicos:[],productos:[]}})
     if (url.pathname === '/api/admin/services/pending-count') return route.fulfill({json:{count:0}})
     if (url.pathname === '/api/admin/services') return route.fulfill({json:{items:[service()],total:1,page:1,pageSize:25,pendingCount:0}})
+    if (url.pathname === '/api/admin/services/' + serviceId + '/report-sharing' && route.request().method()==='GET') return route.fulfill({json:{registeredEmails:['sede@example.test','cliente@example.test'],certificates:[{id:certificateId,type:'ESTABLECIMIENTO',label:'Establecimiento',expiresOn:'2027-10-09'}],activeLinks:0,lastSharedAt:null,gmailConnected:true}})
+    if (url.pathname === '/api/admin/services/' + serviceId + '/report-sharing/send') { requests.push(route.request().postDataJSON()); return route.fulfill({json:{sent:true,linkExpiresAt:'2027-01-09T00:00:00Z',attachmentCount:1}}) }
+    if (url.pathname === '/api/admin/services/' + serviceId + '/report-sharing/revoke') return route.fulfill({json:{revoked:1}})
+    if (url.pathname === '/api/public/reports/resolve') {publicHasAuthorization ||= !!route.request().headers()['authorization'];return route.fulfill({json:{data:publicReportData(result)}})}
+    if (url.pathname === '/api/public/reports/media') {publicHasAuthorization ||= !!route.request().headers()['authorization'];return route.fulfill({json:{url:'https://r2.example.test/opaque.png'}})}
     if (url.pathname === '/api/admin/services/' + serviceId + '/results') return route.fulfill({json:{data:result}})
     if (url.pathname === '/api/admin/services/' + serviceId + '/media/read-url') return route.fulfill({json:{url:'https://r2.example.test/' + encodeURIComponent(url.searchParams.get('path') || '') + '.png'}})
     return route.fulfill({status:404,json:{error:'Ruta inesperada: ' + url.pathname}})
   })
+  return { requests, publicHasAuthorization: () => publicHasAuthorization }
 }
 
 test('Historial ofrece informe solo administrativo y A4 con fotografías y ambas firmas', async ({page}) => {
@@ -77,7 +88,7 @@ test('Historial ofrece informe solo administrativo y A4 con fotografías y ambas
   await expect(print).toBeEnabled()
   await print.click()
   await expect(page.locator('body')).toHaveAttribute('data-report-printed','true')
-  await expect(page.getByText('No compartida con el cliente')).toBeVisible()
+  await expect(page.getByText('Vista administrativa · Sin compartir')).toBeVisible()
   await expect(page.getByText('QR')).toHaveCount(0)
 })
 
@@ -86,4 +97,36 @@ test('un técnico no puede abrir el informe administrativo por URL', async ({pag
   await page.goto('/servicios/' + serviceId + '/informe')
   await expect(page).toHaveURL(/prohibido/)
   await expect(page.getByRole('heading',{name:'Informe técnico de servicio'})).toHaveCount(0)
+})
+
+
+test('El administrador selecciona emails registrados, agrega otro y adjunta un certificado opcional', async ({page}) => {
+  const { requests } = await setup(page,'ADMINISTRADOR')
+  await page.goto('/servicios/' + serviceId + '/informe')
+  await page.getByRole('button',{name:'Enviar informe'}).click()
+  await expect(page.getByRole('heading',{name:'Enviar informe'})).toBeVisible()
+  await expect(page.getByText('sede@example.test')).toBeVisible()
+  await page.getByLabel('sede@example.test').check()
+  await page.getByLabel('Agregar otro correo').fill('Extra@Example.test')
+  await page.getByRole('button',{name:'Añadir'}).click()
+  await page.getByText('Certificado de establecimiento').click()
+  await page.getByRole('button',{name:'Enviar informe',exact:true}).last().click()
+  await expect(page.getByRole('heading',{name:'Enviar informe'})).toHaveCount(0)
+  expect(requests).toHaveLength(1)
+  expect(requests[0]).toMatchObject({
+    recipients:['extra@example.test','sede@example.test'],
+    certificateIds:[certificateId],
+    origin:'http://localhost:4173',
+  })
+})
+
+test('el enlace público se abre sin sesión y no solicita autorización ni muestra acciones administrativas', async ({page}) => {
+  const state = await setup(page,'TECNICO')
+  await page.goto('/informe/consulta/' + publicToken)
+  await expect(page.getByRole('heading',{name:'Informe técnico de servicio'})).toBeVisible()
+  await expect(page.getByRole('img',{name:'Firma del técnico'})).toBeVisible()
+  await expect(page.getByRole('img',{name:'Firma de conformidad del cliente'})).toBeVisible()
+  await expect(page.getByRole('button',{name:'Guardar PDF'})).toBeVisible()
+  await expect(page.getByRole('button',{name:'Enviar informe'})).toHaveCount(0)
+  expect(state.publicHasAuthorization()).toBe(false)
 })

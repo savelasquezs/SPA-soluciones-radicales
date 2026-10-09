@@ -9,6 +9,7 @@ const technicianOnly: ActiveRole[] = ['TECNICO']
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
+    { path: '/informe/consulta/:token', name: 'public-service-report', component: () => import('@/views/AdminServiceReportView.vue'), meta: { publicReport: true } },
     { path: '/acceso', name: 'login', component: () => import('@/views/LoginView.vue'), meta: { public: true } },
     { path: '/sin-acceso', name: 'access-denied', component: () => import('@/views/AccessDeniedView.vue'), meta: { public: true } },
     { path: '/error-sesion', name: 'session-error', component: () => import('@/views/SessionErrorView.vue'), meta: { public: true } },

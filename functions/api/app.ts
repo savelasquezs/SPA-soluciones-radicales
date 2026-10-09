@@ -133,6 +133,10 @@ app.use('/api/*', async (context, next) => {
     return
   }
 
+  if (context.req.path.startsWith('/api/public/reports/')) {
+    await next()
+    return
+  }
   const identity = await verifyAuthorization(context.req.header('Authorization'))
   context.set('identity', identity)
   await next()

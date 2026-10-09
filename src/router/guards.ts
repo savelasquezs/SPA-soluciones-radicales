@@ -8,6 +8,7 @@ type BreadcrumbMeta = string | Array<{ label: string; to?: string }>
 declare module 'vue-router' {
   interface RouteMeta {
     public?: boolean
+    publicReport?: boolean
     roles?: ActiveRole[]
     breadcrumb?: BreadcrumbMeta
     placeholderTitle?: string
@@ -20,6 +21,7 @@ export function hasRequiredRole(activeRole: ActiveRole | null, required: ActiveR
 }
 
 export const authGuard: NavigationGuard = async (to) => {
+  if (to.meta.publicReport) return true
   const auth = useAuthStore()
   await auth.initialize()
 

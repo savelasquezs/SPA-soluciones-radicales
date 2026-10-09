@@ -69,7 +69,10 @@ Fuente: `docs/product/file-retention.md`; despliegue: `docs/development/cloudfla
 - [ ] Ejecutar smoke autenticado de resultados, integración real de Gmail/Calendar, certificados y R2 tras este despliegue; no enviar correo ni modificar objetos sin autorización de prueba.
 - [ ] Implementar después página pública HTML de informe por enlace de solo lectura revocable y con vencimiento.
 - [x] Implementar el informe HTML administrativo desde Servicios → Historial, con fotografías contextualizadas, imágenes de las dos firmas, indicadores, histórico e impresión A4/Guardar PDF del navegador. No guardar PDFs en R2.
-- [ ] Añadir más adelante la vista pública mediante enlace/QR revocable que se enviará junto con el certificado; no habilitar el acceso público en la fase administrativa.
+- [x] Permitir envío desde el informe administrativo: seleccionar correos de cliente/sede, añadir destinatarios y adjuntar certificados ya generados del servicio (opcional).
+- [x] Incorporar página pública de solo lectura mediante enlace de 90 días, revocable, fotos y firmas protegidas; correo Gmail auditado e idempotente.
+- [ ] Incorporar después el QR embebido en el certificado, reutilizando el enlace público del informe.
+- [ ] Ejecutar smoke real autorizado del envío y acceso público en Neon desarrollo.
 - [ ] Definir UX de fotografías vencidas en informe público conforme a retención de R2.
 - [ ] Conectar certificados automáticos al cierre únicamente en una entrega separada y aprobada.
 

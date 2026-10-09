@@ -1,0 +1,48 @@
+import type { ServiceResultsData } from '../../../src/types/serviceResults'
+import { createHash, randomBytes } from 'node:crypto'
+
+export function newReportToken(): string {
+  return randomBytes(32).toString('base64url')
+}
+export function reportTokenHash(token: string): string {
+  return createHash('sha256').update(token, 'utf8').digest('hex')
+}
+export function validReportToken(raw: unknown): raw is string {
+  return typeof raw === 'string' && /^[A-Za-z0-9_-]{43}$/.test(raw)
+}
+
+export function reportPaths(data: ServiceResultsData): string[] {
+  const unique = new Set<string>()
+  const add = (path: string | null | undefined) => {
+    if (path && path.startsWith('services/' + data.id + '/') && !path.includes('..')) unique.add(path)
+  }
+  for (const area of data.areas) {
+    area.fotos.forEach(add)
+    for (const item of area.criterios) item.fotos.forEach(add)
+    for (const item of area.puntos) add(item.foto)
+    for (const item of area.hallazgos) item.fotos.forEach(add)
+  }
+  add(data.firmaTecnico)
+  add(data.firmaCliente)
+  return [...unique]
+}
+/** Public JSON uses opaque evidence references, never R2 storage paths or database IDs. */
+export function publicReportData(data: ServiceResultsData): ServiceResultsData {
+  const paths = reportPaths(data)
+  const byPath = new Map(paths.map((path, index) => [path, 'e:' + index]))
+  const key = (path: string) => byPath.get(path) ?? ''
+  return {
+    ...data,
+    id: 'public',
+    firmaTecnico: key(data.firmaTecnico),
+    firmaCliente: key(data.firmaCliente),
+    areas: data.areas.map((area, index) => ({
+      ...area,
+      id: String(index + 1),
+      fotos: area.fotos.map(key).filter(Boolean),
+      criterios: area.criterios.map(item => ({ ...item, fotos: item.fotos.map(key).filter(Boolean) })),
+      puntos: area.puntos.map(item => ({ ...item, foto: item.foto ? key(item.foto) : null })),
+      hallazgos: area.hallazgos.map(item => ({ ...item, fotos: item.fotos.map(key).filter(Boolean) })),
+    })),
+  }
+}
