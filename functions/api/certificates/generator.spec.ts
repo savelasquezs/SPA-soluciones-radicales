@@ -6,7 +6,7 @@ import { sampleCertificateData } from './docx'
 import { templateFixture } from './testing/fixture'
 
 const google = vi.hoisted(() => ({ convert: vi.fn<(docx: Uint8Array, maxBytes: number) => Promise<Buffer>>() }))
-vi.mock('../google', () => ({ convertDocxToPdfWithGoogleDrive: google.convert }))
+vi.mock('../google', () => ({ convertDocumentToPdfWithGoogleDrive: google.convert }))
 const input = () => ({ template: templateFixture(), type: 'ESTABLECIMIENTO' as const, data: sampleCertificateData('ESTABLECIMIENTO') })
 async function pdf(pages = 1) {
   const doc = await PDFDocument.create()
