@@ -32,10 +32,10 @@ export async function loadReportData(client:PoolClient,serviceId:string):Promise
     throw new ApiError(422,'El informe requiere un servicio Principal de negocio finalizado y firmado.','REPORT_NOT_READY')
   const areas=(await client.query<{id:string;nombre:string;sinAcceso:boolean;motivo:string|null;fotos:unknown}>(`
     select id,nombre_snapshot as nombre,sin_acceso as "sinAcceso",sin_acceso_descripcion as motivo,
-      case when jsonb_array_length(coalesce(sin_acceso_evidencias_storage_paths,'[]'::jsonb))>0 then sin_acceso_evidencias_storage_paths
+      case when jsonb_array_length(coalesce(to_jsonb(sa)->'sin_acceso_evidencias_storage_paths','[]'::jsonb))>0 then to_jsonb(sa)->'sin_acceso_evidencias_storage_paths'
         when sin_acceso_foto_storage_path is not null then jsonb_build_array(sin_acceso_foto_storage_path)
         else '[]'::jsonb end as fotos
-    from public.servicio_areas where servicio_id=$1 order by posicion_recorrido,id`,[serviceId])).rows
+    from public.servicio_areas sa where servicio_id=$1 order by posicion_recorrido,id`,[serviceId])).rows
     .map((a):ReportArea=>({id:a.id,nombre:a.nombre,sinAcceso:a.sinAcceso,motivo:a.motivo,fotos:arr(a.fotos),criterios:[],puntos:[],hallazgos:[]}))
   const byId=new Map(areas.map(a=>[a.id,a]))
   const criteria=(await client.query<{areaId:string;nombre:string;evaluacion:ReportCriterion['evaluacion'];observacion:string|null;fotos:unknown}>(`
