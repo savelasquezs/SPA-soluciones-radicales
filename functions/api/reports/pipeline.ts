@@ -3,7 +3,9 @@ import { ApiError } from '../auth'
 import { transaction } from '../db'
 import { putReportObject, readReportMedia } from '../r2'
 import { loadReportData } from './data'
-import { renderMipReport, type ReportPhoto } from './renderer'
+import { renderMipReportDocx, type ReportPhoto } from './docx'
+import { convertDocumentToPdfWithGoogleDrive } from '../google'
+import { MAX_PDF_BYTES } from '../certificates/generator'
 
 const IMAGE_LIMIT = 80
 async function jpeg(path:string,serviceId:string,signature=false):Promise<Uint8Array>{
@@ -41,7 +43,8 @@ export async function generateReportForService(serviceId:string,jobId:string):Pr
   }
   const technicianSignature=await jpeg(data.firmaTecnico,serviceId,true)
   const clientSignature=await jpeg(data.firmaCliente,serviceId,true)
-  const pdf=await renderMipReport(data,photos,{tecnico:technicianSignature,cliente:clientSignature})
+  const word=renderMipReportDocx(data,photos,{tecnico:technicianSignature,cliente:clientSignature})
+  const pdf=await convertDocumentToPdfWithGoogleDrive(word,MAX_PDF_BYTES)
   const path='reports/'+serviceId+'/'+jobId+'.pdf'
   await putReportObject(path,serviceId,pdf)
   const applied=await transaction(async client=>{
