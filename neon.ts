@@ -14,6 +14,7 @@ export default defineConfig({
     api: {
       name: "Soluciones Radicales API",
       source: "./functions/api/index.ts",
+      externalPackages: ["sharp"],
       env: {
         ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS!,
         GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID!,
