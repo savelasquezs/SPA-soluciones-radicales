@@ -313,6 +313,7 @@ function filename(path: string): string {
               v-model="personal.telefono"
               name="profile-phone"
               label="Celular"
+              type="tel"
               autocomplete="tel"
               placeholder="+57 300 123 4567"
               hint="Opcional · puedes escribir tu número colombiano sin indicativo."
