@@ -103,7 +103,7 @@ function reviewLabel(value: FindingReview): string {
       </dl>
       <div class="finding-card__media">
         <BaseButton v-if="finding.evidenciasAperturaStoragePaths.length" size="compact" variant="ghost" @click="showPhotos(opening)"><Camera :size="16" />Apertura · {{ openingCount }} fotos</BaseButton>
-        <span v-else>{{ openingCount ? 'Fotos de apertura pendientes de sincronizar' : 'Sin fotos disponibles' }}</span>
+        <span v-else>{{ openingCount ? `${openingCount} fotos de apertura pendientes de sincronizar` : 'Sin fotos disponibles' }}</span>
         <BaseButton v-if="finding.estado === 'CERRADO' && finding.evidenciasCierreStoragePaths.length" size="compact" variant="ghost" @click="showPhotos(closing)">Fotos del cierre</BaseButton>
       </div>
 
