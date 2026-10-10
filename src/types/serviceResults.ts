@@ -7,10 +7,15 @@ export type ReportPestClassification = 'VOLADORES' | 'RASTREROS'
 export interface HistoricalSpeciesCapture {
   plagaCodigo:string;plagaNombreSnapshot:string;clasificacion:ReportPestClassification;cantidad:number
 }
+export interface ReportCaptureLocation {
+  clasificacion:ReportPestClassification;plagaCodigo:string;plagaNombreSnapshot:string;
+  cantidad:number;area:string;puesto:string;ubicacion:string
+}
 export interface ReportHistoricalVisit {
   solicitud:string;fecha:string;cumplimiento:number|null;capturas:number
   especies?:HistoricalSpeciesCapture[]
   puestosRevisados?:{voladores:number;rastreros:number}
+  detallesCapturas?:ReportCaptureLocation[]
 }
 export interface ServiceResultsData{
   id:string;solicitud:string;cliente:string;nit:string;sede:string;direccion:string;tecnico:string;firmanteCliente:string;firmaTecnico:string;firmaCliente:string;

@@ -374,8 +374,8 @@ watch(() => [serviceId.value, publicToken.value], () => { void loadReport() }, {
         </section>
 
         <section class="report-document__section" aria-labelledby="report-history-title">
-          <header class="report-document__heading"><span class="report-document__number">06</span><h2 id="report-history-title">Evolución histórica de la sede</h2></header>
-          <p class="report-document__section-intro">Hasta seis visitas finalizadas de esta sede, ordenadas por fecha. Pasa el mouse o toca cada punto o barra para consultar sus valores y la variación frente a la visita anterior.</p>
+          <header class="report-document__heading"><span class="report-document__number">06</span><h2 id="report-history-title">¿Cómo han cambiado los resultados?</h2></header>
+          <p class="report-document__section-intro">Compara las últimas seis visitas, de la más antigua a la más reciente. Desliza el dedo por las gráficas para elegir una fecha y pulsa «Ampliar» para ver los detalles con mayor claridad.</p>
           <ServiceTrendCharts :visits="report.historico" />
           <ServiceSpeciesCharts :visits="report.historico" />
         </section>

@@ -35,18 +35,35 @@ El informe describe la situación **al finalizar el servicio consultado**, no el
 - Las fotos de servicios anteriores se autorizan solo si el informe autorizado incluye la referencia en un hallazgo de la sede. El backend comprueba la referencia contra el informe y firma la ruta con el ID del **servicio propietario del archivo**; en el enlace público se utiliza exclusivamente un identificador opaco, nunca la ruta privada de R2.
 - Los encabezados del resumen reflejan la cantidad **pendiente al finalizar** y no confunden hallazgos heredados con nuevos del servicio.
 
-## Tendencias en el informe y el PDF
+## Gráficos de evolución: lectura sencilla e interacción
 
-La sección **Evolución histórica de la sede** utiliza gráficos SVG vectoriales, sin Chart.js ni dependencias adicionales:
+El informe explica los resultados de **hasta seis servicios Principales finalizados de la misma sede**, anteriores o iguales a la visita consultada. Se ordenan por fecha real, sin agrupar por mes para no confundir varias visitas con una sola.
 
-- **Cumplimiento MIP:** línea cronológica con valores de 0 a 100 %. C=100 %, CP=50 %, NC=0 %; no se inventa 0 % cuando faltan evaluaciones. La línea se interrumpe si una visita no tiene cumplimiento registrado.
-- **Capturas totales:** columnas con la suma de todos los individuos capturados en los puestos revisados en cada visita.
-- **Voladores (lámparas UV) y rastreros (cebaderos / trampas adhesivas):** dos gráficos de barras agrupadas, una serie por especie registrada; cada serie suma las capturas de **todos los puestos de esa clasificación** en cada visita. Solo se agrupa por especie, nunca por puesto. La clasificación viene del snapshot del tipo de trampa del Servicio y la especie se identifica mediante su código histórico; no se mezcla con el consumo de cebos.
-- **Sin monitoreo vs. cero:** si no hubo puestos revisados de una clasificación en una fecha, se muestra S/M; si hubo revisiones pero ninguna captura, se muestra 0. Se conservan nombres y fechas históricas; no se asume que los meses coinciden con las visitas.
+La sección **¿Cómo han cambiado los resultados?** presenta cuatro gráficos SVG sin bibliotecas nuevas:
 
-Los gráficos muestran hasta las seis últimas visitas finalizadas de tipo Principal de la misma sede, fechas reales, valores visibles y variaciones numéricas frente a la visita inmediatamente anterior. Son interactivos en la web: al mover el mouse aparece un detalle con fecha, solicitud, valor y variación; admiten pulsación táctil y foco del teclado. La impresión A4 conserva ejes, fechas, puntos, barras y valores **sin depender del tooltip**. Si existe una sola visita, se muestra el valor sin afirmar ninguna tendencia.
+1. **Cumplimiento de las medidas de prevención.** Línea de porcentaje (0 a 100 %) que valora criterios C (100 %), CP (50 %) y NC (0 %); excluye NA y áreas sin acceso. Un porcentaje mayor indica más medidas cumplidas, no una predicción de futuras plagas.
+2. **Capturas registradas en las trampas.** Dos líneas, **voladores (azul)** y **rastreros (naranja)**, para comparar los totales capturados por clasificación durante cada visita. Reemplaza la antigua barra de capturas totales sin duplicar indicadores.
+3. **Insectos que vuelan · Lámparas UV.** Barras agrupadas por especie de insectos voladores en cada fecha.
+4. **Plagas rastreras · Trampas y cebaderos.** Barras agrupadas por especie de plaga rastrera en cada fecha.
 
-**Interpretación:** bajo los gráficos se presenta una explicación automática, calculada con las diferencias ya disponibles entre la visita actual y la inmediatamente anterior. Las variaciones de cumplimiento se expresan en puntos porcentuales y las de capturas en individuos, sin afirmar mejora o disminución de infestación a partir de capturas solamente. Sin una visita comparable no se inventan tendencias ni proyecciones.
+Todos los textos explican *qué se contó, dónde y qué significa*. No se presenta el identificador de solicitud al cliente en los ejes ni en los tooltips. Las etiquetas temporales muestran **mes y año** cuando las visitas están distribuidas; si hay varias visitas en un mes, muestran día y mes; y si se repiten fechas en un día, muestran hora. Al consultar un dato, el tooltip incluye la fecha completa.
+
+### Interacción y ubicación
+
+- La misma **guía vertical** sigue el cursor o el dedo al recorrer una gráfica. También se puede navegar con tabulador, Enter y barra espaciadora.
+- Cada gráfica tiene un botón **Ampliar**, que abre el componente BaseDialog: visor ancho en escritorio y casi pantalla completa en móvil. Se puede cerrar con Escape y volver al informe.
+- Las dos gráficas de especies muestran la especie, cantidad y hasta tres **áreas / puestos / ubicaciones** directamente en el tooltip. En el visor ampliado se ve toda la tabla de capturas por ubicación y especie de la fecha seleccionada.
+- Las ubicaciones se recuperan de los snapshots históricos de áreas, puestos, ubicaciones y capturas de dispositivos, **solo de esas seis visitas**. No se exponen ID internos ni rutas privadas de fotografías. No se necesita una solicitud al servidor por movimiento del dedo.
+- Los colores de cada especie dependen de su código, no del orden de llegada; permanecen iguales al aparecer otras especies en visitas posteriores.
+- La **ausencia de monitoreo (S/M)** no se dibuja como cero. Un **0** solo significa que hubo puestos revisados, pero no capturas.
+
+### Interpretación, límites e impresión
+
+Bajo las dos primeras gráficas se explica en lenguaje cotidiano el cambio de cumplimiento y las diferencias de voladores y rastreros entre las **dos últimas visitas comparables**. Si falta una medición, se indica que no se puede comparar. Las capturas por sí solas no prueban aumento o reducción de infestación; por eso no se generan proyecciones ni recomendaciones automáticas basadas únicamente en cantidades capturadas. Para comparar periodos con distinta cantidad de puestos, conviene revisar también el número de puestos monitoreados.
+
+En el informe y en el **PDF A4** se mantienen los ejes, fechas, puntos, barras, leyendas y valores visibles sin depender del tooltip. Los botones Ampliar, tooltips y modales no aparecen impresos. El informe público y el administrativo comparten exactamente los mismos componentes.
+
+No se agregan migraciones SQL, librerías externas de gráficos ni cambios a la operación del Técnico. La nueva información se adjunta a la respuesta histórica existente del backend.
 
 ## Detalle de capturas de la visita actual
 
