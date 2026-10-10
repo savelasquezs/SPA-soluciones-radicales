@@ -1,8 +1,7 @@
 import type { ReportHistoricalVisit, ReportPestClassification, ServiceAreaResult } from '@/types/serviceResults'
-import { visitDateLabel } from '@/helpers/serviceTrends'
+import { reportVisitAxisLabels, reportPestColor } from '@/helpers/reportCharts'
 
 export const SPECIES_CHART = { width: 650, height: 204, left: 42, right: 628, top: 18, bottom: 163 } as const
-const palette = ['#206b89','#c36a43','#478f79','#806da5','#b28a36','#b45766','#617a95','#797e54']
 
 export interface SpeciesBar { code:string; color:string; name:string; count:number; x:number; y:number; width:number; height:number }
 export interface SpeciesVisit {
@@ -27,7 +26,8 @@ export function buildSpeciesCharts(history:ReportHistoricalVisit[]):SpeciesChart
         names.set(capture.plagaCodigo,capture.plagaNombreSnapshot)
     const species=[...names.entries()].sort((a,b)=>
       a[1].localeCompare(b[1],'es')||a[0].localeCompare(b[0]))
-      .map(([code,name],index)=>({code,name,color:palette[index%palette.length]!}))
+      .map(([code,name])=>({code,name,color:reportPestColor(code)}))
+    const labels=reportVisitAxisLabels(visits)
     const counts=visits.map(visit=>{
       const byCode=new Map<string,number>()
       for(const capture of visit.especies??[]) if(capture.clasificacion===classification && capture.plagaCodigo &&
@@ -51,12 +51,12 @@ export function buildSpeciesCharts(history:ReportHistoricalVisit[]):SpeciesChart
           x:center+(seriesIndex-species.length/2)*width,
           y,width:Math.max(1,width-1.5),height:SPECIES_CHART.bottom-y}
       })
-      return {solicitud:visit.solicitud,fecha:visit.fecha,label:visitDateLabel(visit.fecha),
+      return {solicitud:visit.solicitud,fecha:visit.fecha,label:labels[index]!,
         reviewed:reviewed??0,hasMonitoring:(reviewed??0)>0,
         total:[...counts[index]!.values()].reduce((sum,value)=>sum+value,0),
         center,bars}
     })
-    return {classification,title:classification==='VOLADORES'?'Lámparas UV · Voladores':'Cebaderos y trampas adhesivas · Rastreros',
+    return {classification,title:classification==='VOLADORES'?'Insectos que vuelan · Lámparas UV':'Plagas rastreras · Trampas y cebaderos',
       species,visits:plotted,max,hasHistory:visits.length>0,
       hasMonitoring:plotted.some(v=>v.hasMonitoring)}
   })

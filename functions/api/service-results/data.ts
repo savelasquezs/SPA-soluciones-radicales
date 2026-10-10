@@ -6,6 +6,10 @@ export interface ServicePoint { numero: string; ubicacion: string; tipo: string;
 export interface ServiceFindingFollowup { solicitud:string;fecha:string;resultado:'SIN_CAMBIOS'|'EN_PROCESO'|'CERRADO';observacion:string|null;fotos:string[] }
 export interface ServiceFinding { descripcion:string; recomendacion:string; estado:'ABIERTO'|'EN_PROCESO'|'CERRADO'; responsable:string; fotos:string[]; fechaApertura:string; solicitudApertura:string; anterior:boolean; visitasDesdeApertura:number; seguimientos:ServiceFindingFollowup[] }
 export interface ServiceArea { id:string; nombre:string; sinAcceso:boolean; motivo:string|null; fotos:string[]; criterios:ServiceCriterion[]; puntos:ServicePoint[]; hallazgos:ServiceFinding[] }
+export interface HistoricalCapturePlace {
+  clasificacion:'VOLADORES'|'RASTREROS';plagaCodigo:string;plagaNombreSnapshot:string;
+  cantidad:number;area:string;puesto:string;ubicacion:string
+}
 export interface ServiceResultsData {
   id:string; solicitud:string; cliente:string; nit:string; sede:string; direccion:string; tecnico:string
   firmanteCliente:string; firmaTecnico:string; firmaCliente:string
@@ -15,7 +19,7 @@ export interface ServiceResultsData {
   areas:ServiceArea[]
   historico:Array<{solicitud:string;fecha:string;cumplimiento:number|null;capturas:number;
     especies:Array<{plagaCodigo:string;plagaNombreSnapshot:string;clasificacion:'VOLADORES'|'RASTREROS';cantidad:number}>;
-    puestosRevisados:{voladores:number;rastreros:number}}>
+    puestosRevisados:{voladores:number;rastreros:number};detallesCapturas:HistoricalCapturePlace[]}>
 }
 const arr=(v:unknown):string[]=>Array.isArray(v)?v.filter((x):x is string=>typeof x==='string'&&x.length>0):[]
 
@@ -142,7 +146,7 @@ export async function loadServiceResultsData(client:PoolClient,serviceId:string)
     order by coalesce(pa.producto_nombre_snapshot,p.nombre),pa.id`,[serviceId])).rows
   const historico=(await client.query<{solicitud:string;fecha:Date;cumplimiento:number|null;capturas:string;
     especies:Array<{plagaCodigo:string;plagaNombreSnapshot:string;clasificacion:'VOLADORES'|'RASTREROS';cantidad:number|string}>;
-    puestosRastrerosRevisados:number;puestosVoladoresRevisados:number}>(`
+    puestosRastrerosRevisados:number;puestosVoladoresRevisados:number;detallesCapturas:HistoricalCapturePlace[]}>(`
     with visitas as (
       select id,solicitud,fin_real from public.servicios
       where sede_id=$1 and estado='FINALIZADO' and tipo_servicio='PRINCIPAL' and fin_real <= (select fin_real from public.servicios where id=$2)
@@ -155,17 +159,24 @@ export async function loadServiceResultsData(client:PoolClient,serviceId:string)
       from visitas v join public.servicio_areas sa on sa.servicio_id=v.id
       left join public.evaluaciones_mip_area e on e.servicio_area_id=sa.id
       group by v.id,sa.id,sa.sin_acceso
-    ), capturas_por_especie as (
+    ), capturas_detalladas as (
       select r.servicio_id,sd.clasificacion_snapshot as clasificacion,
         c.item->>'plagaCodigo' as codigo,
-        max(c.item->>'plagaNombreSnapshot') as nombre,
-        sum((c.item->>'cantidad')::bigint) as cantidad
+        c.item->>'plagaNombreSnapshot' as nombre,
+        (c.item->>'cantidad')::integer as cantidad,
+        sa.nombre_snapshot as area,sd.numero_snapshot as puesto,
+        sd.ubicacion_snapshot as ubicacion
       from public.revisiones_dispositivos r
       join visitas v on v.id=r.servicio_id
       join public.servicio_dispositivos sd on sd.id=r.servicio_dispositivo_id
+      join public.servicio_areas sa on sa.id=sd.servicio_area_id
       cross join lateral jsonb_array_elements(coalesce(r.capturas_json,'[]'::jsonb)) c(item)
       where sd.clasificacion_snapshot in ('RASTREROS','VOLADORES')
-      group by r.servicio_id,sd.clasificacion_snapshot,c.item->>'plagaCodigo'
+    ), capturas_por_especie as (
+      select servicio_id,clasificacion,codigo,
+        max(nombre) as nombre,sum(cantidad::bigint) as cantidad
+      from capturas_detalladas
+      group by servicio_id,clasificacion,codigo
     ), puestos_revisados as (
       select r.servicio_id,
         count(*) filter (where sd.clasificacion_snapshot='RASTREROS')::int as rastreros,
@@ -176,13 +187,18 @@ export async function loadServiceResultsData(client:PoolClient,serviceId:string)
       group by r.servicio_id
     )
     select v.solicitud,v.fin_real as fecha,round(avg(a.porcentaje)::numeric,1)::float8 as cumplimiento,
-       (select coalesce(sum((c.item->>'cantidad')::integer),0)::text from public.revisiones_dispositivos r
-         cross join lateral jsonb_array_elements(coalesce(r.capturas_json,'[]'::jsonb)) c(item)
-         where r.servicio_id=v.id) as capturas,
+       (select coalesce(sum(c.cantidad::bigint),0)::text
+         from capturas_detalladas c where c.servicio_id=v.id) as capturas,
        (select coalesce(jsonb_agg(jsonb_build_object(
          'plagaCodigo',c.codigo,'plagaNombreSnapshot',c.nombre,'clasificacion',c.clasificacion,
          'cantidad',c.cantidad) order by c.clasificacion,c.nombre,c.codigo),'[]'::jsonb)
          from capturas_por_especie c where c.servicio_id=v.id) as especies,
+       (select coalesce(jsonb_agg(jsonb_build_object(
+         'clasificacion',c.clasificacion,'plagaCodigo',c.codigo,
+         'plagaNombreSnapshot',c.nombre,'cantidad',c.cantidad,
+         'area',c.area,'puesto',c.puesto,'ubicacion',c.ubicacion)
+         order by c.area,c.puesto,c.nombre),'[]'::jsonb)
+         from capturas_detalladas c where c.servicio_id=v.id) as "detallesCapturas",
        coalesce(m.rastreros,0)::int as "puestosRastrerosRevisados",
        coalesce(m.voladores,0)::int as "puestosVoladoresRevisados"
     from visitas v left join area_scores a on a.id=v.id
@@ -196,5 +212,9 @@ export async function loadServiceResultsData(client:PoolClient,serviceId:string)
       cumplimiento:h.cumplimiento==null?null:Number(h.cumplimiento),capturas:Number(h.capturas)||0,
       puestosRevisados:{rastreros:Number(h.puestosRastrerosRevisados)||0,voladores:Number(h.puestosVoladoresRevisados)||0},
       especies:h.especies.map(c=>({plagaCodigo:c.plagaCodigo,plagaNombreSnapshot:c.plagaNombreSnapshot,
-        clasificacion:c.clasificacion,cantidad:Number(c.cantidad)||0}))}))}
+        clasificacion:c.clasificacion,cantidad:Number(c.cantidad)||0})),
+      detallesCapturas:h.detallesCapturas.map(c=>({
+        clasificacion:c.clasificacion,plagaCodigo:c.plagaCodigo,
+        plagaNombreSnapshot:c.plagaNombreSnapshot,cantidad:Number(c.cantidad)||0,
+        area:c.area,puesto:c.puesto,ubicacion:c.ubicacion}))}))}
 }
