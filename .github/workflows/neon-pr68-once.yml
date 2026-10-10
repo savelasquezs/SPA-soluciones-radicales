@@ -1,0 +1,57 @@
+name: Neon PR68 one-off
+on:
+  push:
+    branches: ['ops/neon-pr68-ee76cb1']
+    paths: ['.github/workflows/neon-pr68-once.yml']
+permissions:
+  contents: read
+concurrency:
+  group: neon-pr68-one-off
+  cancel-in-progress: false
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ee76cb13949659857c062746f740510b86cebc62
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Build immutable API artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = 'ee76cb13949659857c062746f740510b86cebc62'
+          mkdir -p neon-deploy
+          npx --yes --package=esbuild@0.25.12 esbuild functions/api/index.ts --bundle --platform=node --target=node24 --format=esm --minify --external:pg-native --banner:js='import { createRequire as __createRequire } from "node:module";const require=__createRequire(import.meta.url);' --outfile=neon-deploy/index.mjs
+          node --check neon-deploy/index.mjs
+          DATABASE_URL='postgresql://test:test@127.0.0.1:5432/test' NEON_AUTH_BASE_URL='https://auth.example.test' NEON_AUTH_JWKS_URL='https://auth.example.test/.well-known/jwks.json' NEON_BRANCH=desarrollo node --input-type=module -e 'const {default:api}=await import("./neon-deploy/index.mjs");const response=await api.fetch(new Request("https://api.example.test/health"));const result=await response.json();if(response.status!==200||result.ok!==true||result.branch!=="desarrollo")process.exit(1);console.log("BUNDLE_HEALTH_OK");'
+          (cd neon-deploy && zip -9 api.zip index.mjs)
+          node --input-type=module -e 'import fs from "node:fs";import crypto from "node:crypto";const b=fs.readFileSync("neon-deploy/api.zip");const m={commit:"ee76cb13949659857c062746f740510b86cebc62",project:"patient-pine-80293508",branch:"br-nameless-violet-b7y48a5v",function:"api",bytes:b.length,sha256:crypto.createHash("sha256").update(b).digest("hex")};fs.writeFileSync("neon-deploy/manifest.json",JSON.stringify(m,null,2));console.log(JSON.stringify(m));'
+      - name: Deploy using existing repository credential when available
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$NEON_API_KEY" ]; then
+            echo 'CLI_DEPLOY_UNAVAILABLE: repository NEON_API_KEY is not configured; artifact remains available for connected deployment.'
+            exit 0
+          fi
+          npx -y neon@6.2.4 link --project-id patient-pine-80293508 --branch desarrollo --no-env-pull -y
+          npx -y neon@6.2.4 functions deploy api --src functions/api/index.ts
+          npx -y neon@6.2.4 functions get api
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: neon-pr68-ee76cb1
+          path: |
+            neon-deploy/api.zip
+            neon-deploy/manifest.json
+          if-no-files-found: error
+          retention-days: 1
