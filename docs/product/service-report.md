@@ -50,7 +50,7 @@ Los gráficos muestran hasta las seis últimas visitas finalizadas de tipo Princ
 
 ## Detalle de capturas de la visita actual
 
-En **Puestos de monitoreo y capturas** se muestra una tabla compacta solo con los puestos que registraron individuos: número del puesto, Área, tipo de trampa, ubicación y cantidad por especie. La cabecera indica el total de individuos, puestos revisados, puestos con capturas, revisados sin capturas y los que no registraron revisión. Las Áreas sin acceso no se contabilizan como puestos revisados.
+En **Puestos de monitoreo y capturas** se muestra una tabla HTML real de tres columnas (**Área**, **Puesto / Trampa / Ubicación** y **Capturas registradas**) solo si hay al menos un puesto con cantidades positivas por especie. Cada especie se presenta en una línea dentro de la última celda, con la cifra correspondiente. Las tres columnas y sus encabezados permanecen visibles en móvil y en A4: la conversión a tarjetas móviles aplica exclusivamente a la tabla de Productos, nunca a la de capturas. La cabecera indica el total de individuos, puestos revisados, puestos con capturas, revisados sin capturas y los que no registraron revisión. Las Áreas sin acceso no se contabilizan como puestos revisados.
 
 La lista repetitiva de todos los puestos sin capturas se elimina del informe, pero se mantienen en un bloque corto separado las observaciones, los cambios de estado relevantes y las evidencias fotográficas vinculadas a los puestos, incluso cuando no tuvieron capturas. El historial completo sigue disponible en la Sede. El informe administrativo y el público comparten la misma vista; se imprime en A4 sin tooltips ni URLs privadas de R2.
 
