@@ -2,11 +2,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
-  poolQuery: vi.fn(),
-  clientQuery: vi.fn(),
-  signatureDelete: vi.fn(),
-  certificateDelete: vi.fn(),
-  photoDelete: vi.fn(),
+  poolQuery: vi.fn<(sql: string, values?: unknown[]) => Promise<{ rows: unknown[]; rowCount: number }>>(),
+  clientQuery: vi.fn<(sql: string, values?: unknown[]) => Promise<{ rows: unknown[]; rowCount: number }>>(),
+  signatureDelete: vi.fn<(path: string, serviceId: string) => Promise<void>>(),
+  certificateDelete: vi.fn<(path: string) => Promise<void>>(),
+  photoDelete: vi.fn<(path: string) => Promise<void>>(),
 }))
 vi.mock('../db', () => ({
   pool: { query: mocks.poolQuery },
