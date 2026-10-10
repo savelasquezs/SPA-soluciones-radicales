@@ -15,6 +15,20 @@ export type SessionProfile = {
   requiereSeleccionRol: boolean
 }
 
+export type PersonalProfile = {
+  id: string
+  nombreCompleto: string
+  correoGoogle: string
+  telefono: string | null
+  fotoStoragePath: string | null
+  esAdmin: boolean
+  esTecnico: boolean
+  certificadoStoragePath: string | null
+  certificadoFechaEmision: DateOnly | null
+  certificadoFechaVencimiento: DateOnly | null
+  version: number
+}
+
 export type UserRecord = {
   id: string
   authUserId: string | null
