@@ -37,3 +37,7 @@ export const finalizeTechnicianService = (serviceId: string, requestId: string, 
 
 export const technicianProductSheetUrl=async(serviceId:string,appliedProductId:string):Promise<string> =>
   (await apiRequest<{url:string}>(base+'/'+encodeURIComponent(serviceId)+'/products/'+encodeURIComponent(appliedProductId)+'/technical-sheet')).url
+
+export function getTechnicianEvidenceAccess(serviceId: string, reference: import('@/types/siteInsights').EvidenceReference, signal?: AbortSignal): Promise<import('@/types/siteInsights').EvidenceAccess> {
+  return apiRequest(`${base}/${encodeURIComponent(serviceId)}/photos/${reference.kind}/${encodeURIComponent(reference.recordId)}/${reference.index}`, { signal })
+}

@@ -17,7 +17,7 @@ type CriterionEvidenceUploadInput = { serviceId: string; criterionId: string; fi
 type DeviceReviewPhotoUploadInput = { serviceId: string; serviceDeviceId: string; fileName: string; contentType: string; size: number }
 type FindingEvidenceUploadInput = { serviceId: string; findingId: string; phase: FindingEvidencePhase; fileName: string; contentType: string; size: number }
 type ServiceSignatureUploadInput = { serviceId: string; role: ServiceSignatureRole; fileName: string; contentType: string; size: number }
-export type FindingEvidencePhase = 'OPENING' | 'CLOSURE'
+export type FindingEvidencePhase = 'OPENING' | 'CLOSURE' | 'FOLLOWUP'
 export type ServiceSignatureRole = 'TECHNICIAN' | 'CLIENT'
 export type UploadAuthorization = { url: string; storagePath: string; contentType: string; expiresIn: number }
 const PRESIGNED_TTL_SECONDS = 300
@@ -85,7 +85,7 @@ export function createCriterionEvidenceUploadUrl(input: CriterionEvidenceUploadI
 }
 
 export function createFindingEvidenceUploadUrl(input: FindingEvidenceUploadInput): UploadAuthorization {
-  const folder = input.phase === 'OPENING' ? 'opening' : 'closure'
+  const folder = input.phase.toLowerCase()
   return createServicePhotoUploadUrl(input, `services/${input.serviceId}/findings/${input.findingId}/${folder}`)
 }
 
@@ -120,7 +120,7 @@ export function assertCriterionEvidenceStoragePath(storagePath: string, serviceI
 }
 
 export function assertFindingEvidenceStoragePath(storagePath: string, serviceId: string, findingId: string, phase: FindingEvidencePhase): void {
-  const folder = phase === 'OPENING' ? 'opening' : 'closure'
+  const folder = phase.toLowerCase()
   assertServiceMediaStoragePath(storagePath, `services/${serviceId}/findings/${findingId}/${folder}/`)
 }
 

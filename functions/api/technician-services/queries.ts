@@ -86,8 +86,21 @@ async function findings(client: PoolClient, serviceId: string): Promise<Array<Te
     'id',h.id,'servicioAperturaId',h.servicio_apertura_id,'fechaApertura',h.fecha_apertura,
     'descripcion',h.descripcion,'recomendacionAccion',h.recomendacion_accion,
     'evidenciasAperturaStoragePaths',coalesce(h.evidencias_apertura_storage_paths,'[]'::jsonb),
-    'estado',h.estado,'resultadoSeguimiento',(select seg.resultado from public.hallazgo_seguimientos seg
+    'estado',h.estado,
+    'resultadoSeguimiento',(select seg.resultado from public.hallazgo_seguimientos seg
       where seg.hallazgo_id=h.id and seg.servicio_id=$1),
+    'estadoAnteriorSeguimiento',(select seg.estado_anterior from public.hallazgo_seguimientos seg
+      where seg.hallazgo_id=h.id and seg.servicio_id=$1),
+    'observacionSeguimiento',(select seg.observacion from public.hallazgo_seguimientos seg
+      where seg.hallazgo_id=h.id and seg.servicio_id=$1),
+    'evidenciasSeguimientoStoragePaths',(select coalesce(seg.evidencias_storage_paths,'[]'::jsonb) from public.hallazgo_seguimientos seg
+      where seg.hallazgo_id=h.id and seg.servicio_id=$1),
+    'historialSeguimientos',(select coalesce(jsonb_agg(jsonb_build_object(
+      'id',seg.id,'servicioId',visit.id,'solicitud',visit.solicitud,'fecha',seg.registrado_at,
+      'resultado',seg.resultado,'observacion',seg.observacion,
+      'evidenciasStoragePaths',seg.evidencias_storage_paths) order by seg.registrado_at desc),'[]'::jsonb)
+      from public.hallazgo_seguimientos seg join public.servicios visit on visit.id=seg.servicio_id
+      where seg.hallazgo_id=h.id),
     'responsableNombre',h.responsable_nombre,'responsableCorreo',h.responsable_correo,
     'servicioCierreId',h.servicio_cierre_id,'fechaCierre',h.fecha_cierre,
     'evidenciasCierreStoragePaths',coalesce(h.evidencias_cierre_storage_paths,'[]'::jsonb),

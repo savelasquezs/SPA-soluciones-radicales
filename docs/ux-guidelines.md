@@ -210,3 +210,8 @@ La configuración de plantillas, la prueba sintética, la generación oficial y 
 - El primer pendiente se desplaza a la vista, abre su tarjeta y muestra error inline, sin toasts duplicados ni diálogos grandes para validaciones.
 - Los borradores parciales se conservan antes de cambiar de sección, incluso si aún no existe una calificación.
 - Los indicadores distinguen Hallazgos abiertos de Hallazgos sin evaluación durante la visita. «Sigue igual» registra una revisión sin cerrar el Hallazgo.
+
+- Los avisos de cierre de trabajo de campo usan variantes compactas de `StatusPanel`, sin bloques de nueve rem de alto.
+- Al confirmar la finalización online, abrir el diálogo opcional de envío sin enviar correo automáticamente.
+- El visor de evidencias nuevas permite dibujo y recorte táctil antes de guardar la fotografía. La edición no reescribe fotografías históricas.
+- El aviso de evidencia opcional del hallazgo usa el tono de warning discreto (`--warning-subtle`), en una línea compacta.

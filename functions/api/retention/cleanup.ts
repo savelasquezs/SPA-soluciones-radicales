@@ -5,7 +5,7 @@ import type { PoolClient } from 'pg'
 
 type RetentionCandidate = {
   bucket: 'sr-service-media'
-  category: 'DEVICE_REVIEW' | 'AREA_NO_ACCESS' | 'CRITERION' | 'FINDING_OPENING' | 'FINDING_CLOSURE'
+  category: 'DEVICE_REVIEW' | 'AREA_NO_ACCESS' | 'CRITERION' | 'FINDING_OPENING' | 'FINDING_CLOSURE' | 'FINDING_FOLLOWUP'
   source_id: string
   storage_path: string
   expires_at: string
@@ -68,7 +68,7 @@ export async function runRetentionBatch(mode: 'dry-run' | 'delete'): Promise<{
 
 async function lockSourceRow(client: PoolClient, item: RetentionCandidate): Promise<void> {
   // A row lock on Hallazgo serializes deletion against CERRADO transitions.
-  if (item.category === 'FINDING_OPENING' || item.category === 'FINDING_CLOSURE') {
+  if (item.category === 'FINDING_OPENING' || item.category === 'FINDING_CLOSURE' || item.category === 'FINDING_FOLLOWUP') {
     await client.query('select id from public.hallazgos where id=$1 for update', [item.source_id])
   } else {
     const relation = item.category === 'DEVICE_REVIEW' ? 'revisiones_dispositivos'

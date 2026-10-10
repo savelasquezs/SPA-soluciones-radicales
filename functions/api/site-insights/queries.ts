@@ -112,7 +112,13 @@ export async function listSiteFindings(client: PoolClient, siteId: string, query
         'responsibleName',h.responsable_nombre,'responsibleEmail',h.responsable_correo,
         'openedAt',h.fecha_apertura,'closedAt',h.fecha_cierre,'closingNotes',h.observacion_cierre,
         'followups',(select coalesce(jsonb_agg(jsonb_build_object(
-          'result',seg.resultado,'reviewedAt',seg.registrado_at,
+          'result',seg.resultado,'reviewedAt',seg.registrado_at,'notes',seg.observacion,
+          'photos',(select coalesce(jsonb_agg(jsonb_build_object(
+            'kind','FOLLOWUP','recordId',seg.id,'index',e.ordinality-1,
+            'label','Revisión · '||visit.solicitud,'date',seg.registrado_at)
+            order by e.ordinality),'[]'::jsonb)
+            from jsonb_array_elements_text(seg.evidencias_storage_paths) with ordinality e(path,ordinality)
+            where nullif(btrim(e.path),'') is not null),
           'service',jsonb_build_object('id',visit.id,'number',visit.solicitud,'state',visit.estado,
             'date',seg.registrado_at,'technician',author.nombre_completo)) order by seg.registrado_at desc),'[]'::jsonb)
           from public.hallazgo_seguimientos seg
@@ -144,7 +150,17 @@ export interface EvidenceSource { path: string; serviceId: string; ownerId: stri
 /** Resolve a persisted reference, never a caller-supplied storage path. */
 export async function findSiteEvidence(client: PoolClient, siteId: string, kind: EvidenceKind, recordId: string, index: number): Promise<EvidenceSource> {
   let source: EvidenceSource | undefined
-  if (kind === 'REVIEW') {
+  if (kind === 'FOLLOWUP') {
+    source = (await client.query<EvidenceSource>(`select seg.evidencias_storage_paths ->> $3::integer as path,
+      seg.servicio_id as "serviceId",h.id as "ownerId",
+      (case when h.estado='CERRADO' and h.fecha_cierre is not null
+        then (((h.fecha_cierre at time zone 'America/Bogota')+interval '3 months') at time zone 'America/Bogota')
+        else (((seg.registrado_at at time zone 'America/Bogota')+interval '1 year') at time zone 'America/Bogota') end)::text as "retentionAt"
+      from public.hallazgo_seguimientos seg
+      join public.hallazgos h on h.id=seg.hallazgo_id
+      join public.servicios s on s.id=seg.servicio_id and s.sede_id=$1
+      where h.sede_id=$1 and seg.id=$2`, [siteId,recordId,index])).rows[0]
+  } else if (kind === 'REVIEW') {
     source = (await client.query<EvidenceSource>(`select r.foto_storage_path as path,s.id as "serviceId",r.servicio_dispositivo_id as "ownerId",
       case when s.estado='FINALIZADO' then (((s.fin_real at time zone 'America/Bogota')+interval '3 months') at time zone 'America/Bogota')::text end as "retentionAt"
       from public.revisiones_dispositivos r join public.servicios s on s.id=r.servicio_id

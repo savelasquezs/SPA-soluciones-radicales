@@ -6,7 +6,7 @@ import type { EvidenceDisplayState, EvidenceReference } from '@/types/siteInsigh
 type Entry = { state: EvidenceDisplayState; url: string | null; expiresAt: number; renewed: boolean }
 
 /** Only opened galleries resolve private URLs. Cache lasts for this component/authorized route. */
-export function useEvidenceGallery(siteId: () => string) {
+export function useEvidenceGallery(siteId: () => string, access: typeof getEvidenceAccess = getEvidenceAccess) {
   const photos = shallowRef<EvidenceReference[]>([])
   const index = ref(0)
   const open = ref(false)
@@ -32,7 +32,7 @@ export function useEvidenceGallery(siteId: () => string) {
     controller = requestController
     put(key, { state: 'LOADING', url: null, expiresAt: 0, renewed: cached?.renewed ?? false })
     try {
-      const result = await getEvidenceAccess(siteId(), photo, requestController.signal)
+      const result = await access(siteId(), photo, requestController.signal)
       if (serial !== generation) return
       put(key, { state: result.status, url: result.url,
         expiresAt: result.expiresAt ? new Date(result.expiresAt).getTime() : 0, renewed: cached?.renewed ?? false })

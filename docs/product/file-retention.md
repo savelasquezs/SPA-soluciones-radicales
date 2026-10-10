@@ -14,6 +14,8 @@ Conservar evidencias durante plazos predecibles, mantener el historial estructur
 | Fotografías de áreas sin acceso y criterios MIP | 3 meses calendario | `servicios.fin_real`, tras finalizar el Servicio |
 | Fotografías de apertura de Hallazgo `ABIERTO`/`EN_PROCESO` | Máximo 1 año calendario | `hallazgos.fecha_apertura`, aunque siga pendiente |
 | Fotografías de Hallazgo `CERRADO` (apertura **y** cierre) | 3 meses calendario | `hallazgos.fecha_cierre` |
+| Fotografías de revisión de Hallazgo `ABIERTO`/`EN_PROCESO` | 1 año calendario | Fecha de cada revisión |
+| Fotografías de revisiones de Hallazgo `CERRADO` | 3 meses calendario | `hallazgos.fecha_cierre` |
 | Datos estructurados de servicios, revisiones y hallazgos | Sin vencimiento automático | No se borran durante estas limpiezas |
 
 Los plazos se calculan a partir de eventos del dominio registrados en PostgreSQL, no desde el último acceso, una reprogramación, el nombre del archivo o la fecha de ejecución del cron. «Mes» y «año» significan meses/años calendario, no 30/365 días fijos. El cron diario ejecuta la limpieza **a partir** del vencimiento, no antes; puede haber retrasos si fallan proveedor o job.

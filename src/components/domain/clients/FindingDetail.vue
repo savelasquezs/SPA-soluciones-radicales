@@ -12,11 +12,16 @@ const props = defineProps<{ siteId: string; finding: SiteFinding }>()
 const emit = defineEmits<{ close: [] }>()
 const opening = computed(() => props.finding.photos.filter(photo => photo.kind === 'OPENING'))
 const closure = computed(() => props.finding.photos.filter(photo => photo.kind === 'CLOSURE'))
+const followupPhotos = computed(() => props.finding.followups?.flatMap(review => review.photos ?? []) ?? [])
+const allPhotos = computed(() => [...opening.value, ...followupPhotos.value, ...closure.value])
 const gallery = useEvidenceGallery(() => props.siteId)
 const { open, index, state, url, current, photos } = gallery
 function show(phase: 'OPENING' | 'CLOSURE'): void {
-  const collection = [...opening.value,...closure.value]
-  gallery.show(collection,phase === 'OPENING' ? 0 : opening.value.length)
+  gallery.show(allPhotos.value,phase === 'OPENING' ? 0 : opening.value.length + followupPhotos.value.length)
+}
+function showFollowup(reviewPhotos: SiteFinding['photos']): void {
+  const index = allPhotos.value.findIndex(item => item === reviewPhotos[0])
+  if (index >= 0) gallery.show(allPhotos.value, index)
 }
 </script>
 <template>
@@ -36,6 +41,8 @@ function show(phase: 'OPENING' | 'CLOSURE'): void {
           <div><dt>Resultado</dt><dd>{{ review.result === 'SIN_CAMBIOS' ? 'Sigue igual' : review.result === 'EN_PROCESO' ? 'En proceso' : 'Cerrado' }}</dd></div>
           <div><dt>Visita</dt><dd><RouterLink class="insight-link" :to="`/servicios/${review.service.id}`">{{ review.service.number }}</RouterLink> · {{ insightDate(review.reviewedAt, true) }}</dd></div>
           <div><dt>Técnico</dt><dd>{{ review.service.technician }}</dd></div>
+          <div v-if="review.notes"><dt>Observación</dt><dd>{{ review.notes }}</dd></div>
+          <div class="insight-photos"><BaseButton v-if="review.photos.length" size="compact" variant="secondary" @click="showFollowup(review.photos)"><Camera :size="16" />Ver fotos ({{ review.photos.length }})</BaseButton><span v-else class="insight-muted">Sin fotos disponibles</span></div>
         </dl>
       </section>
       <template v-if="finding.state === 'CERRADO'">
@@ -47,5 +54,5 @@ function show(phase: 'OPENING' | 'CLOSURE'): void {
       </template>
     </div>
   </BaseDrawer>
-  <EvidenceLightbox :open="open" :index="index" :total="photos.length" :state="state" :url="url" :title="current?.label ?? 'Fotografías del hallazgo'" :caption="current ? `${finding.areaName} · ${insightDate(current.date,true)}` : ''" @close="gallery.close" @select="gallery.select" @retry="gallery.retry" @image-error="gallery.imageFailed" />
+  <EvidenceLightbox unavailable-message="Sin fotos disponibles" :open="open" :index="index" :total="photos.length" :state="state" :url="url" :title="current?.label ?? 'Fotografías del hallazgo'" :caption="current ? `${finding.areaName} · ${insightDate(current.date,true)}` : ''" @close="gallery.close" @select="gallery.select" @retry="gallery.retry" @image-error="gallery.imageFailed" />
 </template>

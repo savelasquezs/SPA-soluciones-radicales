@@ -5,8 +5,10 @@ import type { PoolClient } from 'pg'
 import { isServiceId } from '../../../src/helpers/adminServices'
 import { ApiError, requireTechnician, type DomainProfile, type Identity } from '../auth'
 import { transaction } from '../db'
+import { findSiteEvidence } from '../site-insights/queries'
+import type { EvidenceAccess, EvidenceKind } from '../../../src/types/siteInsights'
 import { kickServiceJobs } from '../services/jobs'
-import { assertAreaNoAccessStoragePath, assertCriterionEvidenceStoragePath, assertDeviceReviewStoragePath, assertFindingEvidenceStoragePath, assertServiceSignatureStoragePath, createAreaNoAccessUploadUrl, createCriterionEvidenceUploadUrl, createDeviceReviewUploadUrl, createFindingEvidenceUploadUrl, createServiceSignatureUploadUrl, criterionEvidenceObjectExists, deleteAreaNoAccessObject, deleteCriterionEvidenceObject, deleteDeviceReviewObject, deleteFindingEvidenceObject, deviceReviewMediaObjectExists, findingEvidenceObjectExists, serviceMediaObjectExists, serviceSignatureObjectExists, type FindingEvidencePhase, type ServiceSignatureRole } from '../r2'
+import { assertAreaNoAccessStoragePath, assertCriterionEvidenceStoragePath, assertDeviceReviewStoragePath, assertFindingEvidenceStoragePath, assertServiceSignatureStoragePath, createAreaNoAccessUploadUrl, createCriterionEvidenceUploadUrl, createDeviceReviewUploadUrl, createFindingEvidenceUploadUrl, createServiceMediaReadUrl, createServiceSignatureUploadUrl, criterionEvidenceObjectExists, deleteAreaNoAccessObject, deleteCriterionEvidenceObject, deleteDeviceReviewObject, deleteFindingEvidenceObject, deviceReviewMediaObjectExists, findingEvidenceObjectExists, serviceMediaObjectExists, serviceSignatureObjectExists, type FindingEvidencePhase, type ServiceSignatureRole } from '../r2'
 import { authorizeTechnicianAreaChange, authorizeTechnicianDeviceChange, authorizeTechnicianFindingChange, authorizeTechnicianServiceChange, claimTechnicianService, createTechnicianDevice, createTechnicianFinding, finalizeTechnicianService, saveTechnicianAreaAccess, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, saveTechnicianFindingStatus, startTechnicianService, technicianCommand } from './commands'
 import { getTechnicianPackage, listTechnicianServices, assignedServiceState } from './queries'
 import { technicianProductSheetUrl } from '../service-results/productSheets'
@@ -48,7 +50,7 @@ function criterionEvidencePaths(value: unknown): string[] {
   return paths
 }
 function findingPhase(value: unknown): FindingEvidencePhase {
-  if (value !== 'OPENING' && value !== 'CLOSURE') throw new ApiError(422, 'La etapa de la evidencia no es válida.', 'VALIDATION')
+  if (value !== 'OPENING' && value !== 'CLOSURE' && value !== 'FOLLOWUP') throw new ApiError(422, 'La etapa de la evidencia no es válida.', 'VALIDATION')
   return value
 }
 function signatureRole(value: unknown): ServiceSignatureRole {
@@ -298,6 +300,32 @@ technicianServiceRoutes.post('/:id/areas/:areaId/devices', async context => {
       permanentDeviceId, serviceDeviceId, input))))
 })
 
+// Resolver referencias desde PostgreSQL. La API nunca recibe rutas privadas arbitrarias.
+technicianServiceRoutes.get('/:id/photos/:kind/:recordId/:index', async context => {
+  const serviceId = id(context.req.param('id'))
+  const kind = context.req.param('kind') as EvidenceKind
+  const position = context.req.param('index')
+  if (!['OPENING','CLOSURE','FOLLOWUP'].includes(kind) || !/^(0|[1-9]\\d?)$/.test(position)) {
+    throw new ApiError(422, 'La fotografía solicitada no es válida.', 'VALIDATION')
+  }
+  const source = await read(context, async (client, technician) => {
+    await assignedServiceState(client, technician.id, serviceId)
+    const site = (await client.query<{ siteId: string }>(
+      'select sede_id as "siteId" from public.servicios where id=$1', [serviceId])).rows[0]
+    if (!site) throw new ApiError(404, 'El servicio no está disponible.', 'SERVICE_NOT_FOUND')
+    return findSiteEvidence(client, site.siteId, kind, id(context.req.param('recordId')), Number(position))
+  })
+  const prefix = `services/${source.serviceId}/findings/${source.ownerId}/`
+  const storagePhase = (source.path.startsWith(prefix + 'followup/') ? 'FOLLOWUP'
+    : source.path.startsWith(prefix + 'closure/') ? 'CLOSURE' : kind) as 'OPENING' | 'CLOSURE' | 'FOLLOWUP'
+  const exists = await findingEvidenceObjectExists(source.path, source.serviceId, source.ownerId, storagePhase)
+  const until = source.retentionAt ? new Date(source.retentionAt).getTime() : NaN
+  const result: EvidenceAccess = exists
+    ? { status: 'AVAILABLE', ...createServiceMediaReadUrl(source.path,source.serviceId,source.ownerId,storagePhase) }
+    : { status: Number.isFinite(until) && until <= Date.now() ? 'EXPIRED' : 'MISSING', url: null, expiresAt: null }
+  return context.json(result)
+})
+
 technicianServiceRoutes.post('/:id/areas/:areaId/findings/:findingId/media/upload-url', async context => {
   const payload = await body(context.req.raw)
   const serviceId = id(context.req.param('id'))
@@ -311,9 +339,9 @@ technicianServiceRoutes.post('/:id/areas/:areaId/findings/:findingId/media/uploa
   const size = payload.size
   if (typeof size !== 'number' || !Number.isSafeInteger(size) || size < 1) throw new ApiError(422, 'El tamaño de la evidencia no es válido.', 'VALIDATION')
   await read(context, async (client, technician) => {
-    if (phase === 'CLOSURE') {
+    if (phase === 'CLOSURE' || phase === 'FOLLOWUP') {
       const finding = await authorizeTechnicianFindingChange(client, technician.id, serviceId, deviceId, lockToken, areaId, findingId)
-      if (finding.finding.servicioAperturaId === serviceId || finding.finding.estado === 'CERRADO') {
+      if (finding.finding.servicioAperturaId === serviceId || (finding.finding.estado === 'CERRADO' && finding.finding.servicioCierreId !== serviceId)) {
         throw new ApiError(409, 'El Hallazgo no está disponible para cierre.', 'FINDING_NOT_EDITABLE')
       }
     } else {
@@ -366,13 +394,12 @@ technicianServiceRoutes.post('/:id/areas/:areaId/findings/:findingId/status', as
   if (payload.estado !== 'SIN_CAMBIOS' && payload.estado !== 'EN_PROCESO' && payload.estado !== 'CERRADO') throw new ApiError(422, 'El estado del Hallazgo no es válido.', 'VALIDATION')
   const input = { estado: payload.estado, observacionCierre: optionalString(payload.observacionCierre) } as const
   const evidenceStoragePaths = findingEvidencePaths(payload.evidenceStoragePaths)
-  if (input.estado === 'CERRADO' && !evidenceStoragePaths.length) throw new ApiError(422, 'Adjunta al menos una evidencia para cerrar el Hallazgo.', 'VALIDATION')
   for (const storagePath of evidenceStoragePaths) {
-    assertFindingEvidenceStoragePath(storagePath, serviceId, findingId, 'CLOSURE')
+    assertFindingEvidenceStoragePath(storagePath, serviceId, findingId, 'FOLLOWUP')
   }
   if (evidenceStoragePaths.length) {
     await read(context, (client, technician) => authorizeTechnicianFindingChange(client, technician.id, serviceId, deviceId, lockToken, areaId, findingId))
-    const exists = await Promise.all(evidenceStoragePaths.map(path => findingEvidenceObjectExists(path, serviceId, findingId, 'CLOSURE')))
+    const exists = await Promise.all(evidenceStoragePaths.map(path => findingEvidenceObjectExists(path, serviceId, findingId, 'FOLLOWUP')))
     const missing = exists.findIndex(value => !value)
     if (missing >= 0) throw new ApiError(422, 'Una evidencia todavía no está disponible. Vuelve a cargarla.', 'PHOTO_NOT_FOUND', { storagePath: evidenceStoragePaths[missing] })
   }
@@ -392,11 +419,13 @@ technicianServiceRoutes.post('/:id/areas/:areaId/findings/:findingId/media/delet
   const storagePath = requiredString(payload.storagePath, 'La ruta de la evidencia es obligatoria.', 1_000)
   assertFindingEvidenceStoragePath(storagePath, serviceId, findingId, phase)
   await read(context, async (client, technician) => {
-    if (phase === 'CLOSURE') await authorizeTechnicianFindingChange(client, technician.id, serviceId, deviceId, lockToken, areaId, findingId)
+    if (phase === 'CLOSURE' || phase === 'FOLLOWUP') await authorizeTechnicianFindingChange(client, technician.id, serviceId, deviceId, lockToken, areaId, findingId)
     else await authorizeTechnicianAreaChange(client, technician.id, serviceId, deviceId, lockToken, areaId)
     const referenced = (await client.query<{ found: boolean }>(`select exists(select 1 from public.hallazgos where id=$1
       and (coalesce(evidencias_apertura_storage_paths,'[]'::jsonb) ? $2
-        or coalesce(evidencias_cierre_storage_paths,'[]'::jsonb) ? $2)) as found`, [findingId, storagePath])).rows[0]?.found
+        or coalesce(evidencias_cierre_storage_paths,'[]'::jsonb) ? $2
+        or exists(select 1 from public.hallazgo_seguimientos seg
+          where seg.hallazgo_id=$1 and seg.evidencias_storage_paths ? $2))) as found`, [findingId, storagePath])).rows[0]?.found
     if (referenced) throw new ApiError(409, 'La evidencia está asociada al Hallazgo y no puede eliminarse.', 'FILE_IN_USE')
   })
   await deleteFindingEvidenceObject(storagePath, serviceId, findingId, phase)

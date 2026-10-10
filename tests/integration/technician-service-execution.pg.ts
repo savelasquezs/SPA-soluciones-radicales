@@ -169,12 +169,29 @@ describe('technician service execution · real PostgreSQL', () => {
       phoneId, session.lock.token, area.id, findingId, 1, input, []))
     const saved = await review()
     expect(saved.finding).toMatchObject({ estado: 'ABIERTO', resultadoSeguimiento: 'SIN_CAMBIOS' })
-    await expect(review()).rejects.toMatchObject({ code: 'FINDING_ALREADY_REVIEWED' })
-    const historic = await pool.query('select resultado,estado_anterior from public.hallazgo_seguimientos where servicio_id=$1 and hallazgo_id=$2', [value.service, findingId])
-    expect(historic.rows).toEqual([{ resultado: 'SIN_CAMBIOS', estado_anterior: 'ABIERTO' }])
+    const photoPath = `services/${value.service}/findings/${findingId}/followup/inspeccion.jpg`
+    const processing = await transaction(client => saveTechnicianFindingStatus(client, value.technician, value.service,
+      phoneId, session.lock.token, area.id, findingId, saved.finding.version,
+      { estado: 'EN_PROCESO', observacionCierre: 'En reparación' }, [photoPath]))
+    expect(processing.finding).toMatchObject({ estado: 'EN_PROCESO', resultadoSeguimiento: 'EN_PROCESO' })
+    const closed = await transaction(client => saveTechnicianFindingStatus(client, value.technician, value.service,
+      phoneId, session.lock.token, area.id, findingId, processing.finding.version,
+      { estado: 'CERRADO', observacionCierre: 'Corregido' }, []))
+    expect(closed.finding).toMatchObject({ estado: 'CERRADO', resultadoSeguimiento: 'CERRADO', servicioCierreId: value.service })
+    const corrected = await transaction(client => saveTechnicianFindingStatus(client, value.technician, value.service,
+      phoneId, session.lock.token, area.id, findingId, closed.finding.version,
+      { estado: 'SIN_CAMBIOS', observacionCierre: 'Sigue sin reparar' }, []))
+    expect(corrected.finding).toMatchObject({ estado: 'ABIERTO', resultadoSeguimiento: 'SIN_CAMBIOS', servicioCierreId: null })
+    const historic = await pool.query('select resultado,estado_anterior,observacion,evidencias_storage_paths from public.hallazgo_seguimientos where servicio_id=$1 and hallazgo_id=$2', [value.service, findingId])
+    expect(historic.rows).toEqual([{
+      resultado: 'SIN_CAMBIOS', estado_anterior: 'ABIERTO', observacion: 'Sigue sin reparar',
+      evidencias_storage_paths: [photoPath],
+    }])
     const refreshed = await transaction(client => getTechnicianPackage(client, value.technician, value.service))
     expect(refreshed.areas.find(item => item.areaId === value.internalArea)?.hallazgos.find(item => item.id === findingId)?.resultadoSeguimiento).toBe('SIN_CAMBIOS')
     expect((await finish()).package.service.estado).toBe('FINALIZADO')
+    const retention = await pool.query('select category from private.storage_retention_candidates where storage_path=$1', [photoPath])
+    expect(retention.rows).toEqual([{ category: 'FINDING_FOLLOWUP' }])
   })
 
   it('uses all catalogue methods without requiring per-visit dose or method', async () => {

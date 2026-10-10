@@ -62,6 +62,11 @@ const servicePackage = (state: TechnicianServiceSummary['estado'] = 'PROGRAMADO'
       descripcion: 'Abertura junto al muro', recomendacionAccion: 'Sellar el paso', evidenciasAperturaStoragePaths: [],
       estado: 'ABIERTO', responsableNombre: 'Mantenimiento', responsableCorreo: null, servicioCierreId: null,
       fechaCierre: null, evidenciasCierreStoragePaths: [], observacionCierre: null, version: 1,
+      historialSeguimientos: [{
+        id: uid(12), servicioId: uid(13), solicitud: 'SR-0001',
+        fecha: '2026-09-08T14:00:00Z', resultado: 'SIN_CAMBIOS',
+        observacion: 'Sin novedades', evidenciasStoragePaths: [`services/${uid(13)}/findings/${ids.finding}/followup/revision.jpg`],
+      }],
     }] : [],
   }, {
     id: ids.area2,
@@ -100,6 +105,10 @@ async function setup(page: Page, withPriorFinding = false, failFirstPackage = fa
     if (request.method() === 'OPTIONS') { await route.fulfill({ status: 204 }); return }
     if (path === '/api/session') {
       await json(route, { id: ids.actor, nombreCompleto: 'Técnico de prueba', correoGoogle: 'santyvan974@gmail.com', esAdmin: false, esTecnico: true, rolActivo: 'TECNICO', requiereSeleccionRol: false })
+      return
+    }
+    if (path.startsWith('/api/technician/services/' + ids.service + '/photos/FOLLOWUP/')) {
+      await json(route, { status: 'EXPIRED', url: null, expiresAt: null })
       return
     }
     if (path === '/api/technician/services/' + ids.service + '/products/' + ids.product + '/technical-sheet') {
@@ -412,9 +421,9 @@ test('a finding with several evidence photos survives an offline reload', async 
   await page.reload()
   await page.locator('.area-tabs').getByRole('button', { name: /Hallazgos/ }).click()
   await findings.getByRole('button', { name: /Abertura junto al muro/ }).click()
-  await expect(findings.getByText('2 evidencias de apertura')).toBeVisible()
+  await expect(findings.getByText('2 fotos de apertura pendientes de sincronizar')).toBeVisible()
   await expect(findings.getByText('Contacto Laureles')).toBeVisible()
-  await expect(findings.getByText('Guardado en este dispositivo · pendiente de sincronizar')).toBeVisible()
+  await expect(findings.getByText('Revisión guardada en este celular')).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 })
 
@@ -430,18 +439,20 @@ test('a prior finding can be closed only with evidence and survives offline relo
   const findings = page.locator('.workspace-panel[aria-labelledby="findings-title"]')
   await page.locator('.area-tabs').getByRole('button', { name: /Hallazgos/ }).click()
   await findings.getByRole('button', { name: /Abertura junto al muro/ }).click()
-  await findings.getByRole('button', { name: 'Cerrar Hallazgo' }).click()
-  await findings.getByRole('button', { name: 'Confirmar cierre' }).click()
-  await expect(findings.getByText('Adjunta al menos una evidencia de cierre.')).toBeVisible()
-  await findings.getByLabel('Observación de cierre').fill('Paso sellado')
+  await findings.getByRole('button', { name: 'Cerrado', exact: true }).click()
+  await findings.getByRole('button', { name: 'Guardar revisión' }).click()
+  await expect(findings.getByText('Para cerrar el hallazgo debes adjuntar una fotografía.')).toBeVisible()
+  await findings.getByRole('button', { name: /Observación/ }).click()
+  await findings.getByLabel('Observación de la visita').fill('Paso sellado')
   await findings.locator('input[type="file"][capture="environment"]').setInputFiles({ name: 'cierre.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('synthetic-closure-photo') })
-  await findings.getByRole('button', { name: 'Confirmar cierre' }).click()
-  await expect(findings.getByText('Cerrado', { exact: true })).toBeVisible()
+  await findings.getByRole('button', { name: 'Guardar revisión' }).click()
+  await expect(findings.getByText('Revisado en esta visita · Cerrado')).toBeVisible()
   await page.addInitScript(() => Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }))
   await page.reload()
   await page.locator('.area-tabs').getByRole('button', { name: /Hallazgos/ }).click()
   await findings.getByRole('button', { name: /Abertura junto al muro/ }).click()
-  await expect(findings.getByText(/1 evidencias/)).toBeVisible()
+  await expect(findings.getByText('Revisado en esta visita · Cerrado')).toBeVisible()
+  await findings.getByText(/Historial de revisiones/).click()
   await expect(findings.getByText('Paso sellado')).toBeVisible()
 })
 
@@ -606,6 +617,7 @@ test('an open finding requires one review per visit; sigue igual preserves its s
   await page.evaluate(() => { Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }); window.dispatchEvent(new Event('offline')) })
   await section.getByRole('button', { name: /Abertura junto al muro/ }).click()
   await section.getByRole('button', { name: 'Sigue igual' }).click()
+  await section.getByRole('button', { name: 'Guardar revisión' }).click()
   await expect(section.getByText('Revisado en esta visita · Sigue igual')).toBeVisible()
   await expect(section.getByText('Abierto', { exact: true })).toBeVisible()
   await page.addInitScript(() => Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }))
@@ -613,4 +625,67 @@ test('an open finding requires one review per visit; sigue igual preserves its s
   await page.locator('.area-tabs').getByRole('button', { name: /Hallazgos/ }).click()
   await section.getByRole('button', { name: /Abertura junto al muro/ }).click()
   await expect(section.getByText('Revisado en esta visita · Sigue igual')).toBeVisible()
+  await section.getByRole('button', { name: 'En proceso', exact: true }).click()
+  await section.getByRole('button', { name: 'Actualizar revisión' }).click()
+  await expect(section.getByText('Revisado en esta visita · En proceso')).toBeVisible()
+  await section.getByRole('button', { name: 'Sigue igual' }).click()
+  await section.getByRole('button', { name: 'Actualizar revisión' }).click()
+  await expect(section.getByText('Revisado en esta visita · Sigue igual')).toBeVisible()
+})
+
+
+test('a prior visit photo opens the protected viewer and gracefully reports expired media', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await setup(page, true)
+  await page.goto(`/servicios/${ids.service}/trabajo`)
+  await page.getByRole('button', { name: 'Iniciar servicio' }).click()
+  await page.locator('.area-tabs').getByRole('button', { name: /Hallazgos/ }).click()
+  const findings = page.locator('.workspace-panel[aria-labelledby="findings-title"]')
+  await findings.getByRole('button', { name: /Abertura junto al muro/ }).click()
+  await findings.getByText(/Historial de revisiones/).click()
+  await findings.getByRole('button', { name: 'Ver fotos (1)' }).click()
+  await expect(page.locator('.evidence-viewer__message').getByText('Sin fotos disponibles', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Cerrar visor' }).click()
+})
+
+test('a technician can crop and draw on a photo in the mobile preview before saving it', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await setup(page)
+  await page.goto(`/servicios/${ids.service}/trabajo`)
+  await page.getByRole('button', { name: 'Iniciar servicio' }).click()
+  const criteria = page.locator('.workspace-panel[aria-labelledby="criteria-title"]')
+  await criteria.getByRole('button', { name: /Fotos/ }).click()
+  const png = await page.evaluate(() => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 240
+    canvas.height = 240
+    const context = canvas.getContext('2d')!
+    context.fillStyle = '#ffffff'
+    context.fillRect(0, 0, 240, 240)
+    return canvas.toDataURL('image/png').split(',')[1]!
+  })
+  await criteria.locator('input[type="file"]:not([capture])').setInputFiles({
+    name: 'foto.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64'),
+  })
+  await criteria.getByRole('button', { name: 'Ver fotografía 1' }).click()
+  await page.getByRole('button', { name: 'Dibujar o recortar' }).click()
+  const canvas = page.getByLabel('Fotografía para editar')
+  const bounds = await canvas.boundingBox()
+  expect(bounds).not.toBeNull()
+  await page.getByRole('button', { name: 'Recortar' }).click()
+  await page.mouse.move(bounds!.x + bounds!.width * 0.15, bounds!.y + bounds!.height * 0.15)
+  await page.mouse.down()
+  await page.mouse.move(bounds!.x + bounds!.width * 0.8, bounds!.y + bounds!.height * 0.8, { steps: 4 })
+  await page.mouse.up()
+  await page.getByRole('button', { name: 'Aplicar recorte' }).click()
+  await page.getByRole('button', { name: 'Dibujar' }).click()
+  const reduced = await canvas.boundingBox()
+  expect(reduced).not.toBeNull()
+  await page.mouse.move(reduced!.x + reduced!.width * 0.2, reduced!.y + reduced!.height * 0.2)
+  await page.mouse.down()
+  await page.mouse.move(reduced!.x + reduced!.width * 0.7, reduced!.y + reduced!.height * 0.7, { steps: 4 })
+  await page.mouse.up()
+  await page.getByRole('button', { name: 'Guardar foto' }).click()
+  await expect(page.getByRole('button', { name: 'Dibujar o recortar' })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 })

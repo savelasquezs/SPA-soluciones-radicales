@@ -293,14 +293,13 @@ describe('technician service authorization', () => {
     expect(await response.json()).toEqual([])
     expect(clientQuery).toHaveBeenCalledWith(expect.stringContaining("s.tipo_servicio='PRINCIPAL'"),['technician-id'])
   })
-  it('rejects closing a finding without closure evidence before opening a database transaction',async()=>{
+  it('validates finding authorization before checking whether a prior visit already has closure evidence',async()=>{
     requireTechnician.mockResolvedValue({ id:'technician-id' })
     const response=await app.request(`/api/technician/services/${serviceId}/areas/${serviceId}/findings/${serviceId}/status`,{
       method:'POST',headers:{ Authorization:'Bearer synthetic-token','Content-Type':'application/json' },
       body:JSON.stringify({ requestId:serviceId,deviceId:serviceId,lockToken:serviceId,version:1,estado:'CERRADO',observacionCierre:'Corregido',evidenceStoragePaths:[] }),
     })
-    expect(response.status).toBe(422)
-    expect(await response.json()).toMatchObject({ code:'VALIDATION' })
-    expect(transaction).not.toHaveBeenCalled()
+    expect(response.status).toBe(404)
+    expect(transaction).toHaveBeenCalled()
   })
 })

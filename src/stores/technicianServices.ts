@@ -325,7 +325,7 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
 
   async function uploadFindingMutationEvidences<T extends TechnicianFindingCreateMutation | TechnicianFindingStatusMutation>(
     operation: T,
-    phase: 'OPENING' | 'CLOSURE',
+    phase: 'OPENING' | 'CLOSURE' | 'FOLLOWUP',
   ): Promise<T> {
     let current = operation
     for (const evidence of current.evidences) {
@@ -472,9 +472,7 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
             for (const evidence of findingOperation.evidences) await deleteTechnicianMedia(findingOperation.actorId, evidence.mediaId)
             await persistFinding(serviceId, findingOperation.areaId, result.finding)
           } else if (sending.kind === 'FINDING_STATUS') {
-            const findingOperation = sending.estado === 'CERRADO'
-              ? await uploadFindingMutationEvidences(sending, 'CLOSURE')
-              : sending
+            const findingOperation = await uploadFindingMutationEvidences(sending, 'FOLLOWUP')
             sending = findingOperation
             const result = await saveTechnicianFindingStatus(serviceId, findingOperation.areaId, findingOperation.findingId,
               findingOperation.requestId, findingOperation.deviceId, findingOperation.lockToken, findingOperation.version,
@@ -1087,44 +1085,72 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     files: File[],
   ): Promise<'synced' | 'pending' | 'conflict'> {
     const cache = caches.value[serviceId]
-    if (!cache || cache.package.service.estado !== 'EN_PROCESO' || !cache.lock) throw new Error('Este celular no puede actualizar Hallazgos en el servicio.')
-    const area = cache.package.areas.find(item => item.id === areaId)
-    const finding = area?.hallazgos?.find(item => item.id === findingId)
-    if (!area || !finding) throw new Error('El Hallazgo no pertenece al Área seleccionada.')
-    if (area.sinAcceso) throw new Error('Habilita el acceso al Área antes de actualizar Hallazgos.')
-    if (finding.servicioAperturaId === serviceId) throw new Error('Este Hallazgo se verificará en un Servicio posterior.')
-    if (finding.estado === 'CERRADO') throw new Error('El Hallazgo ya fue cerrado.')
-    if (finding.resultadoSeguimiento) throw new Error('Este Hallazgo ya fue evaluado durante esta visita.')
-    if (input.estado === 'CERRADO' && !files.length) throw new Error('Adjunta al menos una evidencia para cerrar el Hallazgo.')
-    if (input.observacionCierre.length > 2_000) throw new Error('La observación no puede superar 2000 caracteres.')
-    const existing = await reloadMutations(serviceId)
-    const existingStatus = existing.find((item): item is TechnicianFindingStatusMutation => item.kind === 'FINDING_STATUS' && item.findingId === findingId)
-    if (existingStatus?.status === 'CONFLICT') return 'conflict'
-    if (existingStatus) throw new Error('Espera a que termine la sincronización del Hallazgo antes de cambiarlo.')
-    const mediaIds = await saveFindingMedia(serviceId, areaId, input.estado === 'CERRADO' ? files : [])
-    const now = new Date().toISOString()
-    const operation: TechnicianFindingStatusMutation = {
-      schemaVersion: 1, requestId: crypto.randomUUID(), actorId: actorId(), serviceId,
-      deviceId: cache.deviceId, lockToken: cache.lock.token, kind: 'FINDING_STATUS', areaId, findingId,
-      estado: input.estado, observacionCierre: input.observacionCierre.trim(), version: finding.version,
-      evidences: mediaIds.map(mediaId => ({ mediaId, storagePath: null })), conflict: null,
-      status: 'PENDING', createdAt: now, updatedAt: now, error: null,
+    if (!cache || cache.package.service.estado !== 'EN_PROCESO' || !cache.lock) {
+      throw new Error('Este celular no puede actualizar Hallazgos en el servicio.')
     }
+    const area = cache.package.areas.find(item => item.id === areaId)
+    const finding = area?.hallazgos.find(item => item.id === findingId)
+    if (!area || !finding || area.sinAcceso) throw new Error('El Hallazgo no está disponible para esta Área.')
+    if (finding.servicioAperturaId === serviceId) throw new Error('El seguimiento comienza en una visita posterior.')
+    if (finding.estado === 'CERRADO' && finding.servicioCierreId !== serviceId) {
+      throw new Error('El Hallazgo se cerró en una visita anterior.')
+    }
+    const normalizedObservation = input.observacionCierre.trim()
+    if (normalizedObservation.length > 2_000) throw new Error('La observación no puede superar 2000 caracteres.')
+    const existing = await reloadMutations(serviceId)
+    const outstanding = existing.find((item): item is TechnicianFindingStatusMutation =>
+      item.kind === 'FINDING_STATUS' && item.findingId === findingId)
+    if (outstanding?.status === 'CONFLICT') return 'conflict'
+    if (outstanding?.status === 'SENDING') throw new Error('Espera a que se sincronice la revisión anterior.')
+    const oldPaths = finding.evidenciasSeguimientoStoragePaths ?? []
+    const previousPhotos = outstanding?.evidences.length ?? 0
+    if (oldPaths.length + previousPhotos + files.length > 10) throw new Error('Puedes guardar hasta diez fotos por visita.')
+    if (input.estado === 'CERRADO' && oldPaths.length + previousPhotos + files.length === 0) {
+      throw new Error('Adjunta una evidencia fotográfica para cerrar el Hallazgo.')
+    }
+    const mediaIds = await saveFindingMedia(serviceId, areaId, files)
+    const now = new Date().toISOString()
+    const operation: TechnicianFindingStatusMutation = outstanding
+      ? { ...outstanding, estado: input.estado, observacionCierre: normalizedObservation,
+          evidences: [...outstanding.evidences, ...mediaIds.map(mediaId => ({ mediaId, storagePath: null }))],
+          updatedAt: now, error: null }
+      : {
+          schemaVersion: 1, requestId: crypto.randomUUID(), actorId: actorId(), serviceId,
+          deviceId: cache.deviceId, lockToken: cache.lock.token, kind: 'FINDING_STATUS', areaId, findingId,
+          estado: input.estado, observacionCierre: normalizedObservation, version: finding.version,
+          evidences: mediaIds.map(mediaId => ({ mediaId, storagePath: null })), conflict: null,
+          status: 'PENDING', createdAt: now, updatedAt: now, error: null,
+        }
     try { await saveTechnicianMutation(operation) }
-    catch (failure) { for (const mediaId of mediaIds) await deleteTechnicianMedia(operation.actorId, mediaId); throw failure }
+    catch (failure) {
+      for (const mediaId of mediaIds) await deleteTechnicianMedia(operation.actorId, mediaId)
+      throw failure
+    }
     await reloadMutations(serviceId)
-    await persistFinding(serviceId, areaId, input.estado === 'SIN_CAMBIOS'
-      ? { ...finding, resultadoSeguimiento: 'SIN_CAMBIOS' }
-      : input.estado === 'EN_PROCESO'
-        ? { ...finding, estado: 'EN_PROCESO', resultadoSeguimiento: 'EN_PROCESO' }
-        : { ...finding, estado: 'CERRADO', resultadoSeguimiento: 'CERRADO', servicioCierreId: serviceId, fechaCierre: now,
-            evidenciasCierreStoragePaths: [], evidenciasCierreLocalIds: mediaIds,
-            observacionCierre: input.observacionCierre.trim() || null })
+    const original = finding.estadoAnteriorSeguimiento ?? finding.estado
+    const nextState = input.estado === 'SIN_CAMBIOS' ? original
+      : input.estado === 'EN_PROCESO' ? 'EN_PROCESO' : 'CERRADO'
+    const visit = finding.historialSeguimientos?.find(item => item.servicioId === serviceId)
+    const visits = [{ id: visit?.id ?? crypto.randomUUID(), servicioId: serviceId,
+      solicitud: cache.package.service.solicitud, fecha: now, resultado: input.estado,
+      observacion: normalizedObservation || null, evidenciasStoragePaths: oldPaths },
+    ...(finding.historialSeguimientos ?? []).filter(item => item.servicioId !== serviceId)]
+    await persistFinding(serviceId, areaId, {
+      ...finding, estado: nextState, estadoAnteriorSeguimiento: original,
+      resultadoSeguimiento: input.estado, observacionSeguimiento: normalizedObservation || null,
+      evidenciasSeguimientoStoragePaths: oldPaths, evidenciasSeguimientoLocalIds: operation.evidences.map(item => item.mediaId),
+      historialSeguimientos: visits,
+      servicioCierreId: nextState === 'CERRADO' ? serviceId : null,
+      fechaCierre: nextState === 'CERRADO' ? now : null,
+      evidenciasCierreStoragePaths: nextState === 'CERRADO' ? oldPaths : [],
+      evidenciasCierreLocalIds: nextState === 'CERRADO' ? operation.evidences.map(item => item.mediaId) : [],
+      observacionCierre: nextState === 'CERRADO' ? normalizedObservation || null : null,
+    })
     return onlineNow() ? syncPending(serviceId) : 'pending'
   }
 
   async function cleanupFindingMutation(operation: TechnicianFindingCreateMutation | TechnicianFindingStatusMutation): Promise<void> {
-    const phase = operation.kind === 'FINDING_CREATE' ? 'OPENING' : 'CLOSURE'
+    const phase = operation.kind === 'FINDING_CREATE' ? 'OPENING' : 'FOLLOWUP'
     for (const evidence of operation.evidences) {
       if (evidence.storagePath) {
         await deleteTechnicianFindingEvidence(operation.serviceId, operation.areaId, operation.findingId, phase,
