@@ -25,11 +25,12 @@ export function useCertificateGeneration() {
   const deliveryUnknown = ref(false)
   const mail = reactive({ documents: [] as string[], recipients: [] as string[], subject: '', text: '' })
   const mailDirty = ref(false)
-  const selectedDocuments = computed(() => context.value?.documents.filter((document) => mail.documents.includes(document.id)) ?? [])
+  const selectedDocuments = computed(() => context.value?.documents.filter((document) =>
+    mail.documents.includes(document.id) && document.pdfAvailable !== false) ?? [])
   const availability = computed(() => context.value?.availability[type.value])
   const selection = computed(() => context.value ? generationSelection(context.value, type.value, vehicleIds.value) : null)
   const canGenerate = computed(() => !loading.value && !busy.value && Boolean(availability.value?.available) && (type.value === 'ESTABLECIMIENTO' || vehicleIds.value.length > 0 && vehicleIds.value.length <= 10))
-  const canSend = computed(() => !busy.value && !loading.value && !deliveryUnknown.value && mail.documents.length > 0 && mail.documents.length <= 10 && mail.recipients.length > 0 && mail.recipients.length <= 20 && Boolean(mail.subject.trim()) && Boolean(mail.text.trim()) && !/[\r\n]/.test(mail.subject) && mail.subject.length <= 200 && mail.text.length <= 10_000)
+  const canSend = computed(() => !busy.value && !loading.value && !deliveryUnknown.value && mail.documents.length > 0 && selectedDocuments.value.length === mail.documents.length && mail.documents.length <= 10 && mail.recipients.length > 0 && mail.recipients.length <= 20 && Boolean(mail.subject.trim()) && Boolean(mail.text.trim()) && !/[\r\n]/.test(mail.subject) && mail.subject.length <= 200 && mail.text.length <= 10_000)
   // Retain inactive businesses too: historical certificates remain accessible.
   const businesses = computed(() => Object.values(clients.clientsById).filter((client) => client.tipoCliente === 'NEGOCIO').sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')))
   const sites = computed(() => clients.sitesForClient(clientId.value).filter((site) => site.tipoSede === 'NEGOCIO'))
@@ -97,7 +98,7 @@ export function useCertificateGeneration() {
       const loaded = await service.getCertificateContext(id)
       if (!alive || current !== request) return
       context.value = loaded
-      Object.assign(mail, defaultCertificateMail(loaded), { documents: loaded.documents.map((document) => document.id), recipients: [...loaded.recipients] })
+      Object.assign(mail, defaultCertificateMail(loaded), { documents: loaded.documents.filter(document => document.pdfAvailable !== false).map(document => document.id), recipients: [...loaded.recipients] })
     } catch (error) { if (alive && current === request) loadError.value = certificateError(error) }
     finally { if (alive && current === request) loading.value = false }
   }

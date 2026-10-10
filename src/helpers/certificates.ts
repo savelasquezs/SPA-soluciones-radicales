@@ -17,7 +17,7 @@ export function generationSelection(context: CertificateContext, type: Certifica
     const previous = context.documents.find((document) => document.type === type && document.vehicleId === id)
     previousPaths[id ?? 'ESTABLECIMIENTO'] = previous?.storagePath ?? null
   }
-  return { previousPaths, replacing: Object.values(previousPaths).filter(Boolean).length }
+  return { previousPaths, replacing: targets.filter(id => context.documents.some(document => document.type === type && document.vehicleId === id && document.pdfAvailable !== false)).length }
 }
 export function defaultCertificateMail(context: CertificateContext) {
   return {

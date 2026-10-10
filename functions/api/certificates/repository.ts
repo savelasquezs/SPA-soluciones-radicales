@@ -66,7 +66,10 @@ export async function loadCertificateContext(client: PoolClient, serviceId: stri
   )
   const documents = await client.query<CertificateDocument>(
     `select c.id, c.tipo_certificado as type, c.vehiculo_id as "vehicleId", coalesce(v.placa, 'Establecimiento') as label,
-     c.pdf_storage_path as "storagePath", c.fecha_expedicion::text as "issuedOn", c.fecha_vencimiento::text as "expiresOn"
+     c.pdf_storage_path as "storagePath",
+      not exists(select 1 from private.storage_retention_deleted d
+        where d.bucket='sr-generated-documents' and d.storage_path=c.pdf_storage_path) as "pdfAvailable",
+      c.fecha_expedicion::text as "issuedOn", c.fecha_vencimiento::text as "expiresOn"
      from public.certificados c left join public.vehiculos v on v.id = c.vehiculo_id where c.servicio_id = $1`, [serviceId],
   )
   const products = await client.query<Record<string, string>>(
@@ -123,6 +126,9 @@ export function certificateSnapshot(loaded: LoadedCertificateContext, type: Cert
   const issuedOn = previous?.issuedOn ?? loaded.source.issuedOn!
   // Regeneration does not extend validity. Preserve the original certificate's dates.
   const expiresOn = previous?.expiresOn ?? addCalendarMonths(issuedOn, type === 'ESTABLECIMIENTO' ? loaded.source.businessMonths! : loaded.source.vehicleMonths!)
+  if (previous && !loaded.historicalData[previous.id]) {
+    throw new ApiError(422, 'No existen datos históricos suficientes para regenerar este certificado de forma segura.')
+  }
   const data: CertificateData = previous && loaded.historicalData[previous.id] ? { ...loaded.historicalData[previous.id]!, fecha_expedicion: displayDate(issuedOn), fecha_vencimiento: displayDate(expiresOn) } : {
     negocio_nombre: loaded.source.clientName, nit: loaded.source.nit, sede_nombre: loaded.source.siteName,
     sede_direccion: loaded.source.address, tecnico_nombre: loaded.source.technicianName, solicitud: loaded.source.solicitud,
