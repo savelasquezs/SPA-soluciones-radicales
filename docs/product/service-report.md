@@ -5,7 +5,7 @@
 El Administrador abre **Servicios → Historial → Informe** en un servicio Principal finalizado y firmado y selecciona **Enviar informe**.
 
 - Puede marcar cualquier combinación de los correos registrados en cliente y sede (incluido contacto principal), añadir otros correos con validación y enviar a un máximo de 20 destinatarios únicos.
-- Puede adjuntar opcionalmente certificados PDF **generados y todavía disponibles** (máximo 10 archivos, 15 MB). Los vencidos se regeneran por separado, utilizando el motor actual de certificados.
+- Puede adjuntar opcionalmente certificados PDF **generados y todavía disponibles** (máximo 10 archivos, 15 MB). Los vencidos se regeneran por separado con el generador actual.
 - La aplicación envía un correo mediante Gmail empresarial con un enlace al informe y los certificados seleccionados. El envío es idempotente, auditable y usa loading/toast/errores. Los destinatarios adicionales no modifican el catálogo del cliente.
 - En el mismo diálogo se indica cuántos enlaces siguen vigentes y pueden revocarse con confirmación.
 - La edición del **asunto y mensaje** está dentro de una sección **desplegable cerrada inicialmente** para que el modal no crezca innecesariamente en móvil ni escritorio. Se pueden usar los textos predefinidos o editarlos antes de enviar. El editor `EmailComposerFields` es reutilizable para contactos del cliente y la futura finalización por técnicos; esa integración no se habilita en esta entrega.
@@ -24,6 +24,17 @@ El correo incluye un enlace de solo lectura a /informe/consulta/:token, vigente 
 - Gmail usa el outbox idempotente existente con un scope independiente. Cuando la entrega es incierta se avisa revisar Enviados antes de repetirla.
 - No se crea PDF de informe en Neon, Google Drive ni R2; los certificados mantienen su pipeline.
 
+## Hallazgos acumulados y seguimiento
+
+El informe describe la situación **al finalizar el servicio consultado**, no el estado actual de la sede: muestra hallazgos abiertos en ese momento (aunque provengan de visitas anteriores), nuevas aperturas y hallazgos cerrados durante esa visita. Un informe anterior no incorpora seguimientos posteriores ni cambia de estado por cierres futuros.
+
+- Los pendientes de visitas anteriores se priorizan y se identifican como **Pendiente anterior**, con fecha y servicio de apertura, responsable, recomendación, número de visitas desde su detección e historial cronológico de las revisiones registradas hasta esa visita.
+- Cada revisión de `hallazgo_seguimientos` conserva su resultado (`SIN_CAMBIOS`, `EN_PROCESO`, `CERRADO`), observación y fotografías, sin copiar hallazgos ni crear estados nuevos. Los cierres legados conservan la información histórica disponible.
+- Se presentan por separado las evidencias de apertura y las de cada seguimiento. La ausencia de una fotografía, incluido su vencimiento por retención, no oculta la descripción ni el historial estructurado.
+- Los datos se obtienen de `hallazgos`, `hallazgo_seguimientos` y `servicios` existentes. Sin nuevas migraciones ni escrituras en la ejecución técnica.
+- Las fotos de servicios anteriores se autorizan solo si el informe autorizado incluye la referencia en un hallazgo de la sede. El backend comprueba la referencia contra el informe y firma la ruta con el ID del **servicio propietario del archivo**; en el enlace público se utiliza exclusivamente un identificador opaco, nunca la ruta privada de R2.
+- Los encabezados del resumen reflejan la cantidad **pendiente al finalizar** y no confunden hallazgos heredados con nuevos del servicio.
+
 ## Tendencias en el informe y el PDF
 
 La sección **Evolución histórica de la sede** utiliza únicamente **dos gráficos SVG vectoriales**, sin Chart.js ni dependencias adicionales:
@@ -33,7 +44,7 @@ La sección **Evolución histórica de la sede** utiliza únicamente **dos gráf
 
 Ambos muestran hasta las seis últimas visitas finalizadas de tipo Principal de la misma sede, fechas reales, valores visibles y variaciones numéricas frente a la visita inmediatamente anterior. Son interactivos en la web: al mover el mouse aparece un detalle con fecha, solicitud, valor y variación; admiten pulsación táctil y foco del teclado. La impresión A4 conserva ejes, fechas, puntos, barras y valores **sin depender del tooltip**. Si existe una sola visita, se muestra el valor sin afirmar ninguna tendencia.
 
-**Interpretación:** la reducción de capturas no demuestra por sí sola menor presencia de plagas si cambia la cantidad o ubicación de los puestos monitoreados. No se inventan proyecciones.
+**Interpretación:** bajo los gráficos se presenta una explicación automática, calculada con las diferencias ya disponibles entre la visita actual y la inmediatamente anterior. Las variaciones de cumplimiento se expresan en puntos porcentuales y las de capturas en individuos, sin afirmar mejora o disminución de infestación a partir de capturas solamente. Sin una visita comparable no se inventan tendencias ni proyecciones.
 
 ## Envío opcional al finalizar el servicio técnico
 
@@ -71,3 +82,9 @@ Se conserva el campo productos.ficha_tecnica_storage_path y la carga original de
 - La API valida la asignación del técnico y la pertenencia del producto al servicio. El informe exige un servicio finalizado/firmado y el enlace del cliente exige token válido, no vencido ni revocado. El público no recibe rutas privadas de R2 ni IDs de producto.
 - En el informe público se usa un índice de producto vinculado al servicio. El PDF A4 oculta el botón de consulta (la URL firmada es temporal). La ficha se almacena y edita únicamente en el catálogo.
 
+
+## Firmas e informes históricos
+
+- Las imágenes de firma del cliente y del técnico se conservan durante un año desde la finalización del servicio. Los nombres y fechas permanecen registrados en PostgreSQL.
+- Cuando la imagen se ha eliminado y auditado, el informe muestra «Firma de [nombre] (vencida)» tanto en el área administrativa como en el enlace público. Sigue siendo imprimible.
+- Los certificados PDF opcionales se conservan un mes desde su generación o última regeneración. Se vuelven a generar mediante el motor existente y la plantilla vigente; no se genera un segundo documento por el simple hecho de enviar el informe.
