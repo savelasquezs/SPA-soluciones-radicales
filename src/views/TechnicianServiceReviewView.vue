@@ -161,9 +161,9 @@ async function finish(): Promise<void> {
 </template>
 
 <style scoped>
-.review-list { display:grid; gap:0.7rem; border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--surface); padding:1rem; }
+.review-list { display:grid; gap:.4rem; border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--surface); padding:.7rem; }
 h2 { margin:0; font-size:1rem; }
-.review-list button { display:flex; min-height:52px; align-items:center; justify-content:space-between; gap:0.75rem; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); padding:0.75rem; color:var(--text); text-align:left; cursor:pointer; }
+.review-list button { display:flex; min-height:44px; align-items:center; justify-content:space-between; gap:.55rem; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); padding:.42rem .7rem; color:var(--text); text-align:left; cursor:pointer; }
 .review-list__name { display:grid; min-width:0; gap:.2rem; }
 .review-list__name strong { font-size:.88rem; }
 .review-list__name small { font-size:.75rem; color:var(--text-secondary); }
