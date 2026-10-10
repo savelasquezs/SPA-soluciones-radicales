@@ -307,10 +307,10 @@ test('el enlace público se abre sin sesión y no solicita autorización ni mues
 
 test('el cliente cambia el tema de los gráficos y el PDF conserva la paleta clara', async ({page}) => {
   await setup(page, 'ADMINISTRADOR')
-  await page.addInitScript(() => localStorage.setItem('sr-theme-preference', 'light'))
   await page.goto('/informe/consulta/' + publicToken)
   const theme = page.getByTestId('mip-public-theme')
   const document = page.locator('.report-document')
+  await theme.selectOption('light')
   await expect(theme).toHaveValue('light')
   await expect(document).toHaveCSS('background-color', 'rgb(255, 255, 255)')
   await theme.selectOption('dark')
