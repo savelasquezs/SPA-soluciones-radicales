@@ -270,7 +270,7 @@
   }
   .svc-filters--compact .svc-filter-extra select {
     min-height:44px;
-    font-size:0.875rem;
+    font-size:1rem;
   }
   .svc-filters--compact .svc-filter-clear {
     flex:0 0 auto;
