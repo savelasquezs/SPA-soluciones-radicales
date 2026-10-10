@@ -76,8 +76,8 @@ describe('Retención de firmas y certificados', () => {
     expect(mocks.signatureDelete).toHaveBeenCalledWith(signature.storage_path, SERVICE)
     expect(mocks.certificateDelete).toHaveBeenCalledWith(pdf.storage_path)
     expect(mocks.photoDelete).not.toHaveBeenCalled()
-    expect(mocks.clientQuery.mock.calls.filter(([sql]: [string]) =>
-      sql.includes('insert into private.storage_retention_deleted'))).toHaveLength(2)
+    expect(mocks.clientQuery.mock.calls.filter(call =>
+      String(call[0]).includes('insert into private.storage_retention_deleted'))).toHaveLength(2)
   })
   it('si la referencia ya no cumple la condición de expiración, no borra nada', async () => {
     mocks.clientQuery.mockImplementation(async (sql: string) => ({
