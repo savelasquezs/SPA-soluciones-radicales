@@ -9,6 +9,8 @@ import EvidenceLightbox from '@/components/base/EvidenceLightbox.vue'
 import ReportEvidence from '@/components/domain/services/ReportEvidence.vue'
 import SendReportDialog from '@/components/domain/services/SendReportDialog.vue'
 import ServiceTrendCharts from '@/components/domain/services/ServiceTrendCharts.vue'
+import ServiceSpeciesCharts from '@/components/domain/services/ServiceSpeciesCharts.vue'
+import { buildCapturePointSummary } from '@/helpers/serviceSpecies'
 import {
   areaCompliance, bogotaDate, bogotaTime, elapsedMinutes,
   reportEvidence, reportMetrics, scoreText, type ReportEvidenceState,
@@ -42,6 +44,7 @@ onBeforeUnmount(() => { version++ })
 
 const images = computed(() => report.value ? reportEvidence(report.value) : [])
 const metrics = computed(() => report.value ? reportMetrics(report.value) : null)
+const captureSummary = computed(() => report.value ? buildCapturePointSummary(report.value.areas) : null)
 const findings = computed(() => (report.value?.areas.flatMap(area =>
   area.hallazgos.map(finding => ({ ...finding, area: area.nombre }))) ?? []).sort((a, b) => {
   const priority = (finding: {estado:string;anterior:boolean}) =>
@@ -301,22 +304,36 @@ watch(() => [serviceId.value, publicToken.value], () => { void loadReport() }, {
 
         <section class="report-document__section" aria-labelledby="report-points-title">
           <header class="report-document__heading"><span class="report-document__number">04</span><h2 id="report-points-title">Puestos de monitoreo y capturas</h2></header>
-          <p v-if="!metrics.monitoringPoints" class="report-document__empty">No se registraron puestos de monitoreo en este servicio.</p>
-          <template v-for="area in report.areas" :key="area.id">
-            <div v-if="area.puntos.length" class="report-area">
-              <div class="report-area__head"><h3>{{ area.nombre }}</h3><span>{{ area.puntos.length }} puesto(s)</span></div>
-              <div v-for="(point,index) in area.puntos" :key="index" class="report-point">
-                <div class="report-point__head"><h3>Puesto {{ point.numero }}</h3><span>Estado: {{ point.estado || 'Sin revisión' }}</span></div>
-                <div class="report-point__details">
-                  <span><b>Trampa:</b> {{ point.tipo }}</span><span><b>Ubicación:</b> {{ point.ubicacion || '—' }}</span>
-                  <span><b>Capturas:</b> {{ point.capturas.length ? point.capturas.map(c => c.plagaNombreSnapshot + ': ' + c.cantidad).join(', ') : 'Sin capturas' }}</span>
-                </div>
-                <p v-if="point.observaciones" class="report-point__notes">{{ point.observaciones }}</p>
-                <div v-if="point.foto" class="report-photo-row report-photo-row--wide">
-                  <ReportEvidence :path="point.foto" :caption="'Revisión · Puesto ' + point.numero" :state="photoState(point.foto)" :url="urls[point.foto]" @open="openImage" @failed="imageError" />
+          <template v-if="captureSummary">
+            <p v-if="!metrics.monitoringPoints" class="report-document__empty">No se registraron puestos de monitoreo en este servicio.</p>
+            <template v-else>
+              <p class="report-document__section-intro">
+                {{ captureSummary.total }} individuo(s) registrados · {{ captureSummary.reviewed }} puesto(s) revisado(s) ·
+                {{ captureSummary.captured }} con capturas · {{ captureSummary.withoutCaptures }} sin capturas.
+                <span v-if="captureSummary.withoutReview"> {{ captureSummary.withoutReview }} puesto(s) sin revisión registrada.</span>
+              </p>
+              <table v-if="captureSummary.rows.length" class="report-document__table report-captures-table" data-testid="mip-captures-detail">
+                <thead><tr><th scope="col">Puesto / Área</th><th scope="col">Trampa / Ubicación</th><th scope="col">Individuos encontrados</th></tr></thead>
+                <tbody>
+                  <tr v-for="(point,index) in captureSummary.rows" :key="point.area + ':' + point.numero + ':' + index">
+                    <td><strong>{{ point.numero }}</strong><small>{{ point.area }}</small></td>
+                    <td>{{ point.tipo }}<small>{{ point.ubicacion || 'Sin ubicación indicada' }}</small></td>
+                    <td>{{ point.capturas.filter(c=>c.cantidad>0).map(c=>c.cantidad + ' ' + c.plagaNombreSnapshot).join(' · ') }}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p v-else class="report-document__empty">No se registraron individuos capturados en los puestos revisados.</p>
+              <div v-if="captureSummary.attention.length" class="report-captures-notes">
+                <h3>Observaciones, estados especiales y evidencias</h3>
+                <div v-for="(point,index) in captureSummary.attention" :key="point.area + ':' + point.numero + ':' + index" class="report-point">
+                  <div class="report-point__head"><strong>Puesto {{ point.numero }} · {{ point.area }}</strong><span>Estado: {{ point.estado || 'Sin revisión' }}</span></div>
+                  <p class="report-point__notes">{{ point.tipo }} · {{ point.ubicacion || 'Sin ubicación indicada' }}<span v-if="point.observaciones"> · {{ point.observaciones }}</span></p>
+                  <div v-if="point.foto" class="report-photo-row report-photo-row--wide">
+                    <ReportEvidence :path="point.foto" :caption="'Revisión · Puesto ' + point.numero" :state="photoState(point.foto)" :url="urls[point.foto]" @open="openImage" @failed="imageError" />
+                  </div>
                 </div>
               </div>
-            </div>
+            </template>
           </template>
         </section>
 
@@ -362,6 +379,7 @@ watch(() => [serviceId.value, publicToken.value], () => { void loadReport() }, {
           <header class="report-document__heading"><span class="report-document__number">06</span><h2 id="report-history-title">Evolución histórica de la sede</h2></header>
           <p class="report-document__section-intro">Hasta seis visitas finalizadas de esta sede, ordenadas por fecha. Pasa el mouse o toca cada punto o barra para consultar sus valores y la variación frente a la visita anterior.</p>
           <ServiceTrendCharts :visits="report.historico" />
+          <ServiceSpeciesCharts :visits="report.historico" />
         </section>
 
         <section class="report-document__section" aria-labelledby="report-signatures-title">
