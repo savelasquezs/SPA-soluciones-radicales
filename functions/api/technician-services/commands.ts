@@ -429,23 +429,31 @@ export async function saveTechnicianFindingStatus(
   if (input.estado === 'CERRADO' && !evidenceStoragePaths.length) {
     throw new ApiError(422, 'Adjunta al menos una evidencia para cerrar el Hallazgo.', 'VALIDATION')
   }
-  if (input.estado === 'EN_PROCESO') {
-    if (current.estado !== 'ABIERTO') throw new ApiError(409, 'El Hallazgo ya está en seguimiento.', 'FINDING_ALREADY_IN_PROGRESS', { remote: current })
+  // Una sola evaluación por hallazgo y visita; la revisión no altera el estado cuando sigue igual.
+  const reviewed = await client.query('select 1 from public.hallazgo_seguimientos where hallazgo_id=$1 and servicio_id=$2', [findingId, serviceId])
+  if (reviewed.rowCount) throw new ApiError(409, 'Este Hallazgo ya fue evaluado en el servicio.', 'FINDING_ALREADY_REVIEWED', { remote: { ...current, resultadoSeguimiento: input.estado } })
+  if (input.estado !== 'CERRADO' && evidenceStoragePaths.length) {
+    throw new ApiError(422, 'La evidencia de cierre solo corresponde a un Hallazgo cerrado.', 'VALIDATION')
+  }
+  if (input.estado === 'EN_PROCESO' && current.estado === 'ABIERTO') {
     await client.query("update public.hallazgos set estado='EN_PROCESO' where id=$1", [findingId])
-  } else {
+  } else if (input.estado === 'CERRADO') {
     await client.query(`update public.hallazgos set estado='CERRADO',servicio_cierre_id=$2,fecha_cierre=now(),
       evidencias_cierre_storage_paths=$3::jsonb,observacion_cierre=$4 where id=$1`,
     [findingId, serviceId, JSON.stringify(evidenceStoragePaths), input.observacionCierre.trim() || null])
   }
+  await client.query(`insert into public.hallazgo_seguimientos(hallazgo_id,servicio_id,resultado,estado_anterior,tecnico_id)
+    values($1,$2,$3,$4,$5)`, [findingId, serviceId, input.estado, current.estado, userId])
   const finding = await getFinding(client, findingId)
   if (!finding) throw new ApiError(500, 'No fue posible recuperar el Hallazgo actualizado.', 'UNEXPECTED')
-  await audit(client, userId, input.estado === 'CERRADO' ? 'SERVICIO_HALLAZGO_CERRADO' : 'SERVICIO_HALLAZGO_EN_PROCESO', serviceId, {
+  await audit(client, userId, input.estado === 'SIN_CAMBIOS' ? 'SERVICIO_HALLAZGO_SIN_CAMBIOS'
+    : input.estado === 'CERRADO' ? 'SERVICIO_HALLAZGO_CERRADO' : 'SERVICIO_HALLAZGO_EN_PROCESO', serviceId, {
     areaId,
     findingId,
     evidenceCount: evidenceStoragePaths.length,
-    previousState: context.finding.estado,
+    previousState: current.estado,
   })
-  return { finding }
+  return { finding: { ...finding, resultadoSeguimiento: input.estado } }
 }
 
 export async function authorizeTechnicianDeviceChange(
@@ -676,6 +684,17 @@ export async function finalizeTechnicianService(
             or (r.estado_observado<>sd.estado_anterior_snapshot and r.estado_observado in ('DANADO','FUERA_DE_USO') and r.foto_storage_path is null))))
     )`, [serviceId])).rows[0]?.count ?? 0
   if (incomplete) throw new ApiError(422, 'Completa todas las Áreas y dispositivos antes de finalizar.', 'SERVICE_INCOMPLETE')
+  const missingFollowups = (await client.query<{ count: number }>(`select count(*)::integer as count
+    from public.servicio_areas sa
+    join public.servicios current_service on current_service.id=sa.servicio_id
+    join public.hallazgos h on h.sede_id=current_service.sede_id and h.area_id=sa.area_id
+    join public.servicios opening_service on opening_service.id=h.servicio_apertura_id
+    where sa.servicio_id=$1 and not sa.sin_acceso
+      and opening_service.inicio_programado<current_service.inicio_programado
+      and (h.estado in ('ABIERTO','EN_PROCESO') or h.servicio_cierre_id=$1)
+      and not exists(select 1 from public.hallazgo_seguimientos seg
+        where seg.hallazgo_id=h.id and seg.servicio_id=$1)`, [serviceId])).rows[0]?.count ?? 0
+  if (missingFollowups) throw new ApiError(422, 'Evalúa los Hallazgos pendientes antes de finalizar.', 'SERVICE_FINDINGS_INCOMPLETE')
   const normalizedClientName = clientName.trim()
   if (!normalizedClientName || normalizedClientName.length > 200) throw new ApiError(422, 'Indica el nombre de quien firma por el cliente.', 'VALIDATION')
   await client.query(`update public.servicios set estado='FINALIZADO',fin_real=now(),

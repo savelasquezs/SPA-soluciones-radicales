@@ -86,7 +86,9 @@ async function findings(client: PoolClient, serviceId: string): Promise<Array<Te
     'id',h.id,'servicioAperturaId',h.servicio_apertura_id,'fechaApertura',h.fecha_apertura,
     'descripcion',h.descripcion,'recomendacionAccion',h.recomendacion_accion,
     'evidenciasAperturaStoragePaths',coalesce(h.evidencias_apertura_storage_paths,'[]'::jsonb),
-    'estado',h.estado,'responsableNombre',h.responsable_nombre,'responsableCorreo',h.responsable_correo,
+    'estado',h.estado,'resultadoSeguimiento',(select seg.resultado from public.hallazgo_seguimientos seg
+      where seg.hallazgo_id=h.id and seg.servicio_id=$1),
+    'responsableNombre',h.responsable_nombre,'responsableCorreo',h.responsable_correo,
     'servicioCierreId',h.servicio_cierre_id,'fechaCierre',h.fecha_cierre,
     'evidenciasCierreStoragePaths',coalesce(h.evidencias_cierre_storage_paths,'[]'::jsonb),
     'observacionCierre',h.observacion_cierre,'version',h.version

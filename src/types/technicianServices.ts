@@ -4,6 +4,7 @@ import type { PestGroup } from './mipCatalogs'
 export type DeviceState = 'ACTIVO' | 'FUERA_DE_USO' | 'DANADO'
 export type MipEvaluation = 'C' | 'CP' | 'NC' | 'NA'
 export type FindingState = 'ABIERTO' | 'EN_PROCESO' | 'CERRADO'
+export type FindingReview = 'SIN_CAMBIOS' | 'EN_PROCESO' | 'CERRADO'
 
 export interface TechnicianServiceSummary {
   id: string
@@ -122,6 +123,8 @@ export interface TechnicianFinding {
   evidenciasAperturaStoragePaths: string[]
   evidenciasAperturaLocalIds?: string[]
   estado: FindingState
+  /** Resultado de la revisión en el servicio actual, no el estado histórico del hallazgo. */
+  resultadoSeguimiento?: FindingReview | null
   responsableNombre: string
   responsableCorreo: string | null
   servicioCierreId: string | null
@@ -138,7 +141,7 @@ export interface TechnicianFindingCreateInput {
 }
 
 export interface TechnicianFindingStatusInput {
-  estado: Extract<FindingState, 'EN_PROCESO' | 'CERRADO'>
+  estado: FindingReview
   observacionCierre: string
 }
 

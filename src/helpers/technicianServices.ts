@@ -40,11 +40,17 @@ export function orderedTechnicianAreas(areas: TechnicianArea[]): TechnicianArea[
   return [...areas].sort((left, right) => left.posicionRecorrido - right.posicionRecorrido || left.id.localeCompare(right.id))
 }
 
-export function technicianAreaResolved(area: TechnicianArea): boolean {
+export function technicianFindingPending(finding: TechnicianArea['hallazgos'][number], serviceId: string): boolean {
+  return finding.servicioAperturaId !== serviceId && finding.estado !== 'CERRADO'
+    && finding.servicioCierreId !== serviceId && !finding.resultadoSeguimiento
+}
+
+export function technicianAreaResolved(area: TechnicianArea, serviceId?: string): boolean {
   if (area.sinAcceso) return Boolean(area.sinAccesoDescripcion?.trim() && (area.sinAccesoFotoStoragePath || area.sinAccesoFotoLocalId))
   return area.criterios.length > 0
     && area.criterios.every(criterion => criterion.evaluacion)
     && area.dispositivos.every(device => device.revisado)
+    && (!serviceId || area.hallazgos.every(finding => !technicianFindingPending(finding, serviceId)))
 }
 
 export function technicianDevicePhotoRequired(previous: DeviceState, observed: DeviceState): boolean {
