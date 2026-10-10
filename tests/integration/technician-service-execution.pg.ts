@@ -190,6 +190,8 @@ describe('technician service execution · real PostgreSQL', () => {
     const refreshed = await transaction(client => getTechnicianPackage(client, value.technician, value.service))
     expect(refreshed.areas.find(item => item.areaId === value.internalArea)?.hallazgos.find(item => item.id === findingId)?.resultadoSeguimiento).toBe('SIN_CAMBIOS')
     expect((await finish()).package.service.estado).toBe('FINALIZADO')
+    const retention = await pool.query('select category from private.storage_retention_candidates where storage_path=$1', [photoPath])
+    expect(retention.rows).toEqual([{ category: 'FINDING_FOLLOWUP' }])
   })
 
   it('uses all catalogue methods without requiring per-visit dose or method', async () => {
