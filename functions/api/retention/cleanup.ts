@@ -1,11 +1,11 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { pool, transaction } from '../db'
-import { deleteRetainedServicePhoto } from '../r2'
+import { deleteCertificateObject, deleteRetainedServicePhoto, deleteRetainedServiceSignature } from '../r2'
 import type { PoolClient } from 'pg'
 
 type RetentionCandidate = {
-  bucket: 'sr-service-media'
-  category: 'DEVICE_REVIEW' | 'AREA_NO_ACCESS' | 'CRITERION' | 'FINDING_OPENING' | 'FINDING_CLOSURE' | 'FINDING_FOLLOWUP'
+  bucket: 'sr-service-media' | 'sr-generated-documents'
+  category: 'DEVICE_REVIEW' | 'AREA_NO_ACCESS' | 'CRITERION' | 'FINDING_OPENING' | 'FINDING_CLOSURE' | 'FINDING_FOLLOWUP' | 'SERVICE_SIGNATURE' | 'CERTIFICATE_PDF'
   source_id: string
   storage_path: string
   expires_at: string
@@ -35,8 +35,12 @@ export async function runRetentionBatch(mode: 'dry-run' | 'delete'): Promise<{
     `select bucket, category, source_id, storage_path, expires_at
        from private.storage_retention_candidates
        where expires_at <= now()
+         and ($2::text = 'dry-run' or category not in ('SERVICE_SIGNATURE','CERTIFICATE_PDF')
+           or exists(select 1 from private.storage_retention_controls setting
+             where setting.category = private.storage_retention_candidates.category
+               and setting.delete_enabled))
        order by expires_at, bucket, storage_path limit $1`,
-    [LIMIT],
+    [LIMIT, mode],
   )
   const preview: Record<string, number> = {}
   for (const item of rows) preview[item.category] = (preview[item.category] ?? 0) + 1
@@ -68,7 +72,11 @@ export async function runRetentionBatch(mode: 'dry-run' | 'delete'): Promise<{
 
 async function lockSourceRow(client: PoolClient, item: RetentionCandidate): Promise<void> {
   // A row lock on Hallazgo serializes deletion against CERRADO transitions.
-  if (item.category === 'FINDING_OPENING' || item.category === 'FINDING_CLOSURE' || item.category === 'FINDING_FOLLOWUP') {
+  if (item.category === 'SERVICE_SIGNATURE') {
+    await client.query('select id from public.servicios where id=$1 for update', [item.source_id])
+  } else if (item.category === 'CERTIFICATE_PDF') {
+    await client.query('select id from public.certificados where id=$1 for update', [item.source_id])
+  } else if (item.category === 'FINDING_OPENING' || item.category === 'FINDING_CLOSURE' || item.category === 'FINDING_FOLLOWUP') {
     await client.query('select id from public.hallazgos where id=$1 for update', [item.source_id])
   } else {
     const relation = item.category === 'DEVICE_REVIEW' ? 'revisiones_dispositivos'
@@ -94,8 +102,20 @@ async function deleteEligibleObject(item: RetentionCandidate): Promise<boolean> 
     )
     const current = refreshed.rows[0]
     if (!current) return false
-    if (item.bucket !== 'sr-service-media') throw new Error('Categoría de retención no autorizada')
-    await deleteRetainedServicePhoto(item.storage_path)
+    if (['CERTIFICATE_PDF','SERVICE_SIGNATURE'].includes(current.category)) {
+      const control = await client.query<{ delete_enabled: boolean }>(
+        'select delete_enabled from private.storage_retention_controls where category=$1', [current.category])
+      if (control.rows[0]?.delete_enabled !== true) return false
+    }
+    if (item.category === 'CERTIFICATE_PDF' && item.bucket === 'sr-generated-documents') {
+      await deleteCertificateObject(current.storage_path)
+    } else if (item.category === 'SERVICE_SIGNATURE' && item.bucket === 'sr-service-media') {
+      await deleteRetainedServiceSignature(current.storage_path, current.source_id)
+    } else if (item.bucket === 'sr-service-media' && !['CERTIFICATE_PDF','SERVICE_SIGNATURE'].includes(item.category)) {
+      await deleteRetainedServicePhoto(current.storage_path)
+    } else {
+      throw new Error('Categoría de retención no autorizada')
+    }
     await client.query(
       `insert into private.storage_retention_deleted (bucket,storage_path,category,source_id,expired_at)
        values ($1,$2,$3,$4,$5) on conflict(bucket,storage_path) do nothing`,

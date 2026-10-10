@@ -283,6 +283,17 @@ export async function deleteCertificateObject(storagePath: string): Promise<void
   if (!response.ok && response.status !== 404) throw new ApiError(502, 'No fue posible limpiar el documento temporal')
 }
 
+/** Retención de imágenes de firmas de servicios finalizados; nunca permite borrar evidencias. */
+export async function deleteRetainedServiceSignature(storagePath: string, serviceId: string): Promise<void> {
+  if (!/^[0-9a-f-]{36}$/i.test(serviceId)
+    || !/^services\/[0-9a-f-]{36}\/signatures\/(?:client|technician)\/[^/]+\.(?:png|jpe?g|webp)$/i.test(storagePath)
+    || !storagePath.startsWith(`services/${serviceId}/signatures/`)
+    || storagePath.includes('..')) {
+    throw new ApiError(422, 'Ruta de firma no autorizada para retención')
+  }
+  await deleteServiceMediaObject(storagePath)
+}
+
 /**
  * Vencimientos aprobados: SOLO fotografías operativas de servicios.
  * Nunca admitir firmas ni otros objetos de la misma carpeta services/.
