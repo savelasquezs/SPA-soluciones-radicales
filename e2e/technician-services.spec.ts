@@ -86,7 +86,7 @@ const servicePackage = (state: TechnicianServiceSummary['estado'] = 'PROGRAMADO'
   signatures: { technicianStoragePath: null, technicianUserId: null, clientStoragePath: null, clientName: null, clientSignedAt: null },
 })
 
-async function setup(page: Page, withPriorFinding = false, failFirstPackage = false, initialState: TechnicianServiceSummary['estado'] = 'PROGRAMADO') {
+async function setup(page: Page, withPriorFinding = false, failFirstPackage: boolean | number = false, initialState: TechnicianServiceSummary['estado'] = 'PROGRAMADO') {
   let current = servicePackage(initialState, withPriorFinding)
   let packageReads = 0
   const starts: Array<Record<string, unknown>> = []
@@ -130,7 +130,7 @@ async function setup(page: Page, withPriorFinding = false, failFirstPackage = fa
     if (path === '/api/technician/services' && request.method() === 'GET') { await json(route, [current.service]); return }
     if (path === `/api/technician/services/${ids.service}/package`) {
       packageReads++
-      if (failFirstPackage && packageReads === 1) await json(route, { error: 'Falla sintética de descarga' }, 503)
+      if (packageReads <= Number(failFirstPackage)) await json(route, { error: 'Falla sintética de descarga' }, 503)
       else await json(route, current)
       return
     }
@@ -255,15 +255,25 @@ test('criterion controls remain touchable in one row at 320 px and the list scal
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 })
 
-test('automatic preparation fails without blocking the list and offers one retry', async ({ page }) => {
-  const api = await setup(page, false, true)
+test('automatic preparation offers manual retry after both automatic attempts fail', async ({ page }) => {
+  const api = await setup(page, false, 2)
   await page.goto('/servicios')
   await expect(page.getByRole('heading', { name: 'Casa Verde' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Reintentar descarga' })).toBeVisible()
-  expect(api.packageReads).toBe(1)
+  expect(api.packageReads).toBe(2)
   await page.getByRole('button', { name: 'Reintentar descarga' }).click()
   await expect(page.locator('[aria-label="Preparado en este celular"]')).toBeVisible()
+  expect(api.packageReads).toBe(3)
+})
+
+test('automatic preparation recovers a transient read failure without starting a service', async ({ page }) => {
+  const api = await setup(page, false, true)
+  await page.goto('/servicios')
+  await expect(page.getByRole('heading', { name: 'Casa Verde' })).toBeVisible()
+  await expect(page.locator('[aria-label="Preparado en este celular"]')).toBeVisible()
   expect(api.packageReads).toBe(2)
+  await expect(page.getByRole('button', { name: 'Reintentar descarga' })).toHaveCount(0)
+  expect(api.starts).toHaveLength(0)
 })
 
 test('an offline route order survives reload and stays queued on the same phone', async ({ page }) => {
