@@ -115,7 +115,7 @@ test('las tendencias interactivas muestran cifras y variación por mouse, teclad
   await expect(capturesChart).toBeVisible()
   await expect(page.getByTestId('mip-compliance-delta')).toHaveText('+5 pp')
   await expect(page.getByTestId('mip-captures-delta')).toHaveText('-1 captura')
-  await expect(page.getByTestId('mip-trend-summary')).toContainText('Se registraron 1 capturas menos')
+  await expect(page.getByTestId('mip-trend-summary')).toContainText('Se registraron 1 captura menos')
   await page.getByTestId('mip-compliance-visit-2').hover()
   await expect(page.getByTestId('mip-compliance-tooltip')).toContainText('80 %')
   await expect(page.getByTestId('mip-compliance-tooltip')).toContainText('+5 pp')
