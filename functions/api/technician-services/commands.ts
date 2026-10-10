@@ -308,16 +308,29 @@ type TechnicianFindingContext = {
   finding: TechnicianFinding
 }
 
-async function getFinding(client: PoolClient, findingId: string): Promise<TechnicianFinding | null> {
+async function getFinding(client: PoolClient, findingId: string, serviceId: string | null = null): Promise<TechnicianFinding | null> {
   const row = (await client.query<{ record: TechnicianFinding }>(`select jsonb_build_object(
     'id',h.id,'servicioAperturaId',h.servicio_apertura_id,'fechaApertura',h.fecha_apertura,
     'descripcion',h.descripcion,'recomendacionAccion',h.recomendacion_accion,
     'evidenciasAperturaStoragePaths',coalesce(h.evidencias_apertura_storage_paths,'[]'::jsonb),
-    'estado',h.estado,'responsableNombre',h.responsable_nombre,'responsableCorreo',h.responsable_correo,
+    'estado',h.estado,
+    'resultadoSeguimiento',(select seg.resultado from public.hallazgo_seguimientos seg
+      where seg.hallazgo_id=h.id and seg.servicio_id=$2::uuid),
+    'observacionSeguimiento',(select seg.observacion from public.hallazgo_seguimientos seg
+      where seg.hallazgo_id=h.id and seg.servicio_id=$2::uuid),
+    'evidenciasSeguimientoStoragePaths',(select seg.evidencias_storage_paths from public.hallazgo_seguimientos seg
+      where seg.hallazgo_id=h.id and seg.servicio_id=$2::uuid),
+    'historialSeguimientos',(select coalesce(jsonb_agg(jsonb_build_object(
+      'id',seg.id,'servicioId',visit.id,'solicitud',visit.solicitud,'fecha',seg.registrado_at,
+      'resultado',seg.resultado,'observacion',seg.observacion,
+      'evidenciasStoragePaths',seg.evidencias_storage_paths) order by seg.registrado_at desc),'[]'::jsonb)
+      from public.hallazgo_seguimientos seg join public.servicios visit on visit.id=seg.servicio_id
+      where seg.hallazgo_id=h.id),
+    'responsableNombre',h.responsable_nombre,'responsableCorreo',h.responsable_correo,
     'servicioCierreId',h.servicio_cierre_id,'fechaCierre',h.fecha_cierre,
     'evidenciasCierreStoragePaths',coalesce(h.evidencias_cierre_storage_paths,'[]'::jsonb),
     'observacionCierre',h.observacion_cierre,'version',h.version
-  ) as record from public.hallazgos h where h.id=$1`, [findingId])).rows[0]
+  ) as record from public.hallazgos h where h.id=$1`, [findingId, serviceId])).rows[0]
   return row?.record ?? null
 }
 
@@ -401,59 +414,66 @@ export async function createTechnicianFinding(
 }
 
 export async function saveTechnicianFindingStatus(
-  client: PoolClient,
-  userId: string,
-  serviceId: string,
-  deviceId: string,
-  lockToken: string,
-  areaId: string,
-  findingId: string,
-  expectedVersion: number,
-  input: TechnicianFindingStatusInput,
-  evidenceStoragePaths: string[],
+  client: PoolClient, userId: string, serviceId: string, deviceId: string,
+  lockToken: string, areaId: string, findingId: string, expectedVersion: number,
+  input: TechnicianFindingStatusInput, evidenceStoragePaths: string[],
 ): Promise<TechnicianFindingResult> {
   await authorizeTechnicianFindingChange(client, userId, serviceId, deviceId, lockToken, areaId, findingId)
   await client.query('select id from public.hallazgos where id=$1 for update', [findingId])
-  const current = await getFinding(client, findingId)
-  if (!current) throw new ApiError(404, 'El Hallazgo ya no está disponible.', 'FINDING_NOT_FOUND')
+  const current = await getFinding(client, findingId, serviceId)
+  if (!current) throw new ApiError(404, 'El Hallazgo no está disponible.', 'FINDING_NOT_FOUND')
   if (current.version !== expectedVersion) {
-    throw new ApiError(409, 'El Hallazgo cambió. Conservamos tu actualización para que decidas cómo continuar.', 'VERSION_CONFLICT', { remote: current })
+    throw new ApiError(409, 'El Hallazgo cambió. Revisa la versión sincronizada antes de continuar.', 'VERSION_CONFLICT', { remote: current })
   }
   if (current.servicioAperturaId === serviceId) {
-    throw new ApiError(409, 'Un Hallazgo se verifica o cierra en un Servicio posterior.', 'FINDING_SAME_SERVICE')
+    throw new ApiError(409, 'Un Hallazgo se evalúa desde un servicio posterior.', 'FINDING_SAME_SERVICE')
   }
-  if (current.estado === 'CERRADO') throw new ApiError(409, 'El Hallazgo ya fue cerrado.', 'FINDING_CLOSED', { remote: current })
-  if (input.observacionCierre.length > 2_000 || evidenceStoragePaths.length > 10 || new Set(evidenceStoragePaths).size !== evidenceStoragePaths.length) {
-    throw new ApiError(422, 'La actualización del Hallazgo no es válida.', 'VALIDATION')
+  if (current.estado === 'CERRADO' && current.servicioCierreId !== serviceId) {
+    throw new ApiError(409, 'Un Hallazgo cerrado en otra visita no puede editarse.', 'FINDING_CLOSED', { remote: current })
   }
-  if (input.estado === 'CERRADO' && !evidenceStoragePaths.length) {
-    throw new ApiError(422, 'Adjunta al menos una evidencia para cerrar el Hallazgo.', 'VALIDATION')
+  if (input.observacionCierre.length > 2_000 || evidenceStoragePaths.length > 10 ||
+      new Set(evidenceStoragePaths).size !== evidenceStoragePaths.length) {
+    throw new ApiError(422, 'La evaluación del Hallazgo no es válida.', 'VALIDATION')
   }
-  // Una sola evaluación por hallazgo y visita; la revisión no altera el estado cuando sigue igual.
-  const reviewed = await client.query('select 1 from public.hallazgo_seguimientos where hallazgo_id=$1 and servicio_id=$2', [findingId, serviceId])
-  if (reviewed.rowCount) throw new ApiError(409, 'Este Hallazgo ya fue evaluado en el servicio.', 'FINDING_ALREADY_REVIEWED', { remote: { ...current, resultadoSeguimiento: input.estado } })
-  if (input.estado !== 'CERRADO' && evidenceStoragePaths.length) {
-    throw new ApiError(422, 'La evidencia de cierre solo corresponde a un Hallazgo cerrado.', 'VALIDATION')
+  const previous = (await client.query<{
+    estado_anterior: 'ABIERTO' | 'EN_PROCESO'
+    evidencias_storage_paths: string[]
+  }>(`select estado_anterior,evidencias_storage_paths
+      from public.hallazgo_seguimientos where hallazgo_id=$1 and servicio_id=$2 for update`,
+  [findingId, serviceId])).rows[0]
+  const originalState = previous?.estado_anterior ?? current.estado
+  if (originalState !== 'ABIERTO' && originalState !== 'EN_PROCESO') {
+    throw new ApiError(409, 'No se puede modificar la evaluación histórica.', 'FINDING_CLOSED')
   }
-  if (input.estado === 'EN_PROCESO' && current.estado === 'ABIERTO') {
-    await client.query("update public.hallazgos set estado='EN_PROCESO' where id=$1", [findingId])
-  } else if (input.estado === 'CERRADO') {
-    await client.query(`update public.hallazgos set estado='CERRADO',servicio_cierre_id=$2,fecha_cierre=now(),
-      evidencias_cierre_storage_paths=$3::jsonb,observacion_cierre=$4 where id=$1`,
-    [findingId, serviceId, JSON.stringify(evidenceStoragePaths), input.observacionCierre.trim() || null])
+  const merged = [...new Set([...(previous?.evidencias_storage_paths ?? []), ...evidenceStoragePaths])]
+  if (merged.length > 10 || (input.estado === 'CERRADO' && !merged.length)) {
+    throw new ApiError(422, input.estado === 'CERRADO'
+      ? 'Adjunta una fotografía para cerrar el Hallazgo.' : 'Puedes agregar hasta diez fotos por revisión.', 'VALIDATION')
   }
-  await client.query(`insert into public.hallazgo_seguimientos(hallazgo_id,servicio_id,resultado,estado_anterior,tecnico_id)
-    values($1,$2,$3,$4,$5)`, [findingId, serviceId, input.estado, current.estado, userId])
-  const finding = await getFinding(client, findingId)
-  if (!finding) throw new ApiError(500, 'No fue posible recuperar el Hallazgo actualizado.', 'UNEXPECTED')
-  await audit(client, userId, input.estado === 'SIN_CAMBIOS' ? 'SERVICIO_HALLAZGO_SIN_CAMBIOS'
-    : input.estado === 'CERRADO' ? 'SERVICIO_HALLAZGO_CERRADO' : 'SERVICIO_HALLAZGO_EN_PROCESO', serviceId, {
-    areaId,
-    findingId,
-    evidenceCount: evidenceStoragePaths.length,
-    previousState: current.estado,
+  const nextState = input.estado === 'SIN_CAMBIOS' ? originalState
+    : input.estado === 'EN_PROCESO' ? 'EN_PROCESO' : 'CERRADO'
+  await client.query(`update public.hallazgos set estado=$2,
+      servicio_cierre_id=case when $2='CERRADO' then $3::uuid else null end,
+      fecha_cierre=case when $2='CERRADO' then now() else null end,
+      evidencias_cierre_storage_paths=case when $2='CERRADO' then $4::jsonb else null end,
+      observacion_cierre=case when $2='CERRADO' then nullif($5,'') else null end
+      where id=$1`,
+    [findingId, nextState, serviceId, JSON.stringify(merged), input.observacionCierre.trim()])
+  await client.query(`insert into public.hallazgo_seguimientos
+      (hallazgo_id,servicio_id,resultado,estado_anterior,tecnico_id,observacion,evidencias_storage_paths)
+      values($1,$2,$3,$4,$5,nullif($6,''),$7::jsonb)
+      on conflict(hallazgo_id,servicio_id) do update set
+        resultado=excluded.resultado,tecnico_id=excluded.tecnico_id,
+        observacion=excluded.observacion,evidencias_storage_paths=excluded.evidencias_storage_paths,
+        registrado_at=now()`,
+    [findingId,serviceId,input.estado,originalState,userId,input.observacionCierre.trim(),JSON.stringify(merged)])
+  const finding = await getFinding(client, findingId, serviceId)
+  if (!finding) throw new ApiError(500, 'No fue posible recuperar la evaluación guardada.', 'UNEXPECTED')
+  await audit(client, userId, 'SERVICIO_HALLAZGO_EVALUADO', serviceId, {
+    areaId, findingId, previousOutcome: current.resultadoSeguimiento ?? null,
+    outcome: input.estado, evidenceCount: merged.length, previousState: current.estado,
   })
-  return { finding: { ...finding, resultadoSeguimiento: input.estado } }
+  return { finding }
 }
 
 export async function authorizeTechnicianDeviceChange(

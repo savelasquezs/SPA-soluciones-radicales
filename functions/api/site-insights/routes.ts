@@ -62,11 +62,13 @@ siteInsightsRoutes.get('/:siteId/photos/:kind/:recordId/:index', async context =
   if (!/^(0|[1-9]\d?)$/.test(indexText)) throw new ApiError(422, 'La fotografía no es válida.', 'VALIDATION')
   const source = await read(context, client => findSiteEvidence(client, id(context.req.param('siteId')), kind, id(context.req.param('recordId')), Number(indexText)))
   // Release the PostgreSQL connection before calling storage. A timeout/403 is never an absent photo.
+  const storageKind = kind === 'FOLLOWUP' && source.path.startsWith(
+    `services/${source.serviceId}/findings/${source.ownerId}/closure/`) ? 'CLOSURE' : kind
   const exists = kind === 'REVIEW'
     ? await deviceReviewMediaObjectExists(source.path, source.serviceId, source.ownerId)
-    : await findingEvidenceObjectExists(source.path, source.serviceId, source.ownerId, kind)
+    : await findingEvidenceObjectExists(source.path, source.serviceId, source.ownerId, storageKind)
   const result: EvidenceAccess = exists
-    ? { status: 'AVAILABLE', ...createServiceMediaReadUrl(source.path, source.serviceId, source.ownerId, kind) }
+    ? { status: 'AVAILABLE', ...createServiceMediaReadUrl(source.path, source.serviceId, source.ownerId, storageKind) }
     : { status: missingEvidenceStatus(source.retentionAt), url: null, expiresAt: null }
   return context.json(result)
 })
