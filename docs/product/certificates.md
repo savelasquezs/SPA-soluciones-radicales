@@ -89,7 +89,7 @@ y además pertenezcan a su Sede. Lotes de hasta 10 vehículos; servicios paginad
 
 La primera fecha de expedición procede de la finalización real, convertida a `America/Bogota`.
 El vencimiento suma la vigencia en meses calendario, ajustando al último día del mes cuando
-corresponda. Regenerar exige confirmación, conserva ID y fechas originales, y usa la plantilla
+corresponda. Regenerar un PDF aún disponible exige confirmación; uno vencido puede regenerarse sin esa confirmación. Conserva ID y fechas originales, y usa la plantilla
 global vigente del tipo. No amplía la vigencia ni envía correos automáticamente.
 
 Cada primera generación conserva los valores renderizados en el snapshot del trabajo `DOCUMENT`.
