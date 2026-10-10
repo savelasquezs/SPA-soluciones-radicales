@@ -423,7 +423,7 @@ test('a finding with several evidence photos survives an offline reload', async 
   await findings.getByRole('button', { name: /Abertura junto al muro/ }).click()
   await expect(findings.getByText('2 fotos de apertura pendientes de sincronizar')).toBeVisible()
   await expect(findings.getByText('Contacto Laureles')).toBeVisible()
-  await expect(findings.getByText('Guardado en este dispositivo · pendiente de sincronizar')).toBeVisible()
+  await expect(findings.getByText('Revisión guardada en este celular')).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 })
 
@@ -446,7 +446,7 @@ test('a prior finding can be closed only with evidence and survives offline relo
   await findings.getByLabel('Observación de la visita').fill('Paso sellado')
   await findings.locator('input[type="file"][capture="environment"]').setInputFiles({ name: 'cierre.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('synthetic-closure-photo') })
   await findings.getByRole('button', { name: 'Guardar revisión' }).click()
-  await expect(findings.getByText('Cerrado', { exact: true })).toBeVisible()
+  await expect(findings.getByText('Revisado en esta visita · Cerrado')).toBeVisible()
   await page.addInitScript(() => Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }))
   await page.reload()
   await page.locator('.area-tabs').getByRole('button', { name: /Hallazgos/ }).click()
