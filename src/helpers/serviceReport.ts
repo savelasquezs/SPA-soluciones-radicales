@@ -32,20 +32,27 @@ export function reportMetrics(data: ServiceResultsData) {
     monitoringPoints: points.length,
     captures: points.reduce((sum, point) => sum + point.capturas.reduce((part, c) => part + Math.max(0, c.cantidad), 0), 0),
     findings: data.areas.reduce((sum, area) => sum + area.hallazgos.length, 0),
+    unresolvedFindings: data.areas.reduce((sum, area) => sum + area.hallazgos.filter(finding=>finding.estado!=='CERRADO').length, 0),
   }
 }
 
 /** Keep evidence next to its technical record, and signatures in the final section. */
 export function reportEvidence(data: ServiceResultsData): ReportEvidence[] {
   const unique = new Map<string, string>()
-  function add(path: string | null | undefined, caption: string): void {
-    if (path && (path.startsWith('services/' + data.id + '/') || /^e:(0|[1-9]\d{0,3})$/.test(path)) && !unique.has(path)) unique.set(path, caption)
+  const historicFinding = /^services\/[0-9a-f-]{36}\/findings\/[0-9a-f-]{36}\/(?:opening|closure|followup)\/[^/]+\.(?:png|jpe?g|webp)$/i
+  function add(path: string | null | undefined, caption: string, finding = false): void {
+    if (path && (path.startsWith('services/' + data.id + '/') || /^e:(0|[1-9]\d{0,3})$/.test(path)
+      || (finding && historicFinding.test(path))) && !unique.has(path)) unique.set(path, caption)
   }
   for (const area of data.areas) {
     area.fotos.forEach((path, i) => add(path, 'Área sin acceso · ' + area.nombre + ' · Foto ' + (i + 1)))
     for (const criterion of area.criterios) criterion.fotos.forEach((path, i) => add(path, area.nombre + ' · ' + criterion.nombre + ' · Foto ' + (i + 1)))
     for (const point of area.puntos) add(point.foto, 'Puesto ' + point.numero + ' · ' + area.nombre)
-    for (const finding of area.hallazgos) finding.fotos.forEach((path, i) => add(path, 'Hallazgo · ' + area.nombre + ' · Foto ' + (i + 1)))
+    for (const finding of area.hallazgos) {
+      finding.fotos.forEach((path, i) => add(path, 'Hallazgo · ' + area.nombre + ' · Apertura · Foto ' + (i + 1), true))
+      for (const review of finding.seguimientos)
+        review.fotos.forEach((path, i) => add(path, 'Hallazgo · ' + area.nombre + ' · ' + review.solicitud + ' · Foto ' + (i + 1), true))
+    }
   }
   if (!data.firmaTecnicoVencida) add(data.firmaTecnico, 'Firma del técnico')
   if (!data.firmaClienteVencida) add(data.firmaCliente, 'Firma de conformidad del cliente')
