@@ -15,7 +15,7 @@ export async function readJson<T>(response: Response): Promise<T> {
 function retryableRead(error: unknown): boolean {
   return error instanceof RequestTimeoutError || error instanceof TypeError
     || (error instanceof ApiClientError && error.code !== 'INVALID_RESPONSE'
-      && [401, 502, 503, 504].includes(error.status))
+      && ([401, 502, 503, 504].includes(error.status) || (error.status === 0 && error.code === 'AUTH_ERROR')))
 }
 
 /** At most one automatic retry, and only for GET/HEAD. Never replay mutations. */
@@ -59,7 +59,8 @@ export async function authorizedRequest<T>(
         await waitForRetry(request.signal)
         continue
       }
-      if (!safeRead && sent && (error instanceof RequestTimeoutError || error instanceof TypeError)) {
+      if (!safeRead && sent && (error instanceof RequestTimeoutError || error instanceof TypeError
+        || (error instanceof ApiClientError && error.code === 'INVALID_RESPONSE'))) {
         throw new ApiClientError('No pudimos confirmar si se guardó la operación. Tus datos se conservan. Consulta el registro antes de repetirla.', 0, 'MUTATION_UNCONFIRMED')
       }
       throw error

@@ -33,9 +33,11 @@ function unavailable(): ApiError {
 export async function transaction<T>(work: (client: PoolClient) => Promise<T>): Promise<T> {
   const client = await pool.connect().catch(() => { throw unavailable() })
   let discard = false
+  let committing = false
   try {
     await client.query('begin')
     const result = await work(client)
+    committing = true
     await client.query('commit')
     return result
   } catch (error) {
@@ -44,7 +46,10 @@ export async function transaction<T>(work: (client: PoolClient) => Promise<T>): 
     // roll back. Never rerun work: COMMIT may have succeeded before disconnect.
     try { await client.query('rollback') }
     catch { discard = true }
-    if (connectionFailure(error)) throw unavailable()
+    if (connectionFailure(error)) {
+      if (committing) throw new ApiError(503, 'No se pudo confirmar el guardado. Consulta el registro antes de repetir la operación.', 'COMMIT_UNCONFIRMED')
+      throw unavailable()
+    }
     throw error
   } finally {
     client.release(discard)

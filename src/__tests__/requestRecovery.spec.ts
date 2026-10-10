@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { getAccessToken } = vi.hoisted(() => ({ getAccessToken: vi.fn() }))
+const { getAccessToken } = vi.hoisted(() => ({ getAccessToken: vi.fn<(options: { signal?: AbortSignal; forceRefresh?: boolean }) => Promise<string>>() }))
 vi.mock('@/services/authService', () => ({ getAccessToken }))
 
 import { apiBlobRequest, apiRequest, ApiClientError } from '@/services/apiService'
 import { dataApiSelect } from '@/services/dataApiService'
 import { RequestTimeoutError, withRequestDeadline } from '@/services/requestControl'
 
-const fetchMock = vi.fn()
+const fetchMock = vi.fn<typeof fetch>()
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } })
 
 beforeEach(() => {
@@ -40,9 +40,9 @@ describe('solicitudes después de inactividad', () => {
 
   it.each([401, 403, 422])('no entra en bucle con un error permanente %i', async status => {
     fetchMock.mockImplementation(() => Promise.resolve(json({ error: 'Denegado' }, status)))
-    const assertion = expect(apiRequest('api/users')).rejects.toMatchObject({ status })
+    const outcome = apiRequest('api/users').catch((error: unknown) => error)
     await vi.advanceTimersByTimeAsync(750)
-    await assertion
+    expect(await outcome).toMatchObject({ status })
     expect(fetchMock).toHaveBeenCalledTimes(status === 401 ? 2 : 1)
   })
 
@@ -52,16 +52,32 @@ describe('solicitudes después de inactividad', () => {
     expect(fetchMock).toHaveBeenCalledOnce()
   })
 
+  it('no repite un guardado confirmado por HTTP cuyo JSON está incompleto', async () => {
+    fetchMock.mockResolvedValue(new Response('{'))
+    await expect(apiRequest('api/users', { method: 'POST', body: '{}' })).rejects.toMatchObject({ code: 'MUTATION_UNCONFIRMED' })
+    expect(fetchMock).toHaveBeenCalledOnce()
+  })
+
+  it('recupera un error de red devuelto por el SDK de Auth', async () => {
+    getAccessToken.mockRejectedValueOnce(new ApiClientError('Red no disponible', 0, 'AUTH_ERROR'))
+    fetchMock.mockResolvedValue(json([]))
+    const result = apiRequest('api/users')
+    await vi.advanceTimersByTimeAsync(750)
+    await expect(result).resolves.toEqual([])
+    expect(fetchMock).toHaveBeenCalledOnce()
+    expect(getAccessToken).toHaveBeenCalledTimes(2)
+  })
+
   it('permite respuestas vacías 204', async () => {
     fetchMock.mockResolvedValue(new Response(null, { status: 204 }))
     await expect(apiRequest('api/users/1', { method: 'DELETE' })).resolves.toBeNull()
   })
 
   it('limita también un cuerpo de respuesta que nunca termina', async () => {
-    fetchMock.mockResolvedValue({ ok: true, status: 200, json: () => new Promise(() => undefined) })
-    const assertion = expect(apiRequest('api/users', { timeoutMs: 20 })).rejects.toBeInstanceOf(RequestTimeoutError)
+    fetchMock.mockImplementation(async () => new Response(new ReadableStream<Uint8Array>()))
+    const outcome = apiRequest('api/users', { timeoutMs: 20 }).catch((error: unknown) => error)
     await vi.advanceTimersByTimeAsync(800)
-    await assertion
+    expect(await outcome).toBeInstanceOf(RequestTimeoutError)
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(vi.getTimerCount()).toBe(0)
   })
@@ -70,10 +86,10 @@ describe('solicitudes después de inactividad', () => {
     let finishAuth: (token: string) => void = () => undefined
     getAccessToken.mockReturnValue(new Promise(resolve => { finishAuth = resolve }))
     const controller = new AbortController()
-    const assertion = expect(apiRequest('api/users', { method: 'POST', body: '{}', signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' })
+    const outcome = apiRequest('api/users', { method: 'POST', body: '{}', signal: controller.signal }).catch((error: unknown) => error)
     await vi.advanceTimersByTimeAsync(0)
     controller.abort()
-    await assertion
+    expect(await outcome).toMatchObject({ name: 'AbortError' })
     finishAuth('late-token')
     await vi.advanceTimersByTimeAsync(0)
     expect(fetchMock).not.toHaveBeenCalled()
@@ -83,10 +99,10 @@ describe('solicitudes después de inactividad', () => {
   it('cancela durante la espera antes del reintento', async () => {
     const controller = new AbortController()
     fetchMock.mockRejectedValue(new TypeError('Failed to fetch'))
-    const assertion = expect(apiRequest('api/users', { signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' })
+    const outcome = apiRequest('api/users', { signal: controller.signal }).catch((error: unknown) => error)
     await vi.advanceTimersByTimeAsync(1)
     controller.abort()
-    await assertion
+    expect(await outcome).toMatchObject({ name: 'AbortError' })
     await vi.advanceTimersByTimeAsync(1000)
     expect(fetchMock).toHaveBeenCalledOnce()
     expect(vi.getTimerCount()).toBe(0)
@@ -100,9 +116,9 @@ describe('solicitudes después de inactividad', () => {
 
   it('no reenvía un guardado que agotó el tiempo aunque fetch ignore abort', async () => {
     fetchMock.mockReturnValue(new Promise(() => undefined))
-    const assertion = expect(apiRequest('api/users', { method: 'POST', timeoutMs: 20 })).rejects.toMatchObject({ code: 'MUTATION_UNCONFIRMED' })
+    const outcome = apiRequest('api/users', { method: 'POST', timeoutMs: 20 }).catch((error: unknown) => error)
     await vi.advanceTimersByTimeAsync(30)
-    await assertion
+    expect(await outcome).toMatchObject({ code: 'MUTATION_UNCONFIRMED' })
     expect(fetchMock).toHaveBeenCalledOnce()
     expect(vi.getTimerCount()).toBe(0)
   })
@@ -118,26 +134,26 @@ describe('solicitudes después de inactividad', () => {
     const result = dataApiSelect('usuarios', new URLSearchParams('select=id'))
     await vi.advanceTimersByTimeAsync(750)
     await expect(result).resolves.toEqual([{ id: 1 }])
-    const headers = fetchMock.mock.calls[1]?.[1].headers as Headers
+    const headers = new Headers(fetchMock.mock.calls[1]?.[1]?.headers)
     expect(headers.get('Authorization')).toBe('Bearer fresh-token')
     expect(headers.get('Accept')).toBe('application/json')
   })
 
   it('limita la lectura binaria y mantiene la cancelación del consumidor', async () => {
     const controller = new AbortController()
-    fetchMock.mockResolvedValue({ ok: true, headers: new Headers({ 'Content-Type': 'application/pdf' }), blob: () => new Promise(() => undefined) })
-    const assertion = expect(apiBlobRequest('api/certificates/1', { signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' })
+    fetchMock.mockResolvedValue(new Response(new ReadableStream<Uint8Array>(), { headers: { 'Content-Type': 'application/pdf' } }))
+    const outcome = apiBlobRequest('api/certificates/1', { signal: controller.signal }).catch((error: unknown) => error)
     await vi.advanceTimersByTimeAsync(0)
     controller.abort()
-    await assertion
+    expect(await outcome).toMatchObject({ name: 'AbortError' })
     expect(fetchMock).toHaveBeenCalledOnce()
   })
 
   it('cancela y limpia una promesa que ignora AbortSignal', async () => {
     let signal: AbortSignal | undefined
-    const assertion = expect(withRequestDeadline(current => { signal = current; return new Promise(() => undefined) }, 10)).rejects.toBeInstanceOf(ApiClientError)
+    const outcome = withRequestDeadline(current => { signal = current; return new Promise(() => undefined) }, 10).catch((error: unknown) => error)
     await vi.advanceTimersByTimeAsync(11)
-    await assertion
+    expect(await outcome).toBeInstanceOf(ApiClientError)
     expect(signal?.aborted).toBe(true)
     expect(vi.getTimerCount()).toBe(0)
   })

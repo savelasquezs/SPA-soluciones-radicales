@@ -10,9 +10,11 @@ type SessionOptions = { signal?: AbortSignal; forceRefresh?: boolean }
 export async function getAuthSession(options: SessionOptions = {}) {
   const { data, error } = await withRequestDeadline(signal => authClient.getSession({
     ...(options.forceRefresh ? { query: { disableCookieCache: true } } : {}),
-    fetchOptions: { signal },
+    // The Neon SDK has an in-memory cache in addition to Better Auth cookies.
+    // This SDK-only header is stripped before the actual HTTP request.
+    fetchOptions: { signal, ...(options.forceRefresh ? { headers: { 'X-Force-Fetch': 'true' } } : {}) },
   }), 12_000, options.signal)
-  if (error) throw new ApiClientError(error.message, error.status ?? 0, 'AUTH_ERROR')
+  if (error) throw new ApiClientError(error.message ?? 'No fue posible consultar la sesión.', error.status ?? 0, 'AUTH_ERROR')
   if (data?.session.token) {
     const url = new URL(window.location.href)
     if (url.searchParams.has('neon_auth_session_verifier')) {

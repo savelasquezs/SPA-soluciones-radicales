@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { getSession } = vi.hoisted(() => ({ getSession: vi.fn() }))
+type SessionRequest = { query?: { disableCookieCache: boolean }; fetchOptions: { signal: AbortSignal } }
+type SessionResult = { data: { session: { token: string }; user: { id: string } }; error: null }
+const { getSession } = vi.hoisted(() => ({ getSession: vi.fn<(options: SessionRequest) => Promise<SessionResult>>() }))
 vi.mock('@neondatabase/auth', () => ({ createAuthClient: () => ({ getSession }) }))
 import { getAccessToken, getAuthSession } from '@/services/authService'
 import { RequestTimeoutError } from '@/services/requestControl'
@@ -19,7 +21,7 @@ describe('renovación de Neon Auth bajo demanda', () => {
     const fresh = token(Date.now() / 1000 + 900)
     getSession.mockResolvedValueOnce(session(stale)).mockResolvedValueOnce(session(fresh))
     await expect(getAccessToken()).resolves.toBe(fresh)
-    expect(getSession).toHaveBeenNthCalledWith(2, expect.objectContaining({ query: { disableCookieCache: true }, fetchOptions: { signal: expect.any(AbortSignal) } }))
+    expect(getSession).toHaveBeenNthCalledWith(2, expect.objectContaining({ query: { disableCookieCache: true }, fetchOptions: { signal: expect.any(AbortSignal), headers: { 'X-Force-Fetch': 'true' } } }))
     expect(vi.getTimerCount()).toBe(0)
   })
 
@@ -38,9 +40,9 @@ describe('renovación de Neon Auth bajo demanda', () => {
 
   it('el timeout libera el acceso para un siguiente intento', async () => {
     getSession.mockReturnValueOnce(new Promise(() => undefined))
-    const assertion = expect(getAuthSession()).rejects.toBeInstanceOf(RequestTimeoutError)
+    const outcome = getAuthSession().catch((error: unknown) => error)
     await vi.advanceTimersByTimeAsync(12_001)
-    await assertion
+    expect(await outcome).toBeInstanceOf(RequestTimeoutError)
     expect(getSession.mock.calls[0]?.[0].fetchOptions.signal.aborted).toBe(true)
     getSession.mockResolvedValueOnce(session('recovered-token'))
     await expect(getAccessToken()).resolves.toBe('recovered-token')
@@ -50,19 +52,19 @@ describe('renovación de Neon Auth bajo demanda', () => {
   it('no elimina el verificador OAuth si la sesión tarda demasiado', async () => {
     window.history.replaceState({}, '', '/usuarios?neon_auth_session_verifier=one-time')
     getSession.mockReturnValue(new Promise(() => undefined))
-    const assertion = expect(getAuthSession()).rejects.toBeInstanceOf(RequestTimeoutError)
+    const outcome = getAuthSession().catch((error: unknown) => error)
     await vi.advanceTimersByTimeAsync(12_001)
-    await assertion
+    expect(await outcome).toBeInstanceOf(RequestTimeoutError)
     expect(window.location.search).toContain('neon_auth_session_verifier')
   })
 
   it('propaga la cancelación sin borrar una sesión o sus borradores', async () => {
     const controller = new AbortController()
     getSession.mockReturnValue(new Promise(() => undefined))
-    const assertion = expect(getAuthSession({ signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' })
+    const outcome = getAuthSession({ signal: controller.signal }).catch((error: unknown) => error)
     await vi.advanceTimersByTimeAsync(0)
     controller.abort()
-    await assertion
+    expect(await outcome).toMatchObject({ name: 'AbortError' })
     expect(vi.getTimerCount()).toBe(0)
   })
 })

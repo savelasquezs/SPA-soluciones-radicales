@@ -1,8 +1,12 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+type Query = (sql: string) => Promise<{ rows: unknown[] }>
+type Release = (destroy?: boolean) => void
+
 const { connect, query, release, events, poolConfig, attach } = vi.hoisted(() => ({
-  connect: vi.fn(), query: vi.fn(), release: vi.fn(), attach: vi.fn(),
+  connect: vi.fn<() => Promise<{ query: Query; release: Release }>>(),
+  query: vi.fn<Query>(), release: vi.fn<Release>(), attach: vi.fn<(pool: unknown) => void>(),
   events: new Map<string, () => void>(), poolConfig: {} as Record<string, unknown>,
 }))
 vi.mock('@neon/functions', () => ({ attachDatabasePool: attach }))
@@ -33,7 +37,7 @@ describe('pool recuperable después de suspensión', () => {
   it('devuelve 503 cuando no se consigue conexión y no ejecuta la transacción', async () => {
     const { transaction } = await import('./db')
     connect.mockRejectedValueOnce(new Error('connect timeout'))
-    const work = vi.fn()
+    const work = vi.fn<() => Promise<void>>()
     await expect(transaction(work)).rejects.toMatchObject({ status: 503, code: 'DATABASE_UNAVAILABLE' })
     expect(work).not.toHaveBeenCalled()
     expect(release).not.toHaveBeenCalled()
@@ -57,8 +61,8 @@ describe('pool recuperable después de suspensión', () => {
   it('no repite la operación si se corta la conexión durante COMMIT', async () => {
     const { transaction } = await import('./db')
     query.mockResolvedValueOnce({ rows: [] }).mockRejectedValueOnce(Object.assign(new Error('lost'), { code: 'ECONNRESET' }))
-    const work = vi.fn().mockResolvedValue(42)
-    await expect(transaction(work)).rejects.toMatchObject({ status: 503 })
+    const work = vi.fn<() => Promise<number>>().mockResolvedValue(42)
+    await expect(transaction(work)).rejects.toMatchObject({ status: 503, code: 'COMMIT_UNCONFIRMED' })
     expect(work).toHaveBeenCalledOnce()
     expect(release).toHaveBeenCalledWith(true)
   })
