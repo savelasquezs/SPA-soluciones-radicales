@@ -316,6 +316,8 @@ async function getFinding(client: PoolClient, findingId: string, serviceId: stri
     'estado',h.estado,
     'resultadoSeguimiento',(select seg.resultado from public.hallazgo_seguimientos seg
       where seg.hallazgo_id=h.id and seg.servicio_id=$2::uuid),
+    'estadoAnteriorSeguimiento',(select seg.estado_anterior from public.hallazgo_seguimientos seg
+      where seg.hallazgo_id=h.id and seg.servicio_id=$2::uuid),
     'observacionSeguimiento',(select seg.observacion from public.hallazgo_seguimientos seg
       where seg.hallazgo_id=h.id and seg.servicio_id=$2::uuid),
     'evidenciasSeguimientoStoragePaths',(select seg.evidencias_storage_paths from public.hallazgo_seguimientos seg

@@ -135,6 +135,7 @@ export interface TechnicianFinding {
   estado: FindingState
   /** Resultado de la revisión en el servicio actual, no el estado histórico del hallazgo. */
   resultadoSeguimiento?: FindingReview | null
+  estadoAnteriorSeguimiento?: FindingState | null
   observacionSeguimiento?: string | null
   evidenciasSeguimientoStoragePaths?: string[]
   evidenciasSeguimientoLocalIds?: string[]
