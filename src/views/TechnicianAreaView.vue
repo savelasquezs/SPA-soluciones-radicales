@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { CheckCircle2, ClipboardCheck, FileText, ListChecks, ListOrdered, Map as MapIcon, Plus, Search, Wrench } from 'lucide-vue-next'
+import { ArrowLeft, ArrowRight, CheckCheck, CheckCircle2, ClipboardCheck, FileText, ListChecks, ListOrdered, Map as MapIcon, Plus, Search, Wrench } from 'lucide-vue-next'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import BaseButton from '@/components/base/BaseButton.vue'
 import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
@@ -13,8 +13,9 @@ import TechnicianFindingCard from '@/components/domain/services/TechnicianFindin
 import TechnicianFindingCreateEditor from '@/components/domain/services/TechnicianFindingCreateEditor.vue'
 import TechnicianNewDeviceEditor from '@/components/domain/services/TechnicianNewDeviceEditor.vue'
 import '@/components/domain/services/services.css'
-import { orderedTechnicianAreas, technicianAreaResolved } from '@/helpers/technicianServices'
+import { nextTechnicianRouteStep, orderedTechnicianAreas, technicianAreaIssues, technicianAreaResolved, type TechnicianAreaIssue } from '@/helpers/technicianServices'
 import { useTechnicianServicesStore } from '@/stores/technicianServices'
+import { clearAreaAccessDraft, loadAreaAccessDraft, loadCriterionNotes, saveAreaAccessDraft, saveCriterionNote, type AreaAccessDraft } from '@/services/technicianWorkDraftService'
 import type { MipEvaluation, TechnicianArea, TechnicianAreaAccessMutation, TechnicianCriterionEvaluationMutation, TechnicianDeviceCreationInput, TechnicianDeviceCreationMutation, TechnicianDeviceReviewInput, TechnicianDeviceReviewMutation, TechnicianFindingCreateInput, TechnicianFindingCreateMutation, TechnicianFindingStatusInput, TechnicianFindingStatusMutation } from '@/types/technicianServices'
 
 type AreaTab = 'CRITERIA' | 'POINTS' | 'FINDINGS'
@@ -39,8 +40,14 @@ const findingSavingId = ref('')
 const drafts = ref<Record<string, { evaluation: MipEvaluation | null; observation: string }>>({})
 const deviceDrafts = ref<Record<string, { input: TechnicianDeviceReviewInput; photo: File | null }>>({})
 const accessDraft = ref<{ areaId: string; withoutAccess: boolean; description: string; photos: File[] } | null>(null)
+const restoredAccessDraft = ref<AreaAccessDraft | null>(null)
+const unratedDrafts = ref<Record<string, string>>({})
+const validationTarget = ref('')
+const bulkSaving = ref(false)
+const bulkMessage = ref('')
 const saveQueue = new Map<string, Promise<boolean>>()
 const deviceSaveQueue = new Map<string, Promise<boolean>>()
+const localDraftQueue = new Map<string, Promise<void>>()
 let accessSaveQueue: Promise<boolean> | null = null
 
 const canEditRoute = computed(() => packageValue.value?.service.estado === 'EN_PROCESO' && Boolean(currentCache.value?.lock))
@@ -52,11 +59,21 @@ const activeTab = computed<AreaTab>(() => {
 const pendingCriteria = computed(() => currentArea.value?.criterios.filter(item => !item.evaluacion).length ?? 0)
 const pendingPoints = computed(() => currentArea.value?.dispositivos.filter(item => !item.revisado).length ?? 0)
 const openFindings = computed(() => findings.value.filter(item => item.estado !== 'CERRADO').length)
+const areaIssues = computed(() => currentArea.value ? technicianAreaIssues(currentArea.value, serviceId.value) : [])
+const pendingFindings = computed(() => areaIssues.value.filter(issue => issue.tab === 'findings').length)
+const activeIssue = computed(() => areaIssues.value.find(issue => issue.id === validationTarget.value) ?? null)
+const stepAfterArea = computed(() => nextTechnicianRouteStep(orderedAreas.value, routeAreaId.value))
 const creationConflict = computed(() => currentMutations.value.find((item): item is TechnicianDeviceCreationMutation => item.kind === 'DEVICE_CREATE'
   && item.areaId === currentArea.value?.id && item.status === 'CONFLICT') ?? null)
 
-onMounted(load)
+onMounted(async () => { await load(); await revealRequested() })
 watch(routeAreaId, value => {
+  drafts.value = {}
+  deviceDrafts.value = {}
+  accessDraft.value = null
+  validationTarget.value = ''
+  bulkMessage.value = ''
+  void restoreDrafts(value).then(() => revealRequested())
   selectedAreaId.value = value
   newDeviceOpen.value = false
   newFindingOpen.value = false
@@ -65,23 +82,102 @@ watch(routeAreaId, value => {
 watch(creationConflict, value => { if (value) newDeviceOpen.value = true })
 onBeforeRouteLeave(() => flushDrafts())
 onBeforeRouteUpdate(to => String(to.params.areaId ?? '') === routeAreaId.value || flushDrafts())
+watch(() => route.query.focus, () => { void revealRequested() })
 
 async function load(): Promise<void> {
   loading.value = true
   error.value = ''
-  try { await services.ensurePackage(serviceId.value) }
+  try { await services.ensurePackage(serviceId.value); await restoreDrafts(routeAreaId.value) }
   catch (failure) { error.value = failure instanceof Error ? failure.message : 'No fue posible cargar el Área.' }
   finally { loading.value = false }
 }
 
+
+async function restoreDrafts(areaId: string): Promise<void> {
+  const area = orderedAreas.value.find(item => item.id === areaId)
+  const actorId = currentCache.value?.actorId
+  if (!area || !actorId) return
+  const [notes, access] = await Promise.all([
+    loadCriterionNotes(actorId, serviceId.value, areaId, area.criterios.map(item => item.id)),
+    loadAreaAccessDraft(actorId, serviceId.value, areaId),
+  ])
+  if (areaId !== routeAreaId.value) return
+  unratedDrafts.value = Object.fromEntries(Object.entries(notes).filter(([id]) => !area.criterios.find(item => item.id === id)?.evaluacion))
+  restoredAccessDraft.value = access
+}
+
+async function revealRequested(): Promise<void> {
+  const id = String(route.query.focus ?? '')
+  if (!id || !areaIssues.value.some(issue => issue.id === id)) return
+  validationTarget.value = id
+  const issue = areaIssues.value.find(item => item.id === id)
+  if (issue?.tab === 'points') openDeviceId.value = id
+  await nextTick()
+  document.getElementById(`area-item-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
+
+async function showIssue(issue: TechnicianAreaIssue): Promise<void> {
+  validationTarget.value = issue.id
+  if (issue.tab === 'points') openDeviceId.value = issue.id
+  await router.replace({ query: { ...route.query, tab: issue.tab, focus: issue.id } })
+  await nextTick()
+  document.getElementById(`area-item-${issue.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
+
+async function goNext(section: 'criteria' | 'points' | 'findings'): Promise<void> {
+  if (!await flushDrafts()) return
+  const issues = areaIssues.value.filter(issue => section === 'findings' || issue.tab === section)
+  if (issues[0]) { await showIssue(issues[0]); return }
+  validationTarget.value = ''
+  if (section === 'criteria') { selectTab('POINTS'); return }
+  if (section === 'points') { selectTab('FINDINGS'); return }
+  if (stepAfterArea.value.kind === 'AREA') selectArea(stepAfterArea.value.area.id)
+  else openReview()
+}
+
+function goPrevious(section: 'criteria' | 'points' | 'findings'): void {
+  validationTarget.value = ''
+  if (section === 'findings') { selectTab('POINTS'); return }
+  if (section === 'points') { selectTab('CRITERIA'); return }
+  const index = orderedAreas.value.findIndex(area => area.id === routeAreaId.value)
+  const previous = orderedAreas.value[index - 1]
+  if (previous) void router.push({ name: 'technician-service-area', params: { id: serviceId.value, areaId: previous.id }, query: { tab: 'findings' } })
+  else openServiceOverview()
+}
+
+async function markPendingAsCompliant(): Promise<void> {
+  if (!currentArea.value || !canEditRoute.value || bulkSaving.value) return
+  bulkSaving.value = true
+  bulkMessage.value = ''
+  saveError.value = ''
+  let marked = 0
+  try {
+    for (const criterion of currentArea.value.criterios.filter(item => !item.evaluacion)) {
+      if (criterionMutation(criterion.id)?.status === 'CONFLICT') continue
+      const note = drafts.value[criterion.id]?.observation ?? unratedDrafts.value[criterion.id] ?? criterion.observacion ?? ''
+      if (await saveCriterion(criterion.id, 'C', note, [], undefined, true)) marked += 1
+    }
+    if (marked) {
+      const status = await services.syncPending(serviceId.value)
+      bulkMessage.value = status === 'conflict'
+        ? `${marked} marcados; revisa el conflicto de sincronización.`
+        : `${marked} criterios marcados como Cumple.`
+    }
+  } catch (failure) {
+    saveError.value = failure instanceof Error ? failure.message : 'No fue posible marcar todos los criterios.'
+  } finally {
+    bulkSaving.value = false
+  }
+}
+
 function pendingForArea(area: TechnicianArea): number {
   if (area.sinAcceso) return 0
-  return area.criterios.filter(item => !item.evaluacion).length + area.dispositivos.filter(item => !item.revisado).length
+  return technicianAreaIssues(area, serviceId.value).length
 }
 
 function areaOption(area: TechnicianArea, index: number): string {
   if (area.sinAcceso) return `⛔ ${index + 1}. ${area.nombre} · Sin acceso`
-  if (technicianAreaResolved(area)) return `✓ ${index + 1}. ${area.nombre} · Completa`
+  if (technicianAreaResolved(area, serviceId.value)) return `✓ ${index + 1}. ${area.nombre} · Completa`
   const pending = pendingForArea(area)
   return `○ ${index + 1}. ${area.nombre} · ${pending} ${pending === 1 ? 'pendiente' : 'pendientes'}`
 }
@@ -109,7 +205,7 @@ function openReview(): void {
 const nextUnresolvedArea = computed(() => {
   const index = orderedAreas.value.findIndex(area => area.id === currentArea.value?.id)
   const others = [...orderedAreas.value.slice(index + 1), ...orderedAreas.value.slice(0, index)]
-  return others.find(area => !technicianAreaResolved(area)) ?? null
+  return others.find(area => !technicianAreaResolved(area, serviceId.value)) ?? null
 })
 const continueLabel = computed(() => nextUnresolvedArea.value ? `Ir a ${nextUnresolvedArea.value.nombre}` : 'Ir al cierre')
 function continueAfterException(): void {
@@ -213,7 +309,27 @@ async function retryFinding(findingId: string): Promise<void> {
 
 function trackAccessDraft(withoutAccess: boolean, description: string, photos: File[]): void {
   if (!currentArea.value) return
-  accessDraft.value = { areaId: currentArea.value.id, withoutAccess, description, photos }
+  const areaId = currentArea.value.id
+  accessDraft.value = { areaId, withoutAccess, description, photos }
+  const actorId = currentCache.value?.actorId
+  if (!actorId || !withoutAccess) return
+  const previous = localDraftQueue.get('access') ?? Promise.resolve()
+  const task = previous.then(() => saveAreaAccessDraft(actorId, serviceId.value, areaId, { description, photos }))
+  localDraftQueue.set('access', task)
+  void task.catch(() => { saveError.value = 'No fue posible guardar el borrador local del Área.' })
+}
+
+function cancelAccessDraft(): void {
+  accessDraft.value = null
+  restoredAccessDraft.value = null
+  const actorId = currentCache.value?.actorId
+  if (actorId && currentArea.value) {
+    const areaId = currentArea.value.id
+    const previous = localDraftQueue.get('access') ?? Promise.resolve()
+    const task = previous.then(() => clearAreaAccessDraft(actorId, serviceId.value, areaId))
+    localDraftQueue.set('access', task)
+    void task.catch(() => { saveError.value = 'No fue posible descartar el borrador local.' })
+  }
 }
 
 function clearAccessDraft(expected: { areaId: string; withoutAccess: boolean; description: string; photos: File[] }): void {
@@ -234,6 +350,12 @@ async function saveAccess(withoutAccess: boolean, description: string, photos: F
       const result = await services.applyAreaAccess(serviceId.value, expected.areaId, withoutAccess, expected.description, photos)
       if (result === 'conflict') return false
       if (withoutAccess) { drafts.value = {}; deviceDrafts.value = {} }
+      if (currentCache.value?.actorId) {
+        const actorId = currentCache.value.actorId
+        await (localDraftQueue.get('access') ?? Promise.resolve())
+        await clearAreaAccessDraft(actorId, serviceId.value, expected.areaId)
+        restoredAccessDraft.value = null
+      }
       clearAccessDraft(expected)
       return true
     } catch (failure) {
@@ -249,6 +371,15 @@ async function saveAccess(withoutAccess: boolean, description: string, photos: F
 
 function trackCriterionDraft(criterionId: string, evaluation: MipEvaluation | null, observation: string): void {
   drafts.value = { ...drafts.value, [criterionId]: { evaluation, observation } }
+  if (evaluation) { if (validationTarget.value === criterionId) validationTarget.value = ''; return }
+  unratedDrafts.value = { ...unratedDrafts.value, [criterionId]: observation }
+  const actorId = currentCache.value?.actorId
+  const areaId = currentArea.value?.id
+  if (!actorId || !areaId) return
+  const previous = localDraftQueue.get(criterionId) ?? Promise.resolve()
+  const task = previous.then(() => saveCriterionNote(actorId, serviceId.value, areaId, criterionId, observation))
+  localDraftQueue.set(criterionId, task)
+  void task.catch(() => { saveError.value = 'No fue posible conservar una observación en este celular.' })
 }
 
 function clearCriterionDraft(criterionId: string, expected?: { evaluation: MipEvaluation; observation: string }): void {
@@ -259,7 +390,7 @@ function clearCriterionDraft(criterionId: string, expected?: { evaluation: MipEv
   drafts.value = next
 }
 
-async function saveCriterion(criterionId: string, evaluation: MipEvaluation, observation: string, files: File[] = [], retainedEvidenceStoragePaths?: string[]): Promise<boolean> {
+async function saveCriterion(criterionId: string, evaluation: MipEvaluation, observation: string, files: File[] = [], retainedEvidenceStoragePaths?: string[], deferSync = false): Promise<boolean> {
   if (!currentArea.value) return false
   const areaId = currentArea.value.id
   const expected = { evaluation, observation: observation.trim() }
@@ -267,9 +398,20 @@ async function saveCriterion(criterionId: string, evaluation: MipEvaluation, obs
   const task = previous.then(async () => {
     saveError.value = ''
     try {
-      const result = await services.applyCriterionEvaluation(serviceId.value, areaId, criterionId, expected.evaluation, expected.observation, files, retainedEvidenceStoragePaths)
+      const result = await services.applyCriterionEvaluation(serviceId.value, areaId, criterionId, expected.evaluation, expected.observation, files, retainedEvidenceStoragePaths, deferSync)
       if (result === 'conflict') return false
       clearCriterionDraft(criterionId, expected)
+      const actorId = currentCache.value?.actorId
+      if (actorId) {
+        await (localDraftQueue.get(criterionId) ?? Promise.resolve())
+        await saveCriterionNote(actorId, serviceId.value, areaId, criterionId, '')
+      }
+      if (currentArea.value?.id === areaId) {
+        const updated = { ...unratedDrafts.value }
+        delete updated[criterionId]
+        unratedDrafts.value = updated
+        if (validationTarget.value === criterionId) validationTarget.value = ''
+      }
       return true
     } catch (failure) {
       saveError.value = failure instanceof Error ? failure.message : 'No fue posible guardar la evaluación.'
@@ -318,28 +460,32 @@ async function saveDevice(serviceDeviceId: string, input: TechnicianDeviceReview
 }
 
 async function flushDrafts(): Promise<boolean> {
-  if (accessSaveQueue) await accessSaveQueue
-  if (accessDraft.value) {
-    const draft = accessDraft.value
-    if (draft.withoutAccess && (!draft.description.trim() || (!draft.photos.length && !currentArea.value?.sinAccesoEvidenciasStoragePaths?.length && !currentArea.value?.sinAccesoEvidenciasLocalIds?.length && !currentArea.value?.sinAccesoFotoStoragePath && !currentArea.value?.sinAccesoFotoLocalId))) {
-      saveError.value = 'Describe la novedad y adjunta una fotografía antes de salir del Área.'
-      return false
+  try {
+    if (accessSaveQueue) await accessSaveQueue
+    if (localDraftQueue.size) await Promise.all(localDraftQueue.values())
+    // La excepción sin terminar permanece como borrador local; no bloquea las pestañas.
+    if (accessDraft.value) {
+      const draft = accessDraft.value
+      const hasPhoto = draft.photos.length || currentArea.value?.sinAccesoEvidenciasStoragePaths?.length
+        || currentArea.value?.sinAccesoEvidenciasLocalIds?.length || currentArea.value?.sinAccesoFotoStoragePath
+      if (!draft.withoutAccess || (draft.description.trim() && hasPhoto)) {
+        if (!await saveAccess(draft.withoutAccess, draft.description, draft.photos)) return false
+      }
     }
-    if (!await saveAccess(draft.withoutAccess, draft.description, draft.photos)) return false
-  }
-  if (saveQueue.size) await Promise.all(saveQueue.values())
-  for (const [criterionId, draft] of Object.entries(drafts.value)) {
-    if (!draft.evaluation) {
-      saveError.value = 'Selecciona una evaluación para guardar la observación antes de salir del Área.'
-      return false
+    if (saveQueue.size) await Promise.all(saveQueue.values())
+    for (const [criterionId, draft] of Object.entries(drafts.value)) {
+      if (!draft.evaluation) continue
+      if (!await saveCriterion(criterionId, draft.evaluation, draft.observation)) return false
     }
-    if (!await saveCriterion(criterionId, draft.evaluation, draft.observation)) return false
+    if (deviceSaveQueue.size) await Promise.all(deviceSaveQueue.values())
+    for (const [serviceDeviceId, draft] of Object.entries(deviceDrafts.value)) {
+      if (!await saveDevice(serviceDeviceId, draft.input, draft.photo)) return false
+    }
+    return true
+  } catch (failure) {
+    saveError.value = failure instanceof Error ? failure.message : 'No fue posible guardar el borrador local.'
+    return false
   }
-  if (deviceSaveQueue.size) await Promise.all(deviceSaveQueue.values())
-  for (const [serviceDeviceId, draft] of Object.entries(deviceDrafts.value)) {
-    if (!await saveDevice(serviceDeviceId, draft.input, draft.photo)) return false
-  }
-  return true
 }
 
 async function useRemoteCriterion(criterionId: string): Promise<void> {
@@ -418,12 +564,12 @@ async function retryDevice(serviceDeviceId: string): Promise<void> {
             <Wrench :size="18" aria-hidden="true" /><span>Puestos</span><strong v-if="pendingPoints">{{ pendingPoints }}</strong><CheckCircle2 v-else :size="16" aria-label="Completo" />
           </button>
           <button type="button" :class="{ 'area-tabs__active': activeTab === 'FINDINGS' }" :aria-current="activeTab === 'FINDINGS' ? 'page' : undefined" @click="selectTab('FINDINGS')">
-            <Search :size="18" aria-hidden="true" /><span>Hallazgos</span><strong v-if="openFindings" class="area-tabs__neutral">{{ openFindings }}</strong>
+            <Search :size="18" aria-hidden="true" /><span>Hallazgos</span><strong v-if="pendingFindings">{{ pendingFindings }}</strong><CheckCircle2 v-else :size="16" aria-label="Completo" />
           </button>
         </nav>
       </section>
 
-      <StatusPanel v-if="saveError" title="No fue posible guardar" :message="saveError" tone="danger" />
+      <p v-if="saveError" class="area-save-error" role="alert">{{ saveError }}</p>
 
       <TechnicianAreaAccessEditor
         :area="currentArea"
@@ -431,17 +577,23 @@ async function retryDevice(serviceDeviceId: string): Promise<void> {
         :editable="canEditRoute"
         :syncing="syncing"
         :continue-label="continueLabel"
+        :restored-draft="restoredAccessDraft"
         @continue="continueAfterException"
         @draft="trackAccessDraft"
-        @cancel="accessDraft = null"
+        @cancel="cancelAccessDraft"
         @save="handleAccessSave"
         @use-remote="useRemoteAccess"
         @retry="retryAccess"
       />
 
       <section v-show="!currentArea.sinAcceso && activeTab === 'CRITERIA'" class="workspace-panel" aria-labelledby="criteria-title">
-        <header><div><h2 id="criteria-title">Criterios del Área</h2><p>{{ currentArea.criterios.length - pendingCriteria }} de {{ currentArea.criterios.length }} completados</p></div></header>
-        <div class="criteria-list"><TechnicianCriterionEditor v-for="criterion in currentArea.criterios" :key="criterion.id" :criterion="criterion" :mutation="criterionMutation(criterion.id)" :editable="canEditRoute" :syncing="syncing" @draft="(evaluation, observation) => trackCriterionDraft(criterion.id, evaluation, observation)" @save="(evaluation, observation, files, retainedPaths) => saveCriterion(criterion.id, evaluation, observation, files, retainedPaths)" @use-remote="useRemoteCriterion(criterion.id)" @retry="retryCriterion(criterion.id)" /></div>
+        <header class="workspace-panel__actions"><div><h2 id="criteria-title">Criterios del Área</h2><p>{{ currentArea.criterios.length - pendingCriteria }} de {{ currentArea.criterios.length }} completados</p></div>
+          <BaseButton v-if="canEditRoute && pendingCriteria" variant="secondary" size="compact" :loading="bulkSaving" :disabled="syncing" @click="markPendingAsCompliant"><CheckCheck :size="16" aria-hidden="true" />Marcar pendientes como C</BaseButton></header>
+        <p v-if="bulkMessage" class="area-inline-feedback" role="status">{{ bulkMessage }}</p>
+        <div class="criteria-list"><div v-for="criterion in currentArea.criterios" :id="`area-item-${criterion.id}`" :key="criterion.id">
+          <TechnicianCriterionEditor :criterion="criterion" :mutation="criterionMutation(criterion.id)" :draft-text="unratedDrafts[criterion.id]" :validation-error="activeIssue?.id === criterion.id ? activeIssue.message : ''" :editable="canEditRoute" :syncing="syncing" @draft="(evaluation, observation) => trackCriterionDraft(criterion.id, evaluation, observation)" @save="(evaluation, observation, files, retainedPaths) => saveCriterion(criterion.id, evaluation, observation, files, retainedPaths)" @use-remote="useRemoteCriterion(criterion.id)" @retry="retryCriterion(criterion.id)" />
+        </div></div>
+        <footer class="workspace-footer"><BaseButton variant="secondary" @click="goPrevious('criteria')"><ArrowLeft :size="17" />Anterior</BaseButton><BaseButton @click="goNext('criteria')">Siguiente: Puestos<ArrowRight :size="17" /></BaseButton></footer>
       </section>
 
       <section v-show="!currentArea.sinAcceso && activeTab === 'POINTS'" class="workspace-panel" aria-labelledby="points-title">
@@ -449,14 +601,21 @@ async function retryDevice(serviceDeviceId: string): Promise<void> {
         <TechnicianNewDeviceEditor v-if="newDeviceOpen" :device-types="packageValue?.deviceTypes ?? []" :conflict="creationConflict" :saving="newDeviceSaving" @save="saveNewDevice" @cancel="newDeviceOpen = false" @discard="discardNewDevice" />
         <p v-else-if="canEditRoute && !packageValue?.deviceTypes?.length" class="area-empty">No hay trampas disponibles en el paquete del servicio.</p>
         <p v-if="!currentArea.dispositivos.length" class="area-empty">Esta Área no tiene puestos de monitoreo asignados.</p>
-        <div v-else class="device-list"><TechnicianDeviceReviewEditor v-for="device in currentArea.dispositivos" :key="device.id" :device="device" :expanded="openDeviceId === device.id" :creation-mutation="creationMutation(device.id)" :mutation="deviceMutation(device.id)" :editable="canEditRoute" :syncing="syncing" @toggle="toggleDevice(device.id)" @draft="(input, photo) => trackDeviceDraft(device.id, input, photo)" @save="(input, photo) => saveDeviceAndCollapse(device.id, input, photo)" @use-remote="useRemoteDevice(device.id)" @retry="retryDevice(device.id)" /></div>
+        <div v-else class="device-list"><div v-for="device in currentArea.dispositivos" :id="`area-item-${device.id}`" :key="device.id" class="area-focus-item" :class="{ 'area-focus-item--invalid': activeIssue?.id === device.id }">
+          <TechnicianDeviceReviewEditor :device="device" :expanded="openDeviceId === device.id" :creation-mutation="creationMutation(device.id)" :mutation="deviceMutation(device.id)" :editable="canEditRoute" :syncing="syncing" @toggle="toggleDevice(device.id)" @draft="(input, photo) => trackDeviceDraft(device.id, input, photo)" @save="(input, photo) => saveDeviceAndCollapse(device.id, input, photo)" @use-remote="useRemoteDevice(device.id)" @retry="retryDevice(device.id)" />
+          <p v-if="activeIssue?.id === device.id" class="area-validation" role="alert">{{ activeIssue.message }}</p>
+        </div></div>
+        <footer class="workspace-footer"><BaseButton variant="secondary" @click="goPrevious('points')"><ArrowLeft :size="17" />Anterior</BaseButton><BaseButton @click="goNext('points')">Siguiente: Hallazgos<ArrowRight :size="17" /></BaseButton></footer>
       </section>
 
       <section v-show="!currentArea.sinAcceso && activeTab === 'FINDINGS'" class="workspace-panel" aria-labelledby="findings-title">
         <header class="workspace-panel__actions"><div><h2 id="findings-title">Hallazgos</h2><p>{{ findings.length }} registrados · {{ openFindings }} abiertos</p></div><BaseButton v-if="canEditRoute" size="compact" variant="secondary" :disabled="findingSavingId === 'new'" @click="newFindingOpen = true"><Plus :size="17" aria-hidden="true" />Agregar hallazgo</BaseButton></header>
         <TechnicianFindingCreateEditor v-if="newFindingOpen" :saving="findingSavingId === 'new'" @save="saveNewFinding" @cancel="newFindingOpen = false" />
         <p v-if="!findings.length" class="area-empty">No hay Hallazgos registrados para esta Área.</p>
-        <div v-else class="finding-list"><TechnicianFindingCard v-for="finding in findings" :key="finding.id" :finding="finding" :current-service-id="serviceId" :mutation="findingMutation(finding.id)" :editable="canEditRoute" :saving="findingSavingId === finding.id" @status="(input, files) => saveFindingStatus(finding.id, input, files)" @use-remote="useRemoteFinding(finding.id)" @retry="retryFinding(finding.id)" /></div>
+        <div v-else class="finding-list"><div v-for="finding in findings" :id="`area-item-${finding.id}`" :key="finding.id">
+          <TechnicianFindingCard :finding="finding" :current-service-id="serviceId" :mutation="findingMutation(finding.id)" :focus-pending="validationTarget === finding.id" :validation-error="activeIssue?.id === finding.id ? activeIssue.message : ''" :editable="canEditRoute" :saving="findingSavingId === finding.id" @status="(input, files) => saveFindingStatus(finding.id, input, files)" @use-remote="useRemoteFinding(finding.id)" @retry="retryFinding(finding.id)" />
+        </div></div>
+        <footer class="workspace-footer"><BaseButton variant="secondary" @click="goPrevious('findings')"><ArrowLeft :size="17" />Anterior</BaseButton><BaseButton @click="goNext('findings')">{{ stepAfterArea.kind === 'AREA' ? 'Siguiente área' : 'Ir al cierre' }}<ArrowRight :size="17" /></BaseButton></footer>
       </section>
     </template>
   </div>
@@ -478,6 +637,14 @@ async function retryDevice(serviceDeviceId: string): Promise<void> {
 .area-tabs strong { display:grid; min-width:1.35rem; height:1.35rem; place-items:center; border-radius:999px; background:var(--warning-subtle); color:var(--warning); font-size:0.7rem; }
 .area-tabs__neutral { background:var(--surface-raised) !important; color:var(--text-secondary) !important; }
 .workspace-panel { display:grid; gap:0.75rem; border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--surface); padding:0.8rem; }
+.workspace-footer { display:flex; align-items:center; justify-content:space-between; gap:.5rem; border-top:1px solid var(--border); padding-top:.65rem; }
+.workspace-footer :deep(.base-button) { min-width:0; min-height:44px; font-size:.8rem; }
+.workspace-footer :deep(.base-button:last-child) { flex:1; max-width:15rem; }
+.area-inline-feedback { margin:0; color:var(--success); font-size:.78rem; }
+.area-validation, .area-save-error { margin:.4rem 0 0; font-size:.78rem; color:var(--danger); }
+.area-save-error { padding:.55rem .75rem; border:1px solid var(--danger); border-radius:var(--radius); }
+.area-focus-item { border-radius:var(--radius); }
+.area-focus-item--invalid { outline:1px solid var(--danger); outline-offset:2px; }
 .workspace-panel > header { display:flex; align-items:flex-start; justify-content:space-between; gap:0.75rem; }
 .workspace-panel h2, .area-without-access h2, .workspace-panel p, .area-without-access p { margin:0; }
 .workspace-panel h2, .area-without-access h2 { font-size:1rem; }
@@ -486,5 +653,6 @@ async function retryDevice(serviceDeviceId: string): Promise<void> {
 .criteria-list, .device-list, .finding-list { display:grid; gap:0.65rem; }
 .area-without-access { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:start; gap:0.75rem; border:1px solid var(--warning); border-radius:var(--radius-lg); background:var(--warning-subtle); padding:1rem; color:var(--warning); }
 @media (min-width:760px) { .area-workspace__sticky { grid-template-columns:minmax(20rem,1fr) auto; align-items:end; } .area-tabs { grid-column:1/-1; } .workspace-panel { padding:1rem; } }
+@media (max-width:520px) { .workspace-panel__actions { flex-wrap:wrap; } .workspace-panel__actions > .base-button { width:auto; } .workspace-footer :deep(.base-button) { padding-inline:.5rem; } }
 @media (max-width:420px) { .area-picker { grid-template-columns:auto minmax(0,1fr); } .area-picker > :last-child { grid-column:1/-1; justify-self:end; } .service-navigation button, .area-tabs button { font-size:0.75rem; } }
 </style>

@@ -363,7 +363,7 @@ technicianServiceRoutes.post('/:id/areas/:areaId/findings/:findingId/status', as
   const deviceId = id(payload.deviceId)
   const lockToken = id(payload.lockToken)
   const expected = version(payload.version)
-  if (payload.estado !== 'EN_PROCESO' && payload.estado !== 'CERRADO') throw new ApiError(422, 'El estado del Hallazgo no es válido.', 'VALIDATION')
+  if (payload.estado !== 'SIN_CAMBIOS' && payload.estado !== 'EN_PROCESO' && payload.estado !== 'CERRADO') throw new ApiError(422, 'El estado del Hallazgo no es válido.', 'VALIDATION')
   const input = { estado: payload.estado, observacionCierre: optionalString(payload.observacionCierre) } as const
   const evidenceStoragePaths = findingEvidencePaths(payload.evidenceStoragePaths)
   if (input.estado === 'CERRADO' && !evidenceStoragePaths.length) throw new ApiError(422, 'Adjunta al menos una evidencia para cerrar el Hallazgo.', 'VALIDATION')

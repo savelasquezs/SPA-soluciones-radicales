@@ -5,7 +5,7 @@ import type { PoolClient } from 'pg'
 vi.mock('@neon/functions', () => ({ attachDatabasePool: vi.fn<() => void>(), waitUntil: vi.fn<() => void>() }))
 
 import { pool, transaction } from '../../functions/api/db'
-import { claimTechnicianService, createTechnicianDevice, createTechnicianFinding, releaseTechnicianServiceLock, saveTechnicianAreaAccess, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, startTechnicianService, technicianCommand } from '../../functions/api/technician-services/commands'
+import { claimTechnicianService, createTechnicianDevice, createTechnicianFinding, finalizeTechnicianService, releaseTechnicianServiceLock, saveTechnicianAreaAccess, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, saveTechnicianFindingStatus, startTechnicianService, technicianCommand } from '../../functions/api/technician-services/commands'
 import type { DeviceState } from '../../src/types/technicianServices'
 import { getTechnicianPackage } from '../../functions/api/technician-services/queries'
 
@@ -135,6 +135,46 @@ describe('technician service execution · real PostgreSQL', () => {
       contacto_principal_correo='nuevo@example.com' where id=(select sede_id from public.servicios where id=$1)`, [value.service])
     const historic = await pool.query('select responsable_nombre, responsable_correo from public.hallazgos where id=$1', [findingId])
     expect(historic.rows[0]).toMatchObject({ responsable_nombre: 'Responsable vigente', responsable_correo: 'vigente@example.com' })
+  })
+
+  it('requires a prior finding review and records Sigue igual without changing its global state', async () => {
+    const value = await fixture(), phoneId = randomUUID(), previousServiceId = randomUUID(), findingId = randomUUID()
+    await pool.query(`insert into public.servicios(id,sede_id,tipo_servicio,estado,inicio_programado,fin_programado,inicio_real,
+      creado_por_id,tecnico_responsable_id,valor_servicio)
+      select $2,sede_id,tipo_servicio,'EN_PROCESO',inicio_programado-interval '20 days',
+      fin_programado-interval '20 days',now()-interval '20 days',creado_por_id,tecnico_responsable_id,0
+      from public.servicios where id=$1`, [value.service, previousServiceId])
+    await pool.query(`insert into public.hallazgos(id,sede_id,area_id,servicio_apertura_id,fecha_apertura,
+      descripcion,recomendacion_accion,estado,responsable_nombre)
+      select $2,sede_id,$3,$4,now()-interval '19 days','Grieta antigua','Sellar grieta','ABIERTO','Responsable'
+      from public.servicios where id=$1`, [value.service, findingId, value.internalArea, previousServiceId])
+    const session = await transaction(client => startTechnicianService(client, value.technician, value.service, 1, phoneId))
+    const area = session.package.areas.find(item => item.areaId === value.internalArea)!
+    expect(area.hallazgos.find(item => item.id === findingId)).toMatchObject({ estado: 'ABIERTO', resultadoSeguimiento: null })
+    for (const entry of session.package.areas) {
+      for (const criterion of entry.criterios) {
+        await transaction(client => saveTechnicianCriterionEvaluation(client, value.technician, value.service, phoneId,
+          session.lock.token, criterion.id, criterion.version, 'C', ''))
+      }
+    }
+    const device = area.dispositivos[0]!
+    await transaction(client => saveTechnicianDeviceReview(client, value.technician, value.service, phoneId,
+      session.lock.token, device.id, randomUUID(), 0,
+      { estadoObservado: 'ACTIVO', capturas: [], consumo: '', productoQuimico: '', antidoto: '', observaciones: '' }, null))
+    const finish = () => transaction(client => finalizeTechnicianService(client, value.technician, value.service,
+      phoneId, session.lock.token, 'services/fake-technician.png', 'services/fake-client.png', 'Responsable'))
+    await expect(finish()).rejects.toMatchObject({ code: 'SERVICE_FINDINGS_INCOMPLETE' })
+    const input = { estado: 'SIN_CAMBIOS' as const, observacionCierre: '' }
+    const review = () => transaction(client => saveTechnicianFindingStatus(client, value.technician, value.service,
+      phoneId, session.lock.token, area.id, findingId, 1, input, []))
+    const saved = await review()
+    expect(saved.finding).toMatchObject({ estado: 'ABIERTO', resultadoSeguimiento: 'SIN_CAMBIOS' })
+    await expect(review()).rejects.toMatchObject({ code: 'FINDING_ALREADY_REVIEWED' })
+    const historic = await pool.query('select resultado,estado_anterior from public.hallazgo_seguimientos where servicio_id=$1 and hallazgo_id=$2', [value.service, findingId])
+    expect(historic.rows).toEqual([{ resultado: 'SIN_CAMBIOS', estado_anterior: 'ABIERTO' }])
+    const refreshed = await transaction(client => getTechnicianPackage(client, value.technician, value.service))
+    expect(refreshed.areas.find(item => item.areaId === value.internalArea)?.hallazgos.find(item => item.id === findingId)?.resultadoSeguimiento).toBe('SIN_CAMBIOS')
+    expect((await finish()).package.service.estado).toBe('FINALIZADO')
   })
 
   it('uses all catalogue methods without requiring per-visit dose or method', async () => {

@@ -31,7 +31,7 @@ Servicio
 
 El Técnico puede desplazarse entre Áreas en cualquier orden y volver a una anterior. No existe un orden obligatorio de inspección.
 
-El orden del recorrido es editable dentro del Servicio. Lista, selector y «Siguiente: [Área]» usan la misma secuencia. «Siguiente» conserva visible el paso posterior aunque el Área actual esté incompleta; después de la última Área abre la revisión y cierre, donde los pendientes se muestran y la finalización permanece bloqueada hasta completar la matriz requerida. Reorganizar no modifica la Sede ni los datos de evaluación. El detalle de interacción, persistencia offline, excepciones, concurrencia y criterios de aceptación está en [service-area-route.md](service-area-route.md).
+El orden del recorrido es editable dentro del Servicio. Lista, selector y navegación secuencial comparten la misma secuencia. El Técnico puede abrir libremente cualquier Área o pestaña sin evaluar para cambiar de sección. Los botones de avance guiado (Criterios → Puestos → Hallazgos → Siguiente Área/Cierre) comprueban la sección correspondiente y envían al primer elemento pendiente con mensaje contextual; «Anterior» nunca exige completitud. Al llegar a Cierre se ofrece la revisión global con enlaces a los pendientes, y la finalización permanece bloqueada hasta completar la matriz requerida. Reorganizar no modifica la Sede ni los datos de evaluación. Véase [service-area-route.md](service-area-route.md).
 
 Los Servicios de Refuerzo y los Servicios residenciales conservan sus reglas simplificadas y no ejecutan este recorrido MIP completo.
 
@@ -151,7 +151,7 @@ Los Hallazgos pertenecen al Servicio, Sede y Área correspondientes.
 
 Desde el Área el Técnico puede registrar descripción, recomendación/acción correctiva, evidencia y demás datos definidos por el dominio. Los Hallazgos anteriores pendientes deben seguir disponibles para verificación y eventual cierre según las reglas ya aprobadas.
 
-Al abrir un Hallazgo, el backend toma el nombre y correo del contacto principal vigente de la Sede y los guarda como responsable histórico; el Técnico no los escribe ni puede sustituirlos mediante la API. En registros offline se usa el contacto del paquete solo para la vista provisional: el snapshot definitivo se obtiene al sincronizar. Si falta una configuración válida del contacto, se indica que debe completarse desde la administración. Modificar el contacto de la Sede no altera los hallazgos históricos. La apertura puede incluir varias fotografías. Un Hallazgo nuevo permanece `ABIERTO` y no puede verificarse ni cerrarse dentro del mismo Servicio. En un Servicio posterior de la misma Sede, el Técnico puede marcarlo `EN_PROCESO` o cerrarlo; el cierre exige al menos una fotografía de evidencia y conserva el Servicio, la fecha y la observación de cierre. Las fotografías se guardan primero en el dispositivo local y se sincronizan individualmente con el almacenamiento privado cuando existe conexión.
+Al abrir un Hallazgo, el backend toma el nombre y correo del contacto principal vigente de la Sede y los guarda como responsable histórico; el Técnico no los escribe ni puede sustituirlos mediante la API. En registros offline se usa el contacto del paquete solo para la vista provisional: el snapshot definitivo se obtiene al sincronizar. Si falta una configuración válida del contacto, se indica que debe completarse desde la administración. Modificar el contacto de la Sede no altera los hallazgos históricos. La apertura puede incluir varias fotografías. Un Hallazgo nuevo permanece `ABIERTO` y no puede verificarse ni cerrarse dentro del mismo Servicio. En un Servicio posterior de la misma Sede, el Técnico debe evaluarlo una vez como «Sigue igual» (conserva estado ABIERTO/EN_PROCESO), `EN_PROCESO` o cerrado; la evaluación se registra en `hallazgo_seguimientos` con servicio, técnico y fecha; el cierre exige al menos una fotografía de evidencia y conserva el Servicio, la fecha y la observación de cierre. Las fotografías se guardan primero en el dispositivo local y se sincronizan individualmente con el almacenamiento privado cuando existe conexión.
 
 ## Firmas y finalización
 
@@ -167,7 +167,7 @@ Un Servicio Principal está completo cuando:
 - las dos firmas fueron aceptadas;
 - las mutaciones y archivos obligatorios quedaron sincronizados antes de que el servidor confirme la finalización.
 
-Los Hallazgos son opcionales y no se inventa uno para completar el Servicio. Abrir una pantalla no marca una sección como resuelta.
+Los Hallazgos nuevos son opcionales y no se inventa uno para completar el Servicio. Los Hallazgos anteriores abiertos o en proceso, que corresponden a Áreas accesibles, deben evaluarse en cada visita. «Sigue igual» cuenta como revisión sin cambiar el estado histórico. Abrir una pantalla no marca una sección como resuelta.
 
 Frontend y servidor validan la misma matriz de completitud. Offline puede guardarse una intención de cierre, pero la UI no muestra `FINALIZADO` hasta recibir confirmación del servidor.
 
@@ -212,6 +212,16 @@ La ejecución móvil presenta el Área actual mediante un selector y distribuye 
 La excepción «No fue posible acceder» se diligencia en un diálogo. «Habilitar Área» está disponible inmediatamente, incluso antes de completar datos; mientras el Área está guardada como sin acceso, no se muestran criterios, puestos ni hallazgos editables. Se exige descripción y entre 1 y 5 evidencias privadas, con fotografía local durable y sincronización individual. La columna histórica `sin_acceso_foto_storage_path` sigue reflejando la primera evidencia por compatibilidad; `sin_acceso_evidencias_storage_paths` guarda el conjunto en una nueva migración. Tras guardar, la acción de continuar abre otra Área que aún requiera trabajo o la pantalla de revisión/cierre, no firma sin validar.
 
 No se incluyen en esta entrega los cambios estructurales del Puesto de monitoreo (numeración automática, Trampa/Cebo opcionales y edición del alta). Se implementarán con migración y validaciones backend separadas para no alterar los snapshots históricos del servicio.
+
+## Navegación compacta del Técnico, criterios y firmas
+
+- Criterios: «Marcar pendientes como C» evalúa exclusivamente criterios sin calificación y conserva CP/NC/NA. El guardado reutiliza la cola idempotente offline existente; cada criterio puede corregirse individualmente.
+- CP y NC muestran una sugerencia de observación/foto, nunca una obligatoriedad añadida.
+- Observaciones sin evaluación se guardan como borradores locales asociados al Técnico, Servicio y Área. No bloquean pestañas ni selector.
+- Al pulsar Siguiente en Criterios o Puestos, se identifica el primer pendiente, se abre el puesto/hallazgo si aplica, se desplaza hasta el control y aparece validación contextual. Las pestañas continúan libres.
+- En Hallazgos, Siguiente Área/Cierre valida Criterios, Puestos y seguimientos previos, no la existencia obligatoria de hallazgos nuevos.
+- Cierre: nombre de firma del cliente precargado del contacto principal de la Sede, siempre editable sin modificar el contacto de origen. La validación final del servidor incluye seguimientos previos.
+- Disposición móvil compacta, zonas táctiles de 44 px y temas claro/oscuro mediante tokens de diseño existentes.
 
 ## Fichas técnicas para técnicos
 

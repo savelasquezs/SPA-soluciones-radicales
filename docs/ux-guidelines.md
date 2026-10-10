@@ -201,3 +201,12 @@ La configuración de plantillas, la prueba sintética, la generación oficial y 
 - La persistencia de fotografías funciona mediante cola local e identificadores de medio; la sincronización por archivo no debe perder los restantes ni reiniciar un envío ya confirmado.
 
 - Al abrir un Hallazgo, el formulario técnico pide solamente descripción, recomendación/acción y evidencias; la responsabilidad la determina el backend desde el contacto principal de la Sede. Se muestra en el detalle, no se edita en campo.
+
+## Ejecución móvil del Técnico (navegación guiada)
+
+- Compactar encabezados, tarjetas y pies de sección; preservar controles táctiles de 44 px y la identidad de ambos temas mediante tokens existentes.
+- Navegación manual de Área, Servicio, Cierre y pestañas Criterios/Puestos/Hallazgos siempre disponible, sin exigir completitud.
+- Los botones Anterior/Siguiente al pie de cada sección guían el recorrido. Anterior no valida. Siguiente valida exclusivamente el paso que intenta dejar; en Hallazgos valida el Área completa.
+- El primer pendiente se desplaza a la vista, abre su tarjeta y muestra error inline, sin toasts duplicados ni diálogos grandes para validaciones.
+- Los borradores parciales se conservan antes de cambiar de sección, incluso si aún no existe una calificación.
+- Los indicadores distinguen Hallazgos abiertos de Hallazgos sin evaluación durante la visita. «Sigue igual» registra una revisión sin cerrar el Hallazgo.

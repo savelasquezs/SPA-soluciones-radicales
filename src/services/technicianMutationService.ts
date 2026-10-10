@@ -103,7 +103,7 @@ function validMutation(value: unknown, actorId?: string, serviceId?: string): va
     && validFindingEvidences(record.evidences)
   if (record.kind === 'FINDING_STATUS') return isServiceId(record.areaId)
     && isServiceId(record.findingId)
-    && ['EN_PROCESO', 'CERRADO'].includes(record.estado ?? '')
+    && ['SIN_CAMBIOS', 'EN_PROCESO', 'CERRADO'].includes(record.estado ?? '')
     && typeof record.observacionCierre === 'string' && record.observacionCierre.length <= 2_000
     && Number.isSafeInteger(record.version) && Number(record.version) > 0
     && validFindingEvidences(record.evidences)

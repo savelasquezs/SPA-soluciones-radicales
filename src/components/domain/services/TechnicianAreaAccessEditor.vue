@@ -13,6 +13,7 @@ const props = withDefaults(defineProps<{
   editable: boolean
   syncing: boolean
   continueLabel?: string
+  restoredDraft?: { description: string; photos: File[] } | null
 }>(), { continueLabel: 'Continuar' })
 
 const emit = defineEmits<{
@@ -58,6 +59,10 @@ function reset(): void {
 function openException(): void {
   completed.value = false
   resetFields()
+  if (props.restoredDraft) {
+    description.value = props.restoredDraft.description
+    photos.value = [...props.restoredDraft.photos]
+  }
   dialogOpen.value = true
   emit('draft', true, description.value, photos.value)
 }
@@ -126,7 +131,7 @@ function continueFlow(): void {
     <div class="access-summary__actions"><BaseButton size="compact" variant="secondary" :disabled="!editable || syncing || submitting" @click="openException">Editar</BaseButton><BaseButton size="compact" :loading="submitting" :disabled="disabled" @click="enableAccess"><ShieldCheck :size="17" aria-hidden="true" />Habilitar acceso</BaseButton></div>
   </article>
 
-  <BaseButton v-else class="access-trigger" size="compact" variant="danger" :disabled="!editable || syncing || submitting" @click="openException"><ShieldAlert :size="18" aria-hidden="true" />No fue posible acceder</BaseButton>
+  <BaseButton v-else class="access-trigger" size="compact" variant="secondary" :disabled="!editable || syncing || submitting" @click="openException"><ShieldAlert :size="16" aria-hidden="true" />Registrar área sin acceso</BaseButton>
 
   <BaseDialog :model-value="dialogOpen" :title="completed ? 'Área registrada sin acceso' : 'No fue posible acceder al Área'" :description="completed ? 'La excepción quedó guardada y esta Área ya no tiene tareas pendientes.' : 'Indica el motivo y adjunta evidencia antes de continuar.'" :close-on-escape="!submitting" @update:model-value="value => { if (!value) closeException() }">
     <div v-if="completed" class="access-completed">

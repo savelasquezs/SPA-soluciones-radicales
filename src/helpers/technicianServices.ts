@@ -40,11 +40,30 @@ export function orderedTechnicianAreas(areas: TechnicianArea[]): TechnicianArea[
   return [...areas].sort((left, right) => left.posicionRecorrido - right.posicionRecorrido || left.id.localeCompare(right.id))
 }
 
-export function technicianAreaResolved(area: TechnicianArea): boolean {
+export function technicianFindingPending(finding: TechnicianArea['hallazgos'][number], serviceId: string): boolean {
+  return finding.servicioAperturaId !== serviceId && finding.estado !== 'CERRADO'
+    && finding.servicioCierreId !== serviceId && !finding.resultadoSeguimiento
+}
+
+export type TechnicianAreaIssue = { tab: 'criteria' | 'points' | 'findings'; id: string; message: string }
+export function technicianAreaIssues(area: TechnicianArea, serviceId: string): TechnicianAreaIssue[] {
+  if (area.sinAcceso) return []
+  return [
+    ...area.criterios.filter(criterion => !criterion.evaluacion)
+      .map(criterion => ({ tab: 'criteria' as const, id: criterion.id, message: 'Debes evaluar este criterio para continuar.' })),
+    ...area.dispositivos.filter(device => !device.revisado)
+      .map(device => ({ tab: 'points' as const, id: device.id, message: 'Revisa este puesto antes de continuar.' })),
+    ...area.hallazgos.filter(finding => technicianFindingPending(finding, serviceId))
+      .map(finding => ({ tab: 'findings' as const, id: finding.id, message: 'Indica si este hallazgo sigue igual, está en proceso o se cerró.' })),
+  ]
+}
+
+export function technicianAreaResolved(area: TechnicianArea, serviceId?: string): boolean {
   if (area.sinAcceso) return Boolean(area.sinAccesoDescripcion?.trim() && (area.sinAccesoFotoStoragePath || area.sinAccesoFotoLocalId))
   return area.criterios.length > 0
     && area.criterios.every(criterion => criterion.evaluacion)
     && area.dispositivos.every(device => device.revisado)
+    && (!serviceId || area.hallazgos.every(finding => !technicianFindingPending(finding, serviceId)))
 }
 
 export function technicianDevicePhotoRequired(previous: DeviceState, observed: DeviceState): boolean {

@@ -81,6 +81,7 @@ export interface SiteFinding {
   openingService: InsightService
   closingService: InsightService | null
   photos: EvidenceReference[]
+  followups?: Array<{ result: 'SIN_CAMBIOS' | 'EN_PROCESO' | 'CERRADO'; reviewedAt: string; service: InsightService }>
 }
 
 export interface InsightPage<T> {

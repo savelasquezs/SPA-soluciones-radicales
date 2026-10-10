@@ -69,15 +69,16 @@ La completitud de captura y la sincronización son dimensiones diferentes. Regis
 
 El botón muestra siempre el siguiente paso visible del flujo. Mientras exista otra Área después de la actual en el orden aplicado, muestra su nombre, por ejemplo «Siguiente: Oficinas». En la última Área muestra «Revisar servicio».
 
-La navegación y la completitud son responsabilidades diferentes: faltar criterios, revisiones o evidencias no oculta ni reemplaza el siguiente paso. El Área permanece marcada como pendiente y la revisión final explica qué Áreas requieren información antes de permitir finalizar.
+La navegación libre y el avance guiado son responsabilidades diferentes. Selector de Áreas y pestañas son libres y siempre permiten moverse sin evaluar. El botón Siguiente de cada sección comprueba los campos obligatorios de su etapa; al salir de Hallazgos comprueba toda el Área y señala el primer pendiente con desplazamiento contextual. «Anterior» nunca valida completitud. La revisión final explica qué Áreas requieren información antes de finalizar.
 
-Algoritmo:
+Algoritmo de avance guiado:
 
-1. Localizar el ID del Área actual en el orden aplicado al Servicio.
-2. Si existe otra Área inmediatamente después, mostrar «Siguiente: [nombre]» y navegar a ella, esté resuelta o pendiente.
-3. Si la actual es la última Área, mostrar «Revisar servicio» y abrir la pantalla de revisión y cierre.
-4. La pantalla de revisión lista todas las Áreas y conserva su estado real. Si hay pendientes, permite volver a ellas y mantiene bloqueada la finalización.
-5. La completitud nunca redirige de vuelta automáticamente a la misma Área ni crea navegación circular.
+1. Criterios → Puestos: comprobar que todos los Criterios estén evaluados; si falta uno, marcarlo y desplazarlo a la vista.
+2. Puestos → Hallazgos: comprobar que todos los Puestos estén revisados; si falta uno, abrir su tarjeta y enfocar la información pendiente.
+3. Hallazgos → Siguiente Área o Cierre: comprobar Criterios, Puestos y evaluaciones de Hallazgos heredados (un Hallazgo nuevo no se evalúa en su propia visita).
+4. Mostrar siempre las acciones «Anterior» y «Siguiente» al final de cada etapa, sin bloquear la navegación manual entre pestañas y Áreas.
+5. El avance desde Hallazgos respeta el orden aplicado y termina en la revisión global después de la última Área.
+6. La revisión final permite volver directamente al primer pendiente de cualquier Área y no confirma la finalización mientras existan pendientes.
 
 Antes de navegar se conserva el borrador técnico mediante la capa compartida. Un guardado remoto pendiente no debe forzar permanecer en un Área si los datos están guardados localmente; un fallo real de persistencia local sí requiere advertencia para evitar pérdida de trabajo.
 
@@ -85,13 +86,14 @@ El conjunto vacío o de una sola Área debe manejarse sin índices inválidos ni
 
 ### Ejemplos
 
-| Orden aplicado | Situación | Desde | Resultado |
-| --- | --- | --- | --- |
-| Producción → Baños → Oficinas | Producción incompleta | Producción | Siguiente: Baños |
-| Producción → Baños → Oficinas | Baños ya resuelta | Producción | Siguiente: Baños |
-| Producción → Baños → Oficinas | Oficinas incompleta | Oficinas | Revisar servicio |
-| Cualquier orden | Todas resueltas | Última Área | Revisar servicio |
-| Una sola Área | Área incompleta | Esa Área | Revisar servicio |
+| Situación | Acción | Resultado |
+| --- | --- | --- |
+| Criterio sin evaluación | Siguiente: Puestos | Enfoca y destaca el criterio pendiente |
+| Puesto sin revisión | Siguiente: Hallazgos | Abre y destaca el puesto pendiente |
+| Hallazgo previo abierto sin revisión | Siguiente área | Destaca el Hallazgo y ofrece Sigue igual / En proceso / Cerrado |
+| Área completa | Siguiente área | Avanza en el orden aplicado |
+| Última Área completa | Ir al cierre | Abre revisión y firmas |
+| Área incompleta | Selector de Área / pestaña | Navega libremente, conservando borradores |
 
 ## Persistencia y autorización para desarrollo
 

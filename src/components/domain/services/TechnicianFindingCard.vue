@@ -14,19 +14,22 @@ const props = defineProps<{
   mutation?: TechnicianFindingCreateMutation | TechnicianFindingStatusMutation | null
   editable: boolean
   saving: boolean
+  validationError?: string
+  focusPending?: boolean
 }>()
 const emit = defineEmits<{
   status: [input: TechnicianFindingStatusInput, files: File[]]
   useRemote: []
   retry: []
 }>()
-const expanded = ref(false)
+const expanded = ref(Boolean(props.focusPending))
+watch(() => props.focusPending, value => { if (value) expanded.value = true })
 const closureOpen = ref(false)
 const observation = ref('')
 const evidences = ref<File[]>([])
 const evidenceError = ref('')
 const priorFinding = computed(() => props.finding.servicioAperturaId !== props.currentServiceId)
-const canFollowUp = computed(() => props.editable && priorFinding.value && props.finding.estado !== 'CERRADO' && !props.mutation)
+const canFollowUp = computed(() => props.editable && priorFinding.value && props.finding.estado !== 'CERRADO' && !props.finding.resultadoSeguimiento && !props.mutation)
 const stateTone = computed(() => props.finding.estado === 'CERRADO' ? 'success' : props.finding.estado === 'EN_PROCESO' ? 'info' : 'warning')
 const stateLabel = computed(() => props.finding.estado === 'EN_PROCESO' ? 'En proceso' : props.finding.estado === 'CERRADO' ? 'Cerrado' : 'Abierto')
 const openingEvidenceCount = computed(() => props.finding.evidenciasAperturaStoragePaths.length + (props.finding.evidenciasAperturaLocalIds?.length ?? 0))
@@ -42,7 +45,7 @@ function closeFinding(): void {
 </script>
 
 <template>
-  <article class="finding-card">
+  <article class="finding-card" :class="{ 'finding-card--invalid': validationError }">
     <button class="finding-card__summary" type="button" :aria-expanded="expanded" @click="expanded = !expanded">
       <span><strong>{{ finding.descripcion }}</strong><small>{{ priorFinding ? `Abierto ${formatTechnicianDateTime(finding.fechaApertura)}` : 'Abierto en este servicio' }}</small></span>
       <StatusBadge :tone="stateTone">{{ stateLabel }}</StatusBadge>
@@ -63,8 +66,11 @@ function closeFinding(): void {
         <p>{{ mutation.error ?? 'El Hallazgo cambió. Elige cuál versión conservar.' }}</p>
         <div><BaseButton variant="secondary" :disabled="saving" @click="emit('useRemote')">{{ mutation.kind === 'FINDING_CREATE' ? 'Descartar Hallazgo local' : 'Usar versión sincronizada' }}</BaseButton><BaseButton :loading="saving" @click="emit('retry')">Reintentar mi cambio</BaseButton></div>
       </div>
+      <p v-if="finding.resultadoSeguimiento" class="finding-card__reviewed">Revisado en esta visita · {{ finding.resultadoSeguimiento === 'SIN_CAMBIOS' ? 'Sigue igual' : finding.resultadoSeguimiento === 'EN_PROCESO' ? 'En proceso' : 'Cerrado' }}</p>
+      <p v-if="validationError" class="finding-card__validation" role="alert">{{ validationError }}</p>
       <div v-if="canFollowUp" class="finding-card__actions">
-        <BaseButton v-if="finding.estado === 'ABIERTO'" variant="secondary" :disabled="saving" @click="emit('status', { estado: 'EN_PROCESO', observacionCierre: '' }, [])">Marcar en proceso</BaseButton>
+        <BaseButton variant="secondary" :disabled="saving" @click="emit('status', { estado: 'SIN_CAMBIOS', observacionCierre: '' }, [])">Sigue igual</BaseButton>
+        <BaseButton variant="secondary" :disabled="saving" @click="emit('status', { estado: 'EN_PROCESO', observacionCierre: '' }, [])">En proceso</BaseButton>
         <BaseButton :disabled="saving" @click="closureOpen = true">Cerrar Hallazgo</BaseButton>
       </div>
       <form v-if="closureOpen" class="finding-card__closure" @submit.prevent="closeFinding">
@@ -77,6 +83,9 @@ function closeFinding(): void {
 </template>
 
 <style scoped>
+ .finding-card--invalid { border-color:var(--danger); }
+.finding-card__validation { color:var(--danger); font-size:.78rem; }
+.finding-card__reviewed { color:var(--success); font-size:.78rem; }
 .finding-card { overflow:hidden; border:1px solid var(--border); border-radius:var(--radius); }
 .finding-card__summary { display:grid; min-height:58px; width:100%; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; gap:0.65rem; border:0; background:var(--surface); padding:0.75rem; color:var(--text); text-align:left; cursor:pointer; }
 .finding-card__summary > span { display:grid; min-width:0; gap:0.2rem; overflow-wrap:anywhere; }

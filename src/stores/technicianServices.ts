@@ -699,7 +699,7 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
   }
 
   async function applyCriterionEvaluation(serviceId: string, areaId: string, criterionId: string, evaluation: MipEvaluation, observation: string,
-    files: File[] = [], retainedEvidenceStoragePaths?: string[]): Promise<'synced' | 'pending' | 'conflict'> {
+    files: File[] = [], retainedEvidenceStoragePaths?: string[], deferSync = false): Promise<'synced' | 'pending' | 'conflict'> {
     const cache = caches.value[serviceId]
     if (!cache || cache.package.service.estado !== 'EN_PROCESO' || !cache.lock) throw new Error('Este celular no puede evaluar el servicio.')
     const area = cache.package.areas.find(item => item.id === areaId)
@@ -753,7 +753,7 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     await reloadMutations(serviceId)
     await persistCriterionEvaluation(serviceId, areaId, { ...criterion, evaluacion: evaluation, observacion: normalizedObservation || null,
       evidenciasStoragePaths: retained, evidenciasLocalIds: operation.evidences.map(evidence => evidence.mediaId) })
-    return onlineNow() ? syncPending(serviceId) : 'pending'
+    return !deferSync && onlineNow() ? syncPending(serviceId) : 'pending'
   }
 
   async function discardCriterionEvaluationConflict(serviceId: string, criterionId: string): Promise<void> {
@@ -1069,7 +1069,7 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
       id: findingId, servicioAperturaId: serviceId, fechaApertura: now,
       descripcion: normalized.descripcion, recomendacionAccion: normalized.recomendacionAccion,
       evidenciasAperturaStoragePaths: [], evidenciasAperturaLocalIds: mediaIds,
-      estado: 'ABIERTO',
+      estado: 'ABIERTO', resultadoSeguimiento: null,
       // Solo para la vista offline: al sincronizar se guarda el snapshot definitivo del servidor.
       responsableNombre: cache.package.service.contactoPrincipalNombre?.trim() || 'Contacto de la sede',
       responsableCorreo: cache.package.service.contactoPrincipalCorreo?.trim().toLowerCase() || null,
@@ -1094,6 +1094,7 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     if (area.sinAcceso) throw new Error('Habilita el acceso al Área antes de actualizar Hallazgos.')
     if (finding.servicioAperturaId === serviceId) throw new Error('Este Hallazgo se verificará en un Servicio posterior.')
     if (finding.estado === 'CERRADO') throw new Error('El Hallazgo ya fue cerrado.')
+    if (finding.resultadoSeguimiento) throw new Error('Este Hallazgo ya fue evaluado durante esta visita.')
     if (input.estado === 'CERRADO' && !files.length) throw new Error('Adjunta al menos una evidencia para cerrar el Hallazgo.')
     if (input.observacionCierre.length > 2_000) throw new Error('La observación no puede superar 2000 caracteres.')
     const existing = await reloadMutations(serviceId)
@@ -1112,11 +1113,13 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     try { await saveTechnicianMutation(operation) }
     catch (failure) { for (const mediaId of mediaIds) await deleteTechnicianMedia(operation.actorId, mediaId); throw failure }
     await reloadMutations(serviceId)
-    await persistFinding(serviceId, areaId, input.estado === 'EN_PROCESO'
-      ? { ...finding, estado: 'EN_PROCESO' }
-      : { ...finding, estado: 'CERRADO', servicioCierreId: serviceId, fechaCierre: now,
-          evidenciasCierreStoragePaths: [], evidenciasCierreLocalIds: mediaIds,
-          observacionCierre: input.observacionCierre.trim() || null })
+    await persistFinding(serviceId, areaId, input.estado === 'SIN_CAMBIOS'
+      ? { ...finding, resultadoSeguimiento: 'SIN_CAMBIOS' }
+      : input.estado === 'EN_PROCESO'
+        ? { ...finding, estado: 'EN_PROCESO', resultadoSeguimiento: 'EN_PROCESO' }
+        : { ...finding, estado: 'CERRADO', resultadoSeguimiento: 'CERRADO', servicioCierreId: serviceId, fechaCierre: now,
+            evidenciasCierreStoragePaths: [], evidenciasCierreLocalIds: mediaIds,
+            observacionCierre: input.observacionCierre.trim() || null })
     return onlineNow() ? syncPending(serviceId) : 'pending'
   }
 
@@ -1305,7 +1308,7 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
   async function finalizeService(serviceId: string, clientName: string): Promise<'synced' | 'pending' | 'conflict'> {
     const cache = caches.value[serviceId]
     if (!cache || cache.package.service.estado !== 'EN_PROCESO' || !cache.lock) throw new Error('Este celular no puede finalizar el servicio.')
-    if (!cache.package.areas.every(technicianAreaResolved)) throw new Error('Completa todas las Áreas antes de finalizar.')
+    if (!cache.package.areas.every(area => technicianAreaResolved(area, serviceId))) throw new Error('Completa todas las Áreas antes de finalizar.')
     const signatures = cache.package.signatures
     const technicianMediaId = signatures?.technicianLocalId
     const clientMediaId = signatures?.clientLocalId
