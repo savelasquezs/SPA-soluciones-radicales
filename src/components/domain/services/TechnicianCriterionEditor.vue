@@ -13,6 +13,8 @@ const props = defineProps<{
   mutation: TechnicianCriterionEvaluationMutation | null
   editable: boolean
   syncing: boolean
+  draftText?: string
+  validationError?: string
 }>()
 const emit = defineEmits<{
   save: [evaluation: MipEvaluation, observation: string, files: File[], retainedEvidenceStoragePaths: string[]]
@@ -27,8 +29,8 @@ const options: Array<{ value: MipEvaluation; short: string; label: string }> = [
   { value: 'NA', short: 'NA', label: 'No aplica' },
 ]
 const draftEvaluation = ref<MipEvaluation | null>(props.criterion.evaluacion)
-const draftObservation = ref(props.criterion.observacion ?? '')
-const observationOpen = ref(Boolean(props.criterion.observacion))
+const draftObservation = ref(props.draftText ?? props.criterion.observacion ?? '')
+const observationOpen = ref(Boolean(props.criterion.observacion || props.draftText))
 const photosOpen = ref(false)
 const photos = ref<File[]>([])
 const retainedEvidenceStoragePaths = ref([...props.criterion.evidenciasStoragePaths])
@@ -36,9 +38,16 @@ const evidenceCount = computed(() => retainedEvidenceStoragePaths.value.length +
 
 watch(() => props.criterion, criterion => {
   draftEvaluation.value = criterion.evaluacion
-  draftObservation.value = criterion.observacion ?? ''
+  draftObservation.value = props.draftText ?? criterion.observacion ?? ''
   retainedEvidenceStoragePaths.value = [...criterion.evidenciasStoragePaths]
   photos.value = []
+})
+
+watch(() => props.draftText, text => {
+  if (text !== undefined && !draftEvaluation.value) {
+    draftObservation.value = text
+    if (text.trim()) observationOpen.value = true
+  }
 })
 
 function choose(value: MipEvaluation): void {
@@ -76,11 +85,13 @@ function removeStoredPhoto(index: number): void {
 </script>
 
 <template>
-  <article class="criterion-card">
+  <article class="criterion-card" :class="{ 'criterion-card--invalid': validationError }">
     <header><h3>{{ criterion.nombre }}</h3><StatusBadge v-if="mutation?.status === 'CONFLICT'" tone="warning">Conflicto</StatusBadge><StatusBadge v-else-if="mutation" tone="warning">{{ mutation.status === 'SENDING' ? 'Sincronizando' : 'Guardado local' }}</StatusBadge><span v-else-if="criterion.evaluacion" class="criterion-saved" role="status" aria-label="Guardado"><Check :size="19" aria-hidden="true" /></span><StatusBadge v-else tone="neutral">Pendiente</StatusBadge></header>
     <div class="criterion-options" role="group" :aria-label="`Evaluación de ${criterion.nombre}`">
       <button v-for="option in options" :key="option.value" type="button" :aria-label="option.label" :title="option.label" :aria-pressed="draftEvaluation === option.value" :disabled="!editable || syncing || mutation?.status === 'CONFLICT'" @click="choose(option.value)"><strong>{{ option.short }}</strong></button>
     </div>
+    <p v-if="(draftEvaluation === 'CP' || draftEvaluation === 'NC') && !draftObservation.trim() && !evidenceCount" class="criterion-hint">Se recomienda agregar una observación o foto (opcional).</p>
+    <p v-if="validationError" class="criterion-validation" role="alert">{{ validationError }}</p>
     <div class="criterion-tools">
       <BaseButton size="compact" variant="ghost" :aria-expanded="observationOpen" @click="observationOpen = !observationOpen"><MessageSquareText :size="17" aria-hidden="true" />Observación<span v-if="draftObservation.trim()"> · ✓</span></BaseButton>
       <BaseButton size="compact" variant="ghost" :aria-expanded="photosOpen" @click="photosOpen = !photosOpen"><Camera :size="17" aria-hidden="true" />Fotos · {{ evidenceCount }}/5</BaseButton>
@@ -98,6 +109,9 @@ function removeStoredPhoto(index: number): void {
 </template>
 
 <style scoped>
+ .criterion-card--invalid { border-color:var(--danger); }
+.criterion-validation { margin:0; color:var(--danger); font-size:0.78rem; }
+.criterion-hint { margin:0; font-size:0.77rem; color:var(--text-secondary); }
 .criterion-card { display:grid; gap:0.65rem; border:1px solid var(--border); border-radius:var(--radius); padding:0.7rem; }
 header { display:flex; align-items:flex-start; justify-content:space-between; gap:0.75rem; }
 h3, p { margin:0; }
