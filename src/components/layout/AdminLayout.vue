@@ -1,21 +1,20 @@
 <script setup lang="ts">
-import { Building2, CalendarDays, ChevronDown, CircleHelp, CloudOff, FileText, Gauge, LogOut, Menu, Search, Settings2, Users, WalletCards, Wifi, Wrench, X } from 'lucide-vue-next'
+import { Building2, CalendarDays, CircleHelp, CloudOff, FileText, Gauge, Menu, Search, Settings2, Users, WalletCards, Wifi, X } from 'lucide-vue-next'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 
-import BaseButton from '@/components/base/BaseButton.vue'
+import AccountMenu from '@/components/layout/AccountMenu.vue'
 import BaseIconButton from '@/components/base/BaseIconButton.vue'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
-import { useNotificationsStore } from '@/stores/notifications'
 import { useTechnicianReportEmailStore } from '@/stores/technicianReportEmails'
 import { useTechnicianServicesStore } from '@/stores/technicianServices'
-import type { ActiveRole, ThemePreference } from '@/types/domain'
+import type { ThemePreference } from '@/types/domain'
 
 type NavigationItem = { to: string; label: string; icon: typeof Gauge; admin?: boolean }
 type NavigationGroup = { label: string; items: NavigationItem[] }
-const auth = useAuthStore(), app = useAppStore(), notifications = useNotificationsStore()
+const auth = useAuthStore(), app = useAppStore()
 const { online } = useNetworkStatus()
 const reportEmails = useTechnicianReportEmailStore()
 const technicianServices = useTechnicianServicesStore()
@@ -56,8 +55,8 @@ onUnmounted(() => {
   window.removeEventListener('focus', resumePendingWorkNow)
   document.removeEventListener('visibilitychange', onVisibilityChange)
 })
-const route = useRoute(), router = useRouter()
-const navigationOpen = ref(false), switchingRole = ref(false), changingAccount = ref(false)
+const route = useRoute()
+const navigationOpen = ref(false)
 const groups: NavigationGroup[] = [
   { label: 'OPERACIÓN', items: [
     { to: '/', label: 'Resumen', icon: Gauge }, { to: '/agenda', label: 'Agenda', icon: CalendarDays, admin: true }, { to: '/servicios', label: 'Servicios', icon: FileText },
@@ -83,29 +82,6 @@ const breadcrumbItems = computed<BreadcrumbItem[]>(() => {
 })
 function isActive(to: string): boolean { return route.path === to || (to !== '/' && route.path.startsWith(`${to}/`)) }
 watch(() => route.fullPath, () => { navigationOpen.value = false })
-async function logout(): Promise<void> {
-  try { await auth.logout(); await router.replace('/acceso') }
-  catch (error) { notifications.show(error instanceof Error ? error.message : 'No fue posible cerrar sesión', 'error') }
-}
-async function changeAccount(): Promise<void> {
-  if (changingAccount.value) return
-  changingAccount.value = true
-  try { await auth.useAnotherAccount() }
-  catch (error) {
-    changingAccount.value = false
-    notifications.show(error instanceof Error ? error.message : 'No fue posible cambiar de cuenta', 'error')
-  }
-}
-async function switchRole(role: ActiveRole): Promise<void> {
-  if (auth.activeRole === role || switchingRole.value) return
-  switchingRole.value = true
-  try {
-    await auth.selectRole(role)
-    if (role === 'TECNICO' && route.meta.roles?.includes('ADMINISTRADOR')) await router.replace('/')
-    notifications.show(`Rol ${role === 'ADMINISTRADOR' ? 'Administrador' : 'Técnico'} activo`, 'success')
-  } catch (error) { notifications.show(error instanceof Error ? error.message : 'No fue posible cambiar el rol', 'error') }
-  finally { switchingRole.value = false }
-}
 function setTheme(event: Event): void { app.setTheme((event.target as HTMLSelectElement).value as ThemePreference) }
 </script>
 
@@ -117,9 +93,8 @@ function setTheme(event: Event): void { app.setTheme((event.target as HTMLSelect
       <div class="topbar__activity">
         <span class="sync-state" :class="{ 'sync-state--offline': !online }"><Wifi v-if="online" :size="16" aria-hidden="true" /><CloudOff v-else :size="16" aria-hidden="true" />{{ online ? 'En línea' : 'Sin conexión' }}</span>
         <label class="theme-select"><span class="sr-only">Apariencia</span><select :value="app.theme" @change="setTheme"><option value="light">Claro</option><option value="dark">Oscuro</option><option value="system">Sistema</option></select></label>
-        <details class="account-menu"><summary><strong>{{ auth.profile?.nombreCompleto }}</strong><span>{{ auth.activeRole === 'ADMINISTRADOR' ? 'Administrador' : 'Técnico' }}</span><ChevronDown :size="16" aria-hidden="true" /></summary>
-          <div class="account-menu__panel"><p>{{ auth.authEmail }}</p><div v-if="auth.rolesAvailable.length > 1" class="role-options"><BaseButton v-for="role in auth.rolesAvailable" :key="role" variant="ghost" :disabled="switchingRole || changingAccount || auth.activeRole === role" @click="switchRole(role)"><Wrench v-if="role === 'TECNICO'" :size="17" /><Users v-else :size="17" />{{ role === 'ADMINISTRADOR' ? 'Administrador' : 'Técnico' }}</BaseButton></div><BaseButton variant="ghost" :loading="changingAccount" @click="changeAccount"><Users :size="17" />Cambiar cuenta</BaseButton><BaseButton variant="secondary" :disabled="changingAccount" @click="logout"><LogOut :size="17" />Cerrar sesión</BaseButton></div>
-        </details>
+        <AccountMenu placement="topbar" />
+
       </div>
       <BaseIconButton class="menu-button" :label="navigationOpen ? 'Cerrar navegación' : 'Abrir navegación'" aria-controls="admin-navigation" :aria-expanded="navigationOpen" @click="navigationOpen = !navigationOpen"><X v-if="navigationOpen" :size="22" /><Menu v-else :size="22" /></BaseIconButton>
     </header>
@@ -127,7 +102,12 @@ function setTheme(event: Event): void { app.setTheme((event.target as HTMLSelect
       <button v-if="navigationOpen" type="button" class="drawer-backdrop" aria-label="Cerrar navegación" @click="navigationOpen = false"></button>
       <aside id="admin-navigation" class="sidebar" :class="{ 'sidebar--open': navigationOpen }">
         <nav aria-label="Navegación principal"><section v-for="group in visibleGroups" :key="group.label"><h2>{{ group.label }}</h2><RouterLink v-for="item in group.items" :key="item.to" :to="item.to" :class="{ 'nav-active': isActive(item.to) }" @click="navigationOpen = false"><component :is="item.icon" :size="17" aria-hidden="true" />{{ item.label }}</RouterLink></section></nav>
-        <div class="sidebar__footer"><div><span>Tu espacio de trabajo</span><strong>Soluciones Radicales</strong></div><a href="https://github.com/savelasquezs/SPA-soluciones-radicales/tree/main/docs" target="_blank" rel="noreferrer"><CircleHelp :size="17" aria-hidden="true" />Ayuda y documentación</a><BaseButton class="sidebar__logout" variant="ghost" :loading="changingAccount" @click="changeAccount"><Users :size="17" aria-hidden="true" />Cambiar cuenta</BaseButton><BaseButton class="sidebar__logout" variant="ghost" :disabled="changingAccount" @click="logout"><LogOut :size="17" aria-hidden="true" />Cerrar sesión</BaseButton></div>
+        <div class="sidebar__footer">
+          <a href="https://github.com/savelasquezs/SPA-soluciones-radicales/tree/develop/docs" target="_blank" rel="noreferrer">
+            <CircleHelp :size="17" aria-hidden="true" /> Ayuda y documentación
+          </a>
+          <AccountMenu placement="sidebar" />
+        </div>
       </aside>
       <main class="content"><nav v-if="breadcrumbItems.length" class="breadcrumb" aria-label="Ruta de navegación"><template v-for="(item,index) in breadcrumbItems" :key="`${item.label}-${index}`"><RouterLink v-if="item.to" :to="item.to">{{ item.label }}</RouterLink><span v-else :aria-current="index===breadcrumbItems.length-1 ? 'page' : undefined">{{ item.label }}</span><span v-if="index<breadcrumbItems.length-1" class="breadcrumb__separator" aria-hidden="true">/</span></template></nav><RouterView /></main>
     </div>
@@ -149,14 +129,7 @@ function setTheme(event: Event): void { app.setTheme((event.target as HTMLSelect
 .sync-state { display: inline-flex; align-items: center; gap: 0.5rem; color: var(--text-secondary); font-size: 0.8125rem; white-space: nowrap; }
 .sync-state--offline { color: var(--warning); }
 .theme-select select { min-height: 36px; border: 0; background: transparent; color: var(--text-secondary); font-size: 0.8125rem; }
-.account-menu { position: relative; min-width: 0; }
-.account-menu summary { display: flex; min-height: 44px; align-items: center; gap: 0.5rem; list-style: none; cursor: pointer; }
-.account-menu summary::-webkit-details-marker { display: none; }
-.account-menu summary strong { max-width: 15rem; overflow: hidden; font-size: 0.875rem; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
-.account-menu summary span { color: var(--text-secondary); font-size: 0.8125rem; white-space: nowrap; }
-.account-menu__panel { position: absolute; top: calc(100% + 0.5rem); right: 0; display: grid; width: 18rem; gap: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface-raised); padding: 1rem; box-shadow: var(--shadow-lg); }
-.account-menu__panel p { margin: 0; overflow-wrap: anywhere; color: var(--text-secondary); font-size: 0.8125rem; }
-.role-options { display: grid; }
+.topbar__activity :deep(.account-control--topbar) { width: min(16rem, 30vw); }
 .menu-button { display: none; justify-self: end; }
 .shell-body { display: grid; min-width: 0; grid-template-columns: 240px minmax(0, 1fr); }
 .sidebar { position: sticky; top: 64px; display: flex; height: calc(100vh - 64px); flex-direction: column; overflow-y: auto; background: var(--sidebar); padding: 1.5rem 1rem 1rem; }
@@ -167,12 +140,8 @@ function setTheme(event: Event): void { app.setTheme((event.target as HTMLSelect
 .sidebar nav a:hover { background: var(--hover); color: var(--text); }
 .sidebar nav a.nav-active { background: var(--accent-subtle); color: var(--accent); }
 .sidebar__footer { display: grid; gap: 0.75rem; margin-top: auto; }
-.sidebar__footer > div { display: grid; gap: 0.5rem; border-radius: 8px; background: var(--surface); padding: 0.75rem; }
-.sidebar__footer span { color: var(--text-secondary); font-size: 0.8125rem; }
-.sidebar__footer strong { font-size: 0.8125rem; font-weight: 500; }
-.sidebar__footer a { display: flex; min-height: 44px; align-items: center; gap: 0.5rem; color: var(--text-secondary); font-size: 0.8125rem; text-decoration: none; }
-.sidebar__footer :deep(.sidebar__logout) { width: 100%; justify-content: flex-start; min-height: 44px; padding: 0.75rem; font-size: 0.8125rem; font-weight: 500; }
-.sidebar__footer :deep(.sidebar__logout:hover:not(:disabled)) { background: var(--hover); color: var(--text); transform: none; }
+.sidebar__footer a { display: flex; min-height: 44px; align-items: center; gap: 0.5rem; padding: 0 0.5rem; color: var(--text-secondary); font-size: 0.8125rem; text-decoration: none; }
+.sidebar__footer a:hover { color: var(--text); text-decoration: underline; }
 .content { width: 100%; max-width: 1184px; min-width: 0; margin: 0 auto; padding: 1.75rem 2rem 3rem; }
 .breadcrumb { display:flex; align-items:center; gap:0.35rem; margin:0 0 1rem; color:var(--text-secondary); font-size:0.75rem; }
 .breadcrumb a { color:inherit; text-decoration:none; }
@@ -181,8 +150,10 @@ function setTheme(event: Event): void { app.setTheme((event.target as HTMLSelect
 .drawer-backdrop { display: none; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 @media (max-width: 1024px) {
-  .topbar { grid-template-columns: 1fr auto; }
-  .global-search, .topbar__activity { display: none; }
+  .topbar { grid-template-columns: minmax(0, 1fr) auto auto; column-gap: 0.6rem; }
+  .global-search, .sync-state, .theme-select { display: none; }
+  .topbar__activity { display: flex; }
+  .topbar__activity :deep(.account-control--topbar) { width: auto; }
   .menu-button { display: inline-grid; }
   .shell-body { grid-template-columns: 1fr; }
   .sidebar { position: fixed; z-index: 35; top: 64px; bottom: 0; left: 0; width: min(19rem, calc(100vw - 3rem)); height: auto; visibility: hidden; transform: translateX(-105%); transition: transform 180ms ease; box-shadow: var(--shadow-lg); }
@@ -192,7 +163,8 @@ function setTheme(event: Event): void { app.setTheme((event.target as HTMLSelect
 }
 @media (max-width: 560px) {
   .topbar { height: 60px; padding: 0 1rem; }
-  .brand__symbol { width: 38px; height: 38px; }
+  .brand__symbol { width: 34px; height: 34px; }
+  .brand__copy strong { max-width: calc(100vw - 190px); overflow: hidden; text-overflow: ellipsis; font-size: 0.82rem; }
   .brand__copy small { display: none; }
   .shell-body { display: block; }
   .sidebar { top: 60px; }
