@@ -167,10 +167,17 @@ npm run db:bootstrap
 La Function `api` centraliza operaciones privilegiadas, Google OAuth, Gmail y Calendar. Sus secretos se cargan en Neon y no se exponen como variables `VITE_*`.
 
 ```bash
-npx -y neon@6.2.4 deploy
+npx -y neon@6.2.4 checkout desarrollo --no-env-pull
+npx -y neon@6.2.4 functions get api
+npx -y neon@6.2.4 functions deploy api --src functions/api/index.ts
+npx -y neon@6.2.4 functions get api
 ```
 
-Usar el CLI directamente desde el checkout de `develop` enlazado a la rama Neon `desarrollo`. No subir ZIP, Base64 ni binarios al repositorio: el CLI realiza el empaquetado necesario. La API no usa dependencias nativas `sharp`/`libvips`.
+**Runbook obligatorio para desplegar la API:** [Despliegue de Neon Functions](neon-functions-deploy.md). Incluye el camino CLI de solo código y la alternativa **ZIP compilado + conector Neon**, verificada con el deployment **#46** en `desarrollo` el 2026-10-10. Es el procedimiento de recuperación cuando no hay CLI autenticado o un `neon deploy` completo falla por variables privadas locales ausentes.
+
+No ejecutar `neon deploy` sin revisar el `neon.ts` y las variables locales: ese comando reconcilia más recursos que la Function y requiere valores definidos para sus secretos. **Nunca** enviarlos vacíos. La alternativa mediante conector solo transmite código y **hereda el environment de la versión anterior**. Los ZIP/Base64 pueden usarse **solo temporalmente**, nunca se suben al repositorio.
+
+La API actual no usa dependencias nativas `sharp`/`libvips`; verificar el empaquetado si eso cambia.
 
 `ALLOWED_ORIGINS` debe incluir solo los orígenes locales, productivos y de preview realmente autorizados.
 

@@ -13,6 +13,7 @@ La documentación versionada es la referencia viva de Soluciones Radicales MIP.
 | Arquitectura y decisiones | `docs/architecture/` |
 | Base de datos y migraciones | `database/README.md` |
 | Proceso de implementación | `docs/development/workflow.md` |
+| **Despliegue de la API Neon** | **`docs/development/neon-functions-deploy.md`** |
 | Producción de videos de usuario | `docs/development/documentation-videos.md` y `docs/development/user-manual-video-standard.md` |
 | Estado de implementación | `tasks.md`, código y pruebas |
 | Comportamiento implementado | Código y pruebas |
@@ -37,6 +38,7 @@ docs/
 │   ├── cloudflare-workers.md
 │   ├── documentation-videos.md
 │   ├── neon-setup.md
+│   ├── neon-functions-deploy.md
 │   ├── user-manual-video-standard.md
 │   └── workflow.md
 ├── frontend/
