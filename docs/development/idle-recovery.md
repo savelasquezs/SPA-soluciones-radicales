@@ -15,7 +15,7 @@ Corrección sobre `develop` del bloqueo aparente al retomar la SPA. La suspensi�
 - 403, 409 y errores de validación no se reintentan. Una respuesta JSON inválida no se convierte silenciosamente en datos nulos.
 - POST/PUT/PATCH/DELETE nunca se repiten automáticamente, tampoco ante 401. Si se pierde la respuesta de un guardado se muestra `MUTATION_UNCONFIRMED`: conservar borrador y consultar el registro antes de repetir. Un timeout del navegador no prueba que el servidor haya revertido.
 
-La sesión se recupera bajo demanda, al hacer una petición tras la inactividad. `exp` se usa únicamente como indicio de renovación (margen de 30 segundos), nunca como autorización. Un token próximo a vencer o vencido fuerza `getSession({ query: { disableCookieCache: true } })`. Una lectura rechazada con 401 fuerza renovación una vez. No se persisten tokens ni se debilita JWT/RLS; tampoco se cierra sesión por una falla de red ni se recarga la página automáticamente.
+La sesión se recupera bajo demanda, al hacer una petición tras la inactividad. `exp` se usa únicamente como indicio de renovación (margen de 30 segundos), nunca como autorización. Un token próximo a vencer o vencido fuerza `getSession({ query: { disableCookieCache: true } })`. La renovación también envía `X-Force-Fetch` al cliente Neon para evitar su caché local; el SDK elimina ese header antes de la solicitud HTTP. Una lectura rechazada con 401 fuerza renovación una vez. No se persisten tokens ni se debilita JWT/RLS. Tampoco se cierra sesión por una falla de red ni se recarga la página automáticamente.
 
 ## Navegación y formularios
 
@@ -32,7 +32,7 @@ El pool conserva `max: 5` y `attachDatabasePool`:
 - sentencia en servidor: 20 s;
 - espera de una consulta en cliente: 25 s.
 
-Estos límites no son un límite total de una transacción ni de llamadas externas. No se introduce un timeout de transacción ociosa que pueda interrumpir las integraciones existentes. Los errores de conexiones ociosas se manejan sin imprimir mensajes, SQL, URLs ni credenciales. La conexión se descarta si quedó inutilizable; un fallo de rollback no oculta el error inicial. El trabajo de una transacción nunca se vuelve a ejecutar automáticamente, especialmente si se pierde la confirmación de COMMIT.
+Estos límites no son un límite total de una transacción ni de llamadas externas. No se introduce un timeout de transacción ociosa que pueda interrumpir las integraciones existentes. Los errores de conexiones ociosas se manejan sin imprimir mensajes, SQL, URLs ni credenciales. La conexión se descarta si quedó inutilizable; un fallo de rollback no oculta el error inicial. El trabajo de una transacción nunca se vuelve a ejecutar automáticamente, especialmente si se pierde la confirmación de COMMIT. En ese caso se informa `COMMIT_UNCONFIRMED` para consultar el registro antes de repetir el guardado.
 
 ## Pruebas
 
@@ -41,6 +41,8 @@ Estos límites no son un límite total de una transacción ni de llamadas extern
 - `src/__tests__/unsavedNavigation.spec.ts`: guardado ocupado, clics repetidos, cancelar y desmontaje.
 - `functions/api/db.spec.ts`: configuración, adquisición, liberación, rollback, pérdida de COMMIT y errores ociosos.
 - `e2e/idle-recovery.spec.ts`: navegación desktop/móvil tras 5/10/20 min con reloj simulado, renovación real del cliente SDK contra respuestas interceptadas y formulario conservado ante red cortada. Incluido en el workflow existente de Services.
+
+- `e2e/technician-services.spec.ts`: recuperación automática tras un fallo temporal de lectura y reintento manual después de agotar los dos intentos; ninguna preparación inicia el servicio.
 
 Estas pruebas no equivalen a reproducir el incidente con la sesión Google del usuario ni a medir un arranque frío real de Neon. Tras integrar y desplegar, verificar la sesión real en Usuarios, Servicios y Catálogos después de 5, 10 y 20 minutos, incluyendo una pestaña en segundo plano. Registrar ruta, duración y estado HTTP sin tokens. Si solo fallan rutas cargadas por primera vez después de un despliegue, investigar aparte los chunks de Vite obsoletos.
 
