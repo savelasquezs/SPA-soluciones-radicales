@@ -49,6 +49,32 @@ function activateNearest(event: PointerEvent, metric: Metric): void {
 }
 
 const locale = new Intl.NumberFormat('es-CO')
+const summary = computed(() => {
+  const visits = trends.value.visits
+  if (visits.length < 2) return 'Se requiere al menos una visita anterior para interpretar la evolución.'
+  const last = visits[visits.length - 1]!
+  const parts: string[] = []
+  if (last.complianceDelta !== null) {
+    const delta = Math.abs(last.complianceDelta).toLocaleString('es-CO', { maximumFractionDigits: 1 })
+    parts.push(last.complianceDelta < 0
+      ? 'El cumplimiento MIP disminuyó ' + delta + ' puntos porcentuales frente a la visita anterior.'
+      : last.complianceDelta > 0
+        ? 'El cumplimiento MIP aumentó ' + delta + ' puntos porcentuales frente a la visita anterior.'
+        : 'El cumplimiento MIP se mantuvo sin cambios.')
+  }
+  if (last.capturesDelta !== null) {
+    const count = locale.format(Math.abs(last.capturesDelta))
+    parts.push(last.capturesDelta < 0
+      ? 'Se registraron ' + count + ' capturas menos que en la visita anterior.'
+      : last.capturesDelta > 0
+        ? 'Se registraron ' + count + ' capturas más que en la visita anterior.'
+        : 'El número de capturas se mantuvo sin cambios.')
+  }
+  if (last.capturesDelta !== null && last.capturesDelta < 0)
+    parts.push('Una reducción de capturas no demuestra por sí sola una disminución de la presencia de plagas.')
+  return parts.join(' ')
+})
+
 </script>
 
 <template>
@@ -148,10 +174,12 @@ const locale = new Intl.NumberFormat('es-CO')
       </div>
       <figcaption>Suma de todas las plagas capturadas en los puestos revisados.</figcaption>
     </figure>
+    <p class="report-trends__summary" data-testid="mip-trend-summary">{{ summary }}</p>
   </div>
 </template>
 
 <style scoped>
+.report-trends__summary{grid-column:1/-1;margin:0;padding:.55rem .7rem;border-left:2px solid var(--report-accent);font-size:.75rem;line-height:1.5;color:var(--report-ink)}
 .report-trends{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;align-items:start}
 .report-trend{margin:0;min-width:0;padding:.8rem .65rem .65rem;border:1px solid var(--report-border);border-radius:7px;background:#fff;break-inside:avoid;page-break-inside:avoid}
 .report-trend__header{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:.2rem .5rem;padding:0 .35rem}
