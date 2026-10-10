@@ -73,7 +73,18 @@
 .report-point__notes{color:var(--report-muted);font-size:.74rem;margin-top:.35rem!important}
 .report-finding{border:1px solid var(--report-border);border-radius:6px;padding:.8rem;margin:.75rem 0;break-inside:avoid}
 .report-finding__head{display:flex;align-items:start;justify-content:space-between;gap:.75rem}
-.report-finding__head span{font-size:.7rem;color:var(--report-muted);white-space:nowrap}
+.report-finding__head span{font-size:.7rem;color:var(--report-muted)}
+.report-finding__badge{flex-shrink:0;align-self:flex-start;white-space:normal;text-align:right;max-width:45%;font-weight:600}
+.report-finding__badge--pending{color:#92540d!important}
+.report-finding__badge--closed{color:#236343!important}
+.report-finding__meta{color:var(--report-muted)}
+.report-finding__evidence,.report-finding__timeline{margin-top:.7rem}
+.report-finding h4{font-size:.74rem;font-weight:650;margin:0 0 .35rem}
+.report-finding__review{border-left:2px solid var(--report-border);padding:.15rem 0 .5rem .7rem;margin:.35rem 0}
+.report-finding__review-head{display:flex;justify-content:space-between;align-items:baseline;gap:.4rem;font-size:.73rem}
+.report-finding__review-head span{color:var(--report-muted);font-size:.69rem}
+.report-finding__review .report-photo-row{margin-top:.3rem}
+@media(max-width:480px){.report-finding__head{flex-wrap:wrap}.report-finding__badge{max-width:100%;text-align:left}}
 .report-finding p{font-size:.78rem;margin-top:.45rem!important}
 .report-finding small{display:block;font-size:.72rem;color:var(--report-muted);margin-top:.4rem}
 .report-signatures{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1.2rem}
