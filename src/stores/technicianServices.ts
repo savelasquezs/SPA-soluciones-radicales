@@ -1106,7 +1106,7 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     const previousPhotos = outstanding?.evidences.length ?? 0
     if (oldPaths.length + previousPhotos + files.length > 10) throw new Error('Puedes guardar hasta diez fotos por visita.')
     if (input.estado === 'CERRADO' && oldPaths.length + previousPhotos + files.length === 0) {
-      throw new Error('Adjunta una fotografía para cerrar el Hallazgo.')
+      throw new Error('Adjunta una evidencia fotográfica para cerrar el Hallazgo.')
     }
     const mediaIds = await saveFindingMedia(serviceId, areaId, files)
     const now = new Date().toISOString()
