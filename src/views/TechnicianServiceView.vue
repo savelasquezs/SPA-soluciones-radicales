@@ -75,7 +75,7 @@ async function claim(): Promise<void> {
 }
 
 async function enterRoute(): Promise<void> {
-  const pending = orderedAreas.value.find(area => !technicianAreaResolved(area))
+  const pending = orderedAreas.value.find(area => !technicianAreaResolved(area, serviceId.value))
   await router.replace(pending
     ? { name: 'technician-service-area', params: { id: serviceId.value, areaId: pending.id } }
     : { name: 'technician-service-review', params: { id: serviceId.value } })

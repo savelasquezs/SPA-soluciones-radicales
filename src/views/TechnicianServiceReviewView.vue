@@ -10,7 +10,7 @@ import StatusPanel from '@/components/base/StatusPanel.vue'
 import ServicePage from '@/components/domain/services/ServicePage.vue'
 import SendReportDialog from '@/components/domain/services/SendReportDialog.vue'
 import TechnicianSignaturePad from '@/components/domain/services/TechnicianSignaturePad.vue'
-import { orderedTechnicianAreas, technicianAreaResolved } from '@/helpers/technicianServices'
+import { orderedTechnicianAreas, technicianAreaResolved, technicianAreaIssues } from '@/helpers/technicianServices'
 import { useTechnicianServicesStore } from '@/stores/technicianServices'
 import { useTechnicianReportEmailStore } from '@/stores/technicianReportEmails'
 
@@ -23,7 +23,7 @@ const loading = ref(true)
 const error = ref('')
 const packageValue = computed(() => services.currentPackage)
 const areas = computed(() => orderedTechnicianAreas(packageValue.value?.areas ?? []))
-const pending = computed(() => areas.value.filter(area => !technicianAreaResolved(area)))
+const pending = computed(() => areas.value.filter(area => !technicianAreaResolved(area, serviceId.value)))
 const signatureRole = ref<'TECHNICIAN' | 'CLIENT' | null>(null)
 const clientName = ref('')
 const saving = ref(false)
@@ -64,7 +64,7 @@ watch(pendingEmailItems, (current, previous) => {
 onMounted(async () => {
   try {
     const loaded = await services.ensurePackage(serviceId.value)
-    clientName.value = loaded.signatures?.clientName ?? ''
+    clientName.value = loaded.signatures?.clientName ?? loaded.service.contactoPrincipalNombre ?? ''
     await emails.hydrate().catch(() => undefined)
   }
   catch (failure) { error.value = failure instanceof Error ? failure.message : 'No fue posible revisar el servicio.' }
@@ -72,7 +72,10 @@ onMounted(async () => {
 })
 
 function openArea(areaId: string): void {
-  void router.push({ name: 'technician-service-area', params: { id: serviceId.value, areaId } })
+  const area = areas.value.find(item => item.id === areaId)
+  const issue = area ? technicianAreaIssues(area, serviceId.value)[0] : null
+  void router.push({ name: 'technician-service-area', params: { id: serviceId.value, areaId },
+    query: issue ? { tab: issue.tab, focus: issue.id } : undefined })
 }
 
 async function acceptSignature(file: File): Promise<void> {
@@ -113,7 +116,12 @@ async function finish(): Promise<void> {
       <StatusPanel v-if="finalized" title="Servicio finalizado" message="Las firmas y el cierre fueron confirmados por el servidor." tone="success" />
       <StatusPanel v-else-if="pending.length" title="Aún hay Áreas pendientes" :message="`${pending.length} de ${areas.length} Áreas requieren información. Puedes revisar el cierre, pero no finalizar hasta completarlas.`" tone="warning" />
       <StatusPanel v-else title="Recorrido completo" message="Las Áreas están resueltas. Registra ambas firmas para finalizar." tone="success" />
-      <section class="review-list" aria-labelledby="review-areas-title"><h2 id="review-areas-title">Estado por Área</h2><button v-for="area in areas" :key="area.id" type="button" @click="openArea(area.id)"><span>{{ area.nombre }}</span><StatusBadge :tone="technicianAreaResolved(area) ? 'success' : 'neutral'">{{ technicianAreaResolved(area) ? 'Resuelta' : 'Pendiente' }}</StatusBadge></button></section>
+      <section class="review-list" aria-labelledby="review-areas-title"><h2 id="review-areas-title">Estado por Área</h2>
+        <button v-for="area in areas" :key="area.id" type="button" @click="openArea(area.id)">
+          <span class="review-list__name"><strong>{{ area.nombre }}</strong><small v-if="technicianAreaIssues(area, serviceId).length">{{ technicianAreaIssues(area, serviceId).filter(issue => issue.tab === 'criteria').length }} criterios · {{ technicianAreaIssues(area, serviceId).filter(issue => issue.tab === 'points').length }} puestos · {{ technicianAreaIssues(area, serviceId).filter(issue => issue.tab === 'findings').length }} hallazgos pendientes</small></span>
+          <StatusBadge :tone="technicianAreaResolved(area, serviceId) ? 'success' : 'neutral'">{{ technicianAreaResolved(area, serviceId) ? 'Resuelta' : 'Pendiente' }}</StatusBadge>
+        </button>
+      </section>
       <section v-if="!finalized" class="signature-section" aria-labelledby="signatures-title">
         <div><h2 id="signatures-title">Firmas</h2><p>Ambas son obligatorias para cada servicio.</p></div>
         <article><div><strong>Técnico</strong><span>{{ technicianSigned ? 'Firma guardada' : 'Pendiente' }}</span></div><BaseButton variant="secondary" :disabled="saving || Boolean(finalization)" @click="signatureRole = 'TECHNICIAN'">{{ technicianSigned ? 'Firmar de nuevo' : 'Firmar' }}</BaseButton></article>
@@ -153,6 +161,9 @@ async function finish(): Promise<void> {
 .review-list { display:grid; gap:0.7rem; border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--surface); padding:1rem; }
 h2 { margin:0; font-size:1rem; }
 .review-list button { display:flex; min-height:52px; align-items:center; justify-content:space-between; gap:0.75rem; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); padding:0.75rem; color:var(--text); text-align:left; cursor:pointer; }
+.review-list__name { display:grid; min-width:0; gap:.2rem; }
+.review-list__name strong { font-size:.88rem; }
+.review-list__name small { font-size:.75rem; color:var(--text-secondary); }
 .review-list button:hover, .review-list button:focus-visible { border-color:var(--border-strong); background:var(--hover); }
 .review-email{display:grid;gap:.65rem;padding:1rem;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--surface)}
 .review-email h2,.review-email p{margin:0}
