@@ -14,6 +14,7 @@ const router = createRouter({
     { path: '/sin-acceso', name: 'access-denied', component: () => import('@/views/AccessDeniedView.vue'), meta: { public: true } },
     { path: '/error-sesion', name: 'session-error', component: () => import('@/views/SessionErrorView.vue'), meta: { public: true } },
     { path: '/seleccionar-rol', name: 'role-selection', component: () => import('@/views/RoleSelectionView.vue') },
+    { path: '/cuenta/cambiar-google', name: 'google-change-confirm', component: () => import('@/views/GoogleChangeView.vue'), meta: { googleHandoff: true } },
     {
       path: '/',
       component: () => import('@/components/layout/AdminLayout.vue'),
@@ -37,6 +38,7 @@ const router = createRouter({
         { path: 'catalogos', redirect: '/configuracion/catalogos' },
         { path: 'documentos', name: 'documents', component: () => import('@/views/PlaceholderView.vue'), meta: { roles: adminOnly, breadcrumb: 'Documentos', placeholderTitle: 'Documentos', placeholderDescription: 'Los documentos se implementarán en su issue funcional.' } },
         { path: 'pagos', name: 'payments', component: () => import('@/views/PlaceholderView.vue'), meta: { roles: adminOnly, breadcrumb: 'Pagos y caja', placeholderTitle: 'Pagos y caja', placeholderDescription: 'Pagos y caja se implementará en su issue funcional.' } },
+        { path: 'perfil', name: 'my-profile', component: () => import('@/views/ProfileView.vue'), meta: { breadcrumb: 'Mi perfil' } },
         { path: 'usuarios', name: 'users', component: () => import('@/views/UsersView.vue'), meta: { roles: adminOnly, breadcrumb: 'Administración / Usuarios' } },
         { path: 'configuracion', name: 'settings', component: () => import('@/views/SettingsView.vue'), meta: { roles: adminOnly } },
         { path: 'configuracion/catalogos', name: 'catalogs', component: () => import('@/views/MipCatalogsView.vue'), meta: { roles: adminOnly, breadcrumb: [{ label: 'Configuración', to: '/configuracion' }, { label: 'Catálogos MIP' }] } },
