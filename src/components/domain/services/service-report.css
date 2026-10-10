@@ -122,7 +122,9 @@ body:has(.report-document) .report-workspace{display:block!important}
 .report-document__meta{margin-top:8mm}
 .report-document__section{padding-top:9mm}
 .report-document__heading,.report-area__head{break-after:avoid;page-break-after:avoid}
-.report-area,.report-point,.report-criterion,.report-finding,.report-signature,.report-metric{break-inside:avoid;page-break-inside:avoid}
+.report-area,.report-point,.report-criterion,.report-finding__review,.report-signature,.report-metric{break-inside:avoid;page-break-inside:avoid}
+.report-finding{break-inside:auto;page-break-inside:auto}
+.report-finding__head{break-after:avoid;page-break-after:avoid}
 .report-document__table{font-size:8pt}
 .report-document__table th,.report-document__table td{padding:4pt}
 .report-document__table thead{display:table-header-group}
