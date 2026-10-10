@@ -63,6 +63,8 @@ Bajo las dos primeras gráficas se explica en lenguaje cotidiano el cambio de cu
 
 En el informe y en el **PDF A4** se mantienen los ejes, fechas, puntos, barras, leyendas y valores visibles sin depender del tooltip. Los botones Ampliar, tooltips y modales no aparecen impresos. El informe público y el administrativo comparten exactamente los mismos componentes.
 
+**Ampliación móvil:** el visor utiliza una superficie clara incluso con la SPA en modo oscuro, con títulos, leyenda, selección y filas de tabla en texto contrastado. Los SVG ampliados se ajustan a su proporción real, sin alturas mínimas artificiales; en las barras por especie se reescala el eje horizontal en pantallas de hasta 600 px para preservar la legibilidad sin espacio vacío. El detalle queda debajo del gráfico en una zona con desplazamiento vertical. Esto no altera el contenido imprimible A4.
+
 No se agregan migraciones SQL, librerías externas de gráficos ni cambios a la operación del Técnico. La nueva información se adjunta a la respuesta histórica existente del backend.
 
 ## Detalle de capturas de la visita actual
