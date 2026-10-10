@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { Building2, CalendarDays, CircleHelp, CloudOff, FileText, Gauge, Menu, Search, Settings2, Users, WalletCards, Wifi, X } from 'lucide-vue-next'
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, provide, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import AccountMenu from '@/components/layout/AccountMenu.vue'
 import BaseIconButton from '@/components/base/BaseIconButton.vue'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
+import { accountTransitionKey, createAccountTransition } from '@/composables/useAccountTransition'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import { useTechnicianReportEmailStore } from '@/stores/technicianReportEmails'
@@ -15,6 +16,7 @@ import type { ThemePreference } from '@/types/domain'
 type NavigationItem = { to: string; label: string; icon: typeof Gauge; admin?: boolean }
 type NavigationGroup = { label: string; items: NavigationItem[] }
 const auth = useAuthStore(), app = useAppStore()
+provide(accountTransitionKey, createAccountTransition())
 const { online } = useNetworkStatus()
 const reportEmails = useTechnicianReportEmailStore()
 const technicianServices = useTechnicianServicesStore()
