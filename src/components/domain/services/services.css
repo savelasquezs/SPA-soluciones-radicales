@@ -184,6 +184,6 @@
   .svc-week-calendar__day-create { width:44px; height:44px; }
   .svc-week-calendar__header { min-height:44px; }
   .svc-week-calendar__event-detail { width:28px; height:32px; }
-  .svc-week-calendar__slot-target { touch-action:pan-y; }
+  .svc-week-calendar__slot-target { touch-action:auto; }
 }
 @media (max-width:420px) { .svc-filters--week { grid-template-columns:1fr; } }
