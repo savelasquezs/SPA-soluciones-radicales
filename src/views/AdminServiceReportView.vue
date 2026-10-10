@@ -42,6 +42,16 @@ onBeforeUnmount(() => { version++ })
 
 const images = computed(() => report.value ? reportEvidence(report.value) : [])
 const metrics = computed(() => report.value ? reportMetrics(report.value) : null)
+const findings = computed(() => (report.value?.areas.flatMap(area =>
+  area.hallazgos.map(finding => ({ ...finding, area: area.nombre }))) ?? []).sort((a, b) => {
+  const priority = (finding: {estado:string;anterior:boolean}) =>
+    finding.estado === 'CERRADO' ? 2 : finding.anterior ? 0 : 1
+  return priority(a) - priority(b) || a.fechaApertura.localeCompare(b.fechaApertura)
+}))
+const unresolvedFindings = computed(() => findings.value.filter(finding => finding.estado !== 'CERRADO').length)
+const findingReviewLabel: Record<string,string> = {
+  SIN_CAMBIOS: 'Sigue pendiente', EN_PROCESO: 'En proceso', CERRADO: 'Solucionado',
+}
 const missingImages = computed(() => images.value.filter(item => ['MISSING','ERROR'].includes(states[item.path] ?? 'IDLE')).length)
 const activeImage = computed(() => selectedIndex.value === null ? null : images.value[selectedIndex.value] ?? null)
 const activeImageState = computed((): ReportEvidenceState => activeImage.value ? states[activeImage.value.path] ?? 'IDLE' : 'IDLE')
@@ -226,7 +236,7 @@ watch(() => [serviceId.value, publicToken.value], () => { void loadReport() }, {
             <div class="report-metric"><strong>{{ scoreText(metrics.compliance) }}</strong><span>Cumplimiento</span></div>
             <div class="report-metric"><strong>{{ metrics.areasReviewed }} / {{ report.areas.length }}</strong><span>Áreas evaluadas</span></div>
             <div class="report-metric"><strong>{{ metrics.monitoringPoints }}</strong><span>Puestos de monitoreo</span></div>
-            <div class="report-metric"><strong>{{ metrics.findings }}</strong><span>Hallazgos registrados</span></div>
+            <div class="report-metric"><strong>{{ unresolvedFindings }}</strong><span>Hallazgos pendientes</span></div>
           </div>
         </header>
 
@@ -306,17 +316,39 @@ watch(() => [serviceId.value, publicToken.value], () => { void loadReport() }, {
 
         <section class="report-document__section" aria-labelledby="report-findings-title">
           <header class="report-document__heading"><span class="report-document__number">05</span><h2 id="report-findings-title">Hallazgos y acciones correctivas</h2></header>
-          <p v-if="!metrics.findings" class="report-document__empty">No se registraron aperturas ni cierres de hallazgos en esta visita.</p>
-          <template v-for="area in report.areas" :key="area.id">
-            <div v-for="(finding,index) in area.hallazgos" :key="index" class="report-finding">
-              <div class="report-finding__head"><h3>{{ area.nombre }} · Hallazgo {{ index+1 }}</h3><span>Estado actual: {{ finding.estado }}</span></div>
+          <p v-if="!findings.length" class="report-document__empty">No había hallazgos pendientes ni se registraron hallazgos nuevos o cierres en esta visita.</p>
+          <template v-else>
+            <p class="report-document__section-intro">{{ unresolvedFindings }} hallazgo(s) pendiente(s) al finalizar esta visita. Se incluyen los identificados en servicios anteriores aunque no hayan tenido cambios.</p>
+            <article v-for="(finding,index) in findings" :key="finding.solicitudApertura + ':' + finding.area + ':' + index" class="report-finding">
+              <div class="report-finding__head">
+                <h3>{{ finding.area }} · Hallazgo {{ index+1 }}</h3>
+                <span class="report-finding__badge" :class="{'report-finding__badge--pending': finding.anterior && finding.estado !== 'CERRADO', 'report-finding__badge--closed':finding.estado === 'CERRADO'}">
+                  {{ finding.estado === 'CERRADO' ? 'Solucionado en esta visita' : finding.anterior ? 'Pendiente anterior' : 'Nuevo · Pendiente' }}
+                </span>
+              </div>
               <p>{{ finding.descripcion }}</p>
               <p><strong>Acción recomendada:</strong> {{ finding.recomendacion || '—' }}</p>
-              <small>Responsable: {{ finding.responsable || 'No indicado' }}</small>
-              <div v-if="finding.fotos.length" class="report-photo-row report-photo-row--wide">
-                <ReportEvidence v-for="(path,i) in finding.fotos" :key="path" :path="path" :caption="'Hallazgo · ' + area.nombre + ' · Foto ' + (i+1)" :state="photoState(path)" :url="urls[path]" @open="openImage" @failed="imageError" />
+              <p class="report-finding__meta">Detectado el {{ bogotaDate(finding.fechaApertura) }} · {{ finding.solicitudApertura }}
+                <span v-if="finding.anterior && finding.estado !== 'CERRADO'"> · Presente en {{ finding.visitasDesdeApertura }} visita(s)</span>
+              </p>
+              <p class="report-finding__meta">Responsable: {{ finding.responsable || 'No indicado' }}</p>
+              <div v-if="finding.fotos.length" class="report-finding__evidence">
+                <h4>Evidencia inicial</h4>
+                <div class="report-photo-row">
+                  <ReportEvidence v-for="(path,i) in finding.fotos" :key="path" :path="path" :caption="'Apertura · ' + finding.solicitudApertura + ' · Foto ' + (i+1)" :state="photoState(path)" :url="urls[path]" @open="openImage" @failed="imageError" />
+                </div>
               </div>
-            </div>
+              <div v-if="finding.seguimientos.length" class="report-finding__timeline">
+                <h4>Historial de seguimiento</h4>
+                <div v-for="(review,i) in finding.seguimientos" :key="review.solicitud + ':' + i" class="report-finding__review">
+                  <div class="report-finding__review-head"><strong>{{ bogotaDate(review.fecha) }} · {{ review.solicitud }}</strong><span>{{ findingReviewLabel[review.resultado] }}</span></div>
+                  <p v-if="review.observacion">{{ review.observacion }}</p>
+                  <div v-if="review.fotos.length" class="report-photo-row">
+                    <ReportEvidence v-for="(path,j) in review.fotos" :key="path" :path="path" :caption="'Seguimiento · ' + review.solicitud + ' · Foto ' + (j+1)" :state="photoState(path)" :url="urls[path]" @open="openImage" @failed="imageError" />
+                  </div>
+                </div>
+              </div>
+            </article>
           </template>
         </section>
 
