@@ -50,8 +50,8 @@ describe('Gráficos históricos del informe',()=>{
   })
   it('devuelve el desglose por lugar y especie sin información ajena',()=>{
     const visit=make()
-    expect(reportCapturePlaces(visit,'VOLADORES','MOSCA_DOMESTICA'))
-      .map(place=>[place.area,place.puesto,place.ubicacion,place.cantidad])
+    expect(reportCapturePlaces(visit,'VOLADORES','MOSCA_DOMESTICA')
+      .map(place=>[place.area,place.puesto,place.ubicacion,place.cantidad]))
       .toEqual([['Bodega','UV-2','Pasillo',1],['Cocina','UV-1','Entrada',3]])
     expect(reportCapturePlaces(visit,'RASTREROS').map(place=>place.area)).toEqual(['Baño'])
     expect(reportCapturePlaces(make({detallesCapturas:undefined}),'VOLADORES')).toEqual([])
