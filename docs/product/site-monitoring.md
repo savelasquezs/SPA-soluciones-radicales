@@ -12,7 +12,7 @@ Un drawer conserva contexto de Sede y contiene el historial paginado, con filtro
 
 ## Hallazgos
 
-Listado paginado con búsqueda, área, rango de apertura y estados. Inicialmente muestra pendientes; permite consultar también cerrados. El detalle se abre desde el registro ya cargado, sin repetir la consulta. Incluye descripción, acción correctiva, responsable, apertura, cierre y enlaces a los servicios con sus técnicos responsables. El detalle presenta, si existen, las evaluaciones por visita (Sigue igual / En proceso / Cerrado), con fecha y técnico, sin confundir evaluación con estado global. No afirma que el técnico responsable del servicio sea necesariamente el autor individual de cada cambio.
+Listado paginado con búsqueda, área, rango de apertura y estados. Inicialmente muestra pendientes; permite consultar también cerrados. El detalle se abre desde el registro ya cargado, sin repetir la consulta. Incluye descripción, acción correctiva, responsable, apertura, cierre y enlaces a los servicios con sus técnicos responsables. El detalle presenta cada evaluación por visita (Sigue igual / En proceso / Cerrado), con fecha, técnico, observación y fotos vinculadas a esa revisión; si fueron eliminadas por retención, el visor indica «Sin fotos disponibles». No confunde resultado por visita con estado global. No afirma que el técnico responsable del servicio sea necesariamente el autor individual de cada cambio.
 
 Las fotografías de apertura y cierre se identifican por fase dentro del mismo visor. Un cierre registrado en un servicio aún en curso conserva esa advertencia. La eliminación de una fotografía no altera el estado ni la historia del hallazgo.
 
