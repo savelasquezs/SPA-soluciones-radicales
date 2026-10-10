@@ -6,8 +6,8 @@ import type { Identity } from '../auth'
 type DbResult = { rows: Record<string, unknown>[]; rowCount: number }
 const mocks = vi.hoisted(() => ({
   query: vi.fn<(sql: string, params?: unknown[]) => Promise<DbResult>>(),
-  self: vi.fn(),
-  audit: vi.fn(),
+  self: vi.fn<(client: unknown, identity: unknown) => Promise<{ id: string }>>(),
+  audit: vi.fn<(client: unknown, userId: string, action: string, detail: Record<string, unknown>) => Promise<void>>(),
 }))
 
 vi.mock('../db', () => ({
