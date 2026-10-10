@@ -9,7 +9,7 @@ export interface InsightService {
   technician: string
 }
 
-export type EvidenceKind = 'REVIEW' | 'OPENING' | 'CLOSURE'
+export type EvidenceKind = 'REVIEW' | 'OPENING' | 'CLOSURE' | 'FOLLOWUP'
 export interface EvidenceReference {
   kind: EvidenceKind
   recordId: string
@@ -81,7 +81,7 @@ export interface SiteFinding {
   openingService: InsightService
   closingService: InsightService | null
   photos: EvidenceReference[]
-  followups?: Array<{ result: 'SIN_CAMBIOS' | 'EN_PROCESO' | 'CERRADO'; reviewedAt: string; service: InsightService }>
+  followups?: Array<{ result: 'SIN_CAMBIOS' | 'EN_PROCESO' | 'CERRADO'; reviewedAt: string; notes: string | null; photos: EvidenceReference[]; service: InsightService }>
 }
 
 export interface InsightPage<T> {

@@ -114,6 +114,16 @@ export interface TechnicianDeviceReviewInput {
   observaciones: string
 }
 
+export interface TechnicianFindingVisit {
+  id: string
+  servicioId: string
+  solicitud: string
+  fecha: string
+  resultado: FindingReview
+  observacion: string | null
+  evidenciasStoragePaths: string[]
+}
+
 export interface TechnicianFinding {
   id: string
   servicioAperturaId: string
@@ -125,6 +135,10 @@ export interface TechnicianFinding {
   estado: FindingState
   /** Resultado de la revisión en el servicio actual, no el estado histórico del hallazgo. */
   resultadoSeguimiento?: FindingReview | null
+  observacionSeguimiento?: string | null
+  evidenciasSeguimientoStoragePaths?: string[]
+  evidenciasSeguimientoLocalIds?: string[]
+  historialSeguimientos?: TechnicianFindingVisit[]
   responsableNombre: string
   responsableCorreo: string | null
   servicioCierreId: string | null

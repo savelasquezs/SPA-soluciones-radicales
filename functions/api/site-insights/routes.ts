@@ -57,7 +57,7 @@ export function missingEvidenceStatus(retentionAt: string | null, now = Date.now
 }
 siteInsightsRoutes.get('/:siteId/photos/:kind/:recordId/:index', async context => {
   const kind = context.req.param('kind') as EvidenceKind
-  if (!['REVIEW','OPENING','CLOSURE'].includes(kind)) throw new ApiError(422, 'La evidencia no es válida.', 'VALIDATION')
+  if (!['REVIEW','OPENING','CLOSURE','FOLLOWUP'].includes(kind)) throw new ApiError(422, 'La evidencia no es válida.', 'VALIDATION')
   const indexText = context.req.param('index')
   if (!/^(0|[1-9]\d?)$/.test(indexText)) throw new ApiError(422, 'La fotografía no es válida.', 'VALIDATION')
   const source = await read(context, client => findSiteEvidence(client, id(context.req.param('siteId')), kind, id(context.req.param('recordId')), Number(indexText)))

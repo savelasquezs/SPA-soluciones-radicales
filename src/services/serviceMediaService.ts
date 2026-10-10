@@ -6,7 +6,7 @@ type UploadAuthorization = {
   storagePath: string
   contentType: string
 }
-type FindingEvidencePhase = 'OPENING' | 'CLOSURE'
+type FindingEvidencePhase = 'OPENING' | 'CLOSURE' | 'FOLLOWUP'
 type ServiceSignatureRole = 'TECHNICIAN' | 'CLIENT'
 
 async function uploadServicePhoto(endpoint: string, failureMessage: string, deviceId: string, lockToken: string, original: File): Promise<string> {
