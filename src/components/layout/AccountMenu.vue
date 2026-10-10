@@ -206,7 +206,10 @@ async function performAction(action: 'change' | 'logout'): Promise<void> {
 .account-control__section { display: block; padding: 0.65rem 0.7rem 0.25rem; color: var(--text-secondary); font-size: 0.75rem; }
 .account-control__divider { height: 1px; margin: 0.35rem 0.2rem; background: var(--border); }
 .account-control--sidebar { width: 100%; }
-.account-control--sidebar .account-control__panel { top: auto; bottom: calc(100% + 0.35rem); left: 0; right: auto; }
+.account-control--sidebar .account-control__panel { top: auto; bottom: calc(100% + 0.35rem); left: 0; right: auto; width: 100%; }
+@media (max-height: 590px) {
+  .account-control--sidebar .account-control__panel { position: relative; bottom: auto; top: auto; max-height: min(50dvh, 15rem); box-shadow: none; margin-top: 0.25rem; }
+}
 @media (max-width: 1024px) {
   .account-control--topbar .account-control__identity,
   .account-control--topbar .account-control__chevron { display: none; }
