@@ -38,6 +38,20 @@ try {
   assert.equal(inserted.reduce((sum, result) => sum + result.rowCount, 0), 1)
   const dates = await pool.query("select ('2024-01-31'::date + make_interval(months => 1))::date::text as expiry")
   assert.equal(dates.rows[0].expiry, '2024-02-29')
+  const { rows: retentionSettings } = await pool.query(
+    'select category,delete_enabled from private.storage_retention_controls order by category')
+  assert.deepEqual(retentionSettings, [
+    { category: 'CERTIFICATE_PDF', delete_enabled: false },
+    { category: 'SERVICE_SIGNATURE', delete_enabled: false },
+  ], 'Las nuevas categorías inician sin borrados habilitados')
+  const { rows: [retentionDefinition] } = await pool.query(
+    "select pg_get_viewdef('private.storage_retention_candidates'::regclass,true) as sql")
+  assert.match(retentionDefinition.sql,/SERVICE_SIGNATURE/)
+  assert.match(retentionDefinition.sql,/CERTIFICATE_PDF/)
+  const { rows: [certificateColumn] } = await pool.query(
+    "select is_nullable from information_schema.columns where table_schema='public' and table_name='certificados' and column_name='pdf_generado_at'")
+  assert.equal(certificateColumn?.is_nullable,'NO')
+
   const anonymous = await pool.connect()
   try {
     await anonymous.query('set role anonymous')
