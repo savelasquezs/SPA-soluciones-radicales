@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { ArrowUpRight, Plus } from 'lucide-vue-next'
 import { addDateDays, formatServiceDate, SERVICE_STATE_LABELS, todayBogota, toBogotaInput } from '@/helpers/adminServices'
@@ -21,7 +21,8 @@ const days=computed(()=>Array.from({ length:7 },(_,index)=>{
   }
 }))
 const dragging=ref<AdminService | null>(null)
-const dragGrabMinutes=ref(0)
+let activePointer: { id: number; x: number; y: number; grabMinutes: number; record: AdminService } | null=null
+let ignoreClickUntil=0
 const dropPreview=ref<{ date:string; minute:number } | null>(null)
 const createPreview=ref<{ date:string; minute:number } | null>(null)
 
@@ -39,7 +40,7 @@ function hourLabel(minute: number): string {
   const hour=Math.floor(minute/60)
   return new Intl.DateTimeFormat('es-CO',{ hour:'numeric',minute:'2-digit',hour12:true,timeZone:'UTC' }).format(new Date(Date.UTC(2026,0,1,hour,minute%60)))
 }
-function minuteAt(event: MouseEvent | PointerEvent | DragEvent, grab = 0): number {
+function minuteAt(event: MouseEvent | PointerEvent, grab = 0): number {
   const target=event.currentTarget as HTMLElement | null
   if(!target) return bounds.value.startMinute
   const position=event.clientY-target.getBoundingClientRect().top
@@ -61,36 +62,58 @@ function hoverSlot(event: PointerEvent, date: string): void {
   if(event.pointerType!=='mouse' || dragging.value || props.busy || date<todayBogota()) return
   createPreview.value={ date,minute:minuteAt(event) }
 }
-function startDrag(event: DragEvent, record: AdminService): void {
-  if(props.busy || record.estado!=='PROGRAMADO') { event.preventDefault(); return }
-  const target=event.currentTarget as HTMLElement
-  dragGrabMinutes.value=Math.max(0,(event.clientY-target.getBoundingClientRect().top)/HOUR_HEIGHT*60)
-  dragging.value=record
-  createPreview.value=null
-  if(event.dataTransfer) {
-    event.dataTransfer.effectAllowed='move'
-    event.dataTransfer.setData('text/plain',record.id)
+function pickDropPosition(x: number,y: number): { date:string; minute:number } | null {
+  const target=document.elementFromPoint(x,y)
+  const day=target?.closest<HTMLElement>('.svc-week-calendar__day')
+  if(!day?.dataset.date || !activePointer) return null
+  const position=y-day.getBoundingClientRect().top
+  const minute=snapServiceWeekMinute(bounds.value.startMinute+position/HOUR_HEIGHT*60-activePointer.grabMinutes,bounds.value)
+  return { date:day.dataset.date,minute }
+}
+function pointerMove(event: PointerEvent): void {
+  const point=activePointer
+  if(!point || event.pointerId!==point.id || props.busy) return
+  if(!dragging.value && Math.hypot(event.clientX-point.x,event.clientY-point.y)<7) return
+  if(!dragging.value) {
+    dragging.value=point.record
+    createPreview.value=null
   }
+  dropPreview.value=pickDropPosition(event.clientX,event.clientY)
+  if(event.cancelable) event.preventDefault()
 }
-function dragOver(event: DragEvent, date: string): void {
-  if(!dragging.value || props.busy) return
-  event.preventDefault()
-  if(event.dataTransfer) event.dataTransfer.dropEffect='move'
-  dropPreview.value={ date,minute:minuteAt(event,dragGrabMinutes.value) }
-}
-function endDrag(): void {
+function stopPointer(): void {
+  activePointer=null
   dragging.value=null
   dropPreview.value=null
-  dragGrabMinutes.value=0
+  window.removeEventListener('pointermove',pointerMove)
+  window.removeEventListener('pointerup',pointerUp)
+  window.removeEventListener('pointercancel',stopPointer)
 }
-function drop(event: DragEvent, date: string): void {
-  if(!dragging.value || props.busy) return
-  event.preventDefault()
-  const record=dragging.value
-  const start=serviceWeekInstantAt(date,minuteAt(event,dragGrabMinutes.value))
-  endDrag()
-  if(start && new Date(start).getTime()!==new Date(record.inicioProgramado).getTime()) emit('move',record,start)
+function pointerUp(event: PointerEvent): void {
+  const point=activePointer
+  if(!point || event.pointerId!==point.id) return
+  const position=dragging.value ? pickDropPosition(event.clientX,event.clientY) : null
+  if(dragging.value) ignoreClickUntil=Date.now()+500
+  stopPointer()
+  if(!position || props.busy) return
+  const start=serviceWeekInstantAt(position.date,position.minute)
+  if(start && new Date(start).getTime()!==new Date(point.record.inicioProgramado).getTime()) emit('move',point.record,start)
 }
+function pointerDown(event: PointerEvent, record: AdminService): void {
+  if(props.busy || record.estado!=='PROGRAMADO' || event.pointerType!=='mouse' || event.button!==0) return
+  stopPointer()
+  const target=event.currentTarget as HTMLElement
+  activePointer={ id:event.pointerId,x:event.clientX,y:event.clientY,
+    grabMinutes:Math.max(0,(event.clientY-target.getBoundingClientRect().top)/HOUR_HEIGHT*60),record }
+  window.addEventListener('pointermove',pointerMove,{ passive:false })
+  window.addEventListener('pointerup',pointerUp)
+  window.addEventListener('pointercancel',stopPointer)
+}
+function clickRecord(event: MouseEvent, record: AdminService): void {
+  if(Date.now()<ignoreClickUntil) { event.preventDefault();return }
+  emit('open',record)
+}
+onBeforeUnmount(stopPointer)
 function dropStyle(minute: number, duration: number) {
   return { top:offset(minute)+'px',height:Math.max(HOUR_HEIGHT*0.5,duration/60*HOUR_HEIGHT)+'px' }
 }
@@ -114,7 +137,7 @@ function duration(record: AdminService): number {
         <div class="svc-week-calendar__time-axis" aria-hidden="true">
           <span v-for="minute in hours" :key="minute" class="svc-week-calendar__hour-label" :style="{ top:offset(minute)+'px' }">{{ hourLabel(minute) }}</span>
         </div>
-        <section v-for="(day,index) in days" :key="day.date" class="svc-week-calendar__day" :data-date="day.date" :aria-label="day.label" @dragover="dragOver($event,day.date)" @drop="drop($event,day.date)">
+        <section v-for="(day,index) in days" :key="day.date" class="svc-week-calendar__day" :data-date="day.date" :aria-label="day.label">
           <span v-for="minute in hours" :key="minute" class="svc-week-calendar__hour-line" :style="{ top:offset(minute)+'px' }" aria-hidden="true"></span>
           <button
             type="button"
@@ -123,8 +146,6 @@ function duration(record: AdminService): number {
             :data-date="day.date"
             :aria-label="'Elegir una hora para programar servicio el '+day.label"
             :aria-disabled="busy || day.date<todayBogota()"
-            @dragover="dragOver($event,day.date)"
-            @drop="drop($event,day.date)"
             @pointermove="hoverSlot($event,day.date)"
             @pointerleave="createPreview=null"
             @click="createAt(day.date,minuteAt($event))"
@@ -153,11 +174,9 @@ function duration(record: AdminService): number {
               type="button"
               class="svc-week-calendar__event-main"
               :disabled="busy"
-              :draggable="event.record.estado==='PROGRAMADO' && !busy"
-              @dragstart="startDrag($event,event.record)"
-              @dragend="endDrag"
+              @pointerdown="pointerDown($event,event.record)"
               :aria-label="(event.record.estado==='PROGRAMADO' ? 'Reprogramar ' : 'Ver ')+event.record.solicitud+' · '+event.record.clienteNombre"
-              @click="emit('open',event.record)"
+              @click="clickRecord($event,event.record)"
             >
               <span class="svc-week-calendar__event-time">{{ hourLabel(event.startMinute) }} <span v-if="event.record.tipoServicio==='REFUERZO'">· Ref.</span></span>
               <strong>{{ event.record.clienteNombre }}</strong>
