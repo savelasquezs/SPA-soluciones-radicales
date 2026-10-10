@@ -144,7 +144,7 @@ describe('certificate API authorization and mutations', () => {
         ? [{ path: `certificates/${id}/${id}/old.pdf`, available: false }] : [],
       rowCount: 1,
     }))
-    const response = await request('/documents/' + id + '/read-url')
+    const response = await request('/documents/' + id + '/read-url', {})
     expect(response.status).toBe(410)
     expect((await response.json()).code).toBe('PDF_EXPIRED')
   })
