@@ -9,9 +9,6 @@ const props=defineProps<{visits:ReportHistoricalVisit[]}>()
 const charts=computed(()=>buildSpeciesCharts(props.visits))
 const expandedCategory=ref<ReportPestClassification|null>(null)
 const expandedChart=computed(()=>charts.value.find(chart=>chart.classification===expandedCategory.value))
-const description=computed(()=>expandedCategory.value==='VOLADORES'
-  ?'Estos insectos se registraron en las lámparas UV. Selecciona una fecha o una barra para consultar las cantidades y sus ubicaciones.'
-  :'Estas plagas se registraron en trampas y cebaderos. Selecciona una fecha o una barra para consultar las cantidades y sus ubicaciones.')
 </script>
 
 <template>
@@ -19,7 +16,7 @@ const description=computed(()=>expandedCategory.value==='VOLADORES'
     <ReportSpeciesFigure v-for="chart in charts" :key="chart.classification"
       :chart="chart" :visits="visits" @expand="expandedCategory=$event" />
     <ReportChartDialog v-if="expandedCategory!==null&&expandedChart" :open="true"
-      :title="expandedChart.title" :description="description" @close="expandedCategory=null">
+      :title="expandedChart.title" @close="expandedCategory=null">
       <ReportSpeciesFigure :chart="expandedChart" :visits="visits" expanded />
     </ReportChartDialog>
   </div>

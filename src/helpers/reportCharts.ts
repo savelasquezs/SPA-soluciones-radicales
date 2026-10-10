@@ -1,10 +1,5 @@
 import type { ReportCaptureLocation, ReportHistoricalVisit, ReportPestClassification } from '@/types/serviceResults'
 
-export const REPORT_CHART_COLORS = {
-  compliance:'#287FA8', voladores:'#2786B3', rastreros:'#E29462',
-  grid:'#DDE7ED', guide:'#718B9D',
-} as const
-
 // Stable codes keep the same species color across visits, reports and additions.
 const speciesColors:Record<string,string> = {
   MOSCA_DOMESTICA:'#258DA8', MOSCA_FRUTA:'#E49B6C', MOSCA_DE_FRUTA:'#E49B6C',
