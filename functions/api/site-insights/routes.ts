@@ -66,7 +66,7 @@ siteInsightsRoutes.get('/:siteId/photos/:kind/:recordId/:index', async context =
     `services/${source.serviceId}/findings/${source.ownerId}/closure/`) ? 'CLOSURE' : kind
   const exists = kind === 'REVIEW'
     ? await deviceReviewMediaObjectExists(source.path, source.serviceId, source.ownerId)
-    : await findingEvidenceObjectExists(source.path, source.serviceId, source.ownerId, storageKind)
+    : await findingEvidenceObjectExists(source.path, source.serviceId, source.ownerId, storageKind as 'OPENING' | 'CLOSURE' | 'FOLLOWUP')
   const result: EvidenceAccess = exists
     ? { status: 'AVAILABLE', ...createServiceMediaReadUrl(source.path, source.serviceId, source.ownerId, storageKind) }
     : { status: missingEvidenceStatus(source.retentionAt), url: null, expiresAt: null }

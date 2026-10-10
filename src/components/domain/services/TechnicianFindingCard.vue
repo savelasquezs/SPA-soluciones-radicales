@@ -111,6 +111,7 @@ function reviewLabel(value: FindingReview): string {
       </div>
       <p v-if="validationError" class="finding-card__validation" role="alert">{{ validationError }}</p>
 
+      <p v-if="finding.resultadoSeguimiento && canFollowUp" class="finding-card__reviewed">Revisado en esta visita · {{ reviewLabel(finding.resultadoSeguimiento) }}</p>
       <section v-if="canFollowUp" class="finding-review" aria-label="Evaluación de esta visita">
         <div class="finding-review__title"><strong>Evaluación de esta visita</strong><small v-if="finding.resultadoSeguimiento">Guardada · puedes modificarla</small></div>
         <div class="finding-review__choices" role="group" aria-label="Resultado del hallazgo">
