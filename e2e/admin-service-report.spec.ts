@@ -21,7 +21,11 @@ const result: ServiceResultsData = {
   areas:[{id:areaId,nombre:'Cocina',sinAcceso:false,motivo:null,fotos:[],
     criterios:[{nombre:'Control de residuos',evaluacion:'CP',observacion:'Mejorar disposición',fotos:[photo('criteria/e1/evidence.png')]}],
     puntos:[{numero:'01',ubicacion:'Acceso',tipo:'Trampa adhesiva',estado:'BUENO',capturas:[{plagaNombreSnapshot:'Moscas',cantidad:2}],observaciones:'Correcto',foto:photo('devices/d1/review/image.png')}],
-    hallazgos:[{descripcion:'Abertura',recomendacion:'Sellar',estado:'ABIERTO',responsable:'Cliente',fotos:[photo('findings/f1/opening/image.png')]}],
+    hallazgos:[{descripcion:'Abertura',recomendacion:'Sellar',estado:'ABIERTO',responsable:'Cliente',
+      fotos:[photo('findings/f1/opening/image.png')],fechaApertura:'2026-09-23T15:00:00.000Z',solicitudApertura:'SR-00000007',
+      anterior:true,visitasDesdeApertura:2,
+      seguimientos:[{solicitud:'SR-00000008',fecha:'2026-10-09T15:00:00.000Z',
+        resultado:'SIN_CAMBIOS',observacion:'Continúa pendiente de sellado',fotos:[]}]}],
   }],
   historico:[
     {solicitud:'SR-00000006',fecha:'2026-09-09T15:00:00.000Z',cumplimiento:60,capturas:5},
@@ -90,6 +94,8 @@ test('Historial ofrece informe solo administrativo y A4 con fotografías y ambas
   await expect(page.getByText('Producto A')).toBeVisible()
   await expect(page.getByText('Control de residuos', { exact:true })).toBeVisible()
   await expect(page.getByText('Abertura')).toBeVisible()
+  await expect(page.getByText('Pendiente anterior')).toBeVisible()
+  await expect(page.getByText('Continúa pendiente de sellado')).toBeVisible()
   await expect(page.getByRole('img',{name:'Firma del técnico'})).toBeVisible()
   await expect(page.getByRole('img',{name:'Firma de conformidad del cliente'})).toBeVisible()
   const print = page.getByRole('button',{name:'Imprimir / Guardar PDF'})
@@ -109,6 +115,7 @@ test('las tendencias interactivas muestran cifras y variación por mouse, teclad
   await expect(capturesChart).toBeVisible()
   await expect(page.getByTestId('mip-compliance-delta')).toHaveText('+5 pp')
   await expect(page.getByTestId('mip-captures-delta')).toHaveText('-1 captura')
+  await expect(page.getByTestId('mip-trend-summary')).toContainText('Se registraron 1 capturas menos')
   await page.getByTestId('mip-compliance-visit-2').hover()
   await expect(page.getByTestId('mip-compliance-tooltip')).toContainText('80 %')
   await expect(page.getByTestId('mip-compliance-tooltip')).toContainText('+5 pp')
