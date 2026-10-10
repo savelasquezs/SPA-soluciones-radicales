@@ -5,7 +5,7 @@
 El Administrador abre **Servicios → Historial → Informe** en un servicio Principal finalizado y firmado y selecciona **Enviar informe**.
 
 - Puede marcar cualquier combinación de los correos registrados en cliente y sede (incluido contacto principal), añadir otros correos con validación y enviar a un máximo de 20 destinatarios únicos.
-- Puede adjuntar opcionalmente uno o varios certificados PDF **ya generados del mismo servicio** (máximo 10 archivos, 15 MB en conjunto). No se generan certificados nuevos con esta operación.
+- Puede adjuntar opcionalmente certificados PDF **generados y todavía disponibles** (máximo 10 archivos, 15 MB). Los vencidos se regeneran por separado, utilizando el motor actual de certificados.
 - La aplicación envía un correo mediante Gmail empresarial con un enlace al informe y los certificados seleccionados. El envío es idempotente, auditable y usa loading/toast/errores. Los destinatarios adicionales no modifican el catálogo del cliente.
 - En el mismo diálogo se indica cuántos enlaces siguen vigentes y pueden revocarse con confirmación.
 - La edición del **asunto y mensaje** está dentro de una sección **desplegable cerrada inicialmente** para que el modal no crezca innecesariamente en móvil ni escritorio. Se pueden usar los textos predefinidos o editarlos antes de enviar. El editor `EmailComposerFields` es reutilizable para contactos del cliente y la futura finalización por técnicos; esa integración no se habilita en esta entrega.
