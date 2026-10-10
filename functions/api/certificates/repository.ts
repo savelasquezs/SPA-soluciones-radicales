@@ -126,9 +126,6 @@ export function certificateSnapshot(loaded: LoadedCertificateContext, type: Cert
   const issuedOn = previous?.issuedOn ?? loaded.source.issuedOn!
   // Regeneration does not extend validity. Preserve the original certificate's dates.
   const expiresOn = previous?.expiresOn ?? addCalendarMonths(issuedOn, type === 'ESTABLECIMIENTO' ? loaded.source.businessMonths! : loaded.source.vehicleMonths!)
-  if (previous && !loaded.historicalData[previous.id]) {
-    throw new ApiError(422, 'No existen datos históricos suficientes para regenerar este certificado de forma segura.')
-  }
   const data: CertificateData = previous && loaded.historicalData[previous.id] ? { ...loaded.historicalData[previous.id]!, fecha_expedicion: displayDate(issuedOn), fecha_vencimiento: displayDate(expiresOn) } : {
     negocio_nombre: loaded.source.clientName, nit: loaded.source.nit, sede_nombre: loaded.source.siteName,
     sede_direccion: loaded.source.address, tecnico_nombre: loaded.source.technicianName, solicitud: loaded.source.solicitud,
