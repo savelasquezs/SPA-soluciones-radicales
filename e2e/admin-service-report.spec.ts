@@ -36,15 +36,30 @@ const result: ServiceResultsData = {
         {plagaCodigo:'CUCARACHA',plagaNombreSnapshot:'Cucarachas',clasificacion:'RASTREROS',cantidad:3},
         {plagaCodigo:'RATON',plagaNombreSnapshot:'Ratones',clasificacion:'RASTREROS',cantidad:1},
         {plagaCodigo:'MOSCA',plagaNombreSnapshot:'Moscas',clasificacion:'VOLADORES',cantidad:1},
+      ],detallesCapturas:[
+        {clasificacion:'VOLADORES',plagaCodigo:'MOSCA',plagaNombreSnapshot:'Moscas',cantidad:1,
+          area:'Cocina',puesto:'UV-01',ubicacion:'Entrada'},
+        {clasificacion:'RASTREROS',plagaCodigo:'CUCARACHA',plagaNombreSnapshot:'Cucarachas',cantidad:3,
+          area:'Bodega',puesto:'C-01',ubicacion:'Puerta'},
+        {clasificacion:'RASTREROS',plagaCodigo:'RATON',plagaNombreSnapshot:'Ratones',cantidad:1,
+          area:'Bodega',puesto:'C-01',ubicacion:'Puerta'},
       ]},
     {solicitud:'SR-00000007',fecha:'2026-09-23T15:00:00.000Z',cumplimiento:75,capturas:3,
       puestosRevisados:{rastreros:1,voladores:1},especies:[
         {plagaCodigo:'CUCARACHA',plagaNombreSnapshot:'Cucarachas',clasificacion:'RASTREROS',cantidad:2},
         {plagaCodigo:'MOSCA',plagaNombreSnapshot:'Moscas',clasificacion:'VOLADORES',cantidad:1},
+      ],detallesCapturas:[
+        {clasificacion:'VOLADORES',plagaCodigo:'MOSCA',plagaNombreSnapshot:'Moscas',cantidad:1,
+          area:'Cocina',puesto:'UV-01',ubicacion:'Entrada'},
+        {clasificacion:'RASTREROS',plagaCodigo:'CUCARACHA',plagaNombreSnapshot:'Cucarachas',cantidad:2,
+          area:'Baño',puesto:'C-02',ubicacion:'Desagüe'},
       ]},
     {solicitud:'SR-00000008',fecha:'2026-10-09T15:00:00.000Z',cumplimiento:80,capturas:2,
       puestosRevisados:{rastreros:1,voladores:1},especies:[
         {plagaCodigo:'MOSCA',plagaNombreSnapshot:'Moscas',clasificacion:'VOLADORES',cantidad:2},
+      ],detallesCapturas:[
+        {clasificacion:'VOLADORES',plagaCodigo:'MOSCA',plagaNombreSnapshot:'Moscas',cantidad:2,
+          area:'Cocina',puesto:'UV-01',ubicacion:'Acceso principal'},
       ]},
   ],
 }
@@ -137,7 +152,7 @@ test('las tendencias interactivas muestran cifras y variación por mouse, teclad
   await expect(capturesChart).toBeVisible()
   await expect(page.getByTestId('mip-compliance-delta')).toHaveText('+5 pp')
   await expect(page.getByTestId('mip-captures-delta')).toHaveText('-1 captura')
-  await expect(page.getByTestId('mip-trend-summary')).toContainText('Se registraron 1 captura menos')
+  await expect(page.getByTestId('mip-trend-summary')).toContainText('Se registraron 2 capturas rastreras menos')
   await page.getByTestId('mip-compliance-visit-2').hover()
   await expect(page.getByTestId('mip-compliance-tooltip')).toContainText('80 %')
   await expect(page.getByTestId('mip-compliance-tooltip')).toContainText('+5 pp')
@@ -145,14 +160,43 @@ test('las tendencias interactivas muestran cifras y variación por mouse, teclad
   await expect(page.getByTestId('mip-captures-tooltip')).toContainText('5 capturas')
   await page.getByTestId('mip-captures-visit-2').hover()
   await expect(page.getByTestId('mip-captures-tooltip')).toContainText('2 capturas')
-  await expect(page.getByTestId('mip-captures-tooltip')).toContainText('-1 captura')
+  await expect(page.getByTestId('mip-captures-tooltip')).toContainText('Rastreros: 0')
   await page.setViewportSize({width:390,height:844})
   await page.getByTestId('mip-captures-visit-1').click()
   await expect(page.getByTestId('mip-captures-tooltip')).toContainText('3 capturas')
   await page.emulateMedia({media:'print'})
-  await expect(page.getByTestId('mip-compliance-chart').locator('.report-trend__value').filter({hasText:'80 %'})).toBeVisible()
-  await expect(page.getByTestId('mip-captures-chart').locator('.report-trend__value').filter({hasText:'2'}).last()).toBeVisible()
+  await expect(page.getByTestId('mip-compliance-chart').locator('.report-trend-figure__value').filter({hasText:'80 %'})).toBeVisible()
+  await expect(page.getByTestId('mip-captures-chart').locator('.report-trend-figure__value').filter({hasText:'2'}).last()).toBeVisible()
   await expect(page.getByTestId('mip-captures-tooltip')).toBeHidden()
+})
+
+test('permite ampliar gráficas y consultar capturas por ubicación con guía táctil',async ({page})=>{
+  await setup(page,'ADMINISTRADOR')
+  await page.setViewportSize({width:390,height:844})
+  await page.goto('/servicios/'+serviceId+'/informe')
+  await expect(page.getByRole('heading',{name:'¿Cómo han cambiado los resultados?'})).toBeVisible()
+  const species=page.getByTestId('mip-species-voladores')
+  const visit=page.getByTestId('mip-species-visit-voladores-2')
+  await visit.hover()
+  await expect(species.locator('.report-species-figure__guide')).toBeVisible()
+  await expect(page.getByTestId('mip-species-tooltip-voladores')).toContainText('Cocina')
+  await expect(page.getByTestId('mip-species-tooltip-voladores')).toContainText('Acceso principal')
+  await page.getByRole('button',{name:'Ampliar Insectos que vuelan · Lámparas UV'}).click()
+  const modal=page.getByRole('dialog')
+  await expect(modal).toBeVisible()
+  await expect(modal.getByRole('heading',{name:'Insectos que vuelan · Lámparas UV'})).toBeVisible()
+  await expect(modal.getByRole('table')).toContainText('Acceso principal')
+  await expect(modal.getByRole('table')).toContainText('Moscas')
+  await page.keyboard.press('Escape')
+  await expect(modal).toHaveCount(0)
+  await page.getByRole('button',{name:'Ampliar Capturas registradas en las trampas'}).click()
+  await expect(page.getByRole('dialog').getByTestId('mip-captures-chart-expanded')).toBeVisible()
+  await expect(page.getByRole('dialog')).toContainText('Voladores')
+  await expect(page.getByRole('dialog')).toContainText('Rastreros')
+  await page.keyboard.press('Escape')
+  await page.emulateMedia({media:'print'})
+  await expect(page.getByTestId('mip-captures-chart')).toBeVisible()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
 })
 
 test('agrupa capturas por especie y solo detalla puestos con capturas en informe público e impresión',async ({page})=>{
