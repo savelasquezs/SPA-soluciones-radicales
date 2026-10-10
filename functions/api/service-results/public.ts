@@ -19,8 +19,8 @@ export function reportPaths(data: ServiceResultsData): string[] {
       (path.startsWith('services/' + data.id + '/') || (finding && historicFinding.test(path)))) unique.add(path)
   }
   for (const area of data.areas) {
-    area.fotos.forEach(add)
-    for (const item of area.criterios) item.fotos.forEach(add)
+    area.fotos.forEach(path => add(path))
+    for (const item of area.criterios) item.fotos.forEach(path => add(path))
     for (const item of area.puntos) add(item.foto)
     for (const item of area.hallazgos) {
       item.fotos.forEach(path => add(path, true))
