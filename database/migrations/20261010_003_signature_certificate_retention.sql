@@ -112,6 +112,18 @@ with raw_files as (
   join public.servicios s on s.id=c.servicio_id
   where s.estado='FINALIZADO' and c.estado_generacion in ('GENERADO','ENVIADO')
 
+  union all
+  -- Las regeneraciones anteriores también deben expirar; no mantener PDF viejos
+  -- solo porque auditoría conserva su ruta histórica.
+  select 'sr-generated-documents', 'CERTIFICATE_PDF', c.id,
+    a.detalle_json->'current'->>'storagePath', a.fecha_hora + interval '1 month'
+  from public.auditoria a
+  join public.certificados c on c.id=a.registro_id
+  join public.servicios s on s.id=c.servicio_id
+  where s.estado='FINALIZADO' and a.accion='CERTIFICADO_GENERADO'
+    and a.detalle_json->'current'->>'storagePath' like 'certificates/%'
+    and (a.detalle_json->'current'->>'storagePath') is distinct from c.pdf_storage_path
+
 )
 select f.bucket, f.category, f.source_id, f.storage_path, f.expires_at
 from raw_files f
