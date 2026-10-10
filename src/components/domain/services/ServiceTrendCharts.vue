@@ -64,10 +64,11 @@ const summary = computed(() => {
   }
   if (last.capturesDelta !== null) {
     const count = locale.format(Math.abs(last.capturesDelta))
+    const unit = Math.abs(last.capturesDelta) === 1 ? 'captura' : 'capturas'
     parts.push(last.capturesDelta < 0
-      ? 'Se registraron ' + count + ' capturas menos que en la visita anterior.'
+      ? 'Se registraron ' + count + ' ' + unit + ' menos que en la visita anterior.'
       : last.capturesDelta > 0
-        ? 'Se registraron ' + count + ' capturas más que en la visita anterior.'
+        ? 'Se registraron ' + count + ' ' + unit + ' más que en la visita anterior.'
         : 'El número de capturas se mantuvo sin cambios.')
   }
   if (last.capturesDelta !== null && last.capturesDelta < 0)
