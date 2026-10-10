@@ -12,6 +12,7 @@ import ErrorState from '@/components/base/ErrorState.vue'
 import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import StatusBadge from '@/components/base/StatusBadge.vue'
 import { useFileSaveProgress } from '@/composables/useFileSaveProgress'
+import { useAccountTransition } from '@/composables/useAccountTransition'
 import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
 import { certificateFieldErrors, personalFieldErrors, technicianCertificateStatus } from '@/helpers/profile'
 import { signInWithGoogle } from '@/services/authService'
@@ -27,6 +28,7 @@ import type { PersonalProfile } from '@/types/domain'
 const auth = useAuthStore()
 const route = useRoute()
 const notifications = useNotificationsStore()
+const accountTransition = useAccountTransition()
 const profile = ref<PersonalProfile | null>(null)
 const loading = ref(true)
 const loadError = ref<string | null>(null)
@@ -63,8 +65,9 @@ const isCertificateDirty = computed(() => Boolean(profile.value && profile.value
   certificate.expiry !== profile.value.certificadoFechaVencimiento
 )))
 const busy = computed(() => busyPersonal.value || busyPhoto.value || busyCertificate.value || busyGoogle.value)
-const dirty = computed(() => !leavingForGoogle.value && (isPersonalDirty.value || Boolean(photoFile.value) || isCertificateDirty.value))
+const dirty = computed(() => !leavingForGoogle.value && !accountTransition?.discardApproved.value && (isPersonalDirty.value || Boolean(photoFile.value) || isCertificateDirty.value))
 const leave = useUnsavedChanges(dirty, busy)
+watch([dirty, busy], () => { accountTransition?.setStatus(dirty.value, busy.value) }, { immediate: true })
 
 watch(photoFile, file => {
   if (photoPreview.value) URL.revokeObjectURL(photoPreview.value)
@@ -72,7 +75,10 @@ watch(photoFile, file => {
   photoFailed.value = false
 })
 watch(() => auth.avatarUrl, () => { photoFailed.value = false })
-onBeforeUnmount(() => { if (photoPreview.value) URL.revokeObjectURL(photoPreview.value) })
+onBeforeUnmount(() => {
+  if (photoPreview.value) URL.revokeObjectURL(photoPreview.value)
+  accountTransition?.reset()
+})
 onMounted(() => {
   void load()
   if (route.query.googleActualizado === '1') notifications.show('Cuenta Google actualizada correctamente.', 'success')
