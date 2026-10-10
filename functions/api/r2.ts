@@ -283,7 +283,6 @@ export async function deleteCertificateObject(storagePath: string): Promise<void
   if (!response.ok && response.status !== 404) throw new ApiError(502, 'No fue posible limpiar el documento temporal')
 }
 
-/** Retención de imágenes de firmas de servicios finalizados; nunca permite borrar evidencias. */
 export async function deleteRetainedServiceSignature(storagePath: string, serviceId: string): Promise<void> {
   if (!/^[0-9a-f-]{36}$/i.test(serviceId)
     || !/^services\/[0-9a-f-]{36}\/signatures\/(?:client|technician)\/[^/]+\.(?:png|jpe?g|webp)$/i.test(storagePath)
@@ -308,7 +307,7 @@ export async function deleteRetainedServicePhoto(storagePath: string): Promise<v
 export function createServiceResultMediaReadUrl(storagePath:string,serviceId:string):string{
   if(!/^[0-9a-f-]{36}$/i.test(serviceId) ||
     !storagePath.startsWith('services/'+serviceId+'/') ||
-    !/^services\/[0-9a-f-]{36}\/(?:areas\/[0-9a-f-]{36}\/no-access|criteria\/[0-9a-f-]{36}\/evidence|devices\/[0-9a-f-]{36}\/review|findings\/[0-9a-f-]{36}\/(?:opening|closure)|signatures\/(?:client|technician))\/[^/]+\.(?:png|jpe?g|webp)$/i.test(storagePath) ||
+    !/^services\/[0-9a-f-]{36}\/(?:areas\/[0-9a-f-]{36}\/no-access|criteria\/[0-9a-f-]{36}\/evidence|devices\/[0-9a-f-]{36}\/review|findings\/[0-9a-f-]{36}\/(?:opening|closure|followup)|signatures\/(?:client|technician))\/[^/]+\.(?:png|jpe?g|webp)$/i.test(storagePath) ||
     storagePath.includes('..')) throw new ApiError(422,'Ruta no válida')
   return presign('GET',storagePath,undefined,serviceMediaBucket(),{'response-cache-control':'private, no-store'})
 }
