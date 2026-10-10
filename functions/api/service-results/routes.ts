@@ -4,6 +4,7 @@ import { transaction } from '../db'
 import { createServiceResultMediaReadUrl } from '../r2'
 import { productSheetIndex, reportProductSheetUrl } from './productSheets'
 import { loadServiceResultsData } from './data'
+import { reportPaths } from './public'
 import { isServiceId } from '../../../src/helpers/adminServices'
 
 type Environment={Variables:{identity:Identity}}
@@ -27,15 +28,10 @@ serviceResultRoutes.get('/:id/media/read-url',async context=>{
   const path=context.req.query('path')
   if(!path||path.length>1000)throw new ApiError(422,'Ruta de evidencia no válida.','VALIDATION')
   const data=await transaction(client=>loadServiceResultsData(client,serviceId))
-  const authorized=new Set<string>([data.firmaTecnico,data.firmaCliente])
-  for(const area of data.areas){
-    for(const item of area.fotos)authorized.add(item)
-    for(const criterion of area.criterios)for(const item of criterion.fotos)authorized.add(item)
-    for(const point of area.puntos)if(point.foto)authorized.add(point.foto)
-    for(const finding of area.hallazgos)for(const item of finding.fotos)authorized.add(item)
-  }
-  if(!authorized.has(path))throw new ApiError(404,'Evidencia no disponible.','EVIDENCE_NOT_FOUND')
-  return context.json({url:createServiceResultMediaReadUrl(path,serviceId)})
+  // Membership is derived from the authorized report, never from a requested service ID.
+  if(!reportPaths(data).includes(path))throw new ApiError(404,'Evidencia no disponible.','EVIDENCE_NOT_FOUND')
+  const ownerId=path.split('/')[1]!
+  return context.json({url:createServiceResultMediaReadUrl(path,ownerId)})
 })
 
 serviceResultRoutes.get('/:id/results/product-sheet',async context=>{
