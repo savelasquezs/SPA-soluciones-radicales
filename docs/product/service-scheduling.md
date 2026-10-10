@@ -11,6 +11,15 @@ Este documento define la programación administrativa de Servicios Principales y
 - El Administrador puede adaptar fechas y horarios a la disponibilidad real del cliente.
 - Las automatizaciones proponen y precargan; no sustituyen la confirmación del cliente ni la decisión final del Administrador.
 
+## Agenda semanal interactiva
+
+- La vista **Semana** permite crear un Servicio pulsando el espacio del día/hora o el signo + del encabezado. Se abre el formulario existente con hora de Bogotá precargada; no hay reserva hasta confirmar el formulario. Un borrador local anterior tiene prioridad y se identifica al recuperarse.
+- Cada bloque muestra hora, Cliente y Sede. Pulsarlo abre **Reprogramar**, incluyendo equipo, duración y, para un Principal con Refuerzo Programado, la fecha del Refuerzo. El acceso a detalle permite la edición completa. Los servicios que ya no están Programados son de consulta y no admiten arrastre.
+- En escritorio, los bloques **Programados** se arrastran de una columna/hora a otra de la misma semana, ajustando a intervalos de **15 minutos**. Soltar muestra una confirmación con fecha y hora anterior y propuesta; **Cancelar** no envía ninguna mutación y conserva el registro original.
+- Confirmar reutiliza la reprogramación autoritativa con versión e idempotencia, conserva duración, técnicos, cobro y productos. Arrastrar un Principal no mueve silenciosamente su Refuerzo; se informa y la edición rápida permite modificar ambos en una transacción cuando así se requiera.
+- Cruces de horarios y conflictos de versión siguen las validaciones y confirmaciones existentes. Ante un fallo no se altera la posición guardada; el usuario puede reintentar o revisar la versión actual. Google Calendar se actualiza desde la outbox tras el guardado, nunca desde el navegador.
+- La alternativa accesible por teclado o teléfono son los controles de crear y reprogramar del calendario; el arrastre no es la única manera de modificar una fecha.
+
 ## Servicio Principal
 
 El Administrador crea el Servicio Principal y el servidor genera su consecutivo.
