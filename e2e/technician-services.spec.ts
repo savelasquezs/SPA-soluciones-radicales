@@ -644,6 +644,48 @@ test('a prior visit photo opens the protected viewer and gracefully reports expi
   await findings.getByRole('button', { name: /Abertura junto al muro/ }).click()
   await findings.getByText(/Historial de revisiones/).click()
   await findings.getByRole('button', { name: 'Ver fotos (1)' }).click()
-  await expect(page.getByText('Sin fotos disponibles', { exact: true })).toBeVisible()
+  await expect(page.locator('.evidence-viewer__message').getByText('Sin fotos disponibles', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Cerrar visor' }).click()
+})
+
+test('a technician can crop and draw on a photo in the mobile preview before saving it', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await setup(page)
+  await page.goto(`/servicios/${ids.service}/trabajo`)
+  await page.getByRole('button', { name: 'Iniciar servicio' }).click()
+  const criteria = page.locator('.workspace-panel[aria-labelledby="criteria-title"]')
+  await criteria.getByRole('button', { name: /Fotos/ }).click()
+  const png = await page.evaluate(() => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 240
+    canvas.height = 240
+    const context = canvas.getContext('2d')!
+    context.fillStyle = '#ffffff'
+    context.fillRect(0, 0, 240, 240)
+    return canvas.toDataURL('image/png').split(',')[1]!
+  })
+  await criteria.locator('input[type="file"]:not([capture])').setInputFiles({
+    name: 'foto.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64'),
+  })
+  await criteria.getByRole('button', { name: 'Ver fotografía 1' }).click()
+  await page.getByRole('button', { name: 'Dibujar o recortar' }).click()
+  const canvas = page.getByLabel('Fotografía para editar')
+  const bounds = await canvas.boundingBox()
+  expect(bounds).not.toBeNull()
+  await page.getByRole('button', { name: 'Recortar' }).click()
+  await page.mouse.move(bounds!.x + bounds!.width * 0.15, bounds!.y + bounds!.height * 0.15)
+  await page.mouse.down()
+  await page.mouse.move(bounds!.x + bounds!.width * 0.8, bounds!.y + bounds!.height * 0.8, { steps: 4 })
+  await page.mouse.up()
+  await page.getByRole('button', { name: 'Aplicar recorte' }).click()
+  await page.getByRole('button', { name: 'Dibujar' }).click()
+  const reduced = await canvas.boundingBox()
+  expect(reduced).not.toBeNull()
+  await page.mouse.move(reduced!.x + reduced!.width * 0.2, reduced!.y + reduced!.height * 0.2)
+  await page.mouse.down()
+  await page.mouse.move(reduced!.x + reduced!.width * 0.7, reduced!.y + reduced!.height * 0.7, { steps: 4 })
+  await page.mouse.up()
+  await page.getByRole('button', { name: 'Guardar foto' }).click()
+  await expect(page.getByRole('button', { name: 'Dibujar o recortar' })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 })
