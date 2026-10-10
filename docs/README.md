@@ -38,6 +38,7 @@ docs/
 │   ├── cloudflare-workers.md
 │   ├── documentation-videos.md
 │   ├── neon-setup.md
+│   ├── neon-functions-deploy.md
 │   ├── user-manual-video-standard.md
 │   └── workflow.md
 ├── frontend/
