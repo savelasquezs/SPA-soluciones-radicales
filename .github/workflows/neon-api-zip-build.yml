@@ -1,0 +1,32 @@
+name: Build compact Neon API ZIP
+on:
+  push:
+    branches: ['ops/service-retention-neon-bundle-2']
+    paths: ['.github/workflows/neon-api-zip-build.yml']
+permissions:
+  contents: read
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm install --no-save --package-lock=false @neon/config-runtime@1.7.3
+      - name: Bundle API into compact secret-free archive
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { buildFunctionBundle } from '@neon/config-runtime/v1'
+          const zip=await buildFunctionBundle({slug:'api',source:'./functions/api/index.ts'})
+          const b64=Buffer.from(zip).toString('base64')
+          console.log('NEON_ZIP_BYTES:'+zip.byteLength)
+          console.log('NEON_ZIP_SHA256:'+(await import('node:crypto')).createHash('sha256').update(zip).digest('hex'))
+          for(let i=0;i<b64.length;i+=12000)console.log('NEON_ZIP_PART:'+b64.slice(i,i+12000))
+          NODE
