@@ -3,7 +3,8 @@ import { ApiError } from '../auth'
 
 export interface ServiceCriterion { nombre: string; evaluacion: 'C'|'CP'|'NC'|'NA'|null; observacion: string|null; fotos: string[] }
 export interface ServicePoint { numero: string; ubicacion: string; tipo: string; estado: string|null; capturas: Array<{plagaNombreSnapshot:string; cantidad:number}>; observaciones:string|null; foto:string|null }
-export interface ServiceFinding { descripcion:string; recomendacion:string; estado:string; responsable:string; fotos:string[] }
+export interface ServiceFindingFollowup { solicitud:string;fecha:string;resultado:'SIN_CAMBIOS'|'EN_PROCESO'|'CERRADO';observacion:string|null;fotos:string[] }
+export interface ServiceFinding { descripcion:string; recomendacion:string; estado:'ABIERTO'|'EN_PROCESO'|'CERRADO'; responsable:string; fotos:string[]; fechaApertura:string; solicitudApertura:string; anterior:boolean; visitasDesdeApertura:number; seguimientos:ServiceFindingFollowup[] }
 export interface ServiceArea { id:string; nombre:string; sinAcceso:boolean; motivo:string|null; fotos:string[]; criterios:ServiceCriterion[]; puntos:ServicePoint[]; hallazgos:ServiceFinding[] }
 export interface ServiceResultsData {
   id:string; solicitud:string; cliente:string; nit:string; sede:string; direccion:string; tecnico:string
@@ -53,15 +54,75 @@ export async function loadServiceResultsData(client:PoolClient,serviceId:string)
   for(const p of points)byId.get(p.areaId)?.puntos.push({numero:p.numero,ubicacion:p.ubicacion,tipo:p.tipo,estado:p.estado,
     capturas:(Array.isArray(p.capturas)?p.capturas:[]).map(c=>({plagaNombreSnapshot:String(c.plagaNombreSnapshot||'Plaga'),cantidad:Number(c.cantidad)||0})),
     observaciones:p.observaciones,foto:p.foto})
-  const findings=(await client.query<{areaId:string;descripcion:string;recomendacion:string;estado:string;responsable:string;fotos:unknown}>(`
+  // A report describes the findings that were active (or closed) during THIS visit,
+  // regardless of their current status. Follow-ups and evidence are limited to its cutoff.
+  const findings=(await client.query<{
+    areaId:string;descripcion:string;recomendacion:string;estado:ServiceFinding['estado'];responsable:string
+    fotos:unknown;fechaApertura:Date;solicitudApertura:string;anterior:boolean
+    visitasDesdeApertura:number;seguimientos:unknown;fechaCierre:Date|null
+    observacionCierre:string|null;fotosCierre:unknown;servicioCierreId:string|null
+  }>(`
     select sa.id as "areaId",h.descripcion,h.recomendacion_accion as recomendacion,
-      case when h.servicio_cierre_id=$1 then 'CERRADO' else h.estado end as estado,
+      case when h.servicio_cierre_id=$1 then 'CERRADO'
+        else coalesce(last_review.estado,'ABIERTO') end as estado,
       h.responsable_nombre as responsable,
-      case when h.servicio_cierre_id=$1 then coalesce(h.evidencias_cierre_storage_paths,'[]'::jsonb)
-        else coalesce(h.evidencias_apertura_storage_paths,'[]'::jsonb) end as fotos
-    from public.hallazgos h join public.servicio_areas sa on sa.area_id=h.area_id and sa.servicio_id=$1
-    where h.servicio_apertura_id=$1 or h.servicio_cierre_id=$1 order by sa.posicion_recorrido,h.fecha_apertura,h.id`,[serviceId])).rows
-  for(const h of findings)byId.get(h.areaId)?.hallazgos.push({descripcion:h.descripcion,recomendacion:h.recomendacion,estado:h.estado,responsable:h.responsable,fotos:arr(h.fotos)})
+      coalesce(h.evidencias_apertura_storage_paths,'[]'::jsonb) as fotos,
+      h.fecha_apertura as "fechaApertura",opening.solicitud as "solicitudApertura",
+      (h.servicio_apertura_id<>$1) as anterior,
+      (select count(*)::int from public.servicios v where v.sede_id=h.sede_id
+        and v.estado='FINALIZADO' and v.tipo_servicio='PRINCIPAL'
+        and v.fin_real>=opening.fin_real and v.fin_real<=$2::timestamptz) as "visitasDesdeApertura",
+      coalesce(history.items,'[]'::jsonb) as seguimientos,
+      h.fecha_cierre as "fechaCierre",h.observacion_cierre as "observacionCierre",
+      coalesce(h.evidencias_cierre_storage_paths,'[]'::jsonb) as "fotosCierre",
+      h.servicio_cierre_id as "servicioCierreId"
+    from public.hallazgos h
+    join public.servicios opening on opening.id=h.servicio_apertura_id
+    join public.servicio_areas sa on sa.area_id=h.area_id and sa.servicio_id=$1
+    left join lateral (
+      select case when seg.resultado='SIN_CAMBIOS' then seg.estado_anterior
+                  else seg.resultado end as estado
+      from public.hallazgo_seguimientos seg
+      join public.servicios visit on visit.id=seg.servicio_id
+      where seg.hallazgo_id=h.id and visit.estado='FINALIZADO'
+        and visit.fin_real<=$2::timestamptz
+      order by visit.fin_real desc,seg.registrado_at desc,seg.id desc limit 1
+    ) last_review on true
+    left join lateral (
+      select jsonb_agg(jsonb_build_object(
+        'solicitud',visit.solicitud,'fecha',seg.registrado_at,
+        'resultado',seg.resultado,'observacion',seg.observacion,
+        'fotos',coalesce(seg.evidencias_storage_paths,'[]'::jsonb)
+      ) order by visit.fin_real,seg.registrado_at,seg.id) as items
+      from public.hallazgo_seguimientos seg
+      join public.servicios visit on visit.id=seg.servicio_id
+      where seg.hallazgo_id=h.id and visit.estado='FINALIZADO'
+        and visit.fin_real<=$2::timestamptz
+    ) history on true
+    where h.sede_id=$3 and opening.estado='FINALIZADO'
+      and opening.fin_real<=$2::timestamptz
+      and (h.servicio_cierre_id=$1 or h.fecha_cierre is null or h.fecha_cierre>$2::timestamptz)
+    order by case when (case when h.servicio_cierre_id=$1 then 'CERRADO'
+                          else coalesce(last_review.estado,'ABIERTO') end)='CERRADO' then 1 else 0 end,
+      sa.posicion_recorrido,h.fecha_apertura,h.id`,[serviceId,sv.finReal,sv.sedeId])).rows
+  for(const h of findings){
+    const followups:ServiceFindingFollowup[]=Array.isArray(h.seguimientos)
+      ?h.seguimientos.map((item:Record<string,unknown>)=>({
+        solicitud:String(item.solicitud||''),fecha:String(item.fecha||''),
+        resultado:item.resultado==='CERRADO'?'CERRADO':item.resultado==='EN_PROCESO'?'EN_PROCESO':'SIN_CAMBIOS',
+        observacion:typeof item.observacion==='string'?item.observacion:null,fotos:arr(item.fotos),
+      })):[]
+    // Legacy closures without a per-visit follow-up still retain their original evidence.
+    if(h.servicioCierreId===serviceId && !followups.some(item=>item.resultado==='CERRADO')){
+      followups.push({solicitud:sv.solicitud,fecha:h.fechaCierre?.toISOString()??sv.finReal.toISOString(),
+        resultado:'CERRADO',observacion:h.observacionCierre,fotos:arr(h.fotosCierre)})
+    }
+    byId.get(h.areaId)?.hallazgos.push({
+      descripcion:h.descripcion,recomendacion:h.recomendacion,estado:h.estado,responsable:h.responsable,
+      fotos:arr(h.fotos),fechaApertura:h.fechaApertura.toISOString(),solicitudApertura:h.solicitudApertura,
+      anterior:h.anterior,visitasDesdeApertura:h.visitasDesdeApertura,seguimientos:followups,
+    })
+  }
   const productos=(await client.query<ServiceResultsData['productos'][number]>(`
     select coalesce(pa.producto_nombre_snapshot,p.nombre) as nombre,
       coalesce(pa.principio_activo_snapshot,p.principio_activo_composicion,'') as principio,
