@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, useId } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, useId } from 'vue'
 import { Maximize2 } from 'lucide-vue-next'
 import type { ReportHistoricalVisit } from '@/types/serviceResults'
 import type { SpeciesChart } from '@/helpers/serviceSpecies'
@@ -13,6 +13,26 @@ const props=withDefaults(defineProps<{
 const emit=defineEmits<{expand:[classification:'VOLADORES'|'RASTREROS']}>()
 const titleId=useId()
 const countFormat=new Intl.NumberFormat('es-CO')
+// On narrow expanded dialogs, reproject the X axis into a portrait-friendly
+// SVG viewBox instead of forcing a wide aspect ratio into a tall fixed height.
+const narrowScreen=ref(false)
+const mobileGeometry={width:360,left:30,right:348} as const
+const compactChart=computed(()=>props.expanded&&narrowScreen.value)
+const viewWidth=computed(()=>compactChart.value?mobileGeometry.width:geometry.width)
+const plotLeft=computed(()=>compactChart.value?mobileGeometry.left:geometry.left)
+const plotRight=computed(()=>compactChart.value?mobileGeometry.right:geometry.right)
+const ratio=computed(()=>(plotRight.value-plotLeft.value)/(geometry.right-geometry.left))
+function chartX(x:number){return plotLeft.value+(x-geometry.left)*ratio.value}
+function chartWidth(width:number){return width*ratio.value}
+function updateScreenSize(){narrowScreen.value=window.innerWidth<=600}
+onMounted(()=>{
+  if(!props.expanded)return
+  updateScreenSize()
+  window.addEventListener('resize',updateScreenSize)
+})
+onBeforeUnmount(()=>{
+  if(props.expanded)window.removeEventListener('resize',updateScreenSize)
+})
 const selectedIndex=ref<number|null>(null)
 const selectedCode=ref<string|null>(null)
 const visibleIndex=computed(()=>selectedIndex.value??(props.expanded?props.chart.visits.length-1:null))
@@ -43,13 +63,13 @@ function nearest(event:PointerEvent){
   const svg=event.currentTarget as SVGSVGElement
   const bounds=svg.getBoundingClientRect()
   if(!bounds.width)return
-  const x=(event.clientX-bounds.left)*geometry.width/bounds.width
-  const centers=props.chart.visits.map(visit=>visit.center)
+  const x=(event.clientX-bounds.left)*viewWidth.value/bounds.width
+  const centers=props.chart.visits.map(visit=>chartX(visit.center))
   let index=0
   for(let i=1;i<centers.length;i++)if(Math.abs(centers[i]!-x)<Math.abs(centers[index]!-x))index=i
   const bars=props.chart.visits[index]?.bars??[]
   const nearestBar=bars.slice().sort((a,b)=>
-    Math.abs(a.x+a.width/2-x)-Math.abs(b.x+b.width/2-x))[0]
+    Math.abs(chartX(a.x)+chartWidth(a.width)/2-x)-Math.abs(chartX(b.x)+chartWidth(b.width)/2-x))[0]
   activate(index,nearestBar?.code)
 }
 function clear(){selectedIndex.value=null;selectedCode.value=null}
@@ -77,40 +97,40 @@ const y=(value:number)=>geometry.bottom-value/props.chart.max*(geometry.bottom-g
       <p v-if="!chart.species.length" class="report-species-figure__empty">
         Se revisaron puestos, pero no se registraron capturas de esta categoría.</p>
       <div v-else class="report-species-figure__visual">
-        <svg :viewBox="'0 0 '+geometry.width+' '+geometry.height"
+        <svg :viewBox="'0 0 '+viewWidth+' '+geometry.height"
           :aria-labelledby="titleId" role="group" class="report-species-figure__svg"
           :data-testid="'mip-species-chart-'+chart.classification.toLowerCase()+(expanded?'-expanded':'')"
           @pointermove="nearest" @pointerdown="nearest" @pointerleave="clear">
           <title :id="titleId">{{ chart.title }} por fecha de visita</title>
           <g v-for="tick in [...new Set([0,Math.round(chart.max/2),chart.max])]" :key="tick">
-            <line :x1="geometry.left" :x2="geometry.right" :y1="y(tick)" :y2="y(tick)"
+            <line :x1="plotLeft" :x2="plotRight" :y1="y(tick)" :y2="y(tick)"
               :stroke="colors.grid" stroke-width="1" :stroke-dasharray="tick===0?undefined:'3 4'"/>
-            <text :x="geometry.left-8" :y="y(tick)+3" text-anchor="end"
+            <text :x="plotLeft-8" :y="y(tick)+3" text-anchor="end"
               class="report-species-figure__axis">{{ countFormat.format(tick) }}</text>
           </g>
           <g v-for="(date,index) in chart.visits" :key="date.solicitud+':bars'">
             <line v-if="visibleIndex===index" class="report-species-figure__guide"
-              :x1="date.center" :x2="date.center" :y1="geometry.top-6"
+              :x1="chartX(date.center)" :x2="chartX(date.center)" :y1="geometry.top-6"
               :y2="geometry.bottom" :stroke="colors.guide" stroke-width="1.6" stroke-dasharray="4 3" />
             <template v-if="date.hasMonitoring">
               <rect v-for="bar in date.bars.filter(item=>item.count>0)" :key="bar.code"
-                :x="bar.x" :y="bar.y" :width="bar.width" :height="bar.height"
+                :x="chartX(bar.x)" :y="bar.y" :width="chartWidth(bar.width)" :height="bar.height"
                 :fill="bar.color" :opacity="visibleIndex===null||visibleIndex!==index||selectedBar?.code===bar.code?1:.62"
                 rx="2" :aria-label="bar.name+': '+countFormat.format(bar.count)+' capturas el '+bogotaDate(date.fecha)">
                 <title>{{ bogotaDate(date.fecha) }} · {{ bar.name }}: {{ countFormat.format(bar.count) }}</title>
               </rect>
               <text v-for="bar in chart.species.length<=4?date.bars.filter(item=>item.count>0&&item.width>=9):[]"
-                :key="'value:'+bar.code" :x="bar.x+bar.width/2" :y="Math.max(bar.y-5,11)"
+                :key="'value:'+bar.code" :x="chartX(bar.x)+chartWidth(bar.width)/2" :y="Math.max(bar.y-5,11)"
                 text-anchor="middle" class="report-species-figure__value">{{ bar.count }}</text>
-              <text v-if="date.total===0" :x="date.center" :y="geometry.bottom-8"
+              <text v-if="date.total===0" :x="chartX(date.center)" :y="geometry.bottom-8"
                 text-anchor="middle" class="report-species-figure__axis">0</text>
             </template>
-            <text v-else :x="date.center" :y="geometry.bottom-7"
+            <text v-else :x="chartX(date.center)" :y="geometry.bottom-7"
               text-anchor="middle" class="report-species-figure__axis">S/M</text>
-            <text :x="date.center" :y="geometry.bottom+20" text-anchor="middle"
+            <text :x="chartX(date.center)" :y="geometry.bottom+20" text-anchor="middle"
               class="report-species-figure__date">{{ date.label }}</text>
-            <rect :x="date.center-(geometry.right-geometry.left)/chart.visits.length/2"
-              :y="geometry.top-9" :width="(geometry.right-geometry.left)/chart.visits.length"
+            <rect :x="chartX(date.center)-(plotRight-plotLeft)/chart.visits.length/2"
+              :y="geometry.top-9" :width="(plotRight-plotLeft)/chart.visits.length"
               :height="geometry.bottom-geometry.top+15" fill="transparent"
               class="report-species-figure__hit" tabindex="0" role="button"
               :data-testid="'mip-species-visit-'+chart.classification.toLowerCase()+'-'+index+(expanded?'-expanded':'')"
@@ -161,7 +181,7 @@ const y=(value:number)=>geometry.bottom-value/props.chart.max*(geometry.bottom-g
 </template>
 
 <style scoped>
-.report-species-figure{margin:0;min-width:0;padding:.85rem;border:1px solid var(--report-border);border-radius:8px;background:#fff;break-inside:avoid}
+.report-species-figure{margin:0;min-width:0;padding:.85rem;border:1px solid var(--report-border);border-radius:8px;background:#fff;color:var(--report-ink,#203645);break-inside:avoid}
 .report-species-figure__head{display:flex;align-items:flex-start;justify-content:space-between;gap:.7rem}
 .report-species-figure__head-text{min-width:0}
 .report-species-figure h3{font-size:.86rem;font-weight:670;line-height:1.35}
@@ -175,23 +195,94 @@ const y=(value:number)=>geometry.bottom-value/props.chart.max*(geometry.bottom-g
 .report-species-figure__value{font-size:9px;font-weight:650;fill:var(--report-ink)}
 .report-species-figure__hit{cursor:crosshair;outline:none}
 .report-species-figure__hit:focus-visible{stroke:var(--report-accent);stroke-width:1.5;stroke-dasharray:3 4}
-.report-species-figure__tooltip{position:absolute;right:4px;top:3px;display:grid;gap:.22rem;max-width:min(75%,260px);padding:.55rem .65rem;border:1px solid var(--report-border);border-radius:7px;background:rgba(255,255,255,.98);box-shadow:0 6px 16px rgba(22,48,70,.12);font-size:.73rem;z-index:2;pointer-events:none}
-.report-species-figure__tooltip small{font-size:.66rem;color:var(--report-muted)}
-.report-species-figure__place{font-size:.68rem;line-height:1.3;color:var(--report-muted)}
-.report-species-figure__legend{display:flex;flex-wrap:wrap;gap:.3rem .8rem;font-size:.72rem;margin:.25rem 0}
+.report-species-figure__tooltip{position:absolute;right:4px;top:3px;display:grid;gap:.22rem;max-width:min(75%,260px);padding:.55rem .65rem;border:1px solid var(--report-border);border-radius:7px;background:#f4f8fa;color:#203645;box-shadow:0 6px 16px rgba(22,48,70,.12);font-size:.73rem;line-height:1.45;z-index:2;pointer-events:none}
+.report-species-figure__tooltip strong{color:#203645}
+.report-species-figure__tooltip small{font-size:.7rem;color:#536b7b}
+.report-species-figure__place{font-size:.71rem;line-height:1.4;color:#536b7b}
+.report-species-figure__legend{display:flex;flex-wrap:wrap;gap:.3rem .8rem;font-size:.72rem;margin:.25rem 0;color:var(--report-ink,#203645)}
 .report-species-figure__legend span{display:inline-flex;align-items:center;gap:.32rem}
 .report-species-figure__legend i{height:10px;width:10px;border-radius:3px;flex-shrink:0}
 .report-species-figure__note{font-size:.67rem;color:var(--report-muted);line-height:1.45;margin:.4rem 0 0!important}
-.report-species-figure--expanded{border:0;padding:0}
-.report-species-figure--expanded .report-species-figure__svg{max-height:400px;min-height:230px}
-.report-species-figure--expanded .report-species-figure__tooltip{position:static;max-width:none;margin:.4rem 0;box-shadow:none}
-.report-species-figure__detail{margin:.75rem 0 0}
-.report-species-figure__detail h4{font-size:.8rem;font-weight:650;margin:0 0 .45rem}
-.report-species-figure__detail table{width:100%;border-collapse:collapse;font-size:.72rem}
-.report-species-figure__detail th,.report-species-figure__detail td{padding:.45rem .4rem;border-bottom:1px solid var(--report-border);vertical-align:top;text-align:left;overflow-wrap:anywhere}
-.report-species-figure__detail th{font-size:.67rem;color:var(--report-muted);background:var(--report-light)}
-.report-species-figure__detail td small{display:block;color:var(--report-muted)}
-.report-species-figure__numeric{text-align:right!important;font-variant-numeric:tabular-nums}
+.report-species-figure--expanded{border:0;padding:0;display:flex;flex-direction:column;gap:.55rem;color:#203645}
+.report-species-figure--expanded .report-species-figure__visual{display:contents}
+.report-species-figure--expanded .report-species-figure__svg{
+  order:1;
+  display:block;
+  width:100%;
+  max-width:850px;
+  height:auto;
+  min-height:0;
+  max-height:none;
+  margin:0 auto;
+}
+.report-species-figure--expanded .report-species-figure__legend{
+  order:2;
+  gap:.4rem .8rem;
+  margin:0;
+  font-size:.75rem;
+  color:#203645;
+}
+.report-species-figure--expanded .report-species-figure__tooltip{
+  order:3;
+  position:static;
+  width:100%;
+  max-width:none;
+  margin:0;
+  padding:.6rem .7rem;
+  box-shadow:none;
+  font-size:.78rem;
+  background:#f4f8fa;
+  color:#203645;
+}
+.report-species-figure--expanded .report-species-figure__detail{
+  order:4;
+  margin:0;
+  padding-top:.65rem;
+  border-top:1px solid #dbe5eb;
+  color:#203645;
+}
+.report-species-figure--expanded .report-species-figure__note{
+  order:5;
+  color:#536b7b;
+  font-size:.71rem;
+  line-height:1.45;
+  margin:0!important;
+}
+.report-species-figure__detail h4{font-size:.83rem;font-weight:650;margin:0 0 .45rem;color:#203645}
+.report-species-figure__detail table{
+  width:100%;
+  border-collapse:collapse;
+  table-layout:fixed;
+  font-size:.75rem;
+  line-height:1.45;
+  color:#203645;
+}
+.report-species-figure__detail th,.report-species-figure__detail td{
+  padding:.5rem .35rem;
+  border-bottom:1px solid #dbe5eb;
+  vertical-align:top;
+  text-align:left;
+  overflow-wrap:anywhere;
+}
+.report-species-figure__detail th{
+  font-size:.68rem;
+  font-weight:650;
+  color:#536b7b;
+  background:#f4f8fa;
+}
+.report-species-figure__detail th:first-child{width:47%}
+.report-species-figure__detail th:nth-child(2){width:31%}
+.report-species-figure__detail th:last-child{width:22%}
+.report-species-figure__detail td strong{color:#203645}
+.report-species-figure__detail td small{display:block;color:#536b7b;font-size:.7rem;line-height:1.35}
+.report-species-figure__numeric{text-align:right!important;font-weight:650;font-variant-numeric:tabular-nums}
+@media(max-width:600px){
+  .report-species-figure--expanded .report-species-figure__svg{max-width:100%;max-height:none;min-height:0}
+  .report-species-figure--expanded .report-species-figure__axis,
+  .report-species-figure--expanded .report-species-figure__date{fill:#536b7b}
+  .report-species-figure--expanded .report-species-figure__value{fill:#203645}
+  .report-species-figure--expanded .report-species-figure__detail td{font-size:.76rem}
+}
 @media print{
 .report-chart-expand,.report-species-figure__tooltip,.report-species-figure__detail{display:none!important}
 .report-species-figure{padding:2mm 3mm;break-inside:avoid}
