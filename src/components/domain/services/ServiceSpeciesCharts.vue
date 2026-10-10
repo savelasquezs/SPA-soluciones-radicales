@@ -37,6 +37,9 @@ const y=(value:number,max:number)=>geometry.bottom-value/max*(geometry.bottom-ge
                 :aria-label="bar.name + ': ' + format.format(bar.count) + ' capturas el ' + bogotaDate(visit.fecha)">
                 <title>{{ bogotaDate(visit.fecha) }} · {{ bar.name }}: {{ format.format(bar.count) }}</title>
               </rect>
+              <text v-for="bar in chart.species.length<=4 ? visit.bars.filter(item=>item.count>0 && item.width>=9) : []"
+                :key="'count:' + bar.code" :x="bar.x+bar.width/2" :y="Math.max(bar.y-5,11)"
+                text-anchor="middle" class="report-species__value">{{ format.format(bar.count) }}</text>
               <text v-if="visit.total===0" :x="visit.center" :y="geometry.bottom-7"
                 text-anchor="middle" class="report-species__axis">0</text>
             </template>
@@ -68,6 +71,7 @@ const y=(value:number,max:number)=>geometry.bottom-value/max*(geometry.bottom-ge
 .report-species__svg{width:100%;max-height:190px;display:block;overflow:visible}
 .report-species__axis,.report-species__missing{font-size:10px;fill:var(--report-muted)}
 .report-species__date{font-size:11px;fill:var(--report-ink)}
+.report-species__value{font-size:9px;font-weight:650;fill:var(--report-ink)}
 .report-species__legend{display:flex;gap:.35rem .85rem;flex-wrap:wrap;font-size:.72rem}
 .report-species__legend span{display:inline-flex;align-items:center;gap:.3rem}
 .report-species__legend i{display:inline-block;width:9px;height:9px;border-radius:2px;flex-shrink:0}

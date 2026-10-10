@@ -20,7 +20,10 @@ const result: ServiceResultsData = {
   productos:[{nombre:'Producto A',principio:'Ingrediente A',registro:'Registro 1',lote:'L-1',dosis:'5 mL/L',metodos:'Aspersión',fichaTecnicaDisponible:true}],
   areas:[{id:areaId,nombre:'Cocina',sinAcceso:false,motivo:null,fotos:[],
     criterios:[{nombre:'Control de residuos',evaluacion:'CP',observacion:'Mejorar disposición',fotos:[photo('criteria/e1/evidence.png')]}],
-    puntos:[{numero:'01',ubicacion:'Acceso',tipo:'Trampa adhesiva',estado:'BUENO',capturas:[{plagaNombreSnapshot:'Moscas',cantidad:2}],observaciones:'Correcto',foto:photo('devices/d1/review/image.png')}],
+    puntos:[
+      {numero:'01',ubicacion:'Acceso',tipo:'Lámpara UV',estado:'BUENO',capturas:[{plagaNombreSnapshot:'Moscas',cantidad:2}],observaciones:'Correcto',foto:photo('devices/d1/review/image.png')},
+      {numero:'02',ubicacion:'Bodega',tipo:'Trampa adhesiva',estado:'ACTIVO',capturas:[],observaciones:null,foto:null},
+    ],
     hallazgos:[{descripcion:'Abertura',recomendacion:'Sellar',estado:'ABIERTO',responsable:'Cliente',
       fotos:[photo('findings/f1/opening/image.png')],fechaApertura:'2026-09-23T15:00:00.000Z',solicitudApertura:'SR-00000007',
       anterior:true,visitasDesdeApertura:2,
@@ -28,9 +31,21 @@ const result: ServiceResultsData = {
         resultado:'SIN_CAMBIOS',observacion:'Continúa pendiente de sellado',fotos:[]}]}],
   }],
   historico:[
-    {solicitud:'SR-00000006',fecha:'2026-09-09T15:00:00.000Z',cumplimiento:60,capturas:5},
-    {solicitud:'SR-00000007',fecha:'2026-09-23T15:00:00.000Z',cumplimiento:75,capturas:3},
-    {solicitud:'SR-00000008',fecha:'2026-10-09T15:00:00.000Z',cumplimiento:80,capturas:2},
+    {solicitud:'SR-00000006',fecha:'2026-09-09T15:00:00.000Z',cumplimiento:60,capturas:5,
+      puestosRevisados:{rastreros:1,voladores:1},especies:[
+        {plagaCodigo:'CUCARACHA',plagaNombreSnapshot:'Cucarachas',clasificacion:'RASTREROS',cantidad:3},
+        {plagaCodigo:'RATON',plagaNombreSnapshot:'Ratones',clasificacion:'RASTREROS',cantidad:1},
+        {plagaCodigo:'MOSCA',plagaNombreSnapshot:'Moscas',clasificacion:'VOLADORES',cantidad:1},
+      ]},
+    {solicitud:'SR-00000007',fecha:'2026-09-23T15:00:00.000Z',cumplimiento:75,capturas:3,
+      puestosRevisados:{rastreros:1,voladores:1},especies:[
+        {plagaCodigo:'CUCARACHA',plagaNombreSnapshot:'Cucarachas',clasificacion:'RASTREROS',cantidad:2},
+        {plagaCodigo:'MOSCA',plagaNombreSnapshot:'Moscas',clasificacion:'VOLADORES',cantidad:1},
+      ]},
+    {solicitud:'SR-00000008',fecha:'2026-10-09T15:00:00.000Z',cumplimiento:80,capturas:2,
+      puestosRevisados:{rastreros:1,voladores:1},especies:[
+        {plagaCodigo:'MOSCA',plagaNombreSnapshot:'Moscas',clasificacion:'VOLADORES',cantidad:2},
+      ]},
   ],
 }
 function service(): AdminService {
@@ -131,6 +146,29 @@ test('las tendencias interactivas muestran cifras y variación por mouse, teclad
   await expect(page.getByTestId('mip-compliance-chart').locator('.report-trend__value').filter({hasText:'80 %'})).toBeVisible()
   await expect(page.getByTestId('mip-captures-chart').locator('.report-trend__value').filter({hasText:'2'}).last()).toBeVisible()
   await expect(page.getByTestId('mip-captures-tooltip')).toBeHidden()
+})
+
+test('agrupa capturas por especie y solo detalla puestos con capturas en informe público e impresión',async ({page})=>{
+  await setup(page,'ADMINISTRADOR')
+  await page.goto('/servicios/'+serviceId+'/informe')
+  const table=page.getByTestId('mip-captures-detail')
+  await expect(table.getByRole('row')).toHaveCount(2)
+  await expect(table).toContainText('2 Moscas')
+  await expect(table).toContainText('Acceso')
+  await expect(table).not.toContainText('Bodega')
+  const flyers=page.getByTestId('mip-species-voladores')
+  const crawlers=page.getByTestId('mip-species-rastreros')
+  await expect(flyers).toContainText('Moscas')
+  await expect(crawlers).toContainText('Cucarachas')
+  await expect(crawlers).toContainText('Ratones')
+  await expect(crawlers.locator('svg rect[aria-label*="Cucarachas: 3 capturas"]')).toHaveCount(1)
+  await expect(page.getByText('1 sin capturas.',{exact:false})).toBeVisible()
+  await page.emulateMedia({media:'print'})
+  await expect(flyers.locator('svg')).toBeVisible()
+  await expect(crawlers.locator('svg')).toBeVisible()
+  await page.goto('/informe/consulta/'+publicToken)
+  await expect(page.getByTestId('mip-species-voladores')).toBeVisible()
+  await expect(page.getByTestId('mip-captures-detail')).toContainText('2 Moscas')
 })
 
 test('un técnico no puede abrir el informe administrativo por URL', async ({page}) => {

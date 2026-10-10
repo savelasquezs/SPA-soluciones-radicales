@@ -30,7 +30,7 @@ export function buildSpeciesCharts(history:ReportHistoricalVisit[]):SpeciesChart
       .map(([code,name],index)=>({code,name,color:palette[index%palette.length]!}))
     const counts=visits.map(visit=>{
       const byCode=new Map<string,number>()
-      for(const capture of visit.especies??[]) if(capture.clasificacion===classification && byCode !== null &&
+      for(const capture of visit.especies??[]) if(capture.clasificacion===classification && capture.plagaCodigo &&
         Number.isFinite(capture.cantidad) && capture.cantidad>0)
         byCode.set(capture.plagaCodigo,(byCode.get(capture.plagaCodigo)??0)+capture.cantidad)
       return byCode

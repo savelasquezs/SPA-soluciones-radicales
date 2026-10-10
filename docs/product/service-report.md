@@ -37,14 +37,24 @@ El informe describe la situación **al finalizar el servicio consultado**, no el
 
 ## Tendencias en el informe y el PDF
 
-La sección **Evolución histórica de la sede** utiliza únicamente **dos gráficos SVG vectoriales**, sin Chart.js ni dependencias adicionales:
+La sección **Evolución histórica de la sede** utiliza gráficos SVG vectoriales, sin Chart.js ni dependencias adicionales:
 
 - **Cumplimiento MIP:** línea cronológica con valores de 0 a 100 %. C=100 %, CP=50 %, NC=0 %; no se inventa 0 % cuando faltan evaluaciones. La línea se interrumpe si una visita no tiene cumplimiento registrado.
-- **Capturas totales:** columnas con la suma de los individuos capturados de **todas las especies de plagas**, en todos los puestos revisados durante cada visita. El backend ya agrega todas las entradas de las capturas de los dispositivos revisados para ese servicio. No se crean gráficos independientes por plaga.
+- **Capturas totales:** columnas con la suma de todos los individuos capturados en los puestos revisados en cada visita.
+- **Voladores (lámparas UV) y rastreros (cebaderos / trampas adhesivas):** dos gráficos de barras agrupadas, una serie por especie registrada; cada serie suma las capturas de **todos los puestos de esa clasificación** en cada visita. Solo se agrupa por especie, nunca por puesto. La clasificación viene del snapshot del tipo de trampa del Servicio y la especie se identifica mediante su código histórico; no se mezcla con el consumo de cebos.
+- **Sin monitoreo vs. cero:** si no hubo puestos revisados de una clasificación en una fecha, se muestra S/M; si hubo revisiones pero ninguna captura, se muestra 0. Se conservan nombres y fechas históricas; no se asume que los meses coinciden con las visitas.
 
-Ambos muestran hasta las seis últimas visitas finalizadas de tipo Principal de la misma sede, fechas reales, valores visibles y variaciones numéricas frente a la visita inmediatamente anterior. Son interactivos en la web: al mover el mouse aparece un detalle con fecha, solicitud, valor y variación; admiten pulsación táctil y foco del teclado. La impresión A4 conserva ejes, fechas, puntos, barras y valores **sin depender del tooltip**. Si existe una sola visita, se muestra el valor sin afirmar ninguna tendencia.
+Los gráficos muestran hasta las seis últimas visitas finalizadas de tipo Principal de la misma sede, fechas reales, valores visibles y variaciones numéricas frente a la visita inmediatamente anterior. Son interactivos en la web: al mover el mouse aparece un detalle con fecha, solicitud, valor y variación; admiten pulsación táctil y foco del teclado. La impresión A4 conserva ejes, fechas, puntos, barras y valores **sin depender del tooltip**. Si existe una sola visita, se muestra el valor sin afirmar ninguna tendencia.
 
 **Interpretación:** bajo los gráficos se presenta una explicación automática, calculada con las diferencias ya disponibles entre la visita actual y la inmediatamente anterior. Las variaciones de cumplimiento se expresan en puntos porcentuales y las de capturas en individuos, sin afirmar mejora o disminución de infestación a partir de capturas solamente. Sin una visita comparable no se inventan tendencias ni proyecciones.
+
+## Detalle de capturas de la visita actual
+
+En **Puestos de monitoreo y capturas** se muestra una tabla compacta solo con los puestos que registraron individuos: número del puesto, Área, tipo de trampa, ubicación y cantidad por especie. La cabecera indica el total de individuos, puestos revisados, puestos con capturas, revisados sin capturas y los que no registraron revisión. Las Áreas sin acceso no se contabilizan como puestos revisados.
+
+La lista repetitiva de todos los puestos sin capturas se elimina del informe, pero se mantienen en un bloque corto separado las observaciones, los cambios de estado relevantes y las evidencias fotográficas vinculadas a los puestos, incluso cuando no tuvieron capturas. El historial completo sigue disponible en la Sede. El informe administrativo y el público comparten la misma vista; se imprime en A4 sin tooltips ni URLs privadas de R2.
+
+Implementación: ampliar `functions/api/service-results/data.ts` (consulta agrupada de las mismas seis visitas), utilizar `ServiceSpeciesCharts.vue` y `serviceSpecies.ts` y actualizar la vista del informe. No requiere tablas, migraciones, cambios en el Técnico ni bibliotecas adicionales.
 
 ## Envío opcional al finalizar el servicio técnico
 
