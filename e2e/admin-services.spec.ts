@@ -437,3 +437,52 @@ test('opens certificates with the finalized service already selected without a h
   expect(api.calls.filter(call=>call.path==='/api/certificates/services')).toHaveLength(0)
   expect(api.calls.filter(call=>call.method==='POST')).toHaveLength(0)
 })
+
+
+test('weekly calendar confirms drag rescheduling, preserves the Refuerzo, and never saves on cancel',async({ page })=>{
+  const api=await setup(page)
+  const weekStart=addDateDays(day,-((new Date(day+'T00:00:00Z').getUTCDay()+6)%7)+7)
+  const old=fromBogotaInput(weekStart+'T09:00')
+  api.records[0]!.inicioProgramado=old
+  api.records[0]!.finProgramado=scheduleEnd({ inicioProgramado:old,duracionMinutos:90 })
+  const childStart=api.records[1]!.inicioProgramado
+  await page.goto('/agenda?view=week&from='+weekStart)
+  const source=page.locator('.svc-week-calendar__event[data-service-id="'+ids.principal+'"]')
+  const destination=page.locator('.svc-week-calendar__day[data-date="'+addDateDays(weekStart,1)+'"]')
+  await source.dragTo(destination,{ sourcePosition:{ x:12,y:12 },targetPosition:{ x:35,y:150 } })
+  const dialog=page.getByRole('dialog',{ name:'Confirmar nueva fecha' })
+  await expect(dialog).toBeVisible()
+  expect(api.calls.filter(call=>call.method==='POST' && call.path.endsWith('/reschedule'))).toHaveLength(0)
+  await dialog.getByRole('button',{ name:'Cancelar' }).click()
+  await expect(dialog).toHaveCount(0)
+  expect(api.records[0]!.inicioProgramado).toBe(old)
+  await source.dragTo(destination,{ sourcePosition:{ x:12,y:12 },targetPosition:{ x:35,y:150 } })
+  await expect(dialog).toContainText('El Refuerzo conservará su fecha')
+  await dialog.getByRole('button',{ name:'Mover servicio' }).click()
+  await expect(dialog).toHaveCount(0)
+  await expect.poll(()=>api.calls.filter(call=>call.method==='POST' && call.path.endsWith('/reschedule')).length).toBe(1)
+  const request=api.calls.find(call=>call.method==='POST' && call.path.endsWith('/reschedule'))!
+  expect(toBogotaInput(request.body!.programacion.inicioProgramado).slice(0,10)).toBe(addDateDays(weekStart,1))
+  expect(request.body!.programacion.duracionMinutos).toBe(90)
+  expect(request.body!.refuerzo).toBeUndefined()
+  expect(api.records[1]!.inicioProgramado).toBe(childStart)
+})
+
+test('weekly calendar opens quick rescheduling and prefills creation from an empty hour',async({ page })=>{
+  const api=await setup(page)
+  const weekStart=addDateDays(day,-((new Date(day+'T00:00:00Z').getUTCDay()+6)%7)+7)
+  const scheduled=fromBogotaInput(weekStart+'T09:00')
+  api.records[0]!.inicioProgramado=scheduled
+  api.records[0]!.finProgramado=scheduleEnd({ inicioProgramado:scheduled,duracionMinutos:90 })
+  await page.goto('/agenda?view=week&from='+weekStart)
+  await page.getByRole('button',{ name:/Reprogramar SR-0101/ }).click()
+  await expect(page.getByRole('dialog',{ name:'Reprogramar servicio' })).toBeVisible()
+  await page.getByRole('dialog',{ name:'Reprogramar servicio' }).getByRole('button',{ name:'Volver' }).click()
+  const target=addDateDays(weekStart,2)
+  await page.locator('.svc-week-calendar__slot-target[data-date="'+target+'"]').click({ position:{ x:25,y:160 } })
+  await expect(page).toHaveURL(/\/servicios\/nuevo/)
+  const requested=new URL(page.url()).searchParams.get('start')
+  expect(requested).toBeTruthy()
+  expect(toBogotaInput(requested!).slice(0,10)).toBe(target)
+  await expect(page.locator('#programacion-inicio')).toHaveValue(new RegExp(toBogotaInput(requested!).slice(11,16)))
+})
