@@ -92,6 +92,13 @@ profileRoutes.post('/files/discard', async context => {
     if ((kind === 'AVATAR' ? rows[0]?.photo : rows[0]?.certificate) === body.storagePath) {
       throw new ApiError(409, 'No es posible eliminar un archivo en uso')
     }
+    if (kind === 'CERTIFICATE') {
+      const archived = await client.query(
+        "select 1 from public.auditoria where registro_id=$2 and accion='PERFIL_CERTIFICADO_ACTUALIZADO' and (detalle_json->>'currentPath'=$1 or detalle_json->>'previousPath'=$1) limit 1",
+        [body.storagePath, record.id],
+      )
+      if (archived.rowCount) throw new ApiError(409, 'El certificado forma parte del historial y se conserva')
+    }
     await deleteMasterObject(body.storagePath as string)
   })
   return context.body(null, 204)
@@ -103,13 +110,13 @@ profileRoutes.patch('/avatar', async context => {
   const path = body.storagePath
   if (path !== null && typeof path !== 'string') throw new ApiError(422, 'Fotografía no válida')
   const identity = context.get('identity')
-  const initial = await transaction(client => self(client, identity))
-  if (path) {
-    assertOwnedProfileStoragePath('AVATAR', initial.id, path)
-    if (path !== initial.fotoStoragePath && !await profileObjectExists(path)) throw new ApiError(422, 'Primero sube la fotografía')
-  }
   const saved = await transaction(async client => {
     const current = await self(client, identity)
+    await client.query('select id from public.usuarios where id=$1 for update', [current.id])
+    if (path) {
+      assertOwnedProfileStoragePath('AVATAR', current.id, path)
+      if (path !== current.fotoStoragePath && !await profileObjectExists(path)) throw new ApiError(422, 'Primero sube la fotografía')
+    }
     const update = await client.query(
       'update public.usuarios set foto_storage_path=$1 where id=$2 and version=$3 returning id',
       [path, current.id, version],
@@ -140,16 +147,14 @@ profileRoutes.patch('/certificate', async context => {
   const expiry = dateOnly(body.certificadoFechaVencimiento, 'La fecha de vencimiento')
   if (expiry < issue) throw new ApiError(422, 'El vencimiento no puede ser anterior a la emisión')
   const identity = context.get('identity')
-  const initial = await transaction(client => self(client, identity))
-  if (!initial.esTecnico) throw new ApiError(403, 'Se requiere rol Técnico')
-  if (path !== initial.certificadoStoragePath) {
-    assertOwnedProfileStoragePath('CERTIFICATE', initial.id, path)
-    if (!await profileObjectExists(path)) throw new ApiError(422, 'Primero sube el certificado')
-  }
   const record = await transaction(async client => {
     const current = await self(client, identity)
     if (!current.esTecnico) throw new ApiError(403, 'Se requiere rol Técnico')
-    if (path !== current.certificadoStoragePath) assertOwnedProfileStoragePath('CERTIFICATE', current.id, path)
+    await client.query('select id from public.usuarios where id=$1 for update', [current.id])
+    if (path !== current.certificadoStoragePath) {
+      assertOwnedProfileStoragePath('CERTIFICATE', current.id, path)
+      if (!await profileObjectExists(path)) throw new ApiError(422, 'Primero sube el certificado')
+    }
     const updated = await client.query(
       'update public.usuarios set certificado_storage_path=$1, certificado_fecha_emision=$2, certificado_fecha_vencimiento=$3 where id=$4 and version=$5 returning id',
       [path, issue, expiry, current.id, version],
