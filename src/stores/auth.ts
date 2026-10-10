@@ -46,11 +46,12 @@ export const useAuthStore = defineStore('auth', () => {
       if (!session.value?.user) {
         status.value = 'unauthenticated'
         user.value = null
+        privateAvatarUrl.value = null
         return
       }
       user.value = await apiRequest<SessionProfile>('api/session')
+      privateAvatarUrl.value = user.value.avatarUrl ?? null
       status.value = 'authenticated'
-      void refreshAvatar()
     } catch (restoreError) {
       session.value = null
       user.value = null
