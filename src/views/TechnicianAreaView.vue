@@ -110,12 +110,15 @@ async function revealRequested(): Promise<void> {
   const id = String(route.query.focus ?? '')
   if (!id || !areaIssues.value.some(issue => issue.id === id)) return
   validationTarget.value = id
+  const issue = areaIssues.value.find(item => item.id === id)
+  if (issue?.tab === 'points') openDeviceId.value = id
   await nextTick()
   document.getElementById(`area-item-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
 
 async function showIssue(issue: TechnicianAreaIssue): Promise<void> {
   validationTarget.value = issue.id
+  if (issue.tab === 'points') openDeviceId.value = issue.id
   await router.replace({ query: { ...route.query, tab: issue.tab, focus: issue.id } })
   await nextTick()
   document.getElementById(`area-item-${issue.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
