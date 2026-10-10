@@ -412,7 +412,7 @@ export async function saveTechnicianFindingStatus(
   input: TechnicianFindingStatusInput,
   evidenceStoragePaths: string[],
 ): Promise<TechnicianFindingResult> {
-  const context = await authorizeTechnicianFindingChange(client, userId, serviceId, deviceId, lockToken, areaId, findingId)
+  await authorizeTechnicianFindingChange(client, userId, serviceId, deviceId, lockToken, areaId, findingId)
   await client.query('select id from public.hallazgos where id=$1 for update', [findingId])
   const current = await getFinding(client, findingId)
   if (!current) throw new ApiError(404, 'El Hallazgo ya no está disponible.', 'FINDING_NOT_FOUND')
