@@ -26,7 +26,7 @@ describe('Gráficos históricos del informe',()=>{
   it('identifica meses separados, varias visitas del mes y horas del mismo día en Bogotá',()=>{
     expect(reportVisitAxisLabels([
       {fecha:'2026-06-04T15:00:00Z'},{fecha:'2026-09-04T15:00:00Z'},
-    ])).toEqual(['jun 2026','sep 2026'])
+    ])).toEqual(['jun 2026','sept 2026'])
     expect(reportVisitAxisLabels([
       {fecha:'2026-10-08T15:00:00Z'},{fecha:'2026-10-09T15:00:00Z'},
     ])).toEqual(['08 oct','09 oct'])
