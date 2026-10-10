@@ -101,7 +101,10 @@ async function finish(): Promise<void> {
       : await services.finalizeService(serviceId.value, clientName.value)
     actionMessage.value = result === 'synced' ? 'Servicio finalizado.' : result === 'conflict'
       ? 'Revisa la información pendiente antes de volver a intentar.' : 'Cierre guardado. Se finalizará al recuperar conexión.'
-    if (result === 'synced') void emails.flushAll()
+    if (result === 'synced') {
+      reportModalOpen.value = true
+      void emails.flushAll()
+    }
   } catch (failure) {
     actionError.value = failure instanceof Error ? failure.message : 'No fue posible finalizar el servicio.'
   } finally { saving.value = false }
@@ -113,9 +116,9 @@ async function finish(): Promise<void> {
     <LoadingSkeleton v-if="loading" label="Revisando pendientes" :rows="5" />
     <StatusPanel v-else-if="error" title="No fue posible revisar el servicio" :message="error" tone="danger" />
     <template v-else-if="packageValue">
-      <StatusPanel v-if="finalized" title="Servicio finalizado" message="Las firmas y el cierre fueron confirmados por el servidor." tone="success" />
-      <StatusPanel v-else-if="pending.length" title="Aún hay Áreas pendientes" :message="`${pending.length} de ${areas.length} Áreas requieren información. Puedes revisar el cierre, pero no finalizar hasta completarlas.`" tone="warning" />
-      <StatusPanel v-else title="Recorrido completo" message="Las Áreas están resueltas. Registra ambas firmas para finalizar." tone="success" />
+      <StatusPanel v-if="finalized" compact title="Servicio finalizado" message="Las firmas y el cierre fueron confirmados por el servidor." tone="success" />
+      <StatusPanel v-else-if="pending.length" compact title="Aún hay Áreas pendientes" :message="`${pending.length} de ${areas.length} Áreas requieren información. Puedes revisar el cierre, pero no finalizar hasta completarlas.`" tone="warning" />
+      <StatusPanel v-else compact title="Recorrido completo" message="Las Áreas están resueltas. Registra ambas firmas para finalizar." tone="success" />
       <section class="review-list" aria-labelledby="review-areas-title"><h2 id="review-areas-title">Estado por Área</h2>
         <button v-for="area in areas" :key="area.id" type="button" @click="openArea(area.id)">
           <span class="review-list__name"><strong>{{ area.nombre }}</strong><small v-if="technicianAreaIssues(area, serviceId).length">{{ technicianAreaIssues(area, serviceId).filter(issue => issue.tab === 'criteria').length }} criterios · {{ technicianAreaIssues(area, serviceId).filter(issue => issue.tab === 'points').length }} puestos · {{ technicianAreaIssues(area, serviceId).filter(issue => issue.tab === 'findings').length }} hallazgos pendientes</small></span>
@@ -127,18 +130,18 @@ async function finish(): Promise<void> {
         <article><div><strong>Técnico</strong><span>{{ technicianSigned ? 'Firma guardada' : 'Pendiente' }}</span></div><BaseButton variant="secondary" :disabled="saving || Boolean(finalization)" @click="signatureRole = 'TECHNICIAN'">{{ technicianSigned ? 'Firmar de nuevo' : 'Firmar' }}</BaseButton></article>
         <article><div><strong>Responsable del cliente</strong><span>{{ clientSigned ? 'Firma guardada' : 'Pendiente' }}</span></div><BaseButton variant="secondary" :disabled="saving || Boolean(finalization)" @click="signatureRole = 'CLIENT'">{{ clientSigned ? 'Firmar de nuevo' : 'Firmar' }}</BaseButton></article>
         <BaseInput v-model="clientName" name="client-signer-name" label="Nombre de quien firma por el cliente" maxlength="200" required :disabled="saving || Boolean(finalization)" />
-        <StatusPanel v-if="actionError" title="No fue posible cerrar el servicio" :message="actionError" tone="danger" />
-        <StatusPanel v-else-if="actionMessage" title="Estado del cierre" :message="actionMessage" :tone="actionMessage === 'Servicio finalizado.' ? 'success' : 'warning'" />
+        <StatusPanel v-if="actionError" compact title="No fue posible cerrar el servicio" :message="actionError" tone="danger" />
+        <StatusPanel v-else-if="actionMessage" compact title="Estado del cierre" :message="actionMessage" :tone="actionMessage === 'Servicio finalizado.' ? 'success' : 'warning'" />
         <BaseButton :loading="saving" :disabled="!canFinalize || (Boolean(finalization) && finalization?.status !== 'CONFLICT')" @click="finish">{{ finalization?.status === 'CONFLICT' ? 'Reintentar cierre' : finalization ? 'Cierre pendiente' : 'Finalizar servicio' }}</BaseButton>
       </section>
       <section v-if="canOfferReport" class="review-email" aria-labelledby="review-email-title">
         <div><h2 id="review-email-title">Enviar informe al cliente</h2>
           <p>Opcional · Puedes seleccionar los correos registrados, añadir otros y personalizar el mensaje.</p>
         </div>
-        <StatusPanel v-if="pendingEmailItems.some(item => item.status === 'NEEDS_REVIEW')"
+        <StatusPanel v-if="pendingEmailItems.some(item => item.status === 'NEEDS_REVIEW')" compact
           title="Un correo necesita revisión" tone="danger"
           message="No se pudo confirmar o completar el envío. Revisa Gmail y solicita apoyo al administrador antes de generar otro intento." />
-        <StatusPanel v-else-if="pendingEmailItems.length"
+        <StatusPanel v-else-if="pendingEmailItems.length" compact
           title="Envío pendiente" tone="warning"
           :message="pendingEmailItems[0]?.error || 'Guardado en este dispositivo. Se enviará después de confirmar el cierre y recuperar internet.'" />
         <p v-if="emailInfo" class="review-email__notice" role="status">{{ emailInfo }}</p>

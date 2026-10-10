@@ -158,6 +158,9 @@ async function markPendingAsCompliant(): Promise<void> {
       if (await saveCriterion(criterion.id, 'C', note, [], undefined, true)) marked += 1
     }
     if (marked) {
+      await nextTick()
+      document.querySelector<HTMLElement>('.workspace-panel[aria-labelledby="criteria-title"] .workspace-footer')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'end' })
       const status = await services.syncPending(serviceId.value)
       bulkMessage.value = status === 'conflict'
         ? `${marked} marcados; revisa el conflicto de sincronización.`
