@@ -429,7 +429,7 @@ function filename(path: string): string {
       title="Verificar otra cuenta"
       message="Tienes cambios sin guardar. Al autenticar otra cuenta de Google se descartarán."
       confirm-label="Continuar con Google"
-      :disabled="busy"
+      :loading="busyGoogle"
       @cancel="googleConfirmOpen = false"
       @confirm="changeGoogle"
     />
