@@ -30,3 +30,5 @@ jobs:
           console.log('NEON_ZIP_SHA256:'+(await import('node:crypto')).createHash('sha256').update(zip).digest('hex'))
           for(let i=0;i<b64.length;i+=12000)console.log('NEON_ZIP_PART:'+b64.slice(i,i+12000))
           NODE
+
+# Bundle matches retention PR after merging the latest develop.
