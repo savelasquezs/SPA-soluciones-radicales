@@ -13,6 +13,7 @@ export type SessionProfile = {
   esTecnico: boolean
   rolActivo: ActiveRole | null
   requiereSeleccionRol: boolean
+  avatarUrl?: string | null
 }
 
 export type PersonalProfile = {
