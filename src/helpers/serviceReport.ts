@@ -32,6 +32,7 @@ export function reportMetrics(data: ServiceResultsData) {
     monitoringPoints: points.length,
     captures: points.reduce((sum, point) => sum + point.capturas.reduce((part, c) => part + Math.max(0, c.cantidad), 0), 0),
     findings: data.areas.reduce((sum, area) => sum + area.hallazgos.length, 0),
+    unresolvedFindings: data.areas.reduce((sum, area) => sum + area.hallazgos.filter(finding=>finding.estado!=='CERRADO').length, 0),
   }
 }
 
