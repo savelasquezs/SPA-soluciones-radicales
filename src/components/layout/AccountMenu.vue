@@ -3,6 +3,8 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ChevronDown, LogOut, UserRound, UsersRound, Wrench } from 'lucide-vue-next'
 
+import ConfirmDialog from '@/components/base/ConfirmDialog.vue'
+import { useAccountTransition } from '@/composables/useAccountTransition'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
 import type { ActiveRole } from '@/types/domain'
@@ -10,6 +12,8 @@ import type { ActiveRole } from '@/types/domain'
 const props = defineProps<{ placement: 'topbar' | 'sidebar' }>()
 const auth = useAuthStore()
 const notifications = useNotificationsStore()
+const accountTransition = useAccountTransition()
+const pendingAction = ref<'change' | 'logout' | null>(null)
 const router = useRouter()
 const route = useRoute()
 const details = ref<HTMLDetailsElement | null>(null)
@@ -59,24 +63,43 @@ async function switchRole(role: ActiveRole): Promise<void> {
   }
 }
 
-async function changeAccount(): Promise<void> {
+function requestAccountAction(action: 'change' | 'logout'): void {
   if (changingAccount.value) return
-  changingAccount.value = true
-  try { await auth.useAnotherAccount() }
-  catch (error) {
-    changingAccount.value = false
-    notifications.show(error instanceof Error ? error.message : 'No fue posible cambiar de cuenta', 'error')
+  if (accountTransition?.busy.value) {
+    notifications.show('Termina de guardar los cambios antes de salir.', 'warning')
+    return
   }
+  if (accountTransition?.unsaved.value && !accountTransition.discardApproved.value) {
+    close()
+    pendingAction.value = action
+    return
+  }
+  void performAction(action)
 }
 
-async function signOut(): Promise<void> {
+async function confirmAccountAction(): Promise<void> {
+  const action = pendingAction.value
+  pendingAction.value = null
+  if (!action) return
+  accountTransition?.approveDiscard()
+  await performAction(action)
+}
+
+async function performAction(action: 'change' | 'logout'): Promise<void> {
   if (changingAccount.value) return
+  changingAccount.value = true
   try {
-    await auth.logout()
-    close()
-    await router.replace('/acceso')
+    if (action === 'change') await auth.useAnotherAccount()
+    else {
+      await auth.logout()
+      close()
+      await router.replace('/acceso')
+    }
   } catch (error) {
-    notifications.show(error instanceof Error ? error.message : 'No fue posible cerrar sesión', 'error')
+    if (accountTransition) accountTransition.discardApproved.value = false
+    notifications.show(error instanceof Error ? error.message : 'No fue posible actualizar la sesión', 'error')
+  } finally {
+    changingAccount.value = false
   }
 }
 </script>
@@ -121,14 +144,24 @@ async function signOut(): Promise<void> {
         </button>
       </div>
       <div class="account-control__divider"></div>
-      <button type="button" class="account-control__action" :disabled="changingAccount" @click="changeAccount">
+      <button type="button" class="account-control__action" :disabled="changingAccount" @click="requestAccountAction('change')">
         <UsersRound :size="18" aria-hidden="true" /> Cambiar cuenta
       </button>
-      <button type="button" class="account-control__action" :disabled="changingAccount" @click="signOut">
+      <button type="button" class="account-control__action" :disabled="changingAccount" @click="requestAccountAction('logout')">
         <LogOut :size="18" aria-hidden="true" /> Cerrar sesión
       </button>
     </div>
   </details>
+  <ConfirmDialog
+    :open="pendingAction !== null"
+    title="Descartar cambios"
+    :message="pendingAction === 'change' ? 'Tienes cambios sin guardar. ¿Descartarlos para cambiar de cuenta?' : 'Tienes cambios sin guardar. ¿Descartarlos y cerrar la sesión?'"
+    :confirm-label="pendingAction === 'change' ? 'Descartar y cambiar' : 'Descartar y salir'"
+    danger
+    :loading="changingAccount"
+    @cancel="pendingAction = null"
+    @confirm="confirmAccountAction"
+  />
 </template>
 
 <style scoped>
