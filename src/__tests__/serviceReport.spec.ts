@@ -17,7 +17,9 @@ const make = (): ServiceResultsData => ({
         { nombre: 'Anexo', evaluacion: 'NA', observacion: null, fotos: [] },
       ],
       puntos: [{ numero: '01', ubicacion: 'Puerta', tipo: 'Trampa', estado: 'BUENO', capturas: [{ plagaNombreSnapshot: 'Moscas', cantidad: 3 }], observaciones: null, foto: path('devices/review/p2.png') }],
-      hallazgos: [{ descripcion: 'Hallazgo', recomendacion: 'Corregir', estado: 'ABIERTO', responsable: 'Cliente', fotos: [path('findings/opening/p3.png')] }],
+      hallazgos: [{ descripcion: 'Hallazgo', recomendacion: 'Corregir', estado: 'ABIERTO', responsable: 'Cliente',
+        fotos: [path('findings/opening/p3.png')],fechaApertura:'2026-10-08T15:00:00.000Z',
+        solicitudApertura:'SR-0002',anterior:true,visitasDesdeApertura:2,seguimientos:[] }],
     },
     { id: 'area-2', nombre: 'Bodega', sinAcceso: true, motivo: 'Cerrada', fotos: [path('areas/no-access/p4.png')],
       criterios: [{ nombre: 'Ignorar', evaluacion: 'NC', observacion: null, fotos: [] }], puntos: [], hallazgos: [] },
@@ -39,7 +41,7 @@ describe('Informe administrativo MIP', () => {
     expect(scoreText(null)).toBe('—')
   })
   it('contabiliza hallazgos, áreas, puestos y capturas', () => {
-    expect(reportMetrics(make())).toMatchObject({ compliance:75, areasReviewed:1, areasWithoutAccess:1, monitoringPoints:1, captures:3, findings:1, criteriaReviewed:3 })
+    expect(reportMetrics(make())).toMatchObject({ compliance:75, areasReviewed:1, areasWithoutAccess:1, monitoringPoints:1, captures:3, findings:1, unresolvedFindings:1, criteriaReviewed:3 })
     expect(elapsedMinutes('2026-10-09T13:00:00.000Z','2026-10-09T15:00:00.000Z')).toBe(120)
   })
   it('incluye ambas firmas e imágenes contextualizadas sin duplicados', () => {
@@ -51,5 +53,19 @@ describe('Informe administrativo MIP', () => {
       path('findings/opening/p3.png'),path('areas/no-access/p4.png'),data.firmaCliente,
     ])
     expect(items.find(item=>item.path===data.firmaCliente)?.caption).toContain('Firma de conformidad')
+  })
+  it('conserva imágenes históricas vinculadas a otro servicio y fotografía del seguimiento', () => {
+    const data = make()
+    const previous = 'services/20000000-0000-4000-8000-000000000002/findings/30000000-0000-4000-8000-000000000003/opening/old.webp'
+    const followup = 'services/10000000-0000-4000-8000-000000000001/findings/30000000-0000-4000-8000-000000000003/followup/new.webp'
+    const finding = data.areas[0]!.hallazgos[0]!
+    finding.fotos = [previous]
+    finding.seguimientos = [{solicitud:'SR-0003',fecha:data.finReal,resultado:'SIN_CAMBIOS',observacion:'Sigue pendiente',fotos:[followup]}]
+    const evidence = reportEvidence(data)
+    expect(evidence.map(item=>item.path)).toContain(previous)
+    expect(evidence.map(item=>item.path)).toContain(followup)
+    expect(evidence.find(item=>item.path===previous)?.caption).toContain('Apertura')
+    finding.estado='CERRADO'
+    expect(reportMetrics(data).unresolvedFindings).toBe(0)
   })
 })

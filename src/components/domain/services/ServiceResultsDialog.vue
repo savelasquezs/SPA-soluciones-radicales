@@ -21,7 +21,10 @@ const tabs=[
   {id:'puestos',label:'Puestos de monitoreo'}, {id:'detalles',label:'Detalles'},
 ] as const
 const areas=computed(()=>current.value?.data.areas??[])
-const findings=computed(()=>areas.value.flatMap(a=>a.hallazgos.map(h=>({...h,area:a.nombre}))))
+const findings=computed(()=>areas.value.flatMap(a=>a.hallazgos.map(h=>({...h,area:a.nombre}))).sort((a,b)=>{
+  const priority=(f:{estado:string;anterior:boolean})=>f.estado==='CERRADO'?2:f.anterior?0:1
+  return priority(a)-priority(b)||a.fechaApertura.localeCompare(b.fechaApertura)
+}))
 const points=computed(()=>areas.value.flatMap(a=>a.puntos.map(p=>({...p,area:a.nombre}))))
 const evaluation:Record<string,string>={C:'Cumple',CP:'Parcial',NC:'No cumple',NA:'No aplica'}
 const fmt=(date:string)=>new Intl.DateTimeFormat('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',year:'numeric'}).format(new Date(date))
@@ -80,13 +83,22 @@ function certificates():void{
         </template>
       </div>
       <div v-else-if="tab==='hallazgos'" class="results-content">
-        <p v-if="!findings.length" class="muted">Este servicio no registró aperturas ni cierres de hallazgos.</p>
+        <p v-if="!findings.length" class="muted">No había hallazgos pendientes ni se registraron nuevos o cierres.</p>
         <section v-for="(finding,index) in findings" :key="index" class="result-section">
-          <div class="section-title"><h3>{{ finding.area }}</h3><small>{{ finding.estado }}</small></div>
+          <div class="section-title"><h3>{{ finding.area }}</h3><small>{{ finding.estado === 'CERRADO' ? 'Solucionado' : finding.anterior ? 'Pendiente anterior' : 'Nuevo · Pendiente' }}</small></div>
           <p>{{ finding.descripcion }}</p>
           <p class="muted">Acción correctiva: {{ finding.recomendacion }}</p>
           <p class="muted">Responsable: {{ finding.responsable }}</p>
-          <div class="photos"><button v-for="(path,i) in finding.fotos" :key="path" @click="openEvidence(path)">Evidencia {{ i+1 }}</button></div>
+          <p class="muted">Apertura: {{ fmt(finding.fechaApertura) }} · {{ finding.solicitudApertura }}<span v-if="finding.anterior"> · {{ finding.visitasDesdeApertura }} visitas</span></p>
+          <div class="photos"><button v-for="(path,i) in finding.fotos" :key="path" @click="openEvidence(path)">Foto inicial {{ i+1 }}</button></div>
+          <div v-if="finding.seguimientos.length" class="result-section">
+            <strong>Historial</strong>
+            <div v-for="(review,i) in finding.seguimientos" :key="i">
+              <p class="muted">{{ fmt(review.fecha) }} · {{ review.solicitud }} · {{ review.resultado === 'SIN_CAMBIOS' ? 'Sigue pendiente' : review.resultado === 'CERRADO' ? 'Solucionado' : 'En proceso' }}</p>
+              <p v-if="review.observacion">{{ review.observacion }}</p>
+              <div class="photos"><button v-for="(path,j) in review.fotos" :key="path" @click="openEvidence(path)">Foto seguimiento {{ j+1 }}</button></div>
+            </div>
+          </div>
         </section>
       </div>
       <div v-else-if="tab==='puestos'" class="results-content">
