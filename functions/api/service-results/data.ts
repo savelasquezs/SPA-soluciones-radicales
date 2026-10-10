@@ -12,7 +12,9 @@ export interface ServiceResultsData {
   inicioProgramado:string; inicioReal:string; finReal:string
   productos:Array<{nombre:string;principio:string;registro:string;lote:string;dosis:string;metodos:string;fichaTecnicaDisponible:boolean}>
   areas:ServiceArea[]
-  historico:Array<{solicitud:string;fecha:string;cumplimiento:number|null;capturas:number}>
+  historico:Array<{solicitud:string;fecha:string;cumplimiento:number|null;capturas:number;
+    especies:Array<{plagaCodigo:string;plagaNombreSnapshot:string;clasificacion:'VOLADORES'|'RASTREROS';cantidad:number}>;
+    puestosRevisados:{voladores:number;rastreros:number}}>
 }
 const arr=(v:unknown):string[]=>Array.isArray(v)?v.filter((x):x is string=>typeof x==='string'&&x.length>0):[]
 
@@ -132,7 +134,9 @@ export async function loadServiceResultsData(client:PoolClient,serviceId:string)
     from public.productos_aplicados pa join public.productos p on p.id=pa.producto_id
     where pa.servicio_id=$1 and pa.aplicado
     order by coalesce(pa.producto_nombre_snapshot,p.nombre),pa.id`,[serviceId])).rows
-  const historico=(await client.query<{solicitud:string;fecha:Date;cumplimiento:number|null;capturas:string}>(`
+  const historico=(await client.query<{solicitud:string;fecha:Date;cumplimiento:number|null;capturas:string;
+    especies:Array<{plagaCodigo:string;plagaNombreSnapshot:string;clasificacion:'VOLADORES'|'RASTREROS';cantidad:number|string}>;
+    puestosRastrerosRevisados:number;puestosVoladoresRevisados:number}>(`
     with visitas as (
       select id,solicitud,fin_real from public.servicios
       where sede_id=$1 and estado='FINALIZADO' and tipo_servicio='PRINCIPAL' and fin_real <= (select fin_real from public.servicios where id=$2)
@@ -145,16 +149,45 @@ export async function loadServiceResultsData(client:PoolClient,serviceId:string)
       from visitas v join public.servicio_areas sa on sa.servicio_id=v.id
       left join public.evaluaciones_mip_area e on e.servicio_area_id=sa.id
       group by v.id,sa.id,sa.sin_acceso
+    ), capturas_por_especie as (
+      select r.servicio_id,sd.clasificacion_snapshot as clasificacion,
+        c.item->>'plagaCodigo' as codigo,
+        max(c.item->>'plagaNombreSnapshot') as nombre,
+        sum((c.item->>'cantidad')::bigint) as cantidad
+      from public.revisiones_dispositivos r
+      join visitas v on v.id=r.servicio_id
+      join public.servicio_dispositivos sd on sd.id=r.servicio_dispositivo_id
+      cross join lateral jsonb_array_elements(coalesce(r.capturas_json,'[]'::jsonb)) c(item)
+      where sd.clasificacion_snapshot in ('RASTREROS','VOLADORES')
+      group by r.servicio_id,sd.clasificacion_snapshot,c.item->>'plagaCodigo'
+    ), puestos_revisados as (
+      select r.servicio_id,
+        count(*) filter (where sd.clasificacion_snapshot='RASTREROS')::int as rastreros,
+        count(*) filter (where sd.clasificacion_snapshot='VOLADORES')::int as voladores
+      from public.revisiones_dispositivos r
+      join visitas v on v.id=r.servicio_id
+      join public.servicio_dispositivos sd on sd.id=r.servicio_dispositivo_id
+      group by r.servicio_id
     )
     select v.solicitud,v.fin_real as fecha,round(avg(a.porcentaje)::numeric,1)::float8 as cumplimiento,
        (select coalesce(sum((c.item->>'cantidad')::integer),0)::text from public.revisiones_dispositivos r
          cross join lateral jsonb_array_elements(coalesce(r.capturas_json,'[]'::jsonb)) c(item)
-         where r.servicio_id=v.id) as capturas
+         where r.servicio_id=v.id) as capturas,
+       (select coalesce(jsonb_agg(jsonb_build_object(
+         'plagaCodigo',c.codigo,'plagaNombreSnapshot',c.nombre,'clasificacion',c.clasificacion,
+         'cantidad',c.cantidad) order by c.clasificacion,c.nombre,c.codigo),'[]'::jsonb)
+         from capturas_por_especie c where c.servicio_id=v.id) as especies,
+       coalesce(m.rastreros,0)::int as "puestosRastrerosRevisados",
+       coalesce(m.voladores,0)::int as "puestosVoladoresRevisados"
     from visitas v left join area_scores a on a.id=v.id
-    group by v.id,v.solicitud,v.fin_real order by v.fin_real,v.id`,[sv.sedeId,sv.id])).rows
+    left join puestos_revisados m on m.servicio_id=v.id
+    group by v.id,v.solicitud,v.fin_real,m.rastreros,m.voladores order by v.fin_real,v.id`,[sv.sedeId,sv.id])).rows
   return {id:sv.id,solicitud:sv.solicitud,cliente:sv.cliente,nit:sv.nit,sede:sv.sede,direccion:sv.direccion,tecnico:sv.tecnico,
     firmanteCliente:sv.firmanteCliente||'',firmaTecnico:sv.firmaTecnico,firmaCliente:sv.firmaCliente,
     inicioProgramado:sv.inicioProgramado.toISOString(),inicioReal:sv.inicioReal.toISOString(),finReal:sv.finReal.toISOString(),
     productos,areas,historico:historico.map(h=>({solicitud:h.solicitud,fecha:new Date(h.fecha).toISOString(),
-      cumplimiento:h.cumplimiento==null?null:Number(h.cumplimiento),capturas:Number(h.capturas)||0}))}
+      cumplimiento:h.cumplimiento==null?null:Number(h.cumplimiento),capturas:Number(h.capturas)||0,
+      puestosRevisados:{rastreros:Number(h.puestosRastrerosRevisados)||0,voladores:Number(h.puestosVoladoresRevisados)||0},
+      especies:h.especies.map(c=>({plagaCodigo:c.plagaCodigo,plagaNombreSnapshot:c.plagaNombreSnapshot,
+        clasificacion:c.clasificacion,cantidad:Number(c.cantidad)||0}))}))}
 }
