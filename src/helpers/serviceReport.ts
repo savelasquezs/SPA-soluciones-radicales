@@ -1,6 +1,6 @@
 import type { ServiceAreaResult, ServiceResultsData } from '@/types/serviceResults'
 
-export type ReportEvidenceState = 'IDLE' | 'LOADING' | 'AVAILABLE' | 'MISSING' | 'ERROR'
+export type ReportEvidenceState = 'IDLE' | 'LOADING' | 'AVAILABLE' | 'MISSING' | 'EXPIRED' | 'ERROR'
 export type ReportEvidence = { path: string; caption: string }
 
 const weights: Record<'C' | 'CP' | 'NC', number> = { C: 100, CP: 50, NC: 0 }
@@ -54,8 +54,8 @@ export function reportEvidence(data: ServiceResultsData): ReportEvidence[] {
         review.fotos.forEach((path, i) => add(path, 'Hallazgo · ' + area.nombre + ' · ' + review.solicitud + ' · Foto ' + (i + 1), true))
     }
   }
-  add(data.firmaTecnico, 'Firma del técnico')
-  add(data.firmaCliente, 'Firma de conformidad del cliente')
+  if (!data.firmaTecnicoVencida) add(data.firmaTecnico, 'Firma del técnico')
+  if (!data.firmaClienteVencida) add(data.firmaCliente, 'Firma de conformidad del cliente')
   return [...unique].map(([path, caption]) => ({ path, caption }))
 }
 

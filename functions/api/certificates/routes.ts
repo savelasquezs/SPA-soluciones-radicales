@@ -99,7 +99,7 @@ certificateRoutes.post('/generate', async (context) => {
     for (const snapshot of snapshots) {
       const expected = input.previousPaths[targetKey(input.type, snapshot.vehicleId)]
       if ((snapshot.previous?.storagePath ?? null) !== expected) throw new ApiError(409, 'Un certificado cambió. Actualiza el servicio antes de regenerar.', 'VERSION_CONFLICT')
-      if (snapshot.previous && !input.confirmReplace) throw new ApiError(409, 'Confirma el reemplazo de los certificados existentes', 'REPLACEMENT_CONFIRMATION_REQUIRED')
+      if (snapshot.previous && snapshot.previous.pdfAvailable !== false && !input.confirmReplace) throw new ApiError(409, 'Confirma el reemplazo de los certificados existentes', 'REPLACEMENT_CONFIRMATION_REQUIRED')
     }
     await pool.query("update private.integration_jobs set payload = payload || jsonb_build_object('templatePath', $3::text) where id = $1 and payload->>'token' = $2", [job.id, job.token, path])
     const template = await readMasterObject(path, MAX_TEMPLATE_BYTES)
@@ -111,7 +111,7 @@ certificateRoutes.post('/generate', async (context) => {
       uploaded.push(storagePath)
       await putCertificateObject(storagePath, pdf)
       const { data: _data, previous: _previous, ...metadata } = snapshot
-      documents.push({ ...metadata, storagePath })
+      documents.push({ ...metadata, storagePath, pdfAvailable: true })
     }
     const result = { documents }
     await transaction(async (client) => {
@@ -124,7 +124,7 @@ certificateRoutes.post('/generate', async (context) => {
         const document = documents[i]!
         if (snapshot.previous) {
           const updated = await client.query(
-            `update public.certificados set plantilla_storage_path_usada = $2, pdf_storage_path = $3,
+            `update public.certificados set plantilla_storage_path_usada = $2, pdf_storage_path = $3, pdf_generado_at=now(),
              estado_generacion = 'GENERADO', error = null, enviado_at = null, destinatarios_json = null
              where id = $1 and pdf_storage_path = $4`, [document.id, path, document.storagePath, snapshot.previous.storagePath],
           )
@@ -162,10 +162,14 @@ certificateRoutes.post('/generate', async (context) => {
 
 certificateRoutes.post('/documents/:id/read-url', async (context) => {
   const id = uuid(context.req.param('id'))
-  const { rows } = await pool.query<{ path: string }>(
-    `select pdf_storage_path as path from public.certificados where id = $1 and estado_generacion in ('GENERADO', 'ENVIADO')`, [id],
+  const { rows } = await pool.query<{ path: string; available: boolean }>(
+    `select c.pdf_storage_path as path,
+      not exists(select 1 from private.storage_retention_deleted d
+        where d.bucket='sr-generated-documents' and d.storage_path=c.pdf_storage_path) as available
+      from public.certificados c where c.id=$1 and c.estado_generacion in ('GENERADO', 'ENVIADO')`, [id],
   )
   if (!rows[0]) throw new ApiError(404, 'El PDF no está disponible')
+  if (!rows[0].available) throw new ApiError(410, 'El PDF venció. Regenera el certificado con la plantilla actual.', 'PDF_EXPIRED')
   return context.json({ url: createCertificateReadUrl(rows[0].path, `certificado-${id}.pdf`) })
 })
 
@@ -176,6 +180,7 @@ async function prepareMail(input: SendCertificatesInput) {
     const documents = input.documents.map((selected) => {
       const document = loaded.context.documents.find((item) => item.id === selected.id && item.storagePath === selected.storagePath)
       if (!document) throw new ApiError(409, 'Un certificado cambió. Actualiza antes de enviar.', 'VERSION_CONFLICT')
+      if (document.pdfAvailable === false) throw new ApiError(422, 'El PDF venció. Regenera el certificado antes de enviarlo.', 'PDF_EXPIRED')
       return document
     })
     return { documents, solicitud: loaded.source.solicitud }
@@ -237,7 +242,7 @@ certificateRoutes.post('/send', async (context) => {
 certificateRoutes.post('/maintenance/cleanup', async (context) => context.json(await cleanupCertificateOrphans()))
 
 certificateRoutes.onError((error, context) => {
-  if (error instanceof ApiError) return context.json({ error: error.message, code: error.code }, error.status as 400 | 401 | 403 | 404 | 409 | 413 | 422 | 500 | 502 | 503)
+  if (error instanceof ApiError) return context.json({ error: error.message, code: error.code }, error.status as 400 | 401 | 403 | 404 | 409 | 410 | 413 | 422 | 500 | 502 | 503)
   const code = (error as Error & { code?: string }).code
   if (code === '23505') return context.json({ error: 'Un certificado cambió en otra sesión. Actualiza el servicio.', code: 'VERSION_CONFLICT' }, 409)
   return context.json({ error: 'No fue posible completar la operación. Conservamos el resultado anterior; vuelve a intentarlo.' }, 500)

@@ -9,7 +9,7 @@ El **programador y ejecutor del job** será un Cloudflare Worker independiente, 
 Nombres propuestos:
 - Worker de cron: `sr-storage-retention` (separado de la SPA).
 - Horario: `0 7 * * *` UTC, una ejecución diaria a las 02:00 hora de Bogotá.
-- Solo se eliminan fotografías aprobadas de `sr-service-media`. `sr-generated-documents` (certificados) y `sr-master-files` están excluidos.
+- Se reutiliza el mismo Cron: fotos aprobadas, firmas de servicios vencidas a un año y PDF de certificados vencidos a un mes. Las categorías nuevas tienen controles de seguridad inicialmente apagados hasta validar la simulación; `sr-master-files` sigue excluido.
 - Entornos: configuración/credenciales y pruebas separadas de desarrollo/producción. Nunca apuntar un cron de desarrollo a los buckets de producción.
 
 ## Contrato de operación recomendado
@@ -26,7 +26,7 @@ Nombres propuestos:
 
 - Directorio versionado: `cloudflare/storage-retention/`.
 - Worker remoto `sr-storage-retention-dev`: desplegado con `RETENTION_MODE=delete` y URL de Neon Functions `desarrollo`. Su Cron de Cloudflare está activo a las 02:00 de Bogotá.
-- `wrangler.jsonc` contiene el cron previsto `0 7 * * *`, pero el Cron Trigger **aún no está instalado en Cloudflare**. Esto evita ejecuciones fallidas mientras el endpoint de Neon no haya sido desplegado y autorizado.
+- El Cron `0 7 * * *` UTC está instalado y habilitado en Cloudflare (confirmado el 2026-10-08). La SPA no ejecuta ni configura otro Cron.
 - Se generó e instaló el secreto `RETENTION_CRON_TOKEN` en Cloudflare mediante conexión autorizada y únicamente su SHA-256 quedó en Neon `desarrollo`. **No** es necesario usar Wrangler ni crear un API token en el computador. El script `scripts/cloudflare/setup-retention-secret.mjs` queda como alternativa para rotación futura.
 - Neon Function `api` fue actualizada mediante deploy de un ZIP compilado en GitHub Actions (despliegue 33). El endpoint `/jobs/retention` ya existe y la comprobación externa confirmó `/health` y HTTP 401 al invocar el cron sin secreto. Las diez variables privadas previas permanecieron intactas.
 - Cloudflare Cron `0 7 * * *` y modo `delete` fueron activados a través de Cloudflare API el 2026-10-08. Se comprobó por lectura posterior que la configuración contiene los bindings `RETENTION_API_URL`, `RETENTION_CRON_TOKEN` (tipo secret) y `RETENTION_MODE=delete`. En el momento de la activación, 0 archivos estaban vencidos; cualquier error posterior debe investigarse en métricas/logs del Worker. **Pendiente** validar una eliminación sintética real en un entorno aislado antes de considerar probada toda la cadena de R2.
@@ -48,7 +48,7 @@ Antes del cron productivo hacen falta una migración aditiva del registro de obj
 
 - Guardar fecha, tipo, vencimiento calculado, resultado, reintentos, errores y volumen liberado; exponer auditoría solo administrativa.
 - Alertas de uso global R2: 70% y 85% del presupuesto interno de **8 GB**; reservas para hallazgos pendientes y maestros.
-- No eliminar PDFs protegidos por obligaciones legales, certificados, planos, fichas, firmas u otros archivos no aprobados para esta tarea.
+- Nunca aplicar borrado indiscriminado. Solo los PDF **generados para servicios** y las imágenes de firmas de servicio tienen nuevos plazos, con controles independientes en `private.storage_retention_controls`; se excluyen certificados personales de técnicos, fichas y plantillas.
 - Fallo seguro: ante error de backend, R2, reloj/fecha, cruce de referencias o ambigüedad de estado, mantener archivo y reintentar.
 - No confiar únicamente en lifecycle rules por antigüedad del objeto: las reglas de negocio dependen de PostgreSQL y pueden cambiar al cerrarse un hallazgo.
 - Probar con datos sintéticos, y desplegar primero el entorno de desarrollo; el Worker no debe activarse hasta contar con el backend compatible, pruebas de concurrencia y validación explícita de los candidatos en dry-run.

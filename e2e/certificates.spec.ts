@@ -7,13 +7,18 @@ const id = '11111111-1111-4111-8111-111111111111'
 const vehicle = '22222222-2222-4222-8222-222222222222'
 const templatePath = `clients/establishment-templates/${id}-base.docx`
 const profile = { id, nombreCompleto: 'Admin de prueba', correoGoogle: 'admin@example.test', esAdmin: true, esTecnico: false, rolActivo: 'ADMINISTRADOR', requiereSeleccionRol: false }
-async function setup(page: Page, options: { empty?: boolean; unavailable?: boolean; generationFailure?: boolean; sendUnknown?: boolean } = {}) {
+async function setup(page: Page, options: { empty?: boolean; unavailable?: boolean; generationFailure?: boolean; sendUnknown?: boolean; expiredPdf?: boolean } = {}) {
   const recorded = { generations: [] as GenerateCertificateInput[], mails: [] as SendCertificatesInput[], contextCalls: 0, settingsSaves: 0 }
   const settings: CertificateSettings = { converterReady: !options.unavailable, templates: [
     { type: 'ESTABLECIMIENTO', storagePath: options.empty ? null : templatePath, fileName: options.empty ? null : 'base.docx', revision: options.empty ? null : id },
     { type: 'VEHICULO', storagePath: null, fileName: null, revision: null },
   ] }
   const context: CertificateContext = { serviceId: id, solicitud: 'SS-PRUEBA-123', clientName: 'Negocio de prueba', siteName: 'Sede de prueba', recipients: ['uno@example.test', 'dos@example.test'], vehicles: [{ id: vehicle, placa: 'ABC-123' }], documents: [], availability: { ESTABLECIMIENTO: { available: true, reason: null, templateSource: 'GLOBAL' }, VEHICULO: { available: true, reason: null, templateSource: 'GLOBAL' } } }
+  if (options.expiredPdf) context.documents = [{
+    id, type: 'ESTABLECIMIENTO', vehicleId: null, label: 'Establecimiento',
+    storagePath: `certificates/${id}/${id}/expired.pdf`,
+    issuedOn: '2025-01-31', expiresOn: '2025-03-31', pdfAvailable: false,
+  }]
   const pdf = await PDFDocument.create(); pdf.addPage()
   const pdfBytes = Buffer.from(await pdf.save())
   await page.route('**/get-session', async (route) => route.fulfill({ json: {
@@ -154,4 +159,21 @@ test('sin autorización de Drive permite configurar Word pero no muestra una pru
   await setup(page, { unavailable: true })
   await expect(page.getByText(/La integración empresarial de Google debe volver a autorizarse/)).toBeVisible()
   await expect(page.getByRole('button', { name: 'Probar PDF' }).first()).toBeDisabled()
+})
+
+test('el PDF vencido usa el generador existente sin confirmar reemplazo y puede volver a descargarse', async ({ page }) => {
+  const calls = await setup(page, { expiredPdf: true })
+  await page.getByRole('button', { name: 'Generar y enviar', exact: true }).click()
+  await page.getByLabel('Negocio', { exact: true }).selectOption(id)
+  await page.getByLabel('Sede', { exact: true }).selectOption(id)
+  await page.getByLabel('Servicio finalizado', { exact: true }).selectOption(id)
+  await expect(page.getByRole('button', { name: 'Regenerar PDF vencido', exact: true })).toBeEnabled()
+  await expect(page.getByRole('button', { name: 'Descargar PDF Establecimiento' })).toBeDisabled()
+  await page.getByRole('button', { name: 'Regenerar PDF vencido', exact: true }).click()
+  await expect.poll(() => calls.generations.length).toBe(1)
+  expect(calls.generations[0]).toMatchObject({
+    confirmReplace: false,
+    previousPaths: { ESTABLECIMIENTO: `certificates/${id}/${id}/expired.pdf` },
+  })
+  await expect(page.getByRole('button', { name: 'Descargar PDF Establecimiento' })).toBeEnabled()
 })

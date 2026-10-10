@@ -14,6 +14,7 @@ export interface ReportHistoricalVisit {
 }
 export interface ServiceResultsData{
   id:string;solicitud:string;cliente:string;nit:string;sede:string;direccion:string;tecnico:string;firmanteCliente:string;firmaTecnico:string;firmaCliente:string;
+  firmaTecnicoVencida?:boolean;firmaClienteVencida?:boolean;
   inicioProgramado:string;inicioReal:string;finReal:string;productos:Array<{nombre:string;principio:string;registro:string;lote:string;dosis:string;metodos:string;fichaTecnicaDisponible?:boolean}>;
   areas:ServiceAreaResult[];historico:ReportHistoricalVisit[]
 }

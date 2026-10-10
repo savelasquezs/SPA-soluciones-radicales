@@ -95,7 +95,9 @@ async function loadSharingContext(client: PoolClient, id: string): Promise<Share
     "c.fecha_vencimiento::text as \"expiresOn\", c.pdf_storage_path as path " +
     "from public.certificados c left join public.vehiculos v on v.id=c.vehiculo_id " +
     "where c.servicio_id=$1 and c.estado_generacion in ('GENERADO','ENVIADO') " +
-    "and c.pdf_storage_path is not null order by c.tipo_certificado, c.fecha_expedicion desc, c.id", [id])
+    "and c.pdf_storage_path is not null and not exists (select 1 from private.storage_retention_deleted d " +
+    "where d.bucket='sr-generated-documents' and d.storage_path=c.pdf_storage_path) " +
+    "order by c.tipo_certificado, c.fecha_expedicion desc, c.id", [id])
   return { solicitud:report.solicitud, cliente:report.cliente, sede:report.sede, registeredEmails, documents }
 }
 

@@ -9,6 +9,7 @@ export interface ServiceArea { id:string; nombre:string; sinAcceso:boolean; moti
 export interface ServiceResultsData {
   id:string; solicitud:string; cliente:string; nit:string; sede:string; direccion:string; tecnico:string
   firmanteCliente:string; firmaTecnico:string; firmaCliente:string
+  firmaTecnicoVencida:boolean;firmaClienteVencida:boolean
   inicioProgramado:string; inicioReal:string; finReal:string
   productos:Array<{nombre:string;principio:string;registro:string;lote:string;dosis:string;metodos:string;fichaTecnicaDisponible:boolean}>
   areas:ServiceArea[]
@@ -21,11 +22,16 @@ const arr=(v:unknown):string[]=>Array.isArray(v)?v.filter((x):x is string=>typeo
 export async function loadServiceResultsData(client:PoolClient,serviceId:string):Promise<ServiceResultsData>{
   const sv=(await client.query<{
     id:string;solicitud:string;estado:string;tipo:string;sedeTipo:string;sedeId:string;cliente:string;nit:string;sede:string;direccion:string;tecnico:string
-    firmanteCliente:string|null;firmaTecnico:string|null;firmaCliente:string|null;inicioProgramado:Date;inicioReal:Date|null;finReal:Date|null
+    firmanteCliente:string|null;firmaTecnico:string|null;firmaCliente:string|null;firmaTecnicoVencida:boolean;firmaClienteVencida:boolean;inicioProgramado:Date;inicioReal:Date|null;finReal:Date|null
   }>(`select s.id,s.solicitud,s.estado,s.tipo_servicio as tipo,se.tipo_sede as "sedeTipo",se.id as "sedeId",
         n.nombre as cliente,n.nit,se.nombre as sede,se.direccion,u.nombre_completo as tecnico,
         s.firma_cliente_nombre as "firmanteCliente",s.firma_tecnico_storage_path as "firmaTecnico",
-        s.firma_cliente_storage_path as "firmaCliente",s.inicio_programado as "inicioProgramado",
+        s.firma_cliente_storage_path as "firmaCliente",
+        exists(select 1 from private.storage_retention_deleted d where d.bucket='sr-service-media'
+          and d.storage_path=s.firma_tecnico_storage_path) as "firmaTecnicoVencida",
+        exists(select 1 from private.storage_retention_deleted d where d.bucket='sr-service-media'
+          and d.storage_path=s.firma_cliente_storage_path) as "firmaClienteVencida",
+        s.inicio_programado as "inicioProgramado",
         s.inicio_real as "inicioReal",s.fin_real as "finReal"
         from public.servicios s join public.sedes se on se.id=s.sede_id
         join public.negocios n on n.id=se.negocio_id join public.usuarios u on u.id=s.tecnico_responsable_id
@@ -184,6 +190,7 @@ export async function loadServiceResultsData(client:PoolClient,serviceId:string)
     group by v.id,v.solicitud,v.fin_real,m.rastreros,m.voladores order by v.fin_real,v.id`,[sv.sedeId,sv.id])).rows
   return {id:sv.id,solicitud:sv.solicitud,cliente:sv.cliente,nit:sv.nit,sede:sv.sede,direccion:sv.direccion,tecnico:sv.tecnico,
     firmanteCliente:sv.firmanteCliente||'',firmaTecnico:sv.firmaTecnico,firmaCliente:sv.firmaCliente,
+     firmaTecnicoVencida:sv.firmaTecnicoVencida,firmaClienteVencida:sv.firmaClienteVencida,
     inicioProgramado:sv.inicioProgramado.toISOString(),inicioReal:sv.inicioReal.toISOString(),finReal:sv.finReal.toISOString(),
     productos,areas,historico:historico.map(h=>({solicitud:h.solicitud,fecha:new Date(h.fecha).toISOString(),
       cumplimiento:h.cumplimiento==null?null:Number(h.cumplimiento),capturas:Number(h.capturas)||0,

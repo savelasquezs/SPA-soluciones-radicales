@@ -5,7 +5,7 @@
 El Administrador abre **Servicios → Historial → Informe** en un servicio Principal finalizado y firmado y selecciona **Enviar informe**.
 
 - Puede marcar cualquier combinación de los correos registrados en cliente y sede (incluido contacto principal), añadir otros correos con validación y enviar a un máximo de 20 destinatarios únicos.
-- Puede adjuntar opcionalmente uno o varios certificados PDF **ya generados del mismo servicio** (máximo 10 archivos, 15 MB en conjunto). No se generan certificados nuevos con esta operación.
+- Puede adjuntar opcionalmente certificados PDF **generados y todavía disponibles** (máximo 10 archivos, 15 MB). Los vencidos se regeneran por separado con el generador actual.
 - La aplicación envía un correo mediante Gmail empresarial con un enlace al informe y los certificados seleccionados. El envío es idempotente, auditable y usa loading/toast/errores. Los destinatarios adicionales no modifican el catálogo del cliente.
 - En el mismo diálogo se indica cuántos enlaces siguen vigentes y pueden revocarse con confirmación.
 - La edición del **asunto y mensaje** está dentro de una sección **desplegable cerrada inicialmente** para que el modal no crezca innecesariamente en móvil ni escritorio. Se pueden usar los textos predefinidos o editarlos antes de enviar. El editor `EmailComposerFields` es reutilizable para contactos del cliente y la futura finalización por técnicos; esa integración no se habilita en esta entrega.
@@ -92,3 +92,9 @@ Se conserva el campo productos.ficha_tecnica_storage_path y la carga original de
 - La API valida la asignación del técnico y la pertenencia del producto al servicio. El informe exige un servicio finalizado/firmado y el enlace del cliente exige token válido, no vencido ni revocado. El público no recibe rutas privadas de R2 ni IDs de producto.
 - En el informe público se usa un índice de producto vinculado al servicio. El PDF A4 oculta el botón de consulta (la URL firmada es temporal). La ficha se almacena y edita únicamente en el catálogo.
 
+
+## Firmas e informes históricos
+
+- Las imágenes de firma del cliente y del técnico se conservan durante un año desde la finalización del servicio. Los nombres y fechas permanecen registrados en PostgreSQL.
+- Cuando la imagen se ha eliminado y auditado, el informe muestra «Firma de [nombre] (vencida)» tanto en el área administrativa como en el enlace público. Sigue siendo imprimible.
+- Los certificados PDF opcionales se conservan un mes desde su generación o última regeneración. Se vuelven a generar mediante el motor existente y la plantilla vigente; no se genera un segundo documento por el simple hecho de enviar el informe.

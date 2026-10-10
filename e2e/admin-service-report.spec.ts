@@ -60,7 +60,7 @@ function service(): AdminService {
     calendar:{estado:'SINCRONIZADO',ultimaSyncAt:null,error:null},executionLock:null,motivoCancelacion:null,canceladoAt:null,
   }
 }
-async function setup(page: Page, role: 'ADMINISTRADOR' | 'TECNICO') {
+async function setup(page: Page, role: 'ADMINISTRADOR' | 'TECNICO', expiredSignatures = false) {
   const requests: Record<string, unknown>[] = []
   let publicHasAuthorization = false
   await page.addInitScript(() => {
@@ -86,11 +86,18 @@ async function setup(page: Page, role: 'ADMINISTRADOR' | 'TECNICO') {
     if (url.pathname === '/api/admin/services/' + serviceId + '/report-sharing' && route.request().method()==='GET') return route.fulfill({json:{registeredEmails:['sede@example.test','cliente@example.test'],certificates:[{id:certificateId,type:'ESTABLECIMIENTO',label:'Establecimiento',expiresOn:'2027-10-09'}],activeLinks:0,lastSharedAt:null,gmailConnected:true}})
     if (url.pathname === '/api/admin/services/' + serviceId + '/report-sharing/send') { requests.push(route.request().postDataJSON()); return route.fulfill({json:{sent:true,linkExpiresAt:'2027-01-09T00:00:00Z',attachmentCount:1}}) }
     if (url.pathname === '/api/admin/services/' + serviceId + '/report-sharing/revoke') return route.fulfill({json:{revoked:1}})
-    if (url.pathname === '/api/public/reports/resolve') {publicHasAuthorization ||= !!route.request().headers()['authorization'];return route.fulfill({json:{data:publicReportData(result)}})}
+    if (url.pathname === '/api/public/reports/resolve') {
+      publicHasAuthorization ||= !!route.request().headers()['authorization']
+      return route.fulfill({json:{data:publicReportData({
+        ...result, firmaTecnicoVencida: expiredSignatures, firmaClienteVencida: expiredSignatures,
+      })}})
+    }
     if (url.pathname === '/api/public/reports/product-sheet') {publicHasAuthorization ||= !!route.request().headers()['authorization'];return route.fulfill({json:{url:'https://r2.example.test/ficha.pdf'}})}
     if (url.pathname === '/api/admin/services/' + serviceId + '/results/product-sheet') return route.fulfill({json:{url:'https://r2.example.test/ficha.pdf'}})
     if (url.pathname === '/api/public/reports/media') {publicHasAuthorization ||= !!route.request().headers()['authorization'];return route.fulfill({json:{url:'https://r2.example.test/opaque.png'}})}
-    if (url.pathname === '/api/admin/services/' + serviceId + '/results') return route.fulfill({json:{data:result}})
+    if (url.pathname === '/api/admin/services/' + serviceId + '/results') return route.fulfill({json:{data:{
+      ...result, firmaTecnicoVencida: expiredSignatures, firmaClienteVencida: expiredSignatures,
+    }}})
     if (url.pathname === '/api/admin/services/' + serviceId + '/media/read-url') return route.fulfill({json:{url:'https://r2.example.test/' + encodeURIComponent(url.searchParams.get('path') || '') + '.png'}})
     return route.fulfill({status:404,json:{error:'Ruta inesperada: ' + url.pathname}})
   })
@@ -241,4 +248,19 @@ test('el informe administrativo y el cliente muestran enlace de ficha técnica s
   await expect.poll(()=>publicTab.url()).toContain('r2.example.test/ficha.pdf')
   await publicTab.close()
   expect(state.publicHasAuthorization()).toBe(false)
+})
+
+test('informes administrativo y público se imprimen después de vencer ambas firmas, conservando sus nombres', async ({ page }) => {
+  await setup(page, 'ADMINISTRADOR', true)
+  await page.goto('/servicios/' + serviceId + '/informe')
+  await expect(page.getByText('Firma de Camila Cliente (vencida)')).toBeVisible()
+  await expect(page.getByText('Firma de Laura Técnica (vencida)')).toBeVisible()
+  await expect(page.getByText('Firma vencida · imagen eliminada')).toHaveCount(2)
+  await expect(page.getByRole('img', { name: 'Firma del técnico' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Imprimir / Guardar PDF' }).click()
+  await expect(page.locator('body')).toHaveAttribute('data-report-printed', 'true')
+  await page.goto('/informe/consulta/' + publicToken)
+  await expect(page.getByText('Firma de Camila Cliente (vencida)')).toBeVisible()
+  await page.getByRole('button', { name: 'Guardar PDF' }).click()
+  await expect(page.locator('body')).toHaveAttribute('data-report-printed', 'true')
 })

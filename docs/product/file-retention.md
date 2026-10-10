@@ -16,7 +16,9 @@ Conservar evidencias durante plazos predecibles, mantener el historial estructur
 | Fotografías de Hallazgo `CERRADO` (apertura **y** cierre) | 3 meses calendario | `hallazgos.fecha_cierre` |
 | Fotografías de revisión de Hallazgo `ABIERTO`/`EN_PROCESO` | 1 año calendario | Fecha de cada revisión |
 | Fotografías de revisiones de Hallazgo `CERRADO` | 3 meses calendario | `hallazgos.fecha_cierre` |
-| Datos estructurados de servicios, revisiones y hallazgos | Sin vencimiento automático | No se borran durante estas limpiezas |
+| Imágenes de firma de servicios | 1 año calendario | Finalización real del servicio |
+| PDF de certificados generados | 1 mes calendario | Generación del PDF, también al regenerarlo |
+| Datos estructurados de servicios, firmas y certificados | Sin vencimiento automático | Se conservan para historial y regeneración |
 
 Los plazos se calculan a partir de eventos del dominio registrados en PostgreSQL, no desde el último acceso, una reprogramación, el nombre del archivo o la fecha de ejecución del cron. «Mes» y «año» significan meses/años calendario, no 30/365 días fijos. El cron diario ejecuta la limpieza **a partir** del vencimiento, no antes; puede haber retrasos si fallan proveedor o job.
 
@@ -37,7 +39,9 @@ Los plazos se calculan a partir de eventos del dominio registrados en PostgreSQL
 
 - El informe MIP será HTML consultable, no un PDF almacenado. Al imprimirlo, el navegador genera una copia local a petición del usuario, sin subirla a R2.
 - Los datos estructurados se conservan aunque las fotografías de evidencia caduquen. En el informe web se deberá señalar que una imagen venció; no regenerarla.
-- **Fuera del alcance de esta política:** certificados PDF, plantillas, fichas técnicas, planos, archivos maestros, comprobantes, firmas y documentos con plazos legales especiales. Nunca eliminarlos por una regla global del bucket.
+- Los archivos PDF vencidos se pueden regenerar mediante **el motor existente** con la plantilla Word actual, reutilizando los datos históricos disponibles y las fechas originales.
+- El informe web conserva el nombre del firmante aunque su imagen haya vencido; la impresión no depende de archivos eliminados.
+- **Excluidos:** plantillas, certificados personales de técnicos, fichas técnicas, planos, videos, comprobantes y documentos protegidos por obligaciones especiales.
 - Conservaciones contractuales, sanitarias o legales deben respetarse con bloqueos explícitos.
 
 ## Comportamiento de interfaz

@@ -64,7 +64,7 @@ las plantillas globales vigentes y las usadas históricamente siguen protegidas 
 irreversible una URL PUT previamente firmada: la cuenta Administrador tiene autoridad sobre los
 maestros. Los prefijos no son un sustituto de la autorización.
 
-Retención de producto: datos/auditoría indefinidos; PDF hasta un año; maestros mientras sean necesarios.
+Retención aprobada: datos e historial permanentes; PDF físico generado por un mes; plantillas y maestros mientras sean necesarios. Para regenerar PDF vencidos se reutiliza el motor existente con la plantilla actual y fechas originales.
 Configurar la retención del bucket de PDF de forma coherente, también para versiones anteriores.
 El contenido del histórico no garantiza disponibilidad de bytes después del período de retención.
 No aplicar una limpieza general de maestros que deje certificados/auditoría sin sus referencias.

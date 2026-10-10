@@ -40,6 +40,8 @@ export type CertificateDocument = {
   vehicleId: string | null
   label: string
   storagePath: string
+  /** false si el PDF físico venció; los datos históricos siguen disponibles. */
+  pdfAvailable?: boolean
   issuedOn: string
   expiresOn: string
 }

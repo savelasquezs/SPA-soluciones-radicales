@@ -95,7 +95,7 @@ onMounted(async () => {
             <p v-if="generation.availability?.reason" class="notice generation-explanation">{{ generation.availability.reason }}</p>
             <div class="generation-actions">
               <small v-if="generation.availability?.available">Plantilla general. Regenerar conserva las fechas originales.</small>
-              <BaseButton size="compact" :disabled="busy || !generation.canGenerate || generation.vehicleIds.length > 10" :loading="generation.busy && generation.phase.startsWith('Generando')" @click="generation.requestGeneration"><FileCheck2 :size="16" aria-hidden="true" />{{ generation.phase.startsWith('Generando') ? generation.phase : generation.selection?.replacing ? 'Regenerar PDF' : 'Generar PDF' }}</BaseButton>
+              <BaseButton size="compact" :disabled="busy || !generation.canGenerate || generation.vehicleIds.length > 10" :loading="generation.busy && generation.phase.startsWith('Generando')" @click="generation.requestGeneration"><FileCheck2 :size="16" aria-hidden="true" />{{ generation.phase.startsWith('Generando') ? generation.phase : generation.selection?.replacing ? 'Regenerar PDF' : generation.selection?.expired ? 'Regenerar PDF vencido' : 'Generar PDF' }}</BaseButton>
             </div>
           </div>
         </section>
@@ -105,9 +105,13 @@ onMounted(async () => {
           <section v-if="generation.context.documents.length" class="panel documents-panel">
             <header class="panel-heading"><h2>Certificados del servicio</h2><span>{{ generation.context.documents.length }}</span></header>
             <div v-for="document in generation.context.documents" :key="document.id" class="document-row">
-              <BaseCheckbox :model-value="generation.mail.documents.includes(document.id)" :name="`cert-document-${document.id}`" :label="document.label" :disabled="busy" @update:model-value="toggleDocument(document.id, $event)" />
+              <BaseCheckbox :model-value="generation.mail.documents.includes(document.id)" :name="`cert-document-${document.id}`" :label="document.pdfAvailable === false ? document.label + ' · PDF vencido' : document.label"
+                :disabled="busy || document.pdfAvailable === false" @update:model-value="toggleDocument(document.id, $event)" />
               <span class="document-dates">{{ formatDate(document.issuedOn) }} — {{ formatDate(document.expiresOn) }}</span>
-              <BaseButton variant="ghost" size="compact" :disabled="busy" :aria-label="`Descargar PDF ${document.label}`" @click="generation.download(document)"><Download :size="16" aria-hidden="true" />PDF</BaseButton>
+              <BaseButton variant="ghost" size="compact" :disabled="busy || document.pdfAvailable === false"
+                :aria-label="`Descargar PDF ${document.label}`" @click="generation.download(document)">
+                <Download :size="16" aria-hidden="true" />{{ document.pdfAvailable === false ? 'PDF vencido' : 'PDF' }}
+              </BaseButton>
             </div>
             <form class="mail-form" @submit.prevent="generation.sendOpen = true">
               <header class="panel-heading"><h2>Enviar por correo</h2><span>{{ generation.selectedDocuments.length }} adjunto(s)</span></header>

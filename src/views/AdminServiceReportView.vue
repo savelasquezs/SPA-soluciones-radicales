@@ -56,9 +56,6 @@ const findingReviewLabel: Record<string,string> = {
   SIN_CAMBIOS: 'Sigue pendiente', EN_PROCESO: 'En proceso', CERRADO: 'Solucionado',
 }
 const missingImages = computed(() => images.value.filter(item => ['MISSING','ERROR'].includes(states[item.path] ?? 'IDLE')).length)
-const availableSignatures = computed(() => report.value !== null
-  && states[report.value.firmaTecnico] === 'AVAILABLE'
-  && states[report.value.firmaCliente] === 'AVAILABLE')
 const activeImage = computed(() => selectedIndex.value === null ? null : images.value[selectedIndex.value] ?? null)
 const activeImageState = computed((): ReportEvidenceState => activeImage.value ? states[activeImage.value.path] ?? 'IDLE' : 'IDLE')
 
@@ -148,10 +145,6 @@ async function printReport(): Promise<void> {
     // URLs from R2 expire after five minutes: renew and decode before printing.
     await loadAllImages(true, stamp)
     if (stamp !== version) return
-    if (!availableSignatures.value) {
-      notifications.show('Faltan imágenes de firmas. Reintenta antes de imprimir el informe.','error')
-      return
-    }
     await nextTick()
     await document.fonts?.ready
     window.print()
@@ -181,7 +174,11 @@ async function openSheet(index:number):Promise<void>{
     notifications.show(error instanceof Error ? error.message : 'No fue posible consultar la ficha técnica.','error')
   }finally{activeSheet.value=null}
 }
-function photoState(path: string): ReportEvidenceState { return states[path] ?? 'IDLE' }
+function photoState(path: string): ReportEvidenceState {
+  if (report.value && ((report.value.firmaTecnicoVencida && path === report.value.firmaTecnico)
+    || (report.value.firmaClienteVencida && path === report.value.firmaCliente))) return 'EXPIRED'
+  return states[path] ?? 'IDLE'
+}
 function openImage(path: string): void {
   const index = images.value.findIndex(item => item.path === path)
   if (index >= 0) selectedIndex.value = index
@@ -218,9 +215,6 @@ watch(() => [serviceId.value, publicToken.value], () => { void loadReport() }, {
     </StatusPanel>
     <template v-else-if="report && metrics">
       <div v-if="mediaBusy" class="report-workspace__state" role="status">Preparando fotografías y firmas para impresión…</div>
-      <div v-else-if="!availableSignatures" class="report-workspace__alert report-workspace__alert--error" role="alert">
-        No se pudieron cargar las dos firmas. Vuelve a intentar desde «Actualizar» antes de imprimir.
-      </div>
       <div v-else-if="missingImages" class="report-workspace__alert" role="status">
         {{ missingImages }} evidencia(s) no disponible(s). El historial escrito se conserva y esas imágenes se indicarán como ausentes.
       </div>
@@ -384,15 +378,15 @@ watch(() => [serviceId.value, publicToken.value], () => { void loadReport() }, {
 
         <section class="report-document__section" aria-labelledby="report-signatures-title">
           <header class="report-document__heading"><span class="report-document__number">07</span><h2 id="report-signatures-title">Firmas de conformidad</h2></header>
-          <p class="report-document__section-intro">Firmas originales registradas al finalizar el servicio. Se incluyen también en la impresión A4.</p>
+          <p class="report-document__section-intro">Se conserva el nombre de quien firmó aunque la imagen venza después de un año.</p>
           <div class="report-signatures">
             <div class="report-signature"><h3>Firma del técnico</h3>
               <ReportEvidence :path="report.firmaTecnico" caption="Firma del técnico" signature :state="photoState(report.firmaTecnico)" :url="urls[report.firmaTecnico]" @open="openImage" @failed="imageError" />
-              <p>{{ report.tecnico }}</p><small>Técnico responsable</small>
+              <p>Firma de {{ report.tecnico }} <span v-if="report.firmaTecnicoVencida">(vencida)</span></p><small>Técnico responsable</small>
             </div>
             <div class="report-signature"><h3>Firma del cliente</h3>
               <ReportEvidence :path="report.firmaCliente" caption="Firma de conformidad del cliente" signature :state="photoState(report.firmaCliente)" :url="urls[report.firmaCliente]" @open="openImage" @failed="imageError" />
-              <p>{{ report.firmanteCliente || 'Firmante del cliente' }}</p><small>Responsable que recibió el servicio</small>
+              <p>Firma de {{ report.firmanteCliente || 'Firmante del cliente' }} <span v-if="report.firmaClienteVencida">(vencida)</span></p><small>Responsable que recibió el servicio</small>
             </div>
           </div>
         </section>

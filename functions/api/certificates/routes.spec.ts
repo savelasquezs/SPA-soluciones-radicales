@@ -109,6 +109,46 @@ describe('certificate API authorization and mutations', () => {
     expect(mocks.dispatch).toHaveBeenCalledTimes(1)
     expect(mocks.complete).toHaveBeenCalled()
   })
+  it('reuses the existing generator and preserves expiry dates when an old PDF has expired', async () => {
+    const previous = {
+      id, type: 'ESTABLECIMIENTO' as const, vehicleId: null,
+      label: 'Establecimiento', storagePath: `certificates/${id}/${id}/previous.pdf`,
+      issuedOn: '2025-01-31', expiresOn: '2025-03-31', pdfAvailable: false,
+    }
+    loaded.context.documents = [previous]
+    loaded.historicalData[id] = { negocio_nombre: 'Nombre al emitir', fecha_expedicion: '31/01/2025',
+      fecha_vencimiento: '31/03/2025' }
+    const response = await request('/generate', {
+      ...generate(), previousPaths: { ESTABLECIMIENTO: previous.storagePath }, confirmReplace: false,
+    })
+    expect(response.status).toBe(201)
+    expect(mocks.pdf).toHaveBeenCalledWith(expect.objectContaining({
+      template: Buffer.from('word'),
+      data: expect.objectContaining({
+        negocio_nombre: 'Nombre al emitir', fecha_expedicion: '31/01/2025', fecha_vencimiento: '31/03/2025',
+      }),
+    }))
+    expect(mocks.query.mock.calls.some(([sql]) => sql.includes('pdf_generado_at=now()'))).toBe(true)
+  })
+
+  it('does not send an expired PDF; the existing generator must be used first', async () => {
+    const input = mail()
+    loaded.context.documents[0]!.pdfAvailable = false
+    expect((await request('/send', input)).status).toBe(422)
+    expect(mocks.readPdf).not.toHaveBeenCalled()
+  })
+
+  it('responds with 410 instead of a dead download link for an expired PDF', async () => {
+    mocks.query.mockImplementation(async (sql) => ({
+      rows: sql.includes('select c.pdf_storage_path as path')
+        ? [{ path: `certificates/${id}/${id}/old.pdf`, available: false }] : [],
+      rowCount: 1,
+    }))
+    const response = await request('/documents/' + id + '/read-url', {})
+    expect(response.status).toBe(410)
+    expect((await response.json()).code).toBe('PDF_EXPIRED')
+  })
+
   it('rejects unknown recipients, changed PDFs, and cross-service selections', async () => {
     const input = mail()
     expect((await request('/send', { ...input, recipients: ['outsider@example.test'] })).status).toBe(422)

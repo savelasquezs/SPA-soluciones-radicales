@@ -23,6 +23,7 @@ const emit = defineEmits<{ open: [path: string]; failed: [path: string] }>()
       <ImageOff v-else :size="21" aria-hidden="true" />
       <span v-if="state === 'IDLE' || state === 'LOADING'">Cargando imagen…</span>
       <span v-else-if="state === 'ERROR'">Error al cargar. Reintenta desde la barra superior.</span>
+      <span v-else-if="state === 'EXPIRED'">Firma vencida · imagen eliminada</span>
       <span v-else>Imagen no disponible o vencida</span>
     </div>
     <figcaption>{{ caption }}</figcaption>
