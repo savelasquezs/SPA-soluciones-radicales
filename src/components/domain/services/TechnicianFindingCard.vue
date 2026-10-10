@@ -55,6 +55,9 @@ watch(() => props.focusPending, value => { if (value) expanded.value = true })
 watch(() => props.finding.resultadoSeguimiento, value => { choice.value = value ?? null })
 watch(() => props.finding.observacionSeguimiento, value => { if (!props.saving) note.value = value ?? '' })
 watch(() => props.finding.version, () => { photos.value = []; validation.value = '' })
+watch(() => props.finding.evidenciasSeguimientoLocalIds?.join('|'), value => {
+  if (value) photos.value = []
+})
 
 function references(kind: 'OPENING' | 'CLOSURE', count: number, date: string): EvidenceReference[] {
   return Array.from({ length: count }, (_, index) => ({

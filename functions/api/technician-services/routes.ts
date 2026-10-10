@@ -315,8 +315,9 @@ technicianServiceRoutes.get('/:id/photos/:kind/:recordId/:index', async context 
     if (!site) throw new ApiError(404, 'El servicio no está disponible.', 'SERVICE_NOT_FOUND')
     return findSiteEvidence(client, site.siteId, kind, id(context.req.param('recordId')), Number(position))
   })
-  const storagePhase = (kind === 'FOLLOWUP' && source.path.startsWith(
-    `services/${source.serviceId}/findings/${source.ownerId}/closure/`) ? 'CLOSURE' : kind) as 'OPENING' | 'CLOSURE' | 'FOLLOWUP'
+  const prefix = `services/${source.serviceId}/findings/${source.ownerId}/`
+  const storagePhase = (source.path.startsWith(prefix + 'followup/') ? 'FOLLOWUP'
+    : source.path.startsWith(prefix + 'closure/') ? 'CLOSURE' : kind) as 'OPENING' | 'CLOSURE' | 'FOLLOWUP'
   const exists = await findingEvidenceObjectExists(source.path, source.serviceId, source.ownerId, storagePhase)
   const until = source.retentionAt ? new Date(source.retentionAt).getTime() : NaN
   const result: EvidenceAccess = exists
