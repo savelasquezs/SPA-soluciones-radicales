@@ -7,7 +7,7 @@ import BaseIconButton from '@/components/base/BaseIconButton.vue'
 import BaseSpinner from '@/components/base/BaseSpinner.vue'
 import type { EvidenceDisplayState } from '@/types/siteInsights'
 
-const props = defineProps<{ open: boolean; index: number; total: number; title: string; caption: string; url: string | null; state: EvidenceDisplayState }>()
+const props = defineProps<{ open: boolean; index: number; total: number; title: string; caption: string; url: string | null; state: EvidenceDisplayState; unavailableMessage?: string }>()
 const emit = defineEmits<{ close: []; select: [index: number]; retry: []; imageError: [] }>()
 const stage = ref<HTMLElement | null>(null)
 const image = ref<HTMLImageElement | null>(null)
@@ -94,7 +94,7 @@ function pointerUp(event: PointerEvent): void {
       <div ref="stage" class="evidence-viewer__stage" :class="{ 'evidence-viewer__stage--zoomed': scale > 1 }" tabindex="0" role="group" aria-label="Fotografía. Usa las flechas para navegar y más o menos para ampliar." @wheel.prevent="wheel" @dblclick="zoom(scale === 1 ? 2 : 1)" @pointerdown="pointerDown" @pointermove="pointerMove" @pointerup="pointerUp" @pointercancel="pointers.clear()">
         <img v-if="state === 'AVAILABLE' && url" ref="image" :key="url" :src="url" :alt="title" :style="{ transform, visibility: loaded ? 'visible' : 'hidden' }" draggable="false" referrerpolicy="no-referrer" @load="loaded = true" @error="emit('imageError')" />
         <div v-if="state === 'LOADING' || state === 'IDLE' || (state === 'AVAILABLE' && !loaded)" class="evidence-viewer__message" role="status"><BaseSpinner label="Cargando fotografía" /><span>Cargando fotografía…</span></div>
-        <div v-else-if="state === 'MISSING' || state === 'EXPIRED'" class="evidence-viewer__message" role="status"><ImageOff :size="32" aria-hidden="true" /><strong>{{ state === 'EXPIRED' ? 'Foto vencida' : 'Foto no disponible' }}</strong><p>{{ state === 'EXPIRED' ? 'Terminó el plazo de conservación y el archivo ya no está disponible.' : 'El archivo ya no está disponible. Su referencia histórica se conserva.' }}</p></div>
+        <div v-else-if="state === 'MISSING' || state === 'EXPIRED'" class="evidence-viewer__message" role="status"><ImageOff :size="32" aria-hidden="true" /><strong>{{ unavailableMessage ?? (state === 'EXPIRED' ? 'Foto vencida' : 'Foto no disponible') }}</strong><p>{{ state === 'EXPIRED' ? 'Terminó el plazo de conservación y el archivo ya no está disponible.' : 'El archivo ya no está disponible. Su referencia histórica se conserva.' }}</p></div>
         <div v-else-if="state === 'ERROR'" class="evidence-viewer__message" role="alert"><ImageOff :size="32" aria-hidden="true" /><strong>No pudimos cargar la foto</strong><p>Revisa la conexión y vuelve a intentarlo.</p><BaseButton size="compact" variant="secondary" @click="emit('retry')">Reintentar</BaseButton></div>
       </div>
       <footer class="evidence-viewer__footer">
