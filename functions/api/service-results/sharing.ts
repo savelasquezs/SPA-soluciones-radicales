@@ -312,7 +312,7 @@ publicReportRoutes.post('/media', async context => {
     const data = await loadServiceResultsData(client, id)
     const path = reportPaths(data)[media]
     if (!path) throw new ApiError(404,'Esta evidencia no está disponible','EVIDENCE_NOT_FOUND')
-    return { url:createServiceResultMediaReadUrl(path,id) }
+    return { url:createServiceResultMediaReadUrl(path,path.split('/')[1]!) }
   })
   return context.json(result)
 })
