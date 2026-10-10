@@ -1,5 +1,5 @@
 import { describe,expect,it } from 'vitest'
-import { layoutServiceDay,serviceWeekBounds } from './serviceWeek'
+import { layoutServiceDay,serviceWeekBounds,snapServiceWeekMinute,serviceWeekInstantAt } from './serviceWeek'
 import type { AdminService } from '../types/adminServices'
 
 function record(id: string,start: string,end: string): AdminService {
@@ -30,5 +30,21 @@ describe('weekly service calendar layout',()=>{
     expect(layout.slice(0,2).map(item=>item.laneCount)).toEqual([2,2])
     expect(layout.slice(0,2).map(item=>item.lane)).toEqual([0,1])
     expect(layout[2]).toMatchObject({ lane:0,laneCount:1 })
+  })
+})
+
+
+describe('interactive week scheduling',()=>{
+  const bounds={ startMinute:8*60,endMinute:21*60 }
+  it('snaps drag targets to 15-minute increments without leaving the day grid',()=>{
+    expect(snapServiceWeekMinute(9*60+7,bounds)).toBe(9*60)
+    expect(snapServiceWeekMinute(9*60+8,bounds)).toBe(9*60+15)
+    expect(snapServiceWeekMinute(7*60,bounds)).toBe(8*60)
+    expect(snapServiceWeekMinute(22*60,bounds)).toBe(20*60+45)
+  })
+  it('creates timezone-aware Bogotá instants and rejects invalid slots',()=>{
+    expect(serviceWeekInstantAt('2030-10-07',9*60+15)).toBe('2030-10-07T14:15:00.000Z')
+    expect(serviceWeekInstantAt('2030-10-07',24*60)).toBe('')
+    expect(serviceWeekInstantAt('2030-02-30',9*60)).toBe('')
   })
 })

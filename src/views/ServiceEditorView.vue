@@ -16,7 +16,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
 import { createAdminService, fetchServiceCommand, updateAdminService } from '@/services/adminServicesService'
 import { clearAdminServiceDraft, loadAdminServiceDraft, saveAdminServiceDraft, type AdminServiceDraft } from '@/services/draftService'
-import { draftToServiceInput, emptyServiceDraft, isServiceId, scheduleFromDraft, scheduleToDraft, serviceToDraft, suggestReinforcement, toBogotaInput, validateServiceInput } from '@/helpers/adminServices'
+import { draftToServiceInput, emptyServiceDraft, isServiceId, isZonedInstant, scheduleFromDraft, scheduleToDraft, serviceToDraft, suggestReinforcement, toBogotaInput, validateServiceInput } from '@/helpers/adminServices'
 import type { AdminService, ServiceEditorDraft, UpcomingService } from '@/types/adminServices'
 
 const route=useRoute(), router=useRouter(), store=useAdminServicesStore(), auth=useAuthStore(), notifications=useNotificationsStore()
@@ -96,6 +96,11 @@ async function load(force=false): Promise<void> {
     const siteId=proposal?.sedeId ?? (typeof route.query.sedeId==='string' ? route.query.sedeId : '')
     const site=workspace.sedes.find(item=>item.id===siteId)
     draft.value=service ? serviceToDraft(service) : emptyServiceDraft(site)
+    const slotStart=route.query.start
+    if(!service && !proposal && typeof slotStart==='string' && isZonedInstant(slotStart) && new Date(slotStart).getTime()>Date.now()) {
+      draft.value.programacion.inicioProgramado=toBogotaInput(slotStart)
+      if(site?.manejaRefuerzo) draft.value.refuerzo=scheduleToDraft(suggestReinforcement(scheduleFromDraft(draft.value.programacion)))
+    }
     if(proposal) {
       draft.value.programacion.inicioProgramado=toBogotaInput(proposal.fechaSugerida)
       if(site?.manejaRefuerzo) draft.value.refuerzo=scheduleToDraft(suggestReinforcement(scheduleFromDraft(draft.value.programacion)))

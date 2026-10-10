@@ -1,4 +1,4 @@
-import { toBogotaInput } from './adminServices'
+import { fromBogotaInput, toBogotaInput } from './adminServices'
 import type { AdminService } from '../types/adminServices'
 
 export const DEFAULT_WEEK_START_MINUTE=8*60
@@ -72,4 +72,20 @@ export function layoutServiceDay(records: AdminService[],date: string): ServiceW
   }
   flush()
   return result
+}
+
+
+/** Round a calendar pointer position to a 15-minute start, inside the visible day. */
+export function snapServiceWeekMinute(minute: number, bounds: ServiceWeekBounds, step = 15): number {
+  if (!Number.isFinite(minute) || !Number.isInteger(step) || step < 1) return bounds.startMinute
+  const lower=Math.ceil(bounds.startMinute/step)*step
+  const upper=Math.floor(Math.min(23*60+59,bounds.endMinute-step)/step)*step
+  return Math.max(lower,Math.min(Math.max(lower,upper),Math.round(minute/step)*step))
+}
+
+/** Keep calendar slots in the same Bogotá timezone as service scheduling. */
+export function serviceWeekInstantAt(date: string, minute: number): string {
+  if (!Number.isInteger(minute) || minute < 0 || minute >= 24*60) return ''
+  const time=String(Math.floor(minute/60)).padStart(2,'0')+':'+String(minute%60).padStart(2,'0')
+  return fromBogotaInput(date+'T'+time)
 }
