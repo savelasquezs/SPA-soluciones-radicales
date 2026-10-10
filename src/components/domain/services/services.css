@@ -374,7 +374,7 @@
     color:var(--text-secondary);
   }
   .svc-table-region--services .svc-record-team .svc-cell-button small,
-  .svc-table-region--services .svc-record-payment .svc-cell-button small:last-child:not(:first-child:nth-last-child(1)) {
+  .svc-table-region--services .svc-payment-receiver {
     display:none;
   }
   .svc-table-region--services .svc-record-payment .svc-cell-button {
@@ -392,7 +392,6 @@
     white-space:nowrap;
     color:var(--text-secondary);
   }
-  .svc-table-region--services .svc-record-payment .svc-cell-button small:last-of-type:nth-of-type(2) { display:none; }
   .svc-table-region--services .svc-record-contact .svc-contact {
     display:flex;
     flex-wrap:wrap;
