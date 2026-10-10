@@ -170,7 +170,7 @@ test('el PDF vencido usa el generador existente sin confirmar reemplazo y puede 
   await expect(page.getByRole('button', { name: 'Regenerar PDF vencido', exact: true })).toBeEnabled()
   await expect(page.getByRole('button', { name: 'Descargar PDF Establecimiento' })).toBeDisabled()
   await page.getByRole('button', { name: 'Regenerar PDF vencido', exact: true }).click()
-  expect(calls.generations).toHaveLength(1)
+  await expect.poll(() => calls.generations.length).toBe(1)
   expect(calls.generations[0]).toMatchObject({
     confirmReplace: false,
     previousPaths: { ESTABLECIMIENTO: `certificates/${id}/${id}/expired.pdf` },
