@@ -159,7 +159,7 @@ onMounted(() => { void load() })
       <BaseButton v-if="selected" size="compact" variant="secondary" @click="applyCrop"><Crop :size="16" />Aplicar recorte</BaseButton>
       <BaseButton size="compact" variant="ghost" :disabled="busy" @click="reset"><RotateCcw :size="16" />Restablecer</BaseButton>
       <BaseButton size="compact" variant="secondary" @click="emit('cancel')"><X :size="16" />Cancelar</BaseButton>
-      <BaseButton size="compact" :loading="busy" :disabled="Boolean(error) || !source" @click="save"><Save :size="16" />Guardar foto</BaseButton>
+      <BaseButton size="compact" :loading="busy" :disabled="busy || Boolean(error)" @click="save"><Save :size="16" />Guardar foto</BaseButton>
     </div>
   </div>
 </template>

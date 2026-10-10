@@ -325,7 +325,7 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
 
   async function uploadFindingMutationEvidences<T extends TechnicianFindingCreateMutation | TechnicianFindingStatusMutation>(
     operation: T,
-    phase: 'OPENING' | 'CLOSURE',
+    phase: 'OPENING' | 'CLOSURE' | 'FOLLOWUP',
   ): Promise<T> {
     let current = operation
     for (const evidence of current.evidences) {
