@@ -5,6 +5,7 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDialog from '@/components/base/BaseDialog.vue'
 import BaseField from '@/components/base/BaseField.vue'
 import BaseIconButton from '@/components/base/BaseIconButton.vue'
+import TechnicianPhotoEditor from './TechnicianPhotoEditor.vue'
 
 const props = withDefaults(defineProps<{
   modelValue: File[]
@@ -23,6 +24,8 @@ const video = ref<HTMLVideoElement | null>(null)
 const cameraOpen = ref(false)
 const viewerOpen = ref(false)
 const viewerIndex = ref(0)
+const viewerEditing = ref(false)
+const cameraEditing = ref(false)
 const capturedFile = ref<File | null>(null)
 const cameraError = ref('')
 const previewUrls = new Map<string, string>()
@@ -94,6 +97,7 @@ function remove(index: number): void {
 }
 
 function openViewer(index: number): void {
+  viewerEditing.value = false
   viewerIndex.value = index
   viewerOpen.value = true
 }
@@ -145,6 +149,7 @@ function capture(): void {
 }
 
 function retake(): void {
+  cameraEditing.value = false
   if (capturedFile.value) {
     const key = fileKey(capturedFile.value)
     const url = previewUrls.get(key)
@@ -156,6 +161,7 @@ function retake(): void {
 
 function useCaptured(takeAnother: boolean): void {
   if (!capturedFile.value) return
+  cameraEditing.value = false
   const next = mergeFiles([capturedFile.value])
   emit('update:modelValue', next)
   capturedFile.value = null
@@ -165,11 +171,22 @@ function useCaptured(takeAnother: boolean): void {
 }
 
 function stopCamera(): void {
+  cameraEditing.value = false
   for (const track of stream?.getTracks() ?? []) track.stop()
   stream = null
   if (video.value) video.value.srcObject = null
   capturedFile.value = null
   cameraError.value = ''
+}
+
+function saveViewerEdit(updated: File): void {
+  emit('update:modelValue', props.modelValue.map((item, index) => index === viewerIndex.value ? updated : item))
+  viewerEditing.value = false
+}
+
+function saveCapturedEdit(updated: File): void {
+  capturedFile.value = updated
+  cameraEditing.value = false
 }
 
 function closeCamera(): void {
@@ -227,12 +244,19 @@ function closeCamera(): void {
     </div>
   </BaseField>
 
-  <BaseDialog v-model="viewerOpen" title="Vista previa de la fotografía" size="compact">
-    <img v-if="viewerFile" class="evidence-viewer" :src="previewUrl(viewerFile)" alt="Vista previa de la fotografía" />
+  <BaseDialog v-model="viewerOpen" title="Fotografía" size="compact">
+    <TechnicianPhotoEditor v-if="viewerEditing && viewerFile" :file="viewerFile" @save="saveViewerEdit" @cancel="viewerEditing = false" />
+    <template v-else>
+      <img v-if="viewerFile" class="evidence-viewer" :src="previewUrl(viewerFile)" alt="Vista previa de la fotografía" />
+      <div class="evidence-picker__viewer-actions">
+        <BaseButton v-if="viewerFile && !disabled" size="compact" variant="secondary" @click="viewerEditing = true">Dibujar o recortar</BaseButton>
+      </div>
+    </template>
   </BaseDialog>
 
   <BaseDialog :model-value="cameraOpen" title="Tomar fotografía" description="Revisa la imagen antes de agregarla." :close-on-escape="false" @update:model-value="value => { if (!value) closeCamera() }">
-    <div class="camera-capture">
+    <TechnicianPhotoEditor v-if="capturedFile && cameraEditing" :file="capturedFile" @save="saveCapturedEdit" @cancel="cameraEditing = false" />
+    <div v-else class="camera-capture">
       <video v-if="!capturedFile" ref="video" autoplay playsinline muted />
       <img v-else :src="previewUrl(capturedFile)" alt="Fotografía capturada" />
       <p v-if="cameraError" role="alert">{{ cameraError }}</p>
@@ -240,6 +264,7 @@ function closeCamera(): void {
         <BaseButton v-if="!capturedFile" @click="capture"><Camera :size="18" aria-hidden="true" />Capturar</BaseButton>
         <template v-else>
           <BaseButton variant="secondary" @click="retake"><RotateCcw :size="18" aria-hidden="true" />Repetir</BaseButton>
+          <BaseButton variant="secondary" @click="cameraEditing = true">Dibujar o recortar</BaseButton>
           <BaseButton @click="useCaptured(false)">Usar foto</BaseButton>
           <BaseButton v-if="modelValue.length + 1 < max" variant="secondary" @click="useCaptured(true)">Usar y tomar otra</BaseButton>
         </template>
@@ -259,6 +284,7 @@ function closeCamera(): void {
 .evidence-picker__preview { width:100%; height:100%; border:0; background:transparent; padding:0; cursor:zoom-in; }
 .evidence-picker__preview img { display:block; width:100%; height:100%; object-fit:cover; }
 .evidence-picker__previews :deep(.icon-button) { position:absolute; top:0.3rem; right:0.3rem; background:var(--surface); box-shadow:var(--shadow-sm); }
+ .evidence-picker__viewer-actions { display:flex; justify-content:flex-end; padding-top:.5rem; }
 .evidence-viewer { display:block; width:100%; max-height:70dvh; object-fit:contain; border-radius:var(--radius); background:#000; }
 .camera-capture { display:grid; gap:0.85rem; }
 .camera-capture video, .camera-capture img { display:block; width:100%; max-height:62dvh; aspect-ratio:3/4; object-fit:cover; border-radius:var(--radius); background:#000; }
