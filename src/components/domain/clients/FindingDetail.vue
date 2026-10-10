@@ -30,6 +30,14 @@ function show(phase: 'OPENING' | 'CLOSURE'): void {
       <div class="insight-divider"><h3>Apertura</h3></div>
       <dl><div><dt>Fecha</dt><dd>{{ insightDate(finding.openedAt,true) }}</dd></div><div><dt>Servicio</dt><dd><RouterLink class="insight-link" :to="`/servicios/${finding.openingService.id}`">{{ finding.openingService.number }}</RouterLink></dd></div><div><dt>Técnico responsable del servicio</dt><dd>{{ finding.openingService.technician }}</dd></div></dl>
       <div class="insight-photos"><BaseButton v-if="opening.length" size="compact" variant="secondary" @click="show('OPENING')"><Camera :size="16" />Fotos de apertura ({{ opening.length }})</BaseButton><span v-else class="insight-muted">Sin evidencia fotográfica de apertura.</span></div>
+      <section v-if="finding.followups?.length" class="finding-followup-history">
+        <div class="insight-divider"><h3>Seguimiento por visita</h3></div>
+        <dl v-for="review in finding.followups" :key="review.service.id" class="finding-followup-row">
+          <div><dt>Resultado</dt><dd>{{ review.result === 'SIN_CAMBIOS' ? 'Sigue igual' : review.result === 'EN_PROCESO' ? 'En proceso' : 'Cerrado' }}</dd></div>
+          <div><dt>Visita</dt><dd><RouterLink class="insight-link" :to="`/servicios/${review.service.id}`">{{ review.service.number }}</RouterLink> · {{ insightDate(review.reviewedAt, true) }}</dd></div>
+          <div><dt>Técnico</dt><dd>{{ review.service.technician }}</dd></div>
+        </dl>
+      </section>
       <template v-if="finding.state === 'CERRADO'">
         <div class="insight-divider"><h3>Cierre</h3></div>
         <p v-if="finding.closingService?.state === 'EN_PROCESO'" class="insight-provisional">Cierre registrado en un servicio aún en curso.</p>

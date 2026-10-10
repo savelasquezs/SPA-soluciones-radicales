@@ -111,6 +111,14 @@ export async function listSiteFindings(client: PoolClient, siteId: string, query
         'description',h.descripcion,'recommendation',h.recomendacion_accion,
         'responsibleName',h.responsable_nombre,'responsibleEmail',h.responsable_correo,
         'openedAt',h.fecha_apertura,'closedAt',h.fecha_cierre,'closingNotes',h.observacion_cierre,
+        'followups',(select coalesce(jsonb_agg(jsonb_build_object(
+          'result',seg.resultado,'reviewedAt',seg.registrado_at,
+          'service',jsonb_build_object('id',visit.id,'number',visit.solicitud,'state',visit.estado,
+            'date',seg.registrado_at,'technician',author.nombre_completo)) order by seg.registrado_at desc),'[]'::jsonb)
+          from public.hallazgo_seguimientos seg
+          join public.servicios visit on visit.id=seg.servicio_id and visit.sede_id=$1
+          join public.usuarios author on author.id=seg.tecnico_id
+          where seg.hallazgo_id=h.id),
         'openingService',jsonb_build_object('id',s.id,'number',s.solicitud,'state',s.estado,'date',h.fecha_apertura,'technician',u.nombre_completo),
         'closingService',case when cs.id is null then null else jsonb_build_object('id',cs.id,'number',cs.solicitud,'state',cs.estado,'date',h.fecha_cierre,'technician',cu.nombre_completo) end,
         'photos',(
