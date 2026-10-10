@@ -43,4 +43,25 @@ describe('Enlace público del informe', () => {
     expect(reportPaths(data)).not.toContain(invalid)
     expect(publicReportData(data).areas[0]!.fotos).toEqual([])
   })
+  it('habilita evidencias históricas del hallazgo sin autorizar fotos arbitrarias de otros servicios', () => {
+    const historicId = '20000000-0000-4000-8000-000000000020'
+    const findingId = '30000000-0000-4000-8000-000000000030'
+    const opening = 'services/' + historicId + '/findings/' + findingId + '/opening/old.webp'
+    const followup = 'services/' + serviceId + '/findings/' + findingId + '/followup/new.webp'
+    const unrelated = 'services/' + historicId + '/criteria/criterion/evidence.webp'
+    const finding = {descripcion:'Pendiente',recomendacion:'Corregir',estado:'ABIERTO' as const,
+      responsable:'Cliente',fotos:[opening,unrelated],fechaApertura:'2026-09-01T00:00:00Z',
+      solicitudApertura:'SR-0009',anterior:true,visitasDesdeApertura:2,
+      seguimientos:[{solicitud:'SR-0010',fecha:source.finReal,resultado:'SIN_CAMBIOS' as const,observacion:null,fotos:[followup]}]}
+    const data:ServiceResultsData={...source,areas:[{...source.areas[0]!,hallazgos:[finding]}]}
+    const paths=reportPaths(data)
+    expect(paths).toContain(opening)
+    expect(paths).toContain(followup)
+    expect(paths).not.toContain(unrelated)
+    const publicData=publicReportData(data)
+    expect(publicData.areas[0]!.hallazgos[0]!.fotos).toHaveLength(1)
+    expect(publicData.areas[0]!.hallazgos[0]!.seguimientos[0]!.fotos[0]).toMatch(/^e:/)
+    expect(JSON.stringify(publicData)).not.toContain(historicId)
+    expect(JSON.stringify(publicData)).not.toContain('/findings/')
+  })
 })
