@@ -52,4 +52,4 @@ Estas pruebas no equivalen a reproducir el incidente con la sesión Google del u
 - https://node-postgres.com/apis/client
 - https://better-auth.com/docs/concepts/session-management
 
-La API y el frontend requieren sus despliegues habituales después del merge. Este PR no despliega ni modifica la infraestructura.
+El PR #68 se integró a `develop` con commit `ee76cb1` y su backend se publicó como deployment Neon **#46** (2026-10-10). Esta constatación es histórica: para futuras publicaciones seguir el [runbook de despliegue de Neon Functions](neon-functions-deploy.md), verificar el nuevo ID activo y ejecutar `GET /health`. El frontend se despliega por separado en Cloudflare.
