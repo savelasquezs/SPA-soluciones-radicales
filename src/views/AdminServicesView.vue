@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { RefreshCw, Plus, ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import BaseButton from '@/components/base/BaseButton.vue'
+import ConfirmDialog from '@/components/base/ConfirmDialog.vue'
 import BaseIconButton from '@/components/base/BaseIconButton.vue'
 import BaseInput from '@/components/base/BaseInput.vue'
 import BaseSelect from '@/components/base/BaseSelect.vue'
@@ -16,11 +17,13 @@ import UpcomingRecords from '@/components/domain/services/UpcomingRecords.vue'
 import ServiceWeek from '@/components/domain/services/ServiceWeek.vue'
 import ServicePagination from '@/components/domain/services/ServicePagination.vue'
 import ServiceQuickEditor from '@/components/domain/services/ServiceQuickEditor.vue'
+import ServiceSaveFeedback from '@/components/domain/services/ServiceSaveFeedback.vue'
 import UpcomingEditor from '@/components/domain/services/UpcomingEditor.vue'
+import { useServiceMutation } from '@/composables/useServiceMutation'
 import { useAdminServicesStore } from '@/stores/adminServices'
 import { useNotificationsStore } from '@/stores/notifications'
-import { requestCalendarRetry } from '@/services/adminServicesService'
-import { addDateDays, FOLLOW_UP_LABELS, isDateOnly, SERVICE_STATE_LABELS, todayBogota } from '@/helpers/adminServices'
+import { reprogramAdminService, requestCalendarRetry } from '@/services/adminServicesService'
+import { addDateDays, FOLLOW_UP_LABELS, formatServiceDate, isDateOnly, scheduleFromRecord, SERVICE_STATE_LABELS, todayBogota } from '@/helpers/adminServices'
 import { SERVICE_DATE_SHORTCUTS, serviceDateShortcutRange, type ServiceDateShortcutId } from '@/helpers/serviceDateRanges'
 import { formatDateOnly } from '@/helpers/dateTime'
 import type { AdminService, FollowUpState, ServiceFilter, ServiceKind, ServiceState, UpcomingFilter, UpcomingService } from '@/types/adminServices'
@@ -51,6 +54,21 @@ const search=ref(q('query')), pendingAction=ref(false)
 const quick=ref<{ record: AdminService; mode: 'schedule' | 'team' | 'cancel' | 'payment' } | null>(null)
 const results=ref<AdminService|null>(null)
 const upcomingEditor=ref<{ record: UpcomingService; mode: 'manage' | 'email' } | null>(null)
+const pendingMove=ref<{ record: AdminService; start: string } | null>(null)
+const moveReviewOpen=ref(false)
+const { saving:moving, errorMessage:moveError, conflict:moveConflict, overlapOpen:moveOverlapOpen, overlaps:moveOverlaps,
+  run:runMove, reset:resetMove, acceptOverlap:acceptMoveOverlap, cancelOverlap:cancelMoveOverlap }=useServiceMutation()
+const moveMessage=computed(()=>{
+  const move=pendingMove.value
+  if(!move) return ''
+  const previous=formatServiceDate(move.record.inicioProgramado)+' · '+formatServiceDate(move.record.inicioProgramado,true)
+  const next=formatServiceDate(move.start)+' · '+formatServiceDate(move.start,true)
+  const reinforcement=move.record.tipoServicio==='PRINCIPAL' && move.record.refuerzo?.estado==='PROGRAMADO'
+    ? ' El Refuerzo conservará su fecha y hora; para cambiar ambos utiliza Reprogramar.' : ''
+  return 'Mover '+move.record.solicitud+' · '+move.record.clienteNombre+' de '+previous+' a '+next+
+    '. Se conservan la duración, los técnicos y los productos.'+reinforcement+' Calendar se actualizará después de guardar.'
+})
+
 let searchTimer: ReturnType<typeof setTimeout> | undefined
 function setQuery(value: Record<string,string | undefined>): void { void router.replace({ query:{ ...route.query,...value } }) }
 watch(()=>q('query'),value=>{ if(searchTimer) clearTimeout(searchTimer); search.value=value })
@@ -70,13 +88,58 @@ async function load(force=false): Promise<void> {
 function changeTab(next: 'agenda' | 'upcoming' | 'history'): void {
   setQuery({ tab:next,estado:undefined,tipo:undefined,tecnicoId:undefined,from:undefined,to:undefined,page:'1' })
 }
-function changeView(next: 'table' | 'week'): void { setQuery({ view:next,from:next==='week' ? monday(from.value) : todayBogota(),to:next==='week' ? undefined : todayBogota(),page:'1' }) }
+function changeView(next: 'table' | 'week'): void { setQuery({ view:next,from:next==='week' ? monday(from.value) : from.value,to:next==='week' ? undefined : addDateDays(from.value,6),page:'1' }) }
 function moveWeek(days: number): void { setQuery({ from:addDateDays(from.value,days),to:undefined,page:'1' }) }
 function applyDateShortcut(id: ServiceDateShortcutId): void {
   const next=serviceDateShortcutRange(id,todayBogota())
   setQuery({ from:next.from,to:next.to,page:'1' })
 }
 function create(): void { void router.push({ name:'admin-service-new',query:{ returnTo:route.fullPath } }) }
+
+function createAt(start: string): void { void router.push({ name:'admin-service-new',query:{ start,returnTo:route.fullPath } }) }
+function openAgenda(record: AdminService): void {
+  if(pendingAction.value || moving.value || pendingMove.value) return
+  if(record.estado==='PROGRAMADO') void openQuick(record,'schedule')
+  else void router.push({ name:'service-detail',params:{ id:record.id } })
+}
+function proposeMove(record: AdminService, start: string): void {
+  if(pendingAction.value || moving.value || pendingMove.value || record.estado!=='PROGRAMADO') return
+  if(new Date(start).getTime()===new Date(record.inicioProgramado).getTime()) return
+  resetMove()
+  pendingMove.value={ record,start }
+  moveReviewOpen.value=true
+}
+function cancelMove(): void {
+  if(moving.value) return
+  moveReviewOpen.value=false
+  pendingMove.value=null
+  resetMove()
+}
+async function confirmMove(): Promise<void> {
+  const move=pendingMove.value
+  if(!move || moving.value) return
+  moveReviewOpen.value=false
+  await runMove(
+    (requestId,allowConflicts)=>reprogramAdminService(move.record,requestId,{
+      ...scheduleFromRecord(move.record),inicioProgramado:move.start,
+    },allowConflicts),
+    result=>{ store.applyMutation(result);pendingMove.value=null },
+    'Servicio reprogramado. Calendar se actualizará en segundo plano.',
+  )
+}
+async function reloadMove(): Promise<void> {
+  const move=pendingMove.value
+  if(!move) return
+  cancelMove()
+  try {
+    const current=await store.ensureService(move.record.id,true)
+    if(current.estado==='PROGRAMADO') await openQuick(current,'schedule')
+    else notifications.show('El servicio ya no permite reprogramaciones.','warning')
+  } catch(failure) {
+    notifications.show(failure instanceof Error ? failure.message : 'No fue posible consultar la versión actual.','error')
+  }
+}
+function stopMoveOverlap(): void { cancelMoveOverlap();cancelMove() }
 function edit(record: AdminService): void { void router.push({ name:'admin-service-edit',params:{ id:record.id },query:{ returnTo:route.fullPath } }) }
 function scheduleUpcoming(record: UpcomingService): void { void router.push({ name:'admin-service-new',query:{ upcomingId:record.id,returnTo:route.fullPath } }) }
 async function openQuick(record: AdminService, mode: 'schedule' | 'team' | 'cancel' | 'payment'): Promise<void> {
