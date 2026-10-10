@@ -139,18 +139,18 @@ body:has(.report-document) .report-workspace{display:block!important}
 
 /* On phones, detailed product data becomes a readable two-column card instead of six narrow table columns. */
 @media screen and (max-width:600px){
-  .report-document__table,.report-document__table tbody{display:block;width:100%}
-  .report-document__table thead{display:none}
-  .report-document__table tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.6rem;border:1px solid var(--report-border);border-radius:6px;padding:.75rem;margin-bottom:.7rem}
-  .report-document__table td{display:block;border:0;padding:0;min-width:0}
-  .report-document__table td:first-child{grid-column:1/-1}
-  .report-document__table td::before{display:block;color:var(--report-muted);font-size:.65rem;font-weight:500;margin-bottom:.1rem}
-  .report-document__table td:nth-child(1)::before{content:'Producto'}
-  .report-document__table td:nth-child(2)::before{content:'Principio activo'}
-  .report-document__table td:nth-child(3)::before{content:'Registro sanitario'}
-  .report-document__table td:nth-child(4)::before{content:'Lote'}
-  .report-document__table td:nth-child(5)::before{content:'Dosis'}
-  .report-document__table td:nth-child(6)::before{content:'Método(s)'}
+  .report-products-table,.report-products-table tbody{display:block;width:100%}
+  .report-products-table thead{display:none}
+  .report-products-table tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.6rem;border:1px solid var(--report-border);border-radius:6px;padding:.75rem;margin-bottom:.7rem}
+  .report-products-table td{display:block;border:0;padding:0;min-width:0}
+  .report-products-table td:first-child{grid-column:1/-1}
+  .report-products-table td::before{display:block;color:var(--report-muted);font-size:.65rem;font-weight:500;margin-bottom:.1rem}
+  .report-products-table td:nth-child(1)::before{content:'Producto'}
+  .report-products-table td:nth-child(2)::before{content:'Principio activo'}
+  .report-products-table td:nth-child(3)::before{content:'Registro sanitario'}
+  .report-products-table td:nth-child(4)::before{content:'Lote'}
+  .report-products-table td:nth-child(5)::before{content:'Dosis'}
+  .report-products-table td:nth-child(6)::before{content:'Método(s)'}
 }
 
 .report-workspace--public{min-height:100vh;background:#f6f9fb;padding:clamp(.65rem,2vw,1.5rem)}
@@ -165,8 +165,9 @@ body:has(.report-document) .report-workspace{display:block!important}
 @media print{.report-sheet-link{display:none!important}}
 
 /* Compact point-by-point capture table; zero-capture points are summarized above. */
-.report-captures-table th:first-child{width:26%}
-.report-captures-table th:nth-child(2){width:34%}
+.report-captures-table th:first-child{width:20%}
+.report-captures-table th:nth-child(2){width:40%}
+.report-captures-table th:nth-child(3){width:40%}
 .report-captures-table td small{display:block;color:var(--report-muted);font-size:.68rem;margin-top:.12rem}
 .report-captures-notes{margin-top:1rem}
 .report-captures-notes>h3{font-size:.78rem;margin-bottom:.25rem!important}
@@ -176,4 +177,14 @@ body:has(.report-document) .report-workspace{display:block!important}
 @media print{
   .report-captures-table th,.report-captures-table td{padding:1.2mm 1.5mm}
   .report-captures-notes .report-point{break-inside:avoid;page-break-inside:avoid}
+}
+
+/* Keep capture records as an actual three-column table on phones and in A4, never as product cards. */
+.report-captures-table__species{display:block;line-height:1.35}
+.report-captures-table__species+.report-captures-table__species{margin-top:.2rem}
+@media screen and (max-width:600px){
+  .report-captures-table{width:100%;table-layout:fixed;font-size:.73rem}
+  .report-captures-table th,.report-captures-table td{padding:.4rem .25rem;vertical-align:top;overflow-wrap:anywhere;word-break:normal}
+  .report-captures-table th{font-size:.67rem;line-height:1.25}
+  .report-captures-table td small{font-size:.68rem;line-height:1.3}
 }

@@ -259,7 +259,7 @@ watch(() => [serviceId.value, publicToken.value], () => { void loadReport() }, {
         <section class="report-document__section" aria-labelledby="report-products-title">
           <header class="report-document__heading"><span class="report-document__number">02</span><h2 id="report-products-title">Productos aplicados</h2></header>
           <p v-if="!report.productos.length" class="report-document__empty">No se registraron productos aplicados durante esta visita.</p>
-          <table v-else class="report-document__table">
+          <table v-else class="report-document__table report-products-table">
             <thead><tr><th style="width:20%">Producto</th><th style="width:21%">Principio activo</th><th style="width:16%">Registro sanitario</th><th style="width:12%">Lote</th><th style="width:13%">Dosis</th><th style="width:18%">Método(s)</th></tr></thead>
             <tbody><tr v-for="(product,index) in report.productos" :key="index">
               <td><strong>{{ product.nombre }}</strong><button v-if="product.fichaTecnicaDisponible" type="button"
@@ -307,12 +307,16 @@ watch(() => [serviceId.value, publicToken.value], () => { void loadReport() }, {
                 <span v-if="captureSummary.withoutReview"> {{ captureSummary.withoutReview }} puesto(s) sin revisión registrada.</span>
               </p>
               <table v-if="captureSummary.rows.length" class="report-document__table report-captures-table" data-testid="mip-captures-detail">
-                <thead><tr><th scope="col">Puesto / Área</th><th scope="col">Trampa / Ubicación</th><th scope="col">Individuos encontrados</th></tr></thead>
+                <thead><tr><th scope="col">Área</th><th scope="col">Puesto / Trampa / Ubicación</th><th scope="col">Capturas registradas</th></tr></thead>
                 <tbody>
                   <tr v-for="(point,index) in captureSummary.rows" :key="point.area + ':' + point.numero + ':' + index">
-                    <td><strong>{{ point.numero }}</strong><small>{{ point.area }}</small></td>
-                    <td>{{ point.tipo }}<small>{{ point.ubicacion || 'Sin ubicación indicada' }}</small></td>
-                    <td>{{ point.capturas.filter(c=>c.cantidad>0).map(c=>c.cantidad + ' ' + c.plagaNombreSnapshot).join(' · ') }}</td>
+                    <td>{{ point.area }}</td>
+                    <td><strong>Puesto {{ point.numero }}</strong><small>{{ point.tipo }}</small><small>{{ point.ubicacion || 'Sin ubicación indicada' }}</small></td>
+                    <td>
+                      <span v-for="capture in point.capturas.filter(c=>c.cantidad>0)" :key="capture.plagaNombreSnapshot" class="report-captures-table__species">
+                        <strong>{{ capture.cantidad }}</strong> {{ capture.plagaNombreSnapshot }}
+                      </span>
+                    </td>
                   </tr>
                 </tbody>
               </table>
