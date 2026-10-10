@@ -32,12 +32,16 @@ const summary=computed(()=>{
   for(const kind of ['voladores','rastreros'] as const){
     const difference=reportDelta(a[kind],b[kind])
     if(difference===null)continue
-    const name=kind==='voladores'?'voladoras':'rastreras'
+    const plural=kind==='voladores'?'voladoras':'rastreras'
+    const singular=kind==='voladores'?'voladora':'rastrera'
+    const count=Math.abs(difference)
+    const label=count===1?'1 captura '+singular:count.toLocaleString('es-CO')+' capturas '+plural
+    const verb=count===1?'Se registró ':'Se registraron '
     sentences.push(difference===0
-      ?'Se registró la misma cantidad de capturas '+name+'.'
+      ?'Se registró la misma cantidad de capturas '+plural+'.'
       :difference>0
-        ?'Se registraron '+difference.toLocaleString('es-CO')+' capturas '+name+' más que en la visita anterior.'
-        :'Se registraron '+Math.abs(difference).toLocaleString('es-CO')+' capturas '+name+' menos que en la visita anterior.')
+        ?verb+label+' más que en la visita anterior.'
+        :verb+label+' menos que en la visita anterior.')
   }
   if(sentences.length===0)return 'No hay suficientes mediciones comparables entre estas dos visitas.'
   sentences.push('Las capturas muestran lo que encontraron las trampas; por sí solas no confirman que haya más o menos plagas.')
