@@ -15,6 +15,15 @@ const criterion: TechnicianCriterion = {
 }
 
 describe('TechnicianCriterionEditor', () => {
+  it('shows optional evidence guidance only for CP and NC, and contextual validation when pending', async () => {
+    const wrapper = mount(TechnicianCriterionEditor, { props: { criterion, mutation: null, editable: true, syncing: false, validationError: 'Debes evaluar este criterio.' } })
+    expect(wrapper.text()).toContain('Debes evaluar este criterio.')
+    await wrapper.get('button[aria-label="No cumple"]').trigger('click')
+    expect(wrapper.text()).toContain('Se recomienda agregar una observación o foto (opcional).')
+    await wrapper.get('button[aria-label="Cumple"]').trigger('click')
+    expect(wrapper.text()).not.toContain('Se recomienda agregar una observación o foto (opcional).')
+  })
+
   it('saves the selected fixed evaluation with the current observation', async () => {
     const wrapper = mount(TechnicianCriterionEditor, { props: { criterion, mutation: null, editable: true, syncing: false } })
     await wrapper.findAll('.criterion-tools button')[0]!.trigger('click')
