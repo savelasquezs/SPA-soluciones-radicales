@@ -1,18 +1,18 @@
 import { createAuthClient } from '@neondatabase/auth'
+import { ApiClientError, withRequestDeadline } from './requestControl'
 
 const authUrl = import.meta.env.VITE_NEON_AUTH_URL
-
-if (!authUrl) {
-  throw new Error('VITE_NEON_AUTH_URL is required')
-}
-
+if (!authUrl) throw new Error('VITE_NEON_AUTH_URL is required')
 export const authClient = createAuthClient(authUrl)
 
-export async function getAuthSession() {
-  const { data, error } = await authClient.getSession()
-  if (error) {
-    throw new Error(error.message)
-  }
+type SessionOptions = { signal?: AbortSignal; forceRefresh?: boolean }
+
+export async function getAuthSession(options: SessionOptions = {}) {
+  const { data, error } = await withRequestDeadline(signal => authClient.getSession({
+    ...(options.forceRefresh ? { query: { disableCookieCache: true } } : {}),
+    fetchOptions: { signal },
+  }), 12_000, options.signal)
+  if (error) throw new ApiClientError(error.message, error.status ?? 0, 'AUTH_ERROR')
   if (data?.session.token) {
     const url = new URL(window.location.href)
     if (url.searchParams.has('neon_auth_session_verifier')) {
@@ -23,12 +23,25 @@ export async function getAuthSession() {
   return data
 }
 
-export async function getAccessToken(): Promise<string> {
-  const session = await getAuthSession()
-  const token = session?.session.token
-  if (!token) {
-    throw new Error('No fue posible obtener un token de sesión')
+// Expiry is only a refresh hint. Authorization remains on the server/JWKS.
+function tokenExpiresSoon(token: string): boolean {
+  try {
+    const part = token.split('.')[1]
+    if (!part) return false
+    const normalized = part.replace(/-/g, '+').replace(/_/g, '/')
+    const payload = JSON.parse(atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '='))) as { exp?: unknown }
+    return typeof payload.exp === 'number' && payload.exp * 1000 <= Date.now() + 30_000
+  } catch { return false }
+}
+
+export async function getAccessToken(options: SessionOptions = {}): Promise<string> {
+  let session = await getAuthSession(options)
+  if (!options.forceRefresh && session?.session.token && tokenExpiresSoon(session.session.token)) {
+    session = await getAuthSession({ ...options, forceRefresh: true })
   }
+  const token = session?.session.token
+  if (!token) throw new ApiClientError('No fue posible obtener un token de sesión. Inicia sesión nuevamente.', 401, 'AUTH_REQUIRED')
+  if (tokenExpiresSoon(token)) throw new ApiClientError('La sesión venció. Inicia sesión nuevamente.', 401, 'AUTH_EXPIRED')
   return token
 }
 

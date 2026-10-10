@@ -1,40 +1,26 @@
-import { getAccessToken } from './authService'
+import { authorizedRequest, readJson, type ApiRequestInit } from './authorizedRequest'
+import { ApiClientError } from './requestControl'
+
+export { ApiClientError } from './requestControl'
+export type { ApiRequestInit } from './authorizedRequest'
 
 const functionUrl = import.meta.env.VITE_NEON_FUNCTION_URL
 
-export class ApiClientError extends Error {
-  constructor(
-    message: string,
-    public readonly status: number,
-    public readonly code?: string,
-    public readonly details?: Record<string, unknown>,
-  ) { super(message) }
-}
-
-async function authorizedResponse(path: string, init: RequestInit): Promise<Response> {
+function apiUrl(path: string): URL {
   if (!functionUrl) throw new ApiClientError('VITE_NEON_FUNCTION_URL no está configurada', 500)
-  const token = await getAccessToken()
-  const headers = new Headers(init.headers)
-  headers.set('Authorization', `Bearer ${token}`)
-  if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
-  const response = await fetch(new URL(path.replace(/^\//, ''), functionUrl.endsWith('/') ? functionUrl : `${functionUrl}/`), { ...init, headers })
-  if (!response.ok) {
-    const body = await response.json().catch(() => null) as { error?: string; code?: string; details?: Record<string, unknown> } | null
-    throw new ApiClientError(body?.error ?? `La solicitud falló (${response.status})`, response.status, body?.code, body?.details)
-  }
-  return response
+  return new URL(path.replace(/^\//, ''), functionUrl.endsWith('/') ? functionUrl : `${functionUrl}/`)
 }
 
-export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await authorizedResponse(path, init)
-  return await response.json().catch(() => null) as T
+export async function apiRequest<T>(path: string, init: ApiRequestInit = {}): Promise<T> {
+  return authorizedRequest(apiUrl(path), init, readJson<T>)
 }
 
-/** Same authorization/error contract as JSON, without buffering a binary document as JSON. */
-export async function apiBlobRequest(path: string, init: RequestInit = {}): Promise<Blob> {
-  const response = await authorizedResponse(path, init)
-  if (!response.headers.get('content-type')?.includes('application/pdf')) {
-    throw new ApiClientError('El servidor no devolvió un PDF válido', 502)
-  }
-  return response.blob()
+/** Same authorization/error contract as JSON, with a bounded PDF body download. */
+export async function apiBlobRequest(path: string, init: ApiRequestInit = {}): Promise<Blob> {
+  return authorizedRequest(apiUrl(path), { timeoutMs: 90_000, ...init }, async response => {
+    if (!response.headers.get('content-type')?.includes('application/pdf')) {
+      throw new ApiClientError('El servidor no devolvió un PDF válido', 502, 'INVALID_RESPONSE')
+    }
+    return response.blob()
+  })
 }
