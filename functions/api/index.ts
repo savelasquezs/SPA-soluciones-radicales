@@ -1,5 +1,7 @@
 import { parseTriggerDelivery } from '@neon/functions/triggers'
 import app from './app'
+import { profileRoutes } from './profile/routes'
+import { googleChangeRoutes } from './profile/google'
 import { mipCatalogRoutes } from './catalogs/routes'
 import { adminServiceRoutes } from './services/routes'
 import { drainServiceJobs } from './services/jobs'
@@ -10,6 +12,8 @@ import { serviceResultRoutes } from './service-results/routes'
 import { reportSharingRoutes, technicianReportSharingRoutes, publicReportRoutes } from './service-results/sharing'
 
 // The existing app owns authorization, CORS and errors for every /api route.
+app.route('/api/profile', profileRoutes)
+app.route('/api/profile/google', googleChangeRoutes)
 app.route('/api/mip', mipCatalogRoutes)
 app.route('/api/admin/services', adminServiceRoutes)
 app.route('/api/technician/services', technicianServiceRoutes)
