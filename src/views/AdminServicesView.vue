@@ -200,8 +200,10 @@ async function retryCalendar(record: AdminService): Promise<void> {
       <StatusPanel v-else title="Sin próximas visitas en este rango" message="Al finalizar un Principal se generará su próxima propuesta, según la periodicidad de la sede." />
     </template>
     <template v-else>
-      <ServiceWeek v-if="view==='week'" :from="from" :records="store.rows" :busy="pendingAction || moving || Boolean(pendingMove)" @create="createAt" @open="openAgenda" @move="proposeMove" />
-      <p v-if="view==='week' && total>pageSize" class="svc-muted svc-small">Mostrando {{ store.rows.length }} de {{ total }} servicios en esta página. Filtra o cambia a Tabla para consultar los demás.</p>
+      <template v-if="view==='week'">
+        <ServiceWeek :from="from" :records="store.rows" :busy="pendingAction || moving || Boolean(pendingMove)" @create="createAt" @open="openAgenda" @move="proposeMove" />
+        <p v-if="total>pageSize" class="svc-muted svc-small">Mostrando {{ store.rows.length }} de {{ total }} servicios en esta página. Filtra o cambia a Tabla para consultar los demás.</p>
+      </template>
       <ServiceRecords v-else-if="store.rows.length" :records="store.rows" :history="tab==='history'" :busy="pendingAction" @schedule="openQuick($event,'schedule')" @team="openQuick($event,'team')" @payment="openQuick($event,'payment')" @edit="edit" @cancel="openQuick($event,'cancel')" @retry-calendar="retryCalendar" @results="results=$event" />
       <StatusPanel v-else title="Sin servicios en este rango" message="Cambia las fechas o los filtros para consultar otra parte de la operación." />
     </template>

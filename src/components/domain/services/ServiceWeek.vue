@@ -36,7 +36,8 @@ function eventStyle(startMinute: number,endMinute: number,lane: number,laneCount
   }
 }
 function hourLabel(minute: number): string {
-  return String(Math.floor(minute/60)).padStart(2,'0')+':'+String(minute%60).padStart(2,'0')
+  const hour=Math.floor(minute/60)
+  return new Intl.DateTimeFormat('es-CO',{ hour:'numeric',minute:'2-digit',hour12:true,timeZone:'UTC' }).format(new Date(Date.UTC(2026,0,1,hour,minute%60)))
 }
 function minuteAt(event: MouseEvent | PointerEvent | DragEvent, grab = 0): number {
   const target=event.currentTarget as HTMLElement | null
@@ -122,6 +123,8 @@ function duration(record: AdminService): number {
             :data-date="day.date"
             :aria-label="'Elegir una hora para programar servicio el '+day.label"
             :aria-disabled="busy || day.date<todayBogota()"
+            @dragover="dragOver($event,day.date)"
+            @drop="drop($event,day.date)"
             @pointermove="hoverSlot($event,day.date)"
             @pointerleave="createPreview=null"
             @click="createAt(day.date,minuteAt($event))"
@@ -145,14 +148,14 @@ function duration(record: AdminService): number {
             :class="['svc-week-calendar__event--'+event.record.estado,{ 'popover-left':index>=5, 'is-dragging':dragging?.id===event.record.id }]"
             :style="eventStyle(event.startMinute,event.endMinute,event.lane,event.laneCount)"
             :data-service-id="event.record.id"
-            :draggable="event.record.estado==='PROGRAMADO' && !busy"
-            @dragstart="startDrag($event,event.record)"
-            @dragend="endDrag"
           >
             <button
               type="button"
               class="svc-week-calendar__event-main"
               :disabled="busy"
+              :draggable="event.record.estado==='PROGRAMADO' && !busy"
+              @dragstart="startDrag($event,event.record)"
+              @dragend="endDrag"
               :aria-label="(event.record.estado==='PROGRAMADO' ? 'Reprogramar ' : 'Ver ')+event.record.solicitud+' · '+event.record.clienteNombre"
               @click="emit('open',event.record)"
             >
