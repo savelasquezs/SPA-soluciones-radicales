@@ -1,7 +1,7 @@
 import { getAccessToken } from './authService'
 import { ApiClientError, RequestTimeoutError, waitForRetry, withRequestDeadline } from './requestControl'
 
-export type ApiRequestInit = RequestInit & { timeoutMs?: number }
+export type ApiRequestInit = RequestInit & { timeoutMs?: number; forceAuthRefresh?: boolean }
 
 export async function readJson<T>(response: Response): Promise<T> {
   if (response.status === 204 || response.status === 205) return null as T
@@ -24,11 +24,11 @@ export async function authorizedRequest<T>(
   init: ApiRequestInit,
   read: (response: Response) => Promise<T>,
 ): Promise<T> {
-  const { timeoutMs, ...request } = init
+  const { timeoutMs, forceAuthRefresh = false, ...request } = init
   const method = (request.method ?? 'GET').toUpperCase()
   const safeRead = method === 'GET' || method === 'HEAD'
   const timeout = timeoutMs ?? (safeRead ? 30_000 : 90_000)
-  let forceRefresh = false
+  let forceRefresh = forceAuthRefresh
   for (let attempt = 0; ; attempt++) {
     let sent = false
     try {

@@ -15,6 +15,7 @@ import { useFileSaveProgress } from '@/composables/useFileSaveProgress'
 import { useAccountTransition } from '@/composables/useAccountTransition'
 import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
 import { certificateFieldErrors, personalFieldErrors, technicianCertificateStatus } from '@/helpers/profile'
+import { clearPendingGoogleHandoff, savePendingGoogleHandoff } from '@/helpers/googleHandoff'
 import { signInWithGoogle } from '@/services/authService'
 import {
   discardPersonalUpload, getPersonalCertificateUrl, getPersonalProfile,
@@ -237,12 +238,12 @@ async function changeGoogle(): Promise<void> {
   googleConfirmOpen.value = false
   busyGoogle.value = true
   try {
-    const { token } = await startGoogleIdentityChange()
-    sessionStorage.setItem('sr:google-profile-handoff', token)
+    const { token, expiresInSeconds } = await startGoogleIdentityChange()
+    savePendingGoogleHandoff(token, expiresInSeconds)
     leavingForGoogle.value = true
     await signInWithGoogle(true, window.location.origin + '/cuenta/cambiar-google')
   } catch (error) {
-    sessionStorage.removeItem('sr:google-profile-handoff')
+    clearPendingGoogleHandoff()
     leavingForGoogle.value = false
     notifications.show(message(error, 'No fue posible iniciar la verificación con Google'), 'error')
   } finally {

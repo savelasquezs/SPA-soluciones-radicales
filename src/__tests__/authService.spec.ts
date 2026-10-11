@@ -69,8 +69,18 @@ describe('authService', () => {
     expect(signIn).toHaveBeenCalledWith({
       provider: 'google',
       callbackURL: new URL('/usuarios', window.location.origin).toString(),
+      newUserCallbackURL: new URL('/usuarios', window.location.origin).toString(),
       disableRedirect: true,
     })
+  })
+
+  it('envía tanto usuarios existentes como cuentas nuevas al retorno de transferencia', async () => {
+    signIn.mockRejectedValue(new Error('stop before navigation'))
+    const landing = new URL('/cuenta/cambiar-google', window.location.origin).toString()
+    await expect(signInWithGoogle(true, landing)).rejects.toThrow('stop before navigation')
+    expect(signIn).toHaveBeenCalledWith(expect.objectContaining({
+      provider: 'google', callbackURL: landing, newUserCallbackURL: landing,
+    }))
   })
 
   it('rejects an external OAuth return URL', async () => {
