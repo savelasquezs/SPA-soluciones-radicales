@@ -61,5 +61,5 @@ export function startGoogleIdentityChange(): Promise<GoogleHandoff> {
 }
 
 export function finishGoogleIdentityChange(token: string): Promise<{ correoGoogle: string }> {
-  return apiRequest('api/profile/google/finish', { method: 'POST', body: JSON.stringify({ token }) })
+  return apiRequest('api/profile/google/finish', { method: 'POST', body: JSON.stringify({ token }), forceAuthRefresh: true })
 }
