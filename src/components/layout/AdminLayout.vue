@@ -111,7 +111,7 @@ function setTheme(event: Event): void { app.setTheme((event.target as HTMLSelect
           <AccountMenu placement="sidebar" />
         </div>
       </aside>
-      <main class="content"><nav v-if="breadcrumbItems.length" class="breadcrumb" aria-label="Ruta de navegación"><template v-for="(item,index) in breadcrumbItems" :key="`${item.label}-${index}`"><RouterLink v-if="item.to" :to="item.to">{{ item.label }}</RouterLink><span v-else :aria-current="index===breadcrumbItems.length-1 ? 'page' : undefined">{{ item.label }}</span><span v-if="index<breadcrumbItems.length-1" class="breadcrumb__separator" aria-hidden="true">/</span></template></nav><RouterView /></main>
+      <main class="content"><nav v-if="breadcrumbItems.length" class="breadcrumb" :class="{ 'breadcrumb--agenda':route.name==='agenda' || (route.name==='services' && route.query.view==='week') }" aria-label="Ruta de navegación"><template v-for="(item,index) in breadcrumbItems" :key="`${item.label}-${index}`"><RouterLink v-if="item.to" :to="item.to">{{ item.label }}</RouterLink><span v-else :aria-current="index===breadcrumbItems.length-1 ? 'page' : undefined">{{ item.label }}</span><span v-if="index<breadcrumbItems.length-1" class="breadcrumb__separator" aria-hidden="true">/</span></template></nav><RouterView /></main>
     </div>
   </div>
 </template>
@@ -162,6 +162,9 @@ function setTheme(event: Event): void { app.setTheme((event.target as HTMLSelect
   .sidebar--open { visibility: visible; transform: translateX(0); }
   .drawer-backdrop { position: fixed; z-index: 30; inset: 64px 0 0; display: block; border: 0; background: var(--backdrop); }
   .content { padding: 1.5rem; }
+}
+@media (max-width: 680px) {
+  .breadcrumb--agenda { display:none; }
 }
 @media (max-width: 560px) {
   .topbar { height: 60px; padding: 0 1rem; }
