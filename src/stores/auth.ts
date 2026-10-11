@@ -32,7 +32,7 @@ export const useAuthStore = defineStore('auth', () => {
   async function initialize(force = false): Promise<void> {
     if (initialization && !force) return initialization
     if (!force && status.value !== 'idle') return
-    initialization = restore()
+    initialization = restore(force)
     try {
       await initialization
     } finally {
@@ -40,11 +40,11 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function restore(): Promise<void> {
+  async function restore(forceSession = false): Promise<void> {
     status.value = 'loading'
     error.value = null
     try {
-      session.value = await getAuthSession()
+      session.value = await getAuthSession({ forceRefresh: forceSession })
       if (!session.value?.user) {
         status.value = 'unauthenticated'
         user.value = null
