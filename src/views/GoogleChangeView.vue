@@ -4,42 +4,68 @@ import { useRouter } from 'vue-router'
 import { CheckCircle2, CircleAlert } from 'lucide-vue-next'
 
 import BaseButton from '@/components/base/BaseButton.vue'
-import { getAccessToken } from '@/services/authService'
+import {
+  clearPendingGoogleHandoff, readPendingGoogleHandoff,
+} from '@/helpers/googleHandoff'
+import { signInWithGoogle } from '@/services/authService'
 import { finishGoogleIdentityChange } from '@/services/profileService'
 import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
 const auth = useAuthStore()
 const processing = ref(true)
+const switching = ref(false)
 const completed = ref(false)
+const canRetry = ref(false)
 const error = ref<string | null>(null)
-const STORAGE_KEY = 'sr:google-profile-handoff'
 
-onMounted(async () => {
-  const token = sessionStorage.getItem(STORAGE_KEY)
+async function verifyNewAccount(): Promise<void> {
+  processing.value = true
+  error.value = null
+  const token = readPendingGoogleHandoff()
   if (!token) {
-    error.value = 'No existe un cambio de cuenta pendiente. Inícialo desde Mi perfil.'
+    error.value = 'No hay un cambio de cuenta vigente. Inicia el proceso desde tu cuenta anterior.'
+    canRetry.value = false
     processing.value = false
     return
   }
   try {
-    // The OAuth callback has a different identity: bypass the old auth cache.
-    await getAccessToken({ forceRefresh: true })
+    // Never call /api/session before the transfer: the new identity is not yet
+    // registered in public.usuarios. The finishing API verifies its Google JWT.
     await finishGoogleIdentityChange(token)
     completed.value = true
-    sessionStorage.removeItem(STORAGE_KEY)
+    clearPendingGoogleHandoff()
     await auth.initialize(true)
-    if (auth.status !== 'authenticated') throw new Error('Vuelve a entrar con la nueva cuenta Google')
+    if (auth.status !== 'authenticated') {
+      throw new Error('La cuenta cambió, pero la sesión no se pudo actualizar. Vuelve a iniciar sesión con la nueva cuenta.')
+    }
     await router.replace({ name: 'my-profile', query: { googleActualizado: '1' } })
   } catch (cause) {
-    sessionStorage.removeItem(STORAGE_KEY)
     error.value = completed.value
-      ? 'La cuenta fue cambiada, pero la sesión no se pudo actualizar. Inicia sesión con tu cuenta nueva.'
-      : cause instanceof Error ? cause.message : 'No fue posible verificar la cuenta. No se realizaron cambios.'
+      ? 'La cuenta se vinculó, pero hubo un problema al actualizar la sesión. Inicia sesión con la nueva cuenta.'
+      : cause instanceof Error ? cause.message : 'No se pudo confirmar la nueva cuenta. Tu usuario original permanece intacto.'
+    // Retain the one-time handoff on network failures; users can retry before
+    // its deadline instead of being forced to start over or losing access.
+    canRetry.value = !completed.value && Boolean(readPendingGoogleHandoff())
   } finally {
     processing.value = false
   }
-})
+}
+
+async function selectAnotherGoogleAccount(): Promise<void> {
+  if (switching.value || processing.value) return
+  switching.value = true
+  try {
+    await auth.logout()
+    await signInWithGoogle(true, new URL('/cuenta/cambiar-google', window.location.origin).toString())
+  } catch (cause) {
+    error.value = cause instanceof Error ? cause.message : 'No fue posible seleccionar otra cuenta Google.'
+  } finally {
+    switching.value = false
+  }
+}
+
+onMounted(() => { void verifyNewAccount() })
 </script>
 
 <template>
@@ -52,9 +78,11 @@ onMounted(async () => {
       <CheckCircle2 v-else :size="28" aria-hidden="true" />
       <h1>{{ processing ? 'Verificando tu nueva cuenta' : error ? 'No se completó la verificación' : 'Cuenta vinculada' }}</h1>
       <p>{{ processing ? 'Estamos confirmando la cuenta directamente con Google.' : error ?? 'Tu perfil conserva todos sus datos e historial.' }}</p>
-      <BaseButton v-if="!processing && error" @click="router.replace('/acceso')">
-        Ir al acceso
-      </BaseButton>
+      <div v-if="!processing && error" class="handoff__actions">
+        <BaseButton v-if="canRetry" :disabled="switching" @click="verifyNewAccount">Reintentar verificación</BaseButton>
+        <BaseButton v-if="canRetry" variant="secondary" :loading="switching" @click="selectAnotherGoogleAccount">Elegir otra cuenta Google</BaseButton>
+        <BaseButton v-else variant="secondary" @click="router.replace('/acceso')">Ir al acceso</BaseButton>
+      </div>
     </section>
   </main>
 </template>
@@ -68,4 +96,6 @@ onMounted(async () => {
 .handoff__spinner { display: block; width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .handoff__spinner { animation: none; border-style: dashed; } }
+.handoff__actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem; width: 100%; }
+.handoff__actions :deep(button) { min-height: 44px; flex: 1 1 12rem; max-width: 100%; }
 </style>
