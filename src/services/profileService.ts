@@ -8,11 +8,11 @@ type UploadAuthorization = { url: string; storagePath: string; contentType: stri
 type GoogleHandoff = { token: string; expiresInSeconds: number }
 
 export function getPersonalProfile(): Promise<PersonalProfile> {
-  return apiRequest<PersonalProfile>('api/profile/')
+  return apiRequest<PersonalProfile>('api/profile')
 }
 
 export function savePersonalData(input: Pick<PersonalProfile, 'nombreCompleto' | 'telefono' | 'version'>): Promise<PersonalProfile> {
-  return apiRequest('api/profile/', { method: 'PATCH', body: JSON.stringify(input) })
+  return apiRequest('api/profile', { method: 'PATCH', body: JSON.stringify(input) })
 }
 
 export function saveProfileAvatar(storagePath: string | null, version: number): Promise<PersonalProfile> {
