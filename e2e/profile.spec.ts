@@ -40,8 +40,8 @@ async function setup(page: import('@playwright/test').Page, technician = true) {
     let status = 404
     if (url.pathname === '/api/session') [data, status] = [domain, 200]
     else if (url.pathname === '/api/profile/avatar-url') [data, status] = [{ url: null }, 200]
-    else if ((url.pathname === '/api/profile/' || url.pathname === '/api/profile') && method === 'GET') [data, status] = [profile, 200]
-    else if ((url.pathname === '/api/profile/' || url.pathname === '/api/profile') && method === 'PATCH') {
+    else if (url.pathname === '/api/profile' && method === 'GET') [data, status] = [profile, 200]
+    else if (url.pathname === '/api/profile' && method === 'PATCH') {
       personalPatches += 1
       profile = { ...profile, ...route.request().postDataJSON(), telefono: '+573001234567', version: profile.version + 1 }
       ;[data, status] = [profile, 200]
