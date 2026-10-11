@@ -548,6 +548,8 @@
   .svc-week-calendar--day .svc-week-calendar__inner { min-width:0; width:100%; }
   .svc-week-calendar--day .svc-week-calendar__header,
   .svc-week-calendar--day .svc-week-calendar__body { grid-template-columns:3.75rem minmax(0,1fr); }
+  .svc-week-calendar--day .svc-week-calendar__header { position:relative; z-index:1; }
+  .svc-week-calendar--day .svc-week-calendar__hour-label:first-child { transform:none; }
   .svc-week-calendar--day .svc-week-calendar__popover { display:none!important; }
   .svc-week-calendar--day .svc-week-calendar__event-main--brief {
     display:flex; align-items:center; justify-content:flex-start;

@@ -69,3 +69,17 @@ describe('mobile day selection',()=>{
     expect(preferredServiceWeekDay([],monday,'2030-10-20')).toBe(monday)
   })
 })
+
+
+describe('mobile short event visual lanes',()=>{
+  it('keeps sequential 15-minute services individually tappable in a 26px-high minimum',()=>{
+    const rows=[
+      record('short-a','2030-10-07T13:00:00Z','2030-10-07T13:15:00Z'),
+      record('short-b','2030-10-07T13:15:00Z','2030-10-07T13:30:00Z'),
+    ]
+    expect(layoutServiceDay(rows,'2030-10-07').map(item=>item.laneCount)).toEqual([1,1])
+    const mobile=layoutServiceDay(rows,'2030-10-07',34)
+    expect(mobile.map(item=>item.laneCount)).toEqual([2,2])
+    expect(mobile.map(item=>item.lane)).toEqual([0,1])
+  })
+})

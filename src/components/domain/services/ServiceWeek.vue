@@ -19,7 +19,7 @@ const days=computed(()=>Array.from({ length:props.singleDay ? 1 : 7 },(_,index)=
   return {
     date,
     label:new Intl.DateTimeFormat('es-CO',{ weekday:'short',day:'2-digit',timeZone:'America/Bogota' }).format(new Date(date+'T12:00:00-05:00')),
-    events:layoutServiceDay(dayRecords.value,date),
+    events:layoutServiceDay(dayRecords.value,date,props.singleDay ? Math.ceil(26/HOUR_HEIGHT*60) : 1),
   }
 }))
 const dragging=ref<AdminService | null>(null)

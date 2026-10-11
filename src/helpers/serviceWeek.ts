@@ -21,12 +21,12 @@ function minuteOfDay(value: string): number {
   return hour*60+minute
 }
 function localDate(value: string): string { return toBogotaInput(value).slice(0,10) }
-function eventWindow(record: AdminService,date: string): { record: AdminService; startMinute: number; endMinute: number } | null {
+function eventWindow(record: AdminService,date: string,minimumDisplayMinutes=1): { record: AdminService; startMinute: number; endMinute: number } | null {
   if(localDate(record.inicioProgramado)!==date) return null
   const startMinute=minuteOfDay(record.inicioProgramado)
   const endDate=localDate(record.finProgramado)
   const rawEnd=endDate===date ? minuteOfDay(record.finProgramado) : 24*60
-  return { record,startMinute,endMinute:Math.max(startMinute+1,rawEnd) }
+  return { record,startMinute,endMinute:Math.max(startMinute+minimumDisplayMinutes,rawEnd) }
 }
 
 export function serviceWeekBounds(records: AdminService[]): ServiceWeekBounds {
@@ -46,8 +46,8 @@ export function serviceWeekHours(bounds: ServiceWeekBounds): number[] {
   return hours
 }
 
-export function layoutServiceDay(records: AdminService[],date: string): ServiceWeekEventLayout[] {
-  const windows=records.map(record=>eventWindow(record,date)).filter((item): item is NonNullable<typeof item>=>Boolean(item))
+export function layoutServiceDay(records: AdminService[],date: string,minimumDisplayMinutes=1): ServiceWeekEventLayout[] {
+  const windows=records.map(record=>eventWindow(record,date,minimumDisplayMinutes)).filter((item): item is NonNullable<typeof item>=>Boolean(item))
     .sort((a,b)=>a.startMinute-b.startMinute || a.endMinute-b.endMinute || a.record.id.localeCompare(b.record.id))
   const result: ServiceWeekEventLayout[]=[]
   let cluster: typeof windows=[]
