@@ -55,10 +55,11 @@ describe('mobile day selection',()=>{
     const overnight=record('overnight','2030-10-09T03:45:00Z','2030-10-09T07:15:00Z')
     const morning=record('morning','2030-10-09T14:00:00Z','2030-10-09T15:30:00Z')
     const counts=serviceWeekDayCounts([overnight,morning],'2030-10-07')
-    expect(counts['2030-10-07']).toBe(1)
+    expect(counts['2030-10-07']).toBe(0)
     expect(counts['2030-10-08']).toBe(1)
-    expect(serviceWeekDayRecords([morning,overnight],'2030-10-08').map(item=>item.id)).toEqual(['morning'])
-    expect(serviceWeekDayRecords([morning,overnight],'2030-10-07').map(item=>item.id)).toEqual(['overnight'])
+    expect(counts['2030-10-09']).toBe(1)
+    expect(serviceWeekDayRecords([morning,overnight],'2030-10-08').map(item=>item.id)).toEqual(['overnight'])
+    expect(serviceWeekDayRecords([morning,overnight],'2030-10-09').map(item=>item.id)).toEqual(['morning'])
   })
   it('prefers today when in the week, otherwise first occupied day or Monday',()=>{
     const monday='2030-10-07'
