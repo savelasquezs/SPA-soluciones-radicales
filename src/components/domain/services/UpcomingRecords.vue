@@ -11,7 +11,7 @@ defineProps<{ records: UpcomingService[]; busy?: boolean }>()
 const emit=defineEmits<{ manage: [record: UpcomingService]; email: [record: UpcomingService]; schedule: [record: UpcomingService] }>()
 </script>
 <template>
-  <div class="svc-table-region" role="region" aria-label="Próximos por confirmar" tabindex="0">
+  <div class="svc-table-region svc-table-region--upcoming" role="region" aria-label="Próximos por confirmar" tabindex="0">
     <table class="svc-table">
       <thead><tr><th>Próxima sugerida</th><th>Cliente y sede</th><th>Último servicio</th><th>Seguimiento</th><th>Contacto</th><th>Último contacto</th><th>Acciones</th></tr></thead>
       <tbody>
