@@ -303,7 +303,7 @@ function filename(path: string): string {
           <div class="profile-actions">
             <BaseButton v-if="profile.fotoStoragePath" variant="ghost" :disabled="busy" @click="useGooglePhoto">Usar foto de Google</BaseButton>
             <BaseButton :disabled="!photoFile || busy" :loading="busyPhoto" @click="savePhoto">
-              {{ photoProgress.phaseLabel ?? 'Guardar fotografía' }}
+              {{ photoProgress.phaseLabel.value ?? 'Guardar fotografía' }}
             </BaseButton>
           </div>
         </section>
@@ -411,7 +411,7 @@ function filename(path: string): string {
             </div>
             <div class="profile-actions">
               <BaseButton :disabled="!isCertificateDirty || busy" :loading="busyCertificate" @click="saveCertificate">
-                {{ certificateProgress.phaseLabel ?? 'Guardar certificado' }}
+                {{ certificateProgress.phaseLabel.value ?? 'Guardar certificado' }}
               </BaseButton>
             </div>
           </div>
