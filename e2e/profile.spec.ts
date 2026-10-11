@@ -115,7 +115,7 @@ test('perfil y dos menús accesibles sin overflow ni botones pequeños en móvil
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 
   await page.screenshot({ path: info.outputPath('profile-mobile-drawer.png'), fullPage: true })
-  await page.getByRole('button', { name: 'Cerrar navegación' }).click()
+  await page.locator('.menu-button').click()
   await page.screenshot({ path: info.outputPath('profile-mobile-360.png'), fullPage: true })
 })
 
