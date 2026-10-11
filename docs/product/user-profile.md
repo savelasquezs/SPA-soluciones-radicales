@@ -9,6 +9,15 @@ Todo usuario autorizado puede abrir Mi perfil desde el mismo menú de fotografí
 - Roles y estado son de solo lectura.
 - Si tiene rol Técnico, el usuario puede cargar o sustituir su propio certificado y actualizar emisión y vencimiento. Un archivo exige ambas fechas.
 
+## Transferencia Google tras el primer OAuth
+
+- Better Auth admite dos destinos: `callbackURL` para la sesión existente y `newUserCallbackURL` para una identidad Google recién creada. Ambos deben volver a `/cuenta/cambiar-google` durante una transferencia.
+- Antes de la transferencia, la nueva identidad *no* está en `public.usuarios`. El callback usa su JWT Google verificado directamente contra `POST /api/profile/google/finish`, sin intentar primero `GET /api/session`.
+- Cuando el proveedor regresa a `/` en vez del callback, el guard recupera un cambio pendiente en la misma pestaña, con token de alta entropía vigente, y lleva al callback **solo** si la nueva cuenta está denegada. El servidor conserva toda la autorización real.
+- El almacenamiento temporal tiene vencimiento local máximo de diez minutos; un error de red no destruye el estado, para permitir un reintento. Un éxito lo elimina y renueva la sesión del nuevo usuario.
+- Una cuenta no registrada y sin transferencia válida **siempre** permanece sin acceso. No crear usuarios automáticamente en la aplicación.
+- Regresión E2E: cubrir tanto la llegada al callback como el retorno inesperado a la raíz, la autorización del usuario recién vinculado y la denegación sin estado pendiente. No manipular manualmente las tablas de cuentas Google para completar un cambio fallido.
+
 ## Seguridad
 
 La aplicación usa el ID interno de usuarios para conservar el historial, el ID del proveedor para autenticar y la autorización por rol para restringir operaciones. El flujo de cambio Google usa un estado aleatorio con vencimiento de diez minutos y un solo uso. La API verifica en Neon Auth la nueva cuenta y su correo antes de transferir la vinculación. Las sesiones anteriores dejan de satisfacer la autorización del usuario.
