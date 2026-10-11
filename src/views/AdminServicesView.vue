@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { RefreshCw, Plus, ChevronLeft, ChevronRight } from 'lucide-vue-next'
+import { RefreshCw, Plus, ChevronLeft, ChevronRight, CalendarDays, ChevronDown, SlidersHorizontal } from 'lucide-vue-next'
 import BaseButton from '@/components/base/BaseButton.vue'
 import ConfirmDialog from '@/components/base/ConfirmDialog.vue'
 import BaseIconButton from '@/components/base/BaseIconButton.vue'
@@ -51,6 +51,32 @@ const loading=computed(()=>tab.value==='upcoming' ? store.upcomingLoading : stor
 const loadError=computed(()=>tab.value==='upcoming' ? store.upcomingError : store.error)
 const total=computed(()=>tab.value==='upcoming' ? store.upcomingTotal : store.total)
 const search=ref(q('query')), pendingAction=ref(false)
+const compact=ref(typeof window!=='undefined' && window.matchMedia('(max-width: 680px)').matches)
+const mobileFiltersOpen=ref(false), mobileDatesOpen=ref(false)
+const activeFilterCount=computed(()=>tab.value==='upcoming'
+  ? Number(Boolean(upcomingFilter.value.estado))
+  : [serviceFilter.value.estado,serviceFilter.value.tipo,serviceFilter.value.tecnicoId].filter(Boolean).length)
+const mobileRangeLabel=computed(()=>{
+  const short=(value:string)=>formatDateOnly(value).replace(/ \d{4}$/,'')
+  return from.value===to.value ? formatDateOnly(from.value) : short(from.value)+' – '+short(to.value)
+})
+let compactMedia: MediaQueryList | null=null
+function handleCompactChange(event: MediaQueryListEvent):void {
+  compact.value=event.matches
+  mobileDatesOpen.value=false
+  mobileFiltersOpen.value=false
+}
+function moveRange(days:number):void {
+  setQuery({from:addDateDays(from.value,days),to:addDateDays(to.value,days),page:'1'})
+}
+function changeDateRange(next:{from:string;to:string}):void {
+  setQuery({...next,page:'1'})
+  if(next.from && next.to) mobileDatesOpen.value=false
+}
+function clearAdvancedFilters():void {
+  setQuery({estado:undefined,tipo:undefined,tecnicoId:undefined,page:'1'})
+  mobileFiltersOpen.value=false
+}
 const quick=ref<{ record: AdminService; mode: 'schedule' | 'team' | 'cancel' | 'payment' } | null>(null)
 const results=ref<AdminService|null>(null)
 const upcomingEditor=ref<{ record: UpcomingService; mode: 'manage' | 'email' } | null>(null)
@@ -77,22 +103,33 @@ watch(search,value=>{
   if(value===q('query')) return
   searchTimer=setTimeout(()=>setQuery({ query:value || undefined,page:'1' }),300)
 })
-onBeforeUnmount(()=>{ if(searchTimer) clearTimeout(searchTimer) })
+onBeforeUnmount(()=>{
+  if(searchTimer) clearTimeout(searchTimer)
+  compactMedia?.removeEventListener('change',handleCompactChange)
+})
 watch(()=>JSON.stringify({ tab:tab.value,service:serviceFilter.value,upcoming:upcomingFilter.value }),()=>{ void load() },{ immediate:true })
-onMounted(()=>{ void store.loadOptions().catch(()=>undefined) })
+onMounted(()=>{
+  compactMedia=window.matchMedia('(max-width: 680px)')
+  compact.value=compactMedia.matches
+  compactMedia.addEventListener('change',handleCompactChange)
+  void store.loadOptions().catch(()=>undefined)
+})
 async function load(force=false): Promise<void> {
   if(rangeError.value) return
   if(tab.value==='upcoming') await store.loadUpcoming(upcomingFilter.value,force)
   else await store.loadServices(serviceFilter.value,force)
 }
 function changeTab(next: 'agenda' | 'upcoming' | 'history'): void {
+  mobileDatesOpen.value=false
+  mobileFiltersOpen.value=false
   setQuery({ tab:next,estado:undefined,tipo:undefined,tecnicoId:undefined,from:undefined,to:undefined,page:'1' })
 }
-function changeView(next: 'table' | 'week'): void { setQuery({ view:next,from:next==='week' ? monday(from.value) : from.value,to:next==='week' ? undefined : addDateDays(from.value,6),page:'1' }) }
+function changeView(next: 'table' | 'week'): void { mobileDatesOpen.value=false; setQuery({ view:next,from:next==='week' ? monday(from.value) : from.value,to:next==='week' ? undefined : addDateDays(from.value,6),page:'1' }) }
 function moveWeek(days: number): void { setQuery({ from:addDateDays(from.value,days),to:undefined,page:'1' }) }
 function applyDateShortcut(id: ServiceDateShortcutId): void {
   const next=serviceDateShortcutRange(id,todayBogota())
   setQuery({ from:next.from,to:next.to,page:'1' })
+  mobileDatesOpen.value=false
 }
 function create(): void { void router.push({ name:'admin-service-new',query:{ returnTo:route.fullPath } }) }
 
@@ -178,18 +215,37 @@ async function retryCalendar(record: AdminService): Promise<void> {
       </div>
       <p v-if="view==='week'" class="svc-agenda-bar__hint">Arrastra para reprogramar · pulsa un espacio libre para crear</p>
     </div>
-    <div class="svc-filters" :class="{ 'svc-filters--upcoming':tab==='upcoming', 'svc-filters--week':view==='week' }">
-      <div v-if="view==='table'" class="svc-date-filter">
+    <div v-if="compact && view==='table'" class="svc-mobile-datebar" role="group" aria-label="Navegar fechas de servicios">
+      <BaseIconButton label="Fechas anteriores" size="small" @click="moveRange(-1)"><ChevronLeft :size="19" /></BaseIconButton>
+      <BaseButton size="compact" class="svc-mobile-datebar__range" variant="secondary" :aria-expanded="mobileDatesOpen" @click="mobileDatesOpen=!mobileDatesOpen">
+        <CalendarDays :size="17" aria-hidden="true" />
+        <span>{{ mobileRangeLabel }}</span>
+        <ChevronDown :size="15" aria-hidden="true" />
+      </BaseButton>
+      <BaseIconButton label="Fechas siguientes" size="small" @click="moveRange(1)"><ChevronRight :size="19" /></BaseIconButton>
+    </div>
+    <div v-if="compact && view==='table' && mobileDatesOpen" class="svc-mobile-date-panel">
+      <BaseDateRangePicker name="services-range-mobile" label="Seleccionar fechas" :model-value="range" :error="rangeError || undefined" @update:model-value="changeDateRange" />
+      <div class="svc-date-shortcuts" role="group" aria-label="Rangos rápidos de fecha">
+        <button v-for="shortcut in SERVICE_DATE_SHORTCUTS" :key="shortcut.id" type="button" class="svc-date-shortcut" :aria-pressed="activeDateShortcut===shortcut.id" @click="applyDateShortcut(shortcut.id)">{{ shortcut.label }}</button>
+      </div>
+    </div>
+    <div class="svc-filters" :class="{ 'svc-filters--upcoming':tab==='upcoming', 'svc-filters--week':view==='week', 'svc-filters--compact':compact }">
+      <div v-if="view==='table' && !compact" class="svc-date-filter">
         <BaseDateRangePicker name="services-range" label="Fechas" :model-value="range" :error="rangeError || undefined" @update:model-value="setQuery({ ...$event,page:'1' })" />
         <div class="svc-date-shortcuts" role="group" aria-label="Rangos rápidos de fecha">
           <button v-for="shortcut in SERVICE_DATE_SHORTCUTS" :key="shortcut.id" type="button" class="svc-date-shortcut" :aria-pressed="activeDateShortcut===shortcut.id" @click="applyDateShortcut(shortcut.id)">{{ shortcut.label }}</button>
         </div>
       </div>
-      <BaseInput v-model="search" name="service-search" label="Buscar" type="search" maxlength="160" placeholder="Cliente, sede o solicitud" />
-      <BaseSelect v-if="tab==='upcoming'" :model-value="upcomingFilter.estado" name="upcoming-status-filter" label="Seguimiento" @update:model-value="setQuery({ estado:$event || undefined,page:'1' })"><option value="">Todos los pendientes</option><option v-for="(label,value) in FOLLOW_UP_LABELS" :key="value" :value="value">{{ label }}</option></BaseSelect>
-      <BaseSelect v-else :model-value="serviceFilter.estado" name="service-status-filter" label="Estado" @update:model-value="setQuery({ estado:$event || undefined,page:'1' })"><option value="">Todos</option><option v-for="(label,value) in SERVICE_STATE_LABELS" :key="value" :value="value">{{ label }}</option></BaseSelect>
-      <BaseSelect v-if="tab!=='upcoming'" :model-value="serviceFilter.tipo" name="service-type-filter" label="Tipo" @update:model-value="setQuery({ tipo:$event || undefined,page:'1' })"><option value="">Todos</option><option value="PRINCIPAL">Principal</option><option value="REFUERZO">Refuerzo</option></BaseSelect>
-      <BaseSelect v-if="tab!=='upcoming'" :model-value="serviceFilter.tecnicoId" name="service-team-filter" label="Técnico" @update:model-value="setQuery({ tecnicoId:$event || undefined,page:'1' })"><option value="">Todo el equipo</option><option v-for="person in store.options?.tecnicos ?? []" :key="person.id" :value="person.id">{{ person.nombreCompleto }}</option></BaseSelect>
+      <BaseInput v-model="search" class="svc-filter-search" name="service-search" label="Buscar" type="search" maxlength="160" placeholder="Cliente, sede o solicitud" />
+      <BaseButton v-if="compact" size="compact" variant="secondary" class="svc-filter-toggle" :aria-expanded="mobileFiltersOpen" @click="mobileFiltersOpen=!mobileFiltersOpen">
+        <SlidersHorizontal :size="17" aria-hidden="true" /> Filtros{{ activeFilterCount ? ' ('+activeFilterCount+')' : '' }}
+      </BaseButton>
+      <BaseSelect v-if="(!compact || mobileFiltersOpen) && tab==='upcoming'" class="svc-filter-extra" :model-value="upcomingFilter.estado" name="upcoming-status-filter" label="Seguimiento" @update:model-value="setQuery({ estado:$event || undefined,page:'1' })"><option value="">Todos los pendientes</option><option v-for="(label,value) in FOLLOW_UP_LABELS" :key="value" :value="value">{{ label }}</option></BaseSelect>
+      <BaseSelect v-else-if="!compact || mobileFiltersOpen" class="svc-filter-extra" :model-value="serviceFilter.estado" name="service-status-filter" label="Estado" @update:model-value="setQuery({ estado:$event || undefined,page:'1' })"><option value="">Todos</option><option v-for="(label,value) in SERVICE_STATE_LABELS" :key="value" :value="value">{{ label }}</option></BaseSelect>
+      <BaseSelect v-if="tab!=='upcoming' && (!compact || mobileFiltersOpen)" class="svc-filter-extra" :model-value="serviceFilter.tipo" name="service-type-filter" label="Tipo" @update:model-value="setQuery({ tipo:$event || undefined,page:'1' })"><option value="">Todos</option><option value="PRINCIPAL">Principal</option><option value="REFUERZO">Refuerzo</option></BaseSelect>
+      <BaseSelect v-if="tab!=='upcoming' && (!compact || mobileFiltersOpen)" class="svc-filter-extra svc-filter-extra--team" :model-value="serviceFilter.tecnicoId" name="service-team-filter" label="Técnico" @update:model-value="setQuery({ tecnicoId:$event || undefined,page:'1' })"><option value="">Todo el equipo</option><option v-for="person in store.options?.tecnicos ?? []" :key="person.id" :value="person.id">{{ person.nombreCompleto }}</option></BaseSelect>
+      <BaseButton v-if="compact && mobileFiltersOpen" size="compact" variant="ghost" class="svc-filter-clear" @click="clearAdvancedFilters">Limpiar filtros</BaseButton>
     </div>
     <div v-if="tab!=='agenda'" class="svc-toolbar"><span class="svc-muted svc-small">{{ tab==='upcoming' ? 'Las fechas son sugeridas. Agendar crea la visita confirmada.' : 'Servicios finalizados y cancelados' }}</span></div>
     <StatusPanel v-if="rangeError" title="Revisa el rango de fechas" :message="rangeError" tone="warning" />
