@@ -6,18 +6,20 @@ import { addDateDays, formatServiceDate, SERVICE_STATE_LABELS, todayBogota, toBo
 import { layoutServiceDay, serviceWeekBounds, serviceWeekHours, serviceWeekInstantAt, snapServiceWeekMinute } from '@/helpers/serviceWeek'
 import type { AdminService } from '@/types/adminServices'
 
-const props=withDefaults(defineProps<{ from: string; records: AdminService[]; busy?: boolean }>(),{ busy:false })
+const props=withDefaults(defineProps<{ from: string; records: AdminService[]; busy?: boolean; singleDay?: string; returnTo?: string }>(),{ busy:false,singleDay:'' })
 const emit=defineEmits<{ create: [start: string]; open: [record: AdminService]; move: [record: AdminService,start: string] }>()
 const HOUR_HEIGHT=46
-const bounds=computed(()=>serviceWeekBounds(props.records))
+const dayRecords=computed(()=>props.singleDay
+  ? props.records.filter(record=>toBogotaInput(record.inicioProgramado).slice(0,10)===props.singleDay) : props.records)
+const bounds=computed(()=>serviceWeekBounds(dayRecords.value))
 const hours=computed(()=>serviceWeekHours(bounds.value))
 const bodyHeight=computed(()=>Math.max(HOUR_HEIGHT,(bounds.value.endMinute-bounds.value.startMinute)/60*HOUR_HEIGHT))
-const days=computed(()=>Array.from({ length:7 },(_,index)=>{
-  const date=addDateDays(props.from,index)
+const days=computed(()=>Array.from({ length:props.singleDay ? 1 : 7 },(_,index)=>{
+  const date=props.singleDay || addDateDays(props.from,index)
   return {
     date,
     label:new Intl.DateTimeFormat('es-CO',{ weekday:'short',day:'2-digit',timeZone:'America/Bogota' }).format(new Date(date+'T12:00:00-05:00')),
-    events:layoutServiceDay(props.records,date),
+    events:layoutServiceDay(dayRecords.value,date,props.singleDay ? Math.ceil(26/HOUR_HEIGHT*60) : 1),
   }
 }))
 const dragging=ref<AdminService | null>(null)
@@ -122,7 +124,7 @@ function duration(record: AdminService): number {
 }
 </script>
 <template>
-  <div class="svc-week-calendar" role="region" aria-label="Agenda semanal por horas" tabindex="0">
+  <div class="svc-week-calendar" :class="{ 'svc-week-calendar--day':singleDay }" role="region" :aria-label="singleDay ? 'Horario del día' : 'Agenda semanal por horas'" tabindex="0">
     <div class="svc-week-calendar__inner">
       <header class="svc-week-calendar__header">
         <div class="svc-week-calendar__gutter" aria-hidden="true"></div>
@@ -173,16 +175,22 @@ function duration(record: AdminService): number {
             <button
               type="button"
               class="svc-week-calendar__event-main"
+              :class="{ 'svc-week-calendar__event-main--brief':singleDay && event.endMinute-event.startMinute<60 }"
               :disabled="busy"
               @pointerdown="pointerDown($event,event.record)"
               :aria-label="(event.record.estado==='PROGRAMADO' ? 'Reprogramar ' : 'Ver ')+event.record.solicitud+' · '+event.record.clienteNombre"
               @click="clickRecord($event,event.record)"
             >
-              <span class="svc-week-calendar__event-time">{{ hourLabel(event.startMinute) }} <span v-if="event.record.tipoServicio==='REFUERZO'">· Ref.</span></span>
-              <strong>{{ event.record.clienteNombre }}</strong>
-              <small v-if="event.record.sedeNombre">{{ event.record.sedeNombre }}</small>
+              <template v-if="singleDay && event.endMinute-event.startMinute<60">
+                <span class="svc-week-calendar__event-brief">{{ hourLabel(event.startMinute) }} · {{ event.record.clienteNombre }}</span>
+              </template>
+              <template v-else>
+                <span class="svc-week-calendar__event-time">{{ hourLabel(event.startMinute) }} <span v-if="event.record.tipoServicio==='REFUERZO'">· Ref.</span></span>
+                <strong>{{ event.record.clienteNombre }}</strong>
+                <small v-if="event.record.sedeNombre">{{ event.record.sedeNombre }}</small>
+              </template>
             </button>
-            <RouterLink class="svc-week-calendar__event-detail" :to="{ name:'service-detail',params:{ id:event.record.id } }" :aria-label="'Ver detalle de '+event.record.solicitud" title="Ver detalle" @click.stop>
+            <RouterLink class="svc-week-calendar__event-detail" :to="{ name:'service-detail',params:{ id:event.record.id },query:returnTo ? {returnTo} : {} }" :aria-label="'Ver detalle de '+event.record.solicitud" title="Ver detalle" @click.stop>
               <ArrowUpRight :size="13" aria-hidden="true" />
             </RouterLink>
             <span class="svc-week-calendar__popover" role="tooltip">

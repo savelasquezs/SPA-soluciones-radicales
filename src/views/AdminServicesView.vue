@@ -15,6 +15,8 @@ import ServiceRecords from '@/components/domain/services/ServiceRecords.vue'
 import ServiceResultsDialog from '@/components/domain/services/ServiceResultsDialog.vue'
 import UpcomingRecords from '@/components/domain/services/UpcomingRecords.vue'
 import ServiceWeek from '@/components/domain/services/ServiceWeek.vue'
+import ServiceDayList from '@/components/domain/services/ServiceDayList.vue'
+import ServiceDayStrip from '@/components/domain/services/ServiceDayStrip.vue'
 import ServicePagination from '@/components/domain/services/ServicePagination.vue'
 import ServiceQuickEditor from '@/components/domain/services/ServiceQuickEditor.vue'
 import ServiceSaveFeedback from '@/components/domain/services/ServiceSaveFeedback.vue'
@@ -23,7 +25,8 @@ import { useServiceMutation } from '@/composables/useServiceMutation'
 import { useAdminServicesStore } from '@/stores/adminServices'
 import { useNotificationsStore } from '@/stores/notifications'
 import { reprogramAdminService, requestCalendarRetry } from '@/services/adminServicesService'
-import { addDateDays, FOLLOW_UP_LABELS, formatServiceDate, isDateOnly, scheduleFromRecord, SERVICE_STATE_LABELS, todayBogota } from '@/helpers/adminServices'
+import { addDateDays, FOLLOW_UP_LABELS, formatServiceDate, isDateOnly, scheduleFromRecord, SERVICE_STATE_LABELS, todayBogota, toBogotaInput } from '@/helpers/adminServices'
+import { preferredServiceWeekDay, serviceWeekDayCounts, serviceWeekDayRecords, serviceWeekInstantAt } from '@/helpers/serviceWeek'
 import { SERVICE_DATE_SHORTCUTS, serviceDateShortcutRange, type ServiceDateShortcutId } from '@/helpers/serviceDateRanges'
 import { formatDateOnly } from '@/helpers/dateTime'
 import type { AdminService, FollowUpState, ServiceFilter, ServiceKind, ServiceState, UpcomingFilter, UpcomingService } from '@/types/adminServices'
@@ -45,7 +48,7 @@ const page=computed(()=>/^\d+$/.test(q('page')) ? Math.max(1,Math.min(100_000,Nu
 const pageSize=computed(()=>view.value==='week' ? 100 : 25)
 const serviceFilter=computed<ServiceFilter>(()=>({ from:from.value,to:to.value,tab:tab.value==='history' ? 'history' : 'agenda',
   estado:['PROGRAMADO','EN_PROCESO','FINALIZADO','CANCELADO'].includes(q('estado')) ? q('estado') as ServiceState : '',
-  tipo:['PRINCIPAL','REFUERZO'].includes(q('tipo')) ? q('tipo') as ServiceKind : '',tecnicoId:q('tecnicoId'),query:q('query'),page:page.value,pageSize:pageSize.value }))
+  tipo:['PRINCIPAL','REFUERZO'].includes(q('tipo')) ? q('tipo') as ServiceKind : '',tecnicoId:q('tecnicoId'),query:q('query'),page:view.value==='week' ? 1 : page.value,pageSize:pageSize.value }))
 const upcomingFilter=computed<UpcomingFilter>(()=>({ from:from.value,to:to.value,estado:Object.keys(FOLLOW_UP_LABELS).includes(q('estado')) ? q('estado') as FollowUpState : '',query:q('query'),page:page.value,pageSize:25 }))
 const loading=computed(()=>tab.value==='upcoming' ? store.upcomingLoading : store.loading)
 const loadError=computed(()=>tab.value==='upcoming' ? store.upcomingError : store.error)
@@ -53,6 +56,20 @@ const total=computed(()=>tab.value==='upcoming' ? store.upcomingTotal : store.to
 const search=ref(q('query')), pendingAction=ref(false)
 const compact=ref(typeof window!=='undefined' && window.matchMedia('(max-width: 680px)').matches)
 const mobileFiltersOpen=ref(false), mobileDatesOpen=ref(false)
+const mobileWeek=computed(()=>compact.value && tab.value==='agenda' && view.value==='week')
+const mobileWeekDisplay=computed<'list'|'hours'>(()=>q('mobileView')==='hours' ? 'hours' : 'list')
+const dayCounts=computed(()=>serviceWeekDayCounts(store.rows,from.value))
+const selectedWeekDay=computed(()=>{
+  const day=q('day')
+  return isDateOnly(day) && day>=from.value && day<=to.value
+    ? day : preferredServiceWeekDay(store.rows,from.value)
+})
+const selectedDayRecords=computed(()=>serviceWeekDayRecords(store.rows,selectedWeekDay.value))
+const mobileWeekTitle=computed(()=>{
+  const label=new Intl.DateTimeFormat('es-CO',{ month:'long',year:'numeric',timeZone:'UTC' })
+    .format(new Date(selectedWeekDay.value+'T12:00:00Z'))
+  return label.charAt(0).toUpperCase()+label.slice(1)
+})
 const activeFilterCount=computed(()=>tab.value==='upcoming'
   ? Number(Boolean(upcomingFilter.value.estado))
   : [serviceFilter.value.estado,serviceFilter.value.tipo,serviceFilter.value.tecnicoId].filter(Boolean).length)
@@ -117,27 +134,53 @@ onMounted(()=>{
 async function load(force=false): Promise<void> {
   if(rangeError.value) return
   if(tab.value==='upcoming') await store.loadUpcoming(upcomingFilter.value,force)
-  else await store.loadServices(serviceFilter.value,force)
+  else await store.loadServices(serviceFilter.value,force,view.value==='week')
 }
 function changeTab(next: 'agenda' | 'upcoming' | 'history'): void {
   mobileDatesOpen.value=false
   mobileFiltersOpen.value=false
-  setQuery({ tab:next,estado:undefined,tipo:undefined,tecnicoId:undefined,from:undefined,to:undefined,page:'1' })
+  setQuery({ tab:next,estado:undefined,tipo:undefined,tecnicoId:undefined,from:undefined,to:undefined,day:undefined,mobileView:undefined,page:'1' })
 }
-function changeView(next: 'table' | 'week'): void { mobileDatesOpen.value=false; setQuery({ view:next,from:next==='week' ? monday(from.value) : from.value,to:next==='week' ? undefined : addDateDays(from.value,6),page:'1' }) }
-function moveWeek(days: number): void { setQuery({ from:addDateDays(from.value,days),to:undefined,page:'1' }) }
+function changeView(next: 'table' | 'week'): void {
+  mobileDatesOpen.value=false
+  setQuery({view:next,from:next==='week' ? monday(from.value) : from.value,
+    to:next==='week' ? undefined : addDateDays(from.value,6),day:undefined,page:'1'})
+}
+function selectWeekDay(day:string): void { setQuery({day,page:'1'}) }
+function changeMobileWeekDisplay(next:'list'|'hours'):void { setQuery({mobileView:next==='hours'?'hours':undefined}) }
+function moveWeek(days: number): void { setQuery({ from:addDateDays(from.value,days),to:undefined,day:undefined,page:'1' }) }
 function applyDateShortcut(id: ServiceDateShortcutId): void {
   const next=serviceDateShortcutRange(id,todayBogota())
   setQuery({ from:next.from,to:next.to,page:'1' })
   mobileDatesOpen.value=false
 }
-function create(): void { void router.push({ name:'admin-service-new',query:{ returnTo:route.fullPath } }) }
+function create(): void {
+  if(mobileWeek.value) { createForDay(selectedWeekDay.value); return }
+  void router.push({ name:'admin-service-new',query:{ returnTo:route.fullPath } })
+}
+function createForDay(day:string):void {
+  if(day<todayBogota()) {
+    void router.push({ name:'admin-service-new',query:{ returnTo:route.fullPath } })
+    return
+  }
+  let minute=9*60
+  if(day===todayBogota()) {
+    const future=toBogotaInput(new Date(Date.now()+30*60_000).toISOString())
+    const hour=Number(future.slice(11,13)), minutes=Number(future.slice(14,16))
+    if(future.slice(0,10)!==day || hour*60+minutes>=24*60) {
+      createAt(serviceWeekInstantAt(addDateDays(day,1),9*60))
+      return
+    }
+    minute=Math.max(minute,Math.ceil((hour*60+minutes)/15)*15)
+  }
+  createAt(serviceWeekInstantAt(day,minute))
+}
 
 function createAt(start: string): void { void router.push({ name:'admin-service-new',query:{ start,returnTo:route.fullPath } }) }
 function openAgenda(record: AdminService): void {
   if(pendingAction.value || moving.value || pendingMove.value) return
   if(record.estado==='PROGRAMADO') void openQuick(record,'schedule')
-  else void router.push({ name:'service-detail',params:{ id:record.id } })
+  else void router.push({ name:'service-detail',params:{ id:record.id },query:{returnTo:route.fullPath} })
 }
 function proposeMove(record: AdminService, start: string): void {
   if(pendingAction.value || moving.value || pendingMove.value || record.estado!=='PROGRAMADO') return
@@ -195,8 +238,8 @@ async function retryCalendar(record: AdminService): Promise<void> {
 }
 </script>
 <template>
-  <ServicePage title="Servicios">
-    <template #actions><BaseIconButton label="Actualizar servicios" :loading="loading" :disabled="pendingAction" @click="load(true)"><RefreshCw :size="17" /></BaseIconButton><BaseButton size="compact" :disabled="pendingAction" @click="create"><Plus :size="16" /> Programar servicio</BaseButton></template>
+  <ServicePage class="svc-page--agenda" :title="mobileWeek ? 'Agenda' : 'Servicios'">
+    <template #actions><BaseIconButton label="Actualizar servicios" :loading="loading" :disabled="pendingAction" @click="load(true)"><RefreshCw :size="17" /></BaseIconButton><BaseButton size="compact" :disabled="pendingAction" @click="create"><Plus :size="16" /><span>{{ mobileWeek ? 'Programar' : 'Programar servicio' }}</span></BaseButton></template>
     <div class="svc-tabs" role="tablist" aria-label="Vistas de servicios">
       <button role="tab" class="svc-tab" :aria-selected="tab==='agenda'" @click="changeTab('agenda')">Agenda</button>
       <button role="tab" class="svc-tab" :aria-selected="tab==='upcoming'" @click="changeTab('upcoming')">Próximos por confirmar <span v-if="store.pendingCount" class="svc-count" :aria-label="`${store.pendingCount} pendientes de confirmación en los próximos siete días`" title="Pendientes de confirmación · próximos 7 días">{{ store.pendingCount }}</span></button>
@@ -209,11 +252,21 @@ async function retryCalendar(record: AdminService): Promise<void> {
       </div>
       <div v-if="view==='week'" class="svc-week-navigation">
         <BaseIconButton label="Semana anterior" :disabled="Boolean(pendingMove)" @click="moveWeek(-7)"><ChevronLeft :size="16" /></BaseIconButton>
-        <span class="svc-week-navigation__range">{{ formatDateOnly(from) }} – {{ formatDateOnly(to) }}</span>
+        <span class="svc-week-navigation__range">{{ mobileWeek ? mobileWeekTitle : formatDateOnly(from)+' – '+formatDateOnly(to) }}</span>
         <BaseIconButton label="Semana siguiente" :disabled="Boolean(pendingMove)" @click="moveWeek(7)"><ChevronRight :size="16" /></BaseIconButton>
-        <BaseButton size="compact" variant="secondary" :disabled="Boolean(pendingMove)" @click="setQuery({ from:monday(todayBogota()),to:undefined,page:'1' })">Hoy</BaseButton>
+        <BaseButton size="compact" variant="secondary" :disabled="Boolean(pendingMove)" @click="setQuery({ from:monday(todayBogota()),to:undefined,day:todayBogota(),page:'1' })">Hoy</BaseButton>
       </div>
-      <p v-if="view==='week'" class="svc-agenda-bar__hint">Arrastra para reprogramar · pulsa un espacio libre para crear</p>
+      <p v-if="view==='week' && !compact" class="svc-agenda-bar__hint">Arrastra para reprogramar · pulsa un espacio libre para crear</p>
+    </div>
+    <div v-if="mobileWeek" class="svc-mobile-week">
+      <ServiceDayStrip :from="from" :selected-date="selectedWeekDay" :counts="dayCounts" @select="selectWeekDay" />
+      <div class="svc-mobile-week__modes">
+        <div class="svc-segment" role="group" aria-label="Presentación del día">
+          <button type="button" :aria-pressed="mobileWeekDisplay==='list'" @click="changeMobileWeekDisplay('list')">Lista</button>
+          <button type="button" :aria-pressed="mobileWeekDisplay==='hours'" @click="changeMobileWeekDisplay('hours')">Horario</button>
+        </div>
+        <span v-if="mobileWeekDisplay==='hours'" class="svc-mobile-week__tip">Toca para consultar o programar</span>
+      </div>
     </div>
     <div v-if="compact && view==='table'" class="svc-mobile-datebar" role="group" aria-label="Navegar fechas de servicios">
       <BaseIconButton label="Fechas anteriores" size="small" @click="moveRange(-1)"><ChevronLeft :size="19" /></BaseIconButton>
@@ -257,13 +310,13 @@ async function retryCalendar(record: AdminService): Promise<void> {
     </template>
     <template v-else>
       <template v-if="view==='week'">
-        <ServiceWeek :from="from" :records="store.rows" :busy="pendingAction || moving || Boolean(pendingMove)" @create="createAt" @open="openAgenda" @move="proposeMove" />
-        <p v-if="total>pageSize" class="svc-muted svc-small">Mostrando {{ store.rows.length }} de {{ total }} servicios en esta página. Filtra o cambia a Tabla para consultar los demás.</p>
+        <ServiceDayList v-if="mobileWeek && mobileWeekDisplay==='list'" :date="selectedWeekDay" :records="selectedDayRecords" :busy="pendingAction || moving || Boolean(pendingMove)" @open="openAgenda" @create="createForDay" />
+        <ServiceWeek v-else :from="from" :single-day="mobileWeek ? selectedWeekDay : undefined" :return-to="route.fullPath" :records="store.rows" :busy="pendingAction || moving || Boolean(pendingMove)" @create="createAt" @open="openAgenda" @move="proposeMove" />
       </template>
       <ServiceRecords v-else-if="store.rows.length" :records="store.rows" :history="tab==='history'" :busy="pendingAction" @schedule="openQuick($event,'schedule')" @team="openQuick($event,'team')" @payment="openQuick($event,'payment')" @edit="edit" @cancel="openQuick($event,'cancel')" @retry-calendar="retryCalendar" @results="results=$event" />
       <StatusPanel v-else title="Sin servicios en este rango" message="Cambia las fechas o los filtros para consultar otra parte de la operación." />
     </template>
-    <ServicePagination v-if="!rangeError && !loadError" :page="page" :page-size="pageSize" :total="total" :disabled="loading" @page="setQuery({ page:String($event) })" />
+    <ServicePagination v-if="!rangeError && !loadError && view!=='week' && total>pageSize" :page="page" :page-size="pageSize" :total="total" :disabled="loading" @page="setQuery({ page:String($event) })" />
     <ServiceSaveFeedback :error="moveError" :conflict="moveConflict" :overlaps="moveOverlaps" :overlap-open="moveOverlapOpen" :saving="moving" @reload="reloadMove" @accept="acceptMoveOverlap" @cancel="stopMoveOverlap" />
     <div v-if="pendingMove && moveError && !moveConflict && !moveOverlapOpen" class="svc-dialog-actions"><BaseButton size="compact" variant="secondary" @click="cancelMove">Descartar cambio</BaseButton><BaseButton size="compact" @click="moveReviewOpen=true">Reintentar</BaseButton></div>
     <ConfirmDialog :open="moveReviewOpen" title="Confirmar nueva fecha" :message="moveMessage" confirm-label="Mover servicio" :loading="moving" @confirm="confirmMove" @cancel="cancelMove" />

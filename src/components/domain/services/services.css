@@ -529,3 +529,32 @@
     gap:0.15rem 0.35rem;
   }
 }
+
+
+/* Agenda-specific mobile week, preserving seven-column desktop drag and drop. */
+@media (max-width:680px) {
+  .svc-page--agenda { gap:0.45rem; }
+  .svc-page--agenda .svc-page-header { align-items:center; gap:0.35rem; }
+  .svc-page--agenda .svc-page-header h1 { font-size:1rem; line-height:1.35; }
+  .svc-page--agenda .svc-page-header .svc-actions { flex-wrap:nowrap; gap:0.15rem; }
+  .svc-page--agenda .svc-page-header .base-button { min-height:44px; padding-inline:0.6rem; font-size:0.82rem; font-weight:600; }
+  .svc-page--agenda .svc-agenda-bar { gap:0.25rem 0.5rem; }
+  .svc-page--agenda .svc-week-navigation { flex:1 1 100%; justify-content:space-between; }
+  .svc-page--agenda .svc-week-navigation__range { flex:1; text-align:center; text-transform:none; }
+  .svc-mobile-week { display:grid; gap:0.3rem; min-width:0; }
+  .svc-mobile-week__modes { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.35rem; }
+  .svc-mobile-week__tip { font-size:0.7rem; color:var(--text-secondary); }
+  .svc-week-calendar--day { max-height:calc(100dvh - 20rem); min-height:15rem; }
+  .svc-week-calendar--day .svc-week-calendar__inner { min-width:0; width:100%; }
+  .svc-week-calendar--day .svc-week-calendar__header,
+  .svc-week-calendar--day .svc-week-calendar__body { grid-template-columns:3.75rem minmax(0,1fr); }
+  .svc-week-calendar--day .svc-week-calendar__header { position:relative; z-index:1; }
+  .svc-week-calendar--day .svc-week-calendar__hour-label:first-child { transform:none; }
+  .svc-week-calendar--day .svc-week-calendar__popover { display:none!important; }
+  .svc-week-calendar--day .svc-week-calendar__event-main--brief {
+    display:flex; align-items:center; justify-content:flex-start;
+    padding:0.1rem 1.25rem 0.1rem 0.25rem;
+  }
+  .svc-week-calendar--day .svc-week-calendar__event-brief { display:block; width:100%; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:0.72rem; line-height:1.2; }
+  .svc-week-calendar--day .svc-week-calendar__event-detail { min-width:28px; min-height:26px; }
+}

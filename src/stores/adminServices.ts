@@ -15,7 +15,7 @@ export const useAdminServicesStore = defineStore('admin-services',()=>{
   const loading=ref(false), upcomingLoading=ref(false), optionsLoading=ref(false)
   const error=ref(''), upcomingError=ref(''), optionsError=ref('')
   const lastFilter=ref<ServiceFilter | null>(null), lastUpcomingFilter=ref<UpcomingFilter | null>(null)
-  let listKey='', upcomingKey='', listAt=0, upcomingAt=0, optionsAt=0
+  let listKey='', upcomingKey='', listAt=0, upcomingAt=0, optionsAt=0, allServicePages=false
   let serviceController: AbortController | null=null, upcomingController: AbortController | null=null
   let optionsRequest: Promise<ServiceWorkspace> | null=null, generation=0, mutationEpoch=0
   const rows=computed(()=>serviceIds.value.map(id=>records.value[id]).filter((row): row is AdminService=>Boolean(row)))
@@ -25,7 +25,7 @@ export const useAdminServicesStore = defineStore('admin-services',()=>{
   function reset(): void {
     generation++; serviceController?.abort(); upcomingController?.abort(); optionsRequest=null
     records.value={}; upcomingRecords.value={}; serviceIds.value=[]; upcomingIds.value=[]; options.value=null
-    total.value=0; upcomingTotal.value=0; pendingCount.value=0; listKey=''; upcomingKey=''; optionsAt=0
+    total.value=0; upcomingTotal.value=0; pendingCount.value=0; listKey=''; upcomingKey=''; optionsAt=0; allServicePages=false
     loading.value=false; upcomingLoading.value=false; optionsLoading.value=false
     error.value=''; upcomingError.value=''; optionsError.value=''; lastFilter.value=null; lastUpcomingFilter.value=null
   }
@@ -51,20 +51,36 @@ export const useAdminServicesStore = defineStore('admin-services',()=>{
     }).finally(()=>{ if(stamp===generation) { optionsLoading.value=false; optionsRequest=null } })
     return optionsRequest
   }
-  async function loadServices(filter: ServiceFilter, force = false): Promise<void> {
+  async function loadServices(filter: ServiceFilter, force = false, allPages = false): Promise<void> {
     if (!auth.isAdmin) return
-    const key=JSON.stringify(filter)
+    const key=JSON.stringify({ filter,allPages })
     if (!force && key===listKey && Date.now()-listAt<30_000) return
     serviceController?.abort(); const controller=new AbortController(); serviceController=controller
     const stamp=generation
     loading.value=true; error.value=''; lastFilter.value={ ...filter }
     try {
       const result=await fetchAdminServices(filter,controller.signal)
+      const items=[...result.items]
+      // The week calendar must not consider a day empty when its records were
+      // omitted by the 100-row API page limit. Fetch remaining pages only
+      // for the weekly view, keeping a single cancelable operation.
+      if (allPages && filter.page===1) {
+        for(let next=2;next<=Math.ceil(result.total/filter.pageSize);next++) {
+          if(controller.signal.aborted || stamp!==generation) return
+          const page=await fetchAdminServices({ ...filter,page:next },controller.signal)
+          items.push(...page.items)
+        }
+      }
       if (controller.signal.aborted || stamp!==generation) return
-      result.items.forEach(upsert); serviceIds.value=result.items.map(row=>row.id); total.value=result.total; pendingCount.value=result.pendingCount
-      listKey=key; listAt=Date.now()
+      items.forEach(upsert)
+      serviceIds.value=[...new Set(items.map(item=>item.id))]
+      total.value=result.total; pendingCount.value=result.pendingCount
+      listKey=key; listAt=Date.now(); allServicePages=allPages
     } catch (failure) {
-      if (!controller.signal.aborted && stamp===generation) { error.value=failure instanceof Error ? failure.message : 'No fue posible cargar los servicios.'; listKey='' }
+      if (!controller.signal.aborted && stamp===generation) {
+        error.value=failure instanceof Error ? failure.message : 'No fue posible cargar los servicios.'
+        listKey=''; allServicePages=false
+      }
     } finally { if(serviceController===controller && stamp===generation) loading.value=false }
   }
   async function loadUpcoming(filter: UpcomingFilter, force = false): Promise<void> {
@@ -126,7 +142,7 @@ export const useAdminServicesStore = defineStore('admin-services',()=>{
       if (visible && !matches) serviceIds.value=serviceIds.value.filter(id=>id!==row.id)
       if (entered && filter.page===1) serviceIds.value.push(row.id)
     }
-    serviceIds.value=[...new Set(serviceIds.value)].sort((a,b)=>compareServices(records.value[a]!,records.value[b]!)).slice(0,filter?.pageSize ?? 100)
+    serviceIds.value=[...new Set(serviceIds.value)].sort((a,b)=>compareServices(records.value[a]!,records.value[b]!)).slice(0,allServicePages ? undefined : (filter?.pageSize ?? 100))
     pendingCount.value=result.pendingCount; listAt=Date.now()
     if (result.upcoming) applyUpcoming({ upcoming:result.upcoming,pendingCount:result.pendingCount })
   }
