@@ -6,7 +6,7 @@ import { addDateDays, formatServiceDate, SERVICE_STATE_LABELS, todayBogota, toBo
 import { layoutServiceDay, serviceWeekBounds, serviceWeekHours, serviceWeekInstantAt, snapServiceWeekMinute } from '@/helpers/serviceWeek'
 import type { AdminService } from '@/types/adminServices'
 
-const props=withDefaults(defineProps<{ from: string; records: AdminService[]; busy?: boolean; singleDay?: string }>(),{ busy:false,singleDay:'' })
+const props=withDefaults(defineProps<{ from: string; records: AdminService[]; busy?: boolean; singleDay?: string; returnTo?: string }>(),{ busy:false,singleDay:'' })
 const emit=defineEmits<{ create: [start: string]; open: [record: AdminService]; move: [record: AdminService,start: string] }>()
 const HOUR_HEIGHT=46
 const dayRecords=computed(()=>props.singleDay
@@ -190,7 +190,7 @@ function duration(record: AdminService): number {
                 <small v-if="event.record.sedeNombre">{{ event.record.sedeNombre }}</small>
               </template>
             </button>
-            <RouterLink class="svc-week-calendar__event-detail" :to="{ name:'service-detail',params:{ id:event.record.id } }" :aria-label="'Ver detalle de '+event.record.solicitud" title="Ver detalle" @click.stop>
+            <RouterLink class="svc-week-calendar__event-detail" :to="{ name:'service-detail',params:{ id:event.record.id },query:returnTo ? {returnTo} : {} }" :aria-label="'Ver detalle de '+event.record.solicitud" title="Ver detalle" @click.stop>
               <ArrowUpRight :size="13" aria-hidden="true" />
             </RouterLink>
             <span class="svc-week-calendar__popover" role="tooltip">

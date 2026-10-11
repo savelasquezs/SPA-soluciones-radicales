@@ -676,3 +676,20 @@ test('weekly view fetches beyond 100 services so no selected day is falsely empt
   await page.locator('.svc-day-strip__day[data-date="'+target+'"]').click()
   await expect(page.locator('.svc-day-list__items [data-service-id]')).toHaveCount(105)
 })
+
+
+test('mobile day selection survives visiting and returning from a completed service',async({page})=>{
+  const api=await setup(page)
+  await page.setViewportSize({width:390,height:844})
+  const weekStart=addDateDays(day,-((new Date(day+'T00:00:00Z').getUTCDay()+6)%7)+7)
+  const target=addDateDays(weekStart,2)
+  api.records[0]!.inicioProgramado=fromBogotaInput(target+'T09:00')
+  api.records[0]!.finProgramado=fromBogotaInput(target+'T10:30')
+  api.records[0]!.estado='FINALIZADO'
+  await page.goto('/agenda?view=week&from='+weekStart+'&day='+target)
+  await page.getByRole('region',{name:'Servicios del día'}).getByRole('button',{name:/Ver SR-0101/}).click()
+  await expect(page).toHaveURL(/\/servicios\/[0-9a-f-]{36}/)
+  await page.getByRole('button',{name:'Agenda',exact:true}).click()
+  await expect(page).toHaveURL(new RegExp('day='+target))
+  await expect(page.locator('.svc-day-strip__day[aria-pressed="true"]')).toHaveAttribute('data-date',target)
+})

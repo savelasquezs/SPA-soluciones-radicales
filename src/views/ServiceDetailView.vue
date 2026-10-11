@@ -72,6 +72,10 @@ async function loadAudit(page=1): Promise<void> {
   finally { if(stamp===generation) auditLoading.value=false }
 }
 const actionLabels: Record<string,string>={ SERVICIO_CREADO:'Servicio programado',SERVICIO_EDITADO:'Información actualizada',SERVICIO_REPROGRAMADO:'Programación actualizada',SERVICIO_CANCELADO:'Servicio cancelado',SERVICIO_PAGO_ACTUALIZADO:'Pago actualizado',SERVICIO_CALENDAR_INTENTO:'Sincronización de Calendar',SERVICIO_CALENDAR_REINTENTO_SOLICITADO:'Reintento de Calendar solicitado',SERVICIO_BLOQUEO_LIBERADO:'Acceso técnico liberado' }
+function returnTo(): string {
+  const value=route.query.returnTo
+  return typeof value==='string' && /^\/(?:agenda|servicios(?:\/[0-9a-f-]{36})?)(?:\?|$)/i.test(value) ? value : '/servicios'
+}
 function edit(): void { void router.push({ name:'admin-service-edit',params:{ id:id.value },query:{ returnTo:route.fullPath } }) }
 function certificates(): void {
   if(!record.value) return
@@ -80,7 +84,7 @@ function certificates(): void {
 </script>
 <template>
   <ServicePage :title="record ? `${record.clienteNombre} · ${record.sedeNombre}` : 'Detalle del servicio'" :caption="record?.solicitud">
-    <template #actions><BaseButton variant="secondary" size="compact" @click="router.push('/servicios')">Servicios</BaseButton><BaseIconButton label="Actualizar servicio" :loading="loading" :disabled="busy" @click="load(true)"><RefreshCw :size="16" /></BaseIconButton><BaseButton v-if="record?.estado==='PROGRAMADO'" size="compact" :disabled="busy" @click="edit">Editar servicio</BaseButton></template>
+    <template #actions><BaseButton variant="secondary" size="compact" @click="router.push(returnTo())">{{ returnTo().startsWith('/agenda') ? 'Agenda' : 'Servicios' }}</BaseButton><BaseIconButton label="Actualizar servicio" :loading="loading" :disabled="busy" @click="load(true)"><RefreshCw :size="16" /></BaseIconButton><BaseButton v-if="record?.estado==='PROGRAMADO'" size="compact" :disabled="busy" @click="edit">Editar servicio</BaseButton></template>
     <LoadingSkeleton v-if="loading" :rows="7" />
     <StatusPanel v-else-if="loadError" title="No fue posible cargar el servicio" :message="loadError" tone="danger"><BaseButton size="compact" variant="secondary" @click="load(true)">Reintentar</BaseButton></StatusPanel>
     <template v-else-if="record">

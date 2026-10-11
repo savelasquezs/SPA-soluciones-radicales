@@ -177,7 +177,7 @@ function createAt(start: string): void { void router.push({ name:'admin-service-
 function openAgenda(record: AdminService): void {
   if(pendingAction.value || moving.value || pendingMove.value) return
   if(record.estado==='PROGRAMADO') void openQuick(record,'schedule')
-  else void router.push({ name:'service-detail',params:{ id:record.id } })
+  else void router.push({ name:'service-detail',params:{ id:record.id },query:{returnTo:route.fullPath} })
 }
 function proposeMove(record: AdminService, start: string): void {
   if(pendingAction.value || moving.value || pendingMove.value || record.estado!=='PROGRAMADO') return
@@ -308,7 +308,7 @@ async function retryCalendar(record: AdminService): Promise<void> {
     <template v-else>
       <template v-if="view==='week'">
         <ServiceDayList v-if="mobileWeek && mobileWeekDisplay==='list'" :date="selectedWeekDay" :records="selectedDayRecords" :busy="pendingAction || moving || Boolean(pendingMove)" @open="openAgenda" @create="createForDay" />
-        <ServiceWeek v-else :from="from" :single-day="mobileWeek ? selectedWeekDay : undefined" :records="store.rows" :busy="pendingAction || moving || Boolean(pendingMove)" @create="createAt" @open="openAgenda" @move="proposeMove" />
+        <ServiceWeek v-else :from="from" :single-day="mobileWeek ? selectedWeekDay : undefined" :return-to="route.fullPath" :records="store.rows" :busy="pendingAction || moving || Boolean(pendingMove)" @create="createAt" @open="openAgenda" @move="proposeMove" />
       </template>
       <ServiceRecords v-else-if="store.rows.length" :records="store.rows" :history="tab==='history'" :busy="pendingAction" @schedule="openQuick($event,'schedule')" @team="openQuick($event,'team')" @payment="openQuick($event,'payment')" @edit="edit" @cancel="openQuick($event,'cancel')" @retry-calendar="retryCalendar" @results="results=$event" />
       <StatusPanel v-else title="Sin servicios en este rango" message="Cambia las fechas o los filtros para consultar otra parte de la operación." />
