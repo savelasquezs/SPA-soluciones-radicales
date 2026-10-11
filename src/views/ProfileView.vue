@@ -104,6 +104,14 @@ async function load(): Promise<void> {
   }
 }
 
+async function imageError(): Promise<void> {
+  const previous = auth.avatarUrl
+  photoFailed.value = true
+  if (photoPreview.value || !profile.value?.fotoStoragePath) return
+  await auth.recoverExpiredAvatar()
+  if (auth.avatarUrl && auth.avatarUrl !== previous) photoFailed.value = false
+}
+
 function setProfile(record: PersonalProfile): void {
   profile.value = record
   auth.applyPersonalProfile(record)
@@ -275,7 +283,7 @@ function filename(path: string): string {
                 v-if="(photoPreview || auth.avatarUrl) && !photoFailed"
                 :src="photoPreview || auth.avatarUrl || ''"
                 alt="Tu fotografía de perfil"
-                @error="photoFailed = true"
+                @error="imageError"
               />
               <UserRound v-else :size="30" aria-hidden="true" />
             </div>
