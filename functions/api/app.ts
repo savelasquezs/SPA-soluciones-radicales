@@ -26,6 +26,7 @@ import {
   assertMasterStoragePath,
   createMasterReadUrl,
   createMasterUploadUrl,
+  createProfileReadUrl,
   deleteMasterObject,
 } from './r2'
 
@@ -147,7 +148,17 @@ app.get('/health', (context) =>
 )
 
 app.get('/api/session', async (context) => {
-  const profile = await transaction((client) => bootstrapProfile(client, context.get('identity')))
+  const profile = await transaction(async client => {
+    const current = await bootstrapProfile(client, context.get('identity'))
+    const { rows } = await client.query<{ foto_storage_path: string | null }>(
+      'select foto_storage_path from public.usuarios where id=$1', [current.id],
+    )
+    const path = rows[0]?.foto_storage_path
+    return {
+      ...current,
+      avatarUrl: path ? createProfileReadUrl('AVATAR', current.id, path) : null,
+    }
+  })
   return context.json(profile)
 })
 

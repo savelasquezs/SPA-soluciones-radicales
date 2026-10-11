@@ -8,7 +8,7 @@ const MIME_BY_EXTENSION: Record<string, string> = {
 const OPTIMIZATION_TIMEOUT_MS = 120_000
 
 /** Returns the file to upload. No upload, metrics, persistence or UI side effects. */
-export async function optimizeFileForStorage(kind: MasterFileKind | 'SERVICE_PHOTO', original: File): Promise<File> {
+export async function optimizeFileForStorage(kind: MasterFileKind | 'USER_AVATAR' | 'SERVICE_PHOTO', original: File): Promise<File> {
   const extension = original.name.trim().split('.').pop()?.toLowerCase() ?? ''
   const contentType = MIME_BY_EXTENSION[extension]
   if (!contentType) return original

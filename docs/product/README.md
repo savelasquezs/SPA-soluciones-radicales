@@ -62,9 +62,17 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 
 - El acceso interno requiere Google, un registro activo en `usuarios` y al menos un rol.
 - Un usuario con dos roles opera con uno activo por sesión.
-- El correo puede corregirse antes del primer acceso; después de vincular `auth_user_id` permanece inmutable para no romper la identidad Google.
+- El correo puede corregirse antes del primer acceso; después de vincular `auth_user_id`, solo puede cambiarse mediante una autenticación Google nueva, verificada y confirmada con transferencia de identidad de un solo uso. La identidad interna del usuario, sus roles y su historial se conservan.
 - El servidor valida autorización en cada operación protegida.
 - Los clientes y contactos no son usuarios del sistema.
+
+### Perfil personal
+
+- Todo usuario interno autorizado puede abrir **Mi perfil** desde la fotografía/nombre, tanto en la cabecera como en el sidebar.
+- El propio usuario puede cambiar nombre, teléfono y fotografía, restaurar su imagen Google y consultar sus roles, que permanecen de solo lectura.
+- El cambio de identidad Google exige autenticación con la nueva cuenta, validación del proveedor, comprobación de unicidad, estado aleatorio de diez minutos y una sola utilización, sin alterar el ID interno.
+- Los archivos de perfil se guardan en R2 por carpeta individual, con URLs firmadas de corta duración y acceso controlado por la sesión. El Técnico puede mantener su certificado, sin permisos de administración sobre otros usuarios.
+- Véase [user-profile.md](user-profile.md) para alcance y criterios de aceptación.
 
 ### Certificado del Técnico
 
