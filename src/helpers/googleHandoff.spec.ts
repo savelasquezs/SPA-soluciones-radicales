@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
-  clearPendingGoogleHandoff, readPendingGoogleHandoff, savePendingGoogleHandoff,
+  clearPendingGoogleHandoff, readPendingGoogleHandoff, readPendingGoogleHandoffState, savePendingGoogleHandoff,
 } from './googleHandoff'
 
 const validToken = 'A'.repeat(43)
@@ -19,6 +19,19 @@ describe('Estado temporal del cambio Google', () => {
     expect(stored).toMatchObject({ token: validToken })
     clearPendingGoogleHandoff()
     expect(readPendingGoogleHandoff()).toBeNull()
+  })
+
+  it('conserva la identidad de origen para no confirmar con una sesión OAuth obsoleta', () => {
+    savePendingGoogleHandoff(validToken, 600, 'old-google')
+    expect(readPendingGoogleHandoffState()).toMatchObject({
+      token: validToken,
+      originalAuthUserId: 'old-google',
+    })
+  })
+
+  it('acepta solicitudes anteriores sin un ID original conservando su vencimiento', () => {
+    savePendingGoogleHandoff(validToken, 600)
+    expect(readPendingGoogleHandoffState()?.originalAuthUserId).toBeNull()
   })
 
   it('rechaza estados vencidos antes de reanudar una cuenta sin acceso', () => {

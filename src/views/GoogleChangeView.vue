@@ -6,7 +6,10 @@ import { CheckCircle2, CircleAlert } from 'lucide-vue-next'
 import BaseButton from '@/components/base/BaseButton.vue'
 import {
   clearPendingGoogleHandoff, readPendingGoogleHandoff,
+  readPendingGoogleHandoffState,
 } from '@/helpers/googleHandoff'
+import { ApiClientError } from '@/services/apiService'
+import { waitForNewGoogleSession } from '@/services/googleSessionReady'
 import { finishGoogleIdentityChange } from '@/services/profileService'
 import { useAuthStore } from '@/stores/auth'
 
@@ -21,17 +24,29 @@ const error = ref<string | null>(null)
 async function verifyNewAccount(): Promise<void> {
   processing.value = true
   error.value = null
-  const token = readPendingGoogleHandoff()
-  if (!token) {
+  const pending = readPendingGoogleHandoffState()
+  if (!pending) {
     error.value = 'No hay un cambio de cuenta vigente. Inicia el proceso desde tu cuenta anterior.'
     canRetry.value = false
     processing.value = false
     return
   }
   try {
-    // Never call /api/session before the transfer: the new identity is not yet
-    // registered in public.usuarios. The finishing API verifies its Google JWT.
-    await finishGoogleIdentityChange(token)
+    // OAuth can return the previous cached Google session on the first read.
+    // Confirm the identity has actually changed before posting the one-use
+    // handoff, or the API will correctly reject it as "same account".
+    await waitForNewGoogleSession(pending.originalAuthUserId)
+    try {
+      await finishGoogleIdentityChange(pending.token)
+    } catch (cause) {
+      // Narrow recovery: the API performs no mutation on this exact 409.
+      // A stale JWT can survive one extra SDK read, so refresh and try once.
+      if (!(cause instanceof ApiClientError && cause.status === 409
+        && cause.message === 'Seleccionaste la misma cuenta de Google'
+        && pending.originalAuthUserId)) throw cause
+      await waitForNewGoogleSession(pending.originalAuthUserId)
+      await finishGoogleIdentityChange(pending.token)
+    }
     completed.value = true
     clearPendingGoogleHandoff()
     await auth.initialize(true)

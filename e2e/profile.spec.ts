@@ -340,3 +340,97 @@ test('cambio de cuenta Google desde perfil cierra la sesión anterior antes del 
   expect(await page.evaluate(() => sessionStorage.getItem('sr:google-profile-handoff'))).toBeNull()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 })
+
+
+/** Regression observed on Android: immediately after Google consent the
+ * first Neon Auth session read can still contain the previous Google identity. */
+async function setupGoogleSessionRace(
+  page: import('@playwright/test').Page,
+  sessionOrder: 'old-first' | 'stale-on-finish',
+) {
+  const token = 'A'.repeat(43)
+  const oldAuth = 'original-google-auth'
+  const newAuth = 'fresh-google-auth'
+  let reads = 0
+  let confirmations = 0
+  let transferred = false
+  const oldSession = {
+    ...session,
+    session: { ...session.session, userId: oldAuth, token: 'old-google-jwt' },
+    user: { ...session.user, id: oldAuth, email: 'original@example.com' },
+  }
+  const newSession = {
+    ...session,
+    session: { ...session.session, userId: newAuth, token: 'new-google-jwt' },
+    user: { ...session.user, id: newAuth, email: 'nueva@example.com' },
+  }
+
+  await page.addInitScript((value: { token: string; expiresAt: number; originalAuthUserId: string }) => {
+    sessionStorage.setItem('sr:google-profile-handoff', JSON.stringify(value))
+  }, { token, expiresAt: Date.now() + 600_000, originalAuthUserId: oldAuth })
+
+  await page.route(/\/get-session(?:\?.*)?$/, async route => {
+    reads++
+    // The second mode simulates an SDK that briefly serves a cached older
+    // bearer token *after* the callback has observed the new session.
+    const stale = sessionOrder === 'old-first' ? reads === 1 : reads === 2
+    await route.fulfill({ json: stale ? oldSession : newSession })
+  })
+
+  await page.route('https://api.example.test/api/**', async route => {
+    const { pathname } = new URL(route.request().url())
+    const method = route.request().method()
+    if (method === 'OPTIONS') {
+      await route.fulfill({ status: 204 })
+      return
+    }
+    if (pathname === '/api/profile/google/finish') {
+      confirmations++
+      expect(method).toBe('POST')
+      expect(route.request().postDataJSON()).toEqual({ token })
+      if (route.request().headers().authorization !== 'Bearer new-google-jwt') {
+        await route.fulfill({ status: 409, json: { error: 'Seleccionaste la misma cuenta de Google' } })
+        return
+      }
+      transferred = true
+      await route.fulfill({ json: { correoGoogle: 'nueva@example.com' } })
+      return
+    }
+    if (pathname === '/api/session') {
+      await route.fulfill(transferred
+        ? { json: { ...domain, correoGoogle: 'nueva@example.com' } }
+        : { status: 403, json: { error: 'La cuenta no está autorizada' } })
+      return
+    }
+    if (pathname === '/api/profile') {
+      await route.fulfill({ json: { ...initial, correoGoogle: 'nueva@example.com' } })
+      return
+    }
+    await route.fulfill({ status: 404, json: { error: 'Ruta no encontrada' } })
+  })
+  return { getReads: () => reads, getConfirmations: () => confirmations, transferred: () => transferred }
+}
+
+test('OAuth espera una sesión nueva y no muestra el falso error de cuenta igual en móvil', async ({ page }) => {
+  const state = await setupGoogleSessionRace(page, 'old-first')
+  await page.setViewportSize({ width: 360, height: 740 })
+  await page.goto('/cuenta/cambiar-google')
+  await expect(page).toHaveURL(/\/perfil\?googleActualizado=1/)
+  await expect(page.getByRole('heading', { name: 'Mi perfil' })).toBeVisible()
+  expect(state.transferred()).toBe(true)
+  expect(state.getReads()).toBeGreaterThanOrEqual(3)
+  expect(state.getConfirmations()).toBe(1)
+  await expect(page.getByText('Seleccionaste la misma cuenta de Google')).toHaveCount(0)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+})
+
+test('OAuth recupera un único 409 de JWT viejo sin necesitar tocar Reintentar', async ({ page }) => {
+  const state = await setupGoogleSessionRace(page, 'stale-on-finish')
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/cuenta/cambiar-google')
+  await expect(page).toHaveURL(/\/perfil\?googleActualizado=1/)
+  expect(state.transferred()).toBe(true)
+  expect(state.getConfirmations()).toBe(2)
+  await expect(page.getByRole('heading', { name: 'No se completó la verificación' })).toHaveCount(0)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+})
