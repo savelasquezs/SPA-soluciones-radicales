@@ -7,8 +7,11 @@ import type { AdminService } from '@/types/adminServices'
 const props=withDefaults(defineProps<{ date: string; records: AdminService[]; busy?: boolean }>(),{busy:false})
 const emit=defineEmits<{ open: [record: AdminService]; create: [date: string] }>()
 const time=new Intl.DateTimeFormat('es-CO',{ hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'America/Bogota' })
-const readableDate=computed(()=>new Intl.DateTimeFormat('es-CO',{ weekday:'long',day:'numeric',month:'long',timeZone:'UTC' })
-  .format(new Date(props.date+'T12:00:00Z')))
+const readableDate=computed(()=>{
+  const label=new Intl.DateTimeFormat('es-CO',{ weekday:'long',day:'numeric',month:'long',timeZone:'UTC' })
+    .format(new Date(props.date+'T12:00:00Z'))
+  return label.charAt(0).toUpperCase()+label.slice(1)
+})
 function interval(record: AdminService): string {
   const endDate=toBogotaInput(record.finProgramado).slice(0,10)
   return time.format(new Date(record.inicioProgramado))+'–'+time.format(new Date(record.finProgramado))
@@ -47,7 +50,7 @@ function interval(record: AdminService): string {
 <style scoped>
 .svc-day-list { display:grid; gap:0.4rem; min-width:0; }
 .svc-day-list__header { display:flex; justify-content:space-between; align-items:center; gap:0.5rem; }
-.svc-day-list__header h2 { margin:0; font-size:0.87rem; font-weight:600; text-transform:capitalize; }
+.svc-day-list__header h2 { margin:0; font-size:0.87rem; font-weight:600; }
 .svc-day-list__header > span { font-size:0.75rem; color:var(--text-secondary); white-space:nowrap; }
 .svc-day-list__items { display:grid; gap:0.35rem; list-style:none; padding:0; margin:0; }
 .svc-day-list__record { position:relative; display:grid; width:100%; min-height:70px; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:0.18rem 0.6rem; padding:0.55rem 1.6rem 0.55rem 0.7rem; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); color:var(--text); font:inherit; text-align:left; cursor:pointer; }
