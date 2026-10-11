@@ -59,6 +59,9 @@ export async function signInWithGoogle(
   const { data, error } = await authClient.signIn.social({
     provider: 'google',
     callbackURL: callback.toString(),
+    // First-time Google identities use a separate redirect in Better Auth.
+    // Keep the transfer callback for BOTH existing and newly created identities.
+    newUserCallbackURL: callback.toString(),
     disableRedirect: true,
   })
   if (error) {
