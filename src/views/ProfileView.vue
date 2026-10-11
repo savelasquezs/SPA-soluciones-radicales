@@ -239,7 +239,7 @@ async function changeGoogle(): Promise<void> {
   busyGoogle.value = true
   try {
     const { token, expiresInSeconds } = await startGoogleIdentityChange()
-    savePendingGoogleHandoff(token, expiresInSeconds)
+    savePendingGoogleHandoff(token, expiresInSeconds, auth.session?.user?.id ?? null)
     leavingForGoogle.value = true
     // Neon Auth must release the original account BEFORE its Google OAuth flow.
     // The pending, one-use handoff remains in sessionStorage across sign-out.
