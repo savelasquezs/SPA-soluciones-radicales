@@ -12,6 +12,8 @@ Todo usuario autorizado puede abrir Mi perfil desde el mismo menú de fotografí
 ## Transferencia Google tras el primer OAuth
 
 - Better Auth admite dos destinos: `callbackURL` para la sesión existente y `newUserCallbackURL` para una identidad Google recién creada. Ambos deben volver a `/cuenta/cambiar-google` durante una transferencia.
+- Tras crear la solicitud temporal con la identidad actual, el navegador **cierra expresamente la sesión de Neon Auth existente antes de iniciar el siguiente OAuth**. Evita que la primera confirmación reciba el JWT de la cuenta anterior (`Seleccionaste la misma cuenta de Google`), mientras el estado temporal se conserva en `sessionStorage`.
+- Si falla cerrar sesión, no se inicia OAuth. Si el cierre fue correcto pero falla iniciar el nuevo OAuth, se limpia el estado y se vuelve a la pantalla de acceso, sin dejar un perfil antiguo que parezca editable.
 - Antes de la transferencia, la nueva identidad *no* está en `public.usuarios`. El callback usa su JWT Google verificado directamente contra `POST /api/profile/google/finish`, sin intentar primero `GET /api/session`.
 - Cuando el proveedor regresa a `/` en vez del callback, el guard recupera un cambio pendiente en la misma pestaña, con token de alta entropía vigente, y lleva al callback **solo** si la nueva cuenta está denegada. El servidor conserva toda la autorización real.
 - El almacenamiento temporal tiene vencimiento local máximo de diez minutos; un error de red no destruye el estado, para permitir un reintento. Un éxito lo elimina y renueva la sesión del nuevo usuario.
