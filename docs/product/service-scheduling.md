@@ -17,6 +17,18 @@ La tabla administrativa de Agenda e Historial se presenta como tarjetas compacta
 
 En teléfono, la barra de filtros deja visibles la búsqueda, la fecha/rango y el número de filtros activos. Estado, Tipo y Técnico se despliegan a petición; la navegación por días desplaza el intervalo sin cambiar su duración y el selector permite rangos rápidos. Se mantienen las reglas existentes de filtros, URL, edición, confirmación de pagos y reprogramación, sin llamadas adicionales a la API al abrir el panel de filtros.
 
+## Semana responsive en móvil
+
+La vista Semana ofrece una lista cronológica de un solo día como presentación predeterminada en teléfonos (680 px o menos). El Administrador elige un día mediante una franja de siete fechas con indicadores de actividad, sin volver a consultar el servidor al cambiar entre días. La fecha explícitamente seleccionada se conserva en el parámetro URL `day`.
+
+Al ingresar en una semana, se selecciona hoy si pertenece a ella; si no, el primer día con servicios y, si tampoco existe, el lunes. La opción Horario (`mobileView=hours`) presenta una cuadrícula de una sola columna para consultar cruces y crear pulsando en una hora libre. Regresar a Lista conserva la misma fecha. Los servicios cortos usan una etiqueta de una línea y sus detalles permanecen accesibles en Lista.
+
+- Los días e indicadores cuentan los servicios por fecha de inicio programado en Bogotá, sin duplicar servicios nocturnos; la lista indica la fecha de finalización si cruza medianoche.
+- Pulsar un servicio Programado abre la reprogramación rápida existente. Pulsar uno Finalizado o Cancelado abre su detalle. No se anuncia arrastrar con el dedo; el drag-and-drop con mouse permanece en escritorio y exige confirmación.
+- Crear desde la fecha elegida precarga el formulario existente y el enlace de regreso conserva el día elegido. Si la fecha no permite programar una visita futura, se usa el formulario normal.
+- Para garantizar indicadores completos, Semana descarga las páginas adicionales cuando el total supera los 100 servicios de la primera página; las lecturas siguen siendo cancelables cuando cambian fecha, filtros o sesión.
+- En 320 px, la franja de días puede desplazarse horizontalmente de forma independiente, nunca la página completa. El calendario de escritorio conserva sus siete columnas originales.
+
 ## Agenda semanal interactiva
 
 - La vista **Semana** permite crear un Servicio pulsando el espacio del día/hora o el signo + del encabezado. Se abre el formulario existente con hora de Bogotá precargada; no hay reserva hasta confirmar el formulario. Un borrador local anterior tiene prioridad y se identifica al recuperarse.

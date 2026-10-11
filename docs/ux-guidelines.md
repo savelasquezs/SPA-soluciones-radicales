@@ -119,6 +119,7 @@ Una confirmación destructiva identifica el objeto, explica la consecuencia y us
 - Actualizar con la respuesta definitiva de la mutación en lugar de recargar todo.
 - En desktop usar tabla si se comparan columnas.
 - En agenda semanal, representar el tiempo como una cuadrícula horaria: 08:00–21:00 por defecto, ampliable cuando existan Servicios fuera del rango. Las tarjetas muestran solo Cliente/Sede y revelan detalle en hover/focus.
+- En Semana móvil, priorizar una lista cronológica del día con tira de siete días e indicadores completos; la cuadrícula de una sola columna se activa mediante Horario. Evitar instrucciones de arrastrar con mouse en táctil, recortes de servicios cortos y dobles desplazamientos. Mantener la fecha seleccionada en la URL y reutilizar el editor existente.
 - En mobile transformar a cards o filas apiladas cuando la tabla no sea legible.
 - En Servicios (Agenda/Historial), mostrar las filas como tarjetas de lectura rápida, no como ocho campos de formulario apilados: encabezado fecha/hora y estado; cliente/sede y consecutivo/tipo; equipo y pago; contacto y accesos. La persona que recibió el efectivo, el equipo completo y la auditoría permanecen disponibles en el detalle.
 - En las tarjetas móviles, las acciones frecuentes conservan acceso directo o un menú compacto que muestra solo opciones válidas por estado; nunca eliminar acciones administrativas existentes. Mantener el celular con WhatsApp inline, la semántica independiente del estado del servicio y el estado del pago, y objetivos táctiles de al menos 44 px.
