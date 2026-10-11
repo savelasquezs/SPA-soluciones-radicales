@@ -1,4 +1,4 @@
-import { fromBogotaInput, toBogotaInput } from './adminServices'
+import { addDateDays, compareServices, fromBogotaInput, toBogotaInput, todayBogota } from './adminServices'
 import type { AdminService } from '../types/adminServices'
 
 export const DEFAULT_WEEK_START_MINUTE=8*60
@@ -88,4 +88,26 @@ export function serviceWeekInstantAt(date: string, minute: number): string {
   if (!Number.isInteger(minute) || minute < 0 || minute >= 24*60) return ''
   const time=String(Math.floor(minute/60)).padStart(2,'0')+':'+String(minute%60).padStart(2,'0')
   return fromBogotaInput(date+'T'+time)
+}
+
+
+/** Group by the service START date in Bogotá, including overnight services only once. */
+export function serviceWeekDayRecords(records: AdminService[], date: string): AdminService[] {
+  return records.filter(record=>localDate(record.inicioProgramado)===date).sort(compareServices)
+}
+export function serviceWeekDayCounts(records: AdminService[], from: string): Record<string,number> {
+  const result: Record<string,number>=Object.fromEntries(
+    Array.from({ length:7 },(_,day)=>[addDateDays(from,day),0]),
+  )
+  for(const record of records) {
+    const day=localDate(record.inicioProgramado)
+    if(Object.prototype.hasOwnProperty.call(result,day)) result[day]=(result[day] ?? 0)+1
+  }
+  return result
+}
+export function preferredServiceWeekDay(records: AdminService[], from: string, today=todayBogota()): string {
+  const end=addDateDays(from,6)
+  if(today>=from && today<=end) return today
+  const first=Object.entries(serviceWeekDayCounts(records,from)).find(([,count])=>count>0)
+  return first?.[0] ?? from
 }

@@ -1,5 +1,5 @@
 import { describe,expect,it } from 'vitest'
-import { layoutServiceDay,serviceWeekBounds,snapServiceWeekMinute,serviceWeekInstantAt } from './serviceWeek'
+import { layoutServiceDay,serviceWeekBounds,snapServiceWeekMinute,serviceWeekInstantAt,serviceWeekDayRecords,serviceWeekDayCounts,preferredServiceWeekDay } from './serviceWeek'
 import type { AdminService } from '../types/adminServices'
 
 function record(id: string,start: string,end: string): AdminService {
@@ -46,5 +46,25 @@ describe('interactive week scheduling',()=>{
     expect(serviceWeekInstantAt('2030-10-07',9*60+15)).toBe('2030-10-07T14:15:00.000Z')
     expect(serviceWeekInstantAt('2030-10-07',24*60)).toBe('')
     expect(serviceWeekInstantAt('2030-02-30',9*60)).toBe('')
+  })
+})
+
+
+describe('mobile day selection',()=>{
+  it('groups visits by their Bogotá start date without duplicating overnight visits',()=>{
+    const overnight=record('overnight','2030-10-09T03:45:00Z','2030-10-09T07:15:00Z')
+    const morning=record('morning','2030-10-09T14:00:00Z','2030-10-09T15:30:00Z')
+    const counts=serviceWeekDayCounts([overnight,morning],'2030-10-07')
+    expect(counts['2030-10-07']).toBe(1)
+    expect(counts['2030-10-08']).toBe(1)
+    expect(serviceWeekDayRecords([morning,overnight],'2030-10-08').map(item=>item.id)).toEqual(['morning'])
+    expect(serviceWeekDayRecords([morning,overnight],'2030-10-07').map(item=>item.id)).toEqual(['overnight'])
+  })
+  it('prefers today when in the week, otherwise first occupied day or Monday',()=>{
+    const monday='2030-10-07'
+    const event=record('example','2030-10-10T14:00:00Z','2030-10-10T15:00:00Z')
+    expect(preferredServiceWeekDay([event],monday,'2030-10-08')).toBe('2030-10-08')
+    expect(preferredServiceWeekDay([event],monday,'2030-10-20')).toBe('2030-10-10')
+    expect(preferredServiceWeekDay([],monday,'2030-10-20')).toBe(monday)
   })
 })
