@@ -157,7 +157,9 @@ async function setupNewGoogleAccount(page: import('@playwright/test').Page, with
     user: { ...session.user, id: 'fresh-google-auth', email: 'otra-cuenta@gmail.com' },
   }
 
-  await page.route('**/get-session', route => route.fulfill({ json: newIdentity }))
+  // Forced Neon Auth refresh appends ?disableCookieCache=true. The mock must
+  // cover both the ordinary and forced session endpoint.
+  await page.route(/\/get-session(?:\?.*)?$/, route => route.fulfill({ json: newIdentity }))
   await page.route('https://api.example.test/api/**', async route => {
     const { pathname } = new URL(route.request().url())
     const method = route.request().method()
