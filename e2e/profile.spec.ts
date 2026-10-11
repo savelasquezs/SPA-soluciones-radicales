@@ -243,3 +243,100 @@ test('una nueva cuenta sin transferencia válida conserva el bloqueo de acceso',
   expect(state.transferred()).toBe(false)
   expect(state.attempts()).toBe(0)
 })
+
+
+test('cambio de cuenta Google desde perfil cierra la sesión anterior antes del primer OAuth', async ({ page }) => {
+  const token = 'A'.repeat(43)
+  const sequence: string[] = []
+  let signedOut = false
+  let transferred = false
+  const newEmail = 'nuevo-google@example.com'
+
+  await page.route('https://auth.example.test/**', async route => {
+    const { pathname } = new URL(route.request().url())
+    if (pathname.endsWith('/get-session')) {
+      const loggedIn = signedOut
+        ? {
+          ...session,
+          session: { ...session.session, userId: 'new-google-auth', token: 'new-google-jwt' },
+          user: { ...session.user, id: 'new-google-auth', email: newEmail },
+        }
+        : session
+      await route.fulfill({ json: loggedIn })
+      return
+    }
+    if (pathname.endsWith('/sign-out')) {
+      sequence.push('sign-out')
+      signedOut = true
+      await route.fulfill({ json: { success: true } })
+      return
+    }
+    if (pathname.endsWith('/sign-in/social')) {
+      sequence.push('google-oauth')
+      // Fail the test if the browser starts OAuth with the old Better Auth cookie.
+      if (!signedOut) {
+        await route.fulfill({ status: 409, json: { error: 'La cuenta anterior continúa activa' } })
+        return
+      }
+      const request = route.request().postDataJSON() as { callbackURL?: string; newUserCallbackURL?: string }
+      expect(request.callbackURL).toContain('/cuenta/cambiar-google')
+      expect(request.newUserCallbackURL).toContain('/cuenta/cambiar-google')
+      await route.fulfill({ json: { url: new URL('/cuenta/cambiar-google', page.url()).toString() } })
+      return
+    }
+    await route.fulfill({ status: 404, json: { error: 'Ruta Auth no simulada' } })
+  })
+
+  await page.route('https://api.example.test/api/**', async route => {
+    const { pathname } = new URL(route.request().url())
+    if (route.request().method() === 'OPTIONS') {
+      await route.fulfill({ status: 204 })
+      return
+    }
+    if (pathname === '/api/session') {
+      if (signedOut && !transferred) {
+        await route.fulfill({ status: 403, json: { error: 'Cuenta sin acceso previo' } })
+        return
+      }
+      await route.fulfill({ json: {
+        ...domain, correoGoogle: transferred ? newEmail : domain.correoGoogle,
+      } })
+      return
+    }
+    if (pathname === '/api/profile') {
+      await route.fulfill({ json: {
+        ...initial, correoGoogle: transferred ? newEmail : domain.correoGoogle,
+      } })
+      return
+    }
+    if (pathname === '/api/profile/google/start') {
+      expect(signedOut).toBe(false)
+      sequence.push('start-handoff')
+      await route.fulfill({ json: { token, expiresInSeconds: 600 } })
+      return
+    }
+    if (pathname === '/api/profile/google/finish') {
+      sequence.push('finish-handoff')
+      expect(signedOut).toBe(true)
+      expect(route.request().headers().authorization).toBe('Bearer new-google-jwt')
+      expect(route.request().postDataJSON()).toEqual({ token })
+      transferred = true
+      await route.fulfill({ json: { correoGoogle: newEmail } })
+      return
+    }
+    await route.fulfill({ status: 404, json: { error: 'Ruta API no simulada' } })
+  })
+
+  await page.setViewportSize({ width: 360, height: 740 })
+  await page.goto('/perfil')
+  await expect(page.getByRole('heading', { name: 'Mi perfil' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Cambiar cuenta de Google' }).click()
+
+  await expect(page).toHaveURL(/\/perfil\?googleActualizado=1/)
+  await expect(page.getByLabel('Correo vinculado')).toHaveValue(newEmail)
+  expect(transferred).toBe(true)
+  expect(sequence).toEqual(['start-handoff', 'sign-out', 'google-oauth', 'finish-handoff'])
+  expect(await page.evaluate(() => sessionStorage.getItem('sr:google-profile-handoff'))).toBeNull()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+})
