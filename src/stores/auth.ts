@@ -15,6 +15,8 @@ export const useAuthStore = defineStore('auth', () => {
   const privateAvatarUrl = ref<string | null>(null)
   const error = ref<string | null>(null)
   let initialization: Promise<void> | null = null
+  let avatarRefreshing: Promise<void> | null = null
+  let lastAvatarRecoveryAt = 0
 
   const profile = computed(() => user.value)
   const avatarUrl = computed(() => privateAvatarUrl.value ?? session.value?.user?.image ?? null)
@@ -62,13 +64,26 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function refreshAvatar(): Promise<void> {
-    if (!isAuthenticated.value) return
-    try {
-      const response = await apiRequest<{ url: string | null }>('api/profile/avatar-url')
-      privateAvatarUrl.value = response.url
-    } catch {
-      privateAvatarUrl.value = null
-    }
+    if (avatarRefreshing) return avatarRefreshing
+    if (!isAuthenticated.value || !user.value) return
+    const currentUserId = user.value.id
+    avatarRefreshing = (async () => {
+      try {
+        const response = await apiRequest<{ url: string | null }>('api/profile/avatar-url')
+        if (user.value?.id === currentUserId && isAuthenticated.value) privateAvatarUrl.value = response.url
+      } catch {
+        // Keep the Google fallback when R2 or the profile endpoint is unavailable.
+        if (user.value?.id === currentUserId) privateAvatarUrl.value = null
+      }
+    })()
+    try { await avatarRefreshing }
+    finally { avatarRefreshing = null }
+  }
+
+  async function recoverExpiredAvatar(): Promise<void> {
+    if (!privateAvatarUrl.value || Date.now() - lastAvatarRecoveryAt < 90_000) return
+    lastAvatarRecoveryAt = Date.now()
+    await refreshAvatar()
   }
 
   function applyPersonalProfile(record: PersonalProfile): void {
@@ -109,6 +124,7 @@ export const useAuthStore = defineStore('auth', () => {
     profile,
     avatarUrl,
     refreshAvatar,
+    recoverExpiredAvatar,
     applyPersonalProfile,
     authEmail,
     error,
