@@ -32,7 +32,7 @@ describe('Estado temporal del cambio Google', () => {
   })
 
   it('no acepta tokens inválidos ni alarga su vencimiento más de diez minutos', () => {
-    expect(() => savePendingGoogleHandoff('incorrecto', 600)).toThrow()
+    expect(() => savePendingGoogleHandoff('incorrecto', 600)).toThrow('No fue posible preparar el cambio de cuenta')
     savePendingGoogleHandoff(validToken, 60_000)
     const state = JSON.parse(sessionStorage.getItem('sr:google-profile-handoff') ?? '{}')
     expect(state.expiresAt - Date.now()).toBeLessThanOrEqual(600_000)
