@@ -231,7 +231,7 @@ function formatMoney(value: number): string { return new Intl.NumberFormat('es-C
           <StatusBadge :tone="site.activo ? 'success' : 'neutral'">{{ site.activo ? 'Activa' : 'Inactiva' }}</StatusBadge>
         </div>
       </div>
-      <BaseButton size="compact" variant="secondary" @click="openSiteEdit"><Pencil :size="16" />Editar sede</BaseButton>
+      <BaseButton size="compact" variant="secondary" @click="openSiteEdit"><Pencil :size="16" />Editar Sede</BaseButton>
     </header>
     <nav class="tabs" aria-label="Detalle de Sede">
       <button v-for="item in ([['summary','Resumen'],['areas','Áreas'],['devices','Puestos de monitoreo'],['findings','Hallazgos'],['history','Historial de servicios'],['settings','Configuración']] as const)" :key="item[0]" :aria-current="tab === item[0] ? 'page' : undefined" @click="changeTab(item[0], $event)">{{ item[1] }}</button>
@@ -242,7 +242,7 @@ function formatMoney(value: number): string { return new Intl.NumberFormat('es-C
     <section v-else-if="tab === 'areas'" class="areas-layout">
       <div class="areas-toolbar">
         <div><strong>Áreas</strong><span>{{ areas.length }} {{ areas.length === 1 ? 'área' : 'áreas' }}</span></div>
-        <BaseButton size="compact" @click="openAreaCreate"><Plus :size="16" />Agregar área</BaseButton>
+        <BaseButton size="compact" @click="openAreaCreate"><Plus :size="16" />Agregar Área</BaseButton>
       </div>
       <div class="areas-panel">
         <LoadingSkeleton v-if="areasLoading" label="Cargando Áreas" :lines="5" />
@@ -305,11 +305,11 @@ function formatMoney(value: number): string { return new Intl.NumberFormat('es-C
     <SiteMonitoringPanel v-if="visited.devices" v-show="tab === 'devices'" :site-id="siteId" :active="tab === 'devices'" />
     <SiteFindingsPanel v-if="visited.findings" v-show="tab === 'findings'" :site-id="siteId" :active="tab === 'findings'" />
 
-    <BaseDialog :model-value="areaCreateOpen" title="Agregar área" @update:model-value="!saving && (areaCreateOpen = $event)">
+    <BaseDialog :model-value="areaCreateOpen" title="Agregar Área" @update:model-value="!saving && (areaCreateOpen = $event)">
       <AreaForm v-model="newArea" mode="create" form-id="area-create-form" id-prefix="new-area" @submit="createArea" @invalid="notifications.show('Ingresa el nombre del Área.', 'error')" />
       <template #footer>
         <BaseButton variant="secondary" :disabled="saving" @click="areaCreateOpen = false">Cancelar</BaseButton>
-        <BaseButton type="submit" form="area-create-form" :loading="saving">Agregar área</BaseButton>
+        <BaseButton type="submit" form="area-create-form" :loading="saving">Agregar Área</BaseButton>
       </template>
     </BaseDialog>
     <BaseDialog :model-value="siteFormOpen" title="Editar Sede" @update:model-value="!saving && (siteFormOpen = $event)"><SiteForm v-model="siteForm" mode="edit" :saving="saving" :client-name="client.nombre" @submit="saveSite" @invalid="notifications.show('Revisa los campos marcados.', 'error')" @file-selected="selectSiteFile" @view-plan="siteForm.planoStoragePath && openPrivateFile(siteForm.planoStoragePath)" /><template #footer><BaseButton variant="secondary" :disabled="saving" @click="siteFormOpen = false">Cancelar</BaseButton><BaseButton type="submit" form="site-form" :loading="saving">{{ savePhaseLabel ?? 'Guardar cambios' }}</BaseButton></template></BaseDialog>

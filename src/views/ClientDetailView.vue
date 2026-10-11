@@ -289,7 +289,7 @@ function formatDate(value: string): string { return new Intl.DateTimeFormat('es-
       </div>
       <div class="header-actions">
         <BaseButton size="compact" variant="secondary" @click="openClientEdit"><Pencil :size="16" />Editar</BaseButton>
-        <BaseButton v-if="client.tipoCliente === 'NEGOCIO' && client.activo" size="compact" @click="openSiteCreate"><Plus :size="16" />Agregar sede</BaseButton>
+        <BaseButton v-if="client.tipoCliente === 'NEGOCIO' && client.activo" size="compact" @click="openSiteCreate"><Plus :size="16" />Agregar Sede</BaseButton>
         <details class="action-menu">
           <summary aria-label="Más acciones del cliente" title="Más acciones"><Ellipsis :size="18" /></summary>
           <div class="action-menu__panel">
