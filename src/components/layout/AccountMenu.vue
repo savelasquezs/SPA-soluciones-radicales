@@ -27,6 +27,14 @@ const roleLabel = computed(() => auth.activeRole === 'ADMINISTRADOR' ? 'Administ
 watch(() => auth.avatarUrl, () => { imageFailed.value = false })
 watch(() => route.fullPath, close)
 
+async function imageError(): Promise<void> {
+  const previous = auth.avatarUrl
+  imageFailed.value = true
+  if (previous && previous !== auth.session?.user?.image) {
+    await auth.recoverExpiredAvatar()
+    if (auth.avatarUrl && auth.avatarUrl !== previous) imageFailed.value = false
+  }
+}
 function close(): void {
   if (details.value) details.value.open = false
 }
@@ -112,7 +120,7 @@ async function performAction(action: 'change' | 'logout'): Promise<void> {
   >
     <summary :aria-label="'Opciones de cuenta de ' + (auth.profile?.nombreCompleto ?? 'usuario')">
       <span class="account-control__avatar">
-        <img v-if="auth.avatarUrl && !imageFailed" :src="auth.avatarUrl" alt="" @error="imageFailed = true" />
+        <img v-if="auth.avatarUrl && !imageFailed" :src="auth.avatarUrl" alt="" @error="imageError" />
         <span v-else aria-hidden="true">{{ initials }}</span>
       </span>
       <span class="account-control__identity">
