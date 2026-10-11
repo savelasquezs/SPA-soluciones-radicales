@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { Camera, ExternalLink, ShieldCheck, UserRound } from 'lucide-vue-next'
 
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -16,7 +16,6 @@ import { useAccountTransition } from '@/composables/useAccountTransition'
 import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
 import { certificateFieldErrors, personalFieldErrors, technicianCertificateStatus } from '@/helpers/profile'
 import { clearPendingGoogleHandoff, savePendingGoogleHandoff } from '@/helpers/googleHandoff'
-import { signInWithGoogle } from '@/services/authService'
 import {
   discardPersonalUpload, getPersonalCertificateUrl, getPersonalProfile,
   savePersonalCertificate, savePersonalData, saveProfileAvatar,
@@ -28,6 +27,7 @@ import type { PersonalProfile } from '@/types/domain'
 
 const auth = useAuthStore()
 const route = useRoute()
+const router = useRouter()
 const notifications = useNotificationsStore()
 const accountTransition = useAccountTransition()
 const profile = ref<PersonalProfile | null>(null)
@@ -241,11 +241,19 @@ async function changeGoogle(): Promise<void> {
     const { token, expiresInSeconds } = await startGoogleIdentityChange()
     savePendingGoogleHandoff(token, expiresInSeconds)
     leavingForGoogle.value = true
-    await signInWithGoogle(true, window.location.origin + '/cuenta/cambiar-google')
+    // Neon Auth must release the original account BEFORE its Google OAuth flow.
+    // The pending, one-use handoff remains in sessionStorage across sign-out.
+    await auth.useAnotherAccount(new URL('/cuenta/cambiar-google', window.location.origin).toString())
   } catch (error) {
     clearPendingGoogleHandoff()
-    leavingForGoogle.value = false
     notifications.show(message(error, 'No fue posible iniciar la verificación con Google'), 'error')
+    if (auth.status === 'unauthenticated') {
+      // If sign-out worked but OAuth did not start, never leave a stale profile
+      // that appears editable while the browser no longer has a session.
+      await router.replace({ name: 'login' })
+    } else {
+      leavingForGoogle.value = false
+    }
   } finally {
     busyGoogle.value = false
   }
