@@ -16,7 +16,7 @@ const days=computed(()=>Array.from({length:7},(_,index)=>{
 <template>
   <nav class="svc-day-strip" aria-label="Días de la semana">
     <button v-for="day in days" :key="day.date" type="button"
-      class="svc-day-strip__day" :class="{ 'is-active':day.date===selectedDate,'is-today':day.date===today }"
+      class="svc-day-strip__day" :data-date="day.date" :class="{ 'is-active':day.date===selectedDate,'is-today':day.date===today }"
       :aria-pressed="day.date===selectedDate"
       :aria-label="day.label+' '+day.number+' · '+day.count+' '+(day.count===1?'servicio':'servicios')"
       @click="emit('select',day.date)">

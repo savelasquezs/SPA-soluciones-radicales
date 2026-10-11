@@ -44,7 +44,7 @@ interface Body {
 async function setup(page: Page, role: 'ADMINISTRADOR' | 'TECNICO'='ADMINISTRADOR') {
   const records=[record(),record(ids.refuerzo,'REFUERZO')]
   let next=proposal(), counter=20, failList=false, conflictOnce=false, lostResponse=false
-  const calls: { path: string; method: string; body?: Body }[]=[]
+  const calls: { path: string; method: string; body?: Body; query?: string }[]=[]
   const journal=new Map<string,ServiceMutation>()
   function synchronize(): void {
     for(const item of records) {
@@ -70,7 +70,7 @@ async function setup(page: Page, role: 'ADMINISTRADOR' | 'TECNICO'='ADMINISTRADO
     const request=route.request(), url=new URL(request.url()), path=url.pathname, method=request.method()
     if(method==='OPTIONS') { await route.fulfill({ status:204 });return }
     const body=method==='GET' ? undefined : request.postDataJSON() as Body
-    calls.push({ path,method,body })
+    calls.push({ path,method,body,query:url.searchParams.toString() })
     if(path==='/api/session') { await json(route,{ id:ids.admin,nombreCompleto:'Admin de prueba',correoGoogle:'admin@example.test',esAdmin:role==='ADMINISTRADOR',esTecnico:role==='TECNICO',rolActivo:role,requiereSeleccionRol:false });return }
     if(path==='/api/certificates/settings') { await json(route,{ templates:[],converterReady:true });return }
     if(path==='/api/clients') { await json(route,url.searchParams.get('active')==='false' ? [] : [{ id:ids.client,nombre:'Casa Verde',tipoCliente:'NEGOCIO',nit:'CI-1',correos:contact.correos,activo:true,version:1,vigenciaCertificadoMeses:12,sedesCount:1 }]);return }
@@ -94,7 +94,9 @@ async function setup(page: Page, role: 'ADMINISTRADOR' | 'TECNICO'='ADMINISTRADO
         const d=toBogotaInput(item.inicioProgramado).slice(0,10)
         return d >= (url.searchParams.get('from') || '') && d <= (url.searchParams.get('to') || '9999') && (url.searchParams.get('tab')!=='history' || ['FINALIZADO','CANCELADO'].includes(item.estado))
       })
-      await json(route,{ items,total:items.length,page:1,pageSize:25,pendingCount:count() });return
+      const pageNumber=Number(url.searchParams.get('page') || '1')
+      const pageSize=Number(url.searchParams.get('pageSize') || '25')
+      await json(route,{ items:items.slice((pageNumber-1)*pageSize,pageNumber*pageSize),total:items.length,page:pageNumber,pageSize,pendingCount:count() });return
     }
     if(path===base && method==='POST' && body) {
       if(journal.has(body.requestId)) { await json(route,journal.get(body.requestId),201);return }
@@ -572,4 +574,105 @@ test('extra compact mobile spacing preserves service and upcoming access',async(
   await page.setViewportSize({width:320,height:844})
   await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1)).toBe(true)
   await expect.poll(()=>upcoming.evaluate(node=>Math.round(node.getBoundingClientRect().height))).toBeLessThanOrEqual(335)
+})
+
+
+test('mobile week defaults to the first occupied day and switches dates without refetching',async({page},info)=>{
+  const api=await setup(page)
+  await page.setViewportSize({width:390,height:844})
+  const weekStart=addDateDays(day,-((new Date(day+'T00:00:00Z').getUTCDay()+6)%7)+7)
+  const tuesday=addDateDays(weekStart,1),thursday=addDateDays(weekStart,3)
+  api.records[0]!.inicioProgramado=fromBogotaInput(tuesday+'T09:00')
+  api.records[0]!.finProgramado=fromBogotaInput(tuesday+'T10:30')
+  api.records[1]!.inicioProgramado=fromBogotaInput(thursday+'T11:30')
+  api.records[1]!.finProgramado=fromBogotaInput(thursday+'T12:00')
+  await page.goto('/agenda?view=week&from='+weekStart)
+  const strip=page.getByRole('navigation',{name:'Días de la semana'})
+  await expect(strip).toBeVisible()
+  await expect(strip.locator('[aria-pressed="true"]')).toHaveAttribute('data-date',tuesday)
+  await expect(page.getByRole('region',{name:'Servicios del día'})).toContainText('Casa Verde')
+  await expect(page.getByRole('region',{name:'Servicios del día'})).toContainText('09:00')
+  const before=api.calls.filter(call=>call.method==='GET' && call.path==='/api/admin/services').length
+  await strip.locator('[data-date="'+thursday+'"]').click()
+  await expect(page).toHaveURL(new RegExp('day='+thursday))
+  await expect(strip.locator('[aria-pressed="true"]')).toHaveAttribute('data-date',thursday)
+  await expect(page.getByRole('region',{name:'Servicios del día'})).toContainText('11:30')
+  expect(api.calls.filter(call=>call.method==='GET' && call.path==='/api/admin/services')).toHaveLength(before)
+  await page.getByRole('button',{name:'Horario',exact:true}).click()
+  const timeline=page.getByRole('region',{name:'Horario del día'})
+  await expect(timeline).toBeVisible()
+  await expect(timeline.locator('.svc-week-calendar__day')).toHaveCount(1)
+  await expect(timeline.locator('[data-service-id="'+ids.refuerzo+'"]')).toBeVisible()
+  await page.getByRole('button',{name:'Lista',exact:true}).click()
+  await expect(page.getByRole('region',{name:'Servicios del día'})).toBeVisible()
+  await expect(strip.locator('[aria-pressed="true"]')).toHaveAttribute('data-date',thursday)
+  await page.screenshot({path:info.outputPath('mobile-week-day-list.png'),fullPage:true})
+  for(const width of [320,360,390]) {
+    await page.setViewportSize({width,height:844})
+    await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1)).toBe(true)
+  }
+})
+
+test('mobile week keeps selected date for creation and return navigation',async({page})=>{
+  await setup(page)
+  await page.setViewportSize({width:390,height:844})
+  const weekStart=addDateDays(day,-((new Date(day+'T00:00:00Z').getUTCDay()+6)%7)+7)
+  const emptyDay=addDateDays(weekStart,4)
+  await page.goto('/agenda?view=week&from='+weekStart)
+  await page.locator('.svc-day-strip__day[data-date="'+emptyDay+'"]').click()
+  await expect(page.getByRole('region',{name:'Servicios del día'})).toContainText('No hay servicios')
+  await page.getByRole('button',{name:'Programar servicio',exact:true}).click()
+  await expect(page).toHaveURL(/\/servicios\/nuevo/)
+  const url=new URL(page.url())
+  const requested=url.searchParams.get('start')
+  expect(requested).toBeTruthy()
+  expect(toBogotaInput(requested!).slice(0,10)).toBe(emptyDay)
+  expect(decodeURIComponent(url.searchParams.get('returnTo') ?? '')).toContain('day='+emptyDay)
+  await page.getByRole('button',{name:'Volver',exact:true}).first().click()
+  await expect(page).toHaveURL(new RegExp('day='+emptyDay))
+  await expect(page.locator('.svc-day-strip__day[aria-pressed="true"]')).toHaveAttribute('data-date',emptyDay)
+})
+
+test('short mobile timeline events remain accessible while desktop uses seven columns',async({page})=>{
+  const api=await setup(page)
+  const weekStart=addDateDays(day,-((new Date(day+'T00:00:00Z').getUTCDay()+6)%7)+7)
+  const target=addDateDays(weekStart,2)
+  for(const [index,minutes] of [15,30].entries()){
+    const item=api.records[index]!
+    item.inicioProgramado=fromBogotaInput(target+'T08:'+String(index*15).padStart(2,'0'))
+    item.finProgramado=new Date(new Date(item.inicioProgramado).getTime()+minutes*60_000).toISOString()
+  }
+  await page.setViewportSize({width:320,height:844})
+  await page.goto('/agenda?view=week&from='+weekStart+'&day='+target+'&mobileView=hours')
+  const timeline=page.getByRole('region',{name:'Horario del día'})
+  await expect(timeline.locator('.svc-week-calendar__day')).toHaveCount(1)
+  await expect(timeline.locator('.svc-week-calendar__event-main--brief')).toHaveCount(2)
+  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1)).toBe(true)
+  await timeline.getByRole('button',{name:/Reprogramar SR-0101/}).click()
+  await expect(page.getByRole('dialog',{name:'Reprogramar servicio'})).toBeVisible()
+  await page.getByRole('dialog',{name:'Reprogramar servicio'}).getByRole('button',{name:'Volver'}).click()
+  await page.setViewportSize({width:1440,height:900})
+  const weekly=page.getByRole('region',{name:'Agenda semanal por horas'})
+  await expect(weekly).toBeVisible()
+  await expect(weekly.locator('.svc-week-calendar__day')).toHaveCount(7)
+})
+
+test('weekly view fetches beyond 100 services so no selected day is falsely empty',async({page})=>{
+  const api=await setup(page)
+  const weekStart=addDateDays(day,-((new Date(day+'T00:00:00Z').getUTCDay()+6)%7)+7)
+  const target=addDateDays(weekStart,4)
+  for(let index=0;index<105;index++){
+    const item=record(uid(500+index))
+    item.solicitud='SR-'+String(500+index)
+    item.inicioProgramado=fromBogotaInput(target+'T'+String(9+Math.floor(index/60)).padStart(2,'0')+':'+String(index%60).padStart(2,'0'))
+    item.finProgramado=new Date(new Date(item.inicioProgramado).getTime()+15*60_000).toISOString()
+    api.records.push(item)
+  }
+  await page.setViewportSize({width:390,height:844})
+  await page.goto('/agenda?view=week&from='+weekStart)
+  await expect(page.locator('.svc-day-strip__day[data-date="'+target+'"]')).toHaveAttribute('aria-label',/105 servicios/)
+  await expect(page.locator('.svc-day-list__items [data-service-id]')).toHaveCount(105)
+  expect(api.calls.some(call=>call.path==='/api/admin/services' && call.query?.includes('page=2'))).toBe(true)
+  await page.locator('.svc-day-strip__day[data-date="'+target+'"]').click()
+  await expect(page.locator('.svc-day-list__items [data-service-id]')).toHaveCount(105)
 })
