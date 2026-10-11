@@ -7,7 +7,6 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import {
   clearPendingGoogleHandoff, readPendingGoogleHandoff,
 } from '@/helpers/googleHandoff'
-import { signInWithGoogle } from '@/services/authService'
 import { finishGoogleIdentityChange } from '@/services/profileService'
 import { useAuthStore } from '@/stores/auth'
 
@@ -56,8 +55,7 @@ async function selectAnotherGoogleAccount(): Promise<void> {
   if (switching.value || processing.value) return
   switching.value = true
   try {
-    await auth.logout()
-    await signInWithGoogle(true, new URL('/cuenta/cambiar-google', window.location.origin).toString())
+    await auth.useAnotherAccount(new URL('/cuenta/cambiar-google', window.location.origin).toString())
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : 'No fue posible seleccionar otra cuenta Google.'
   } finally {
