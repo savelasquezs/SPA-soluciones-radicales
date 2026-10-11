@@ -142,3 +142,102 @@ test('un usuario sin rol técnico no puede ver controles de credencial', async (
   await expect(page.getByRole('heading', { name: 'Credencial técnica' })).toHaveCount(0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 })
+
+
+/** Model the real OAuth edge case: a verified new Google identity has no SPA
+ * record until /api/profile/google/finish transfers the existing user. */
+async function setupNewGoogleAccount(page: import('@playwright/test').Page, withHandoff = true) {
+  const token = 'A'.repeat(43)
+  let transferred = false
+  let attempts = 0
+  let deniedBeforeTransfer = 0
+  const newIdentity = {
+    ...session,
+    session: { ...session.session, userId: 'fresh-google-auth' },
+    user: { ...session.user, id: 'fresh-google-auth', email: 'otra-cuenta@gmail.com' },
+  }
+
+  await page.route('**/get-session', route => route.fulfill({ json: newIdentity }))
+  await page.route('https://api.example.test/api/**', async route => {
+    const { pathname } = new URL(route.request().url())
+    const method = route.request().method()
+    if (method === 'OPTIONS') {
+      await route.fulfill({ status: 204 })
+      return
+    }
+    if (pathname === '/api/session' && !transferred) {
+      deniedBeforeTransfer += 1
+      await route.fulfill({ status: 403, json: { error: 'La cuenta no está autorizada' } })
+      return
+    }
+    if (pathname === '/api/profile/google/finish' && method === 'POST') {
+      attempts += 1
+      const body = route.request().postDataJSON() as { token: string }
+      const authorized = route.request().headers().authorization
+      expect(body.token).toBe(token)
+      expect(authorized).toMatch(/^Bearer /)
+      transferred = true
+      await route.fulfill({ json: { correoGoogle: 'otra-cuenta@gmail.com' } })
+      return
+    }
+    if (pathname === '/api/session') {
+      await route.fulfill({ json: { ...domain, correoGoogle: 'otra-cuenta@gmail.com' } })
+      return
+    }
+    if (pathname === '/api/profile') {
+      await route.fulfill({ json: { ...initial, correoGoogle: 'otra-cuenta@gmail.com' } })
+      return
+    }
+    await route.fulfill({ status: 404, json: { error: 'Ruta no encontrada' } })
+  })
+
+  if (withHandoff) await page.addInitScript((state: { token: string; expiresAt: number }) => {
+    window.sessionStorage.setItem('sr:google-profile-handoff', JSON.stringify(state))
+  }, { token, expiresAt: Date.now() + 600_000 })
+
+  return {
+    transferred: () => transferred,
+    attempts: () => attempts,
+    deniedBeforeTransfer: () => deniedBeforeTransfer,
+  }
+}
+
+test('OAuth de una cuenta Google nueva se transfiere antes de evaluar el perfil', async ({ page }) => {
+  const state = await setupNewGoogleAccount(page)
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/cuenta/cambiar-google')
+
+  await expect(page).toHaveURL(/\/perfil\?googleActualizado=1/)
+  await expect(page.getByRole('heading', { name: 'Mi perfil' })).toBeVisible()
+  await expect(page.getByLabel('Correo vinculado')).toHaveValue('otra-cuenta@gmail.com')
+  expect(state.transferred()).toBe(true)
+  expect(state.attempts()).toBe(1)
+  expect(state.deniedBeforeTransfer()).toBe(0)
+  expect(await page.evaluate(() => sessionStorage.getItem('sr:google-profile-handoff'))).toBeNull()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+})
+
+test('si Neon devuelve al inicio, la cuenta nueva sin acceso reanuda la transferencia pendiente', async ({ page }) => {
+  const state = await setupNewGoogleAccount(page)
+  await page.setViewportSize({ width: 360, height: 740 })
+  // Regression: the previous OAuth flow returned new Google users to "/",
+  // which triggered /api/session 403 and the "Cuenta sin acceso" page.
+  await page.goto('/')
+
+  await expect(page).toHaveURL(/\/perfil\?googleActualizado=1/)
+  await expect(page.getByRole('heading', { name: 'Mi perfil' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Cuenta sin acceso' })).toHaveCount(0)
+  expect(state.deniedBeforeTransfer()).toBeGreaterThanOrEqual(1)
+  expect(state.attempts()).toBe(1)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+})
+
+test('una nueva cuenta sin transferencia válida conserva el bloqueo de acceso', async ({ page }) => {
+  const state = await setupNewGoogleAccount(page, false)
+  await page.goto('/')
+
+  await expect(page).toHaveURL(/\/sin-acceso/)
+  await expect(page.getByRole('heading', { name: 'Cuenta sin acceso' })).toBeVisible()
+  expect(state.transferred()).toBe(false)
+  expect(state.attempts()).toBe(0)
+})
