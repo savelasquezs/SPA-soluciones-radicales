@@ -163,7 +163,7 @@ function createForDay(day:string):void {
   let minute=9*60
   if(day===todayBogota()) {
     const future=toBogotaInput(new Date(Date.now()+30*60_000).toISOString())
-    const [hour,minutes]=future.slice(11,16).split(':').map(Number)
+    const hour=Number(future.slice(11,13)), minutes=Number(future.slice(14,16))
     if(future.slice(0,10)!==day || hour*60+minutes>=24*60) {
       createAt(serviceWeekInstantAt(addDateDays(day,1),9*60))
       return
