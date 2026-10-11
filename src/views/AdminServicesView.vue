@@ -65,8 +65,11 @@ const selectedWeekDay=computed(()=>{
     ? day : preferredServiceWeekDay(store.rows,from.value)
 })
 const selectedDayRecords=computed(()=>serviceWeekDayRecords(store.rows,selectedWeekDay.value))
-const mobileWeekTitle=computed(()=>new Intl.DateTimeFormat('es-CO',{ month:'long',year:'numeric',timeZone:'UTC' })
-  .format(new Date(selectedWeekDay.value+'T12:00:00Z')))
+const mobileWeekTitle=computed(()=>{
+  const label=new Intl.DateTimeFormat('es-CO',{ month:'long',year:'numeric',timeZone:'UTC' })
+    .format(new Date(selectedWeekDay.value+'T12:00:00Z'))
+  return label.charAt(0).toUpperCase()+label.slice(1)
+})
 const activeFilterCount=computed(()=>tab.value==='upcoming'
   ? Number(Boolean(upcomingFilter.value.estado))
   : [serviceFilter.value.estado,serviceFilter.value.tipo,serviceFilter.value.tecnicoId].filter(Boolean).length)

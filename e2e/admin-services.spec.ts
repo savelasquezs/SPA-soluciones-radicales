@@ -607,6 +607,8 @@ test('mobile week defaults to the first occupied day and switches dates without 
   await expect(page.getByRole('region',{name:'Servicios del día'})).toBeVisible()
   await expect(strip.locator('[aria-pressed="true"]')).toHaveAttribute('data-date',thursday)
   await page.screenshot({path:info.outputPath('mobile-week-day-list.png'),fullPage:true})
+  await page.evaluate(()=>{document.documentElement.dataset.theme='dark'})
+  await page.screenshot({path:info.outputPath('mobile-week-day-list-dark.png'),fullPage:true})
   for(const width of [320,360,390]) {
     await page.setViewportSize({width,height:844})
     await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1)).toBe(true)
