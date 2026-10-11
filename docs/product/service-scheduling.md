@@ -11,6 +11,12 @@ Este documento define la programación administrativa de Servicios Principales y
 - El Administrador puede adaptar fechas y horarios a la disponibilidad real del cliente.
 - Las automatizaciones proponen y precargan; no sustituyen la confirmación del cliente ni la decisión final del Administrador.
 
+## Tabla de Servicios en móvil
+
+La tabla administrativa de Agenda e Historial se presenta como tarjetas compactas en teléfono, manteniendo la tabla de columnas en escritorio. Cada tarjeta prioriza fecha/hora, estado de la visita, Cliente y Sede, solicitud/tipo, Técnico responsable y valor/estado de pago; el contacto con WhatsApp inline y las acciones de detalle se conservan. La información extensa (colaboradores, receptor del pago e histórico) permanece consultable desde el detalle del Servicio.
+
+En teléfono, la barra de filtros deja visibles la búsqueda, la fecha/rango y el número de filtros activos. Estado, Tipo y Técnico se despliegan a petición; la navegación por días desplaza el intervalo sin cambiar su duración y el selector permite rangos rápidos. Se mantienen las reglas existentes de filtros, URL, edición, confirmación de pagos y reprogramación, sin llamadas adicionales a la API al abrir el panel de filtros.
+
 ## Agenda semanal interactiva
 
 - La vista **Semana** permite crear un Servicio pulsando el espacio del día/hora o el signo + del encabezado. Se abre el formulario existente con hora de Bogotá precargada; no hay reserva hasta confirmar el formulario. Un borrador local anterior tiene prioridad y se identifica al recuperarse.
