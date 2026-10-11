@@ -65,6 +65,8 @@ test('el perfil permite editar datos y conserva navegación compacta en escritor
   await expect(page.getByRole('heading', { name: 'Mi perfil' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Credencial técnica' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Cambiar cuenta de Google' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Guardar fotografía' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Guardar certificado' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Guardar datos' })).toBeDisabled()
 
   await page.locator('.account-control--topbar summary').click()
