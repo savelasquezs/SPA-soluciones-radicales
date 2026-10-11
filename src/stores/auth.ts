@@ -112,9 +112,13 @@ export const useAuthStore = defineStore('auth', () => {
     status.value = 'unauthenticated'
   }
 
-  async function useAnotherAccount(): Promise<void> {
+  async function useAnotherAccount(callbackURL = window.location.origin): Promise<void> {
+    // Better Auth keeps the current session during signIn.social, which can
+    // return the old Google identity on the first attempt. Invalidate that
+    // session before starting OAuth, while the short-lived handoff remains in
+    // sessionStorage (owned by the profile flow).
     await logout()
-    await login(true)
+    await login(true, callbackURL)
   }
 
   return {
