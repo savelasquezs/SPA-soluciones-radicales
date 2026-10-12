@@ -164,6 +164,10 @@
 .svc-week-calendar__event:hover, .svc-week-calendar__event:focus-within { z-index:6; border-color:var(--border-strong); outline:1px solid var(--accent); outline-offset:0; }
 .svc-week-calendar__event-main { user-select:none; -webkit-user-select:none; display:flex; flex:1 1 auto; flex-direction:column; align-items:flex-start; gap:0.09rem; min-width:0; height:100%; padding:0.19rem 1.2rem 0.2rem 0.3rem; border:0; border-radius:inherit; background:transparent; color:inherit; font:inherit; text-align:left; cursor:pointer; }
 .svc-week-calendar__event-main:disabled { cursor:wait; }
+/* Clip event text to its own rectangle; keep the outer event overflow visible for its tooltip. */
+.svc-week-calendar__event-main { overflow:hidden; }
+.svc-week-calendar__event-main--brief { justify-content:center; padding-block:0.1rem; }
+.svc-week-calendar__event-brief { display:block; width:100%; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:0.68rem; line-height:1.2; }
 .svc-week-calendar__event--PROGRAMADO .svc-week-calendar__event-main:not(:disabled) { cursor:grab; }
 .svc-week-calendar__event-main > strong, .svc-week-calendar__event-main > small, .svc-week-calendar__event-time { display:block; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .svc-week-calendar__event-main > strong { font-weight:600; font-size:0.71rem; }
