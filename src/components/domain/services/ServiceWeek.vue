@@ -1,13 +1,19 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { ArrowUpRight, Plus } from 'lucide-vue-next'
-import { addDateDays, formatServiceDate, SERVICE_STATE_LABELS, todayBogota, toBogotaInput } from '@/helpers/adminServices'
+import { ArrowUpRight, CheckCircle2, CirclePlay, Clock3, Plus, XCircle } from 'lucide-vue-next'
+import { addDateDays, formatServiceDate, todayBogota, toBogotaInput } from '@/helpers/adminServices'
 import { layoutServiceDay, serviceWeekBounds, serviceWeekHours, serviceWeekInstantAt, snapServiceWeekMinute } from '@/helpers/serviceWeek'
 import type { AdminService } from '@/types/adminServices'
 
 const props=withDefaults(defineProps<{ from: string; records: AdminService[]; busy?: boolean; singleDay?: string; returnTo?: string }>(),{ busy:false,singleDay:'' })
 const emit=defineEmits<{ create: [start: string]; open: [record: AdminService]; move: [record: AdminService,start: string] }>()
+const WEEK_STATUS: Record<AdminService['estado'], { label: string; icon: typeof Clock3 }> = {
+  PROGRAMADO: { label:'Pendiente de realizar',icon:Clock3 },
+  EN_PROCESO: { label:'Servicio en proceso',icon:CirclePlay },
+  FINALIZADO: { label:'Servicio finalizado',icon:CheckCircle2 },
+  CANCELADO: { label:'Servicio cancelado',icon:XCircle },
+}
 const HOUR_HEIGHT=46
 const dayRecords=computed(()=>props.singleDay
   ? props.records.filter(record=>toBogotaInput(record.inicioProgramado).slice(0,10)===props.singleDay) : props.records)
@@ -198,7 +204,11 @@ function duration(record: AdminService): number {
               <span>{{ formatServiceDate(event.record.inicioProgramado) }} · {{ formatServiceDate(event.record.inicioProgramado,true) }} – {{ formatServiceDate(event.record.finProgramado,true) }}</span>
               <span>{{ event.record.direccion }}</span>
               <span>Técnico: {{ event.record.responsable.nombreCompleto }}</span>
-              <span>{{ SERVICE_STATE_LABELS[event.record.estado] }} · {{ event.record.tipoServicio==='REFUERZO' ? 'Refuerzo' : 'Principal' }}</span>
+              <span class="svc-week-calendar__popover-state" :class="'svc-week-calendar__popover-state--'+event.record.estado">
+                <component :is="WEEK_STATUS[event.record.estado].icon" :size="16" aria-hidden="true" />
+                <strong>{{ WEEK_STATUS[event.record.estado].label }}</strong>
+                <span class="svc-week-calendar__popover-kind">{{ event.record.tipoServicio==='REFUERZO' ? 'Refuerzo' : 'Principal' }}</span>
+              </span>
               <span v-if="event.record.estado==='PROGRAMADO'" class="svc-week-calendar__popover-hint">Arrastra para mover · pulsa para reprogramar</span>
             </span>
           </div>
