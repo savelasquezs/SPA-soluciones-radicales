@@ -472,6 +472,37 @@ test('opens certificates with the finalized service already selected without a h
 })
 
 
+test('concurrent weekly events use a short time and wrap the client vertically',async({page})=>{
+  const api=await setup(page)
+  const starts=['09:00','09:07','16:00','16:07']
+  api.records.splice(0,api.records.length,...starts.map((time,index)=>{
+    const item=record(uid(100+index))
+    item.clienteNombre='El señor arroz'
+    item.inicioProgramado=fromBogotaInput(`${day}T${time}`)
+    item.finProgramado=new Date(new Date(item.inicioProgramado).getTime()+(index<2?90:30)*60_000).toISOString()
+    return item
+  }))
+  await page.setViewportSize({width:1440,height:900})
+  await page.goto(`/agenda?view=week&from=${day}`)
+  const calendar=page.getByRole('region',{name:'Agenda semanal por horas'})
+  const narrow=calendar.locator('.svc-week-calendar__event--narrow')
+  await expect(narrow).toHaveCount(4)
+  const tall=narrow.filter({has:page.locator('.svc-week-calendar__event-short-time', {hasText:'9:00'})})
+  await expect(tall.locator('.svc-week-calendar__event-short-time')).toHaveText('9:00')
+  const name=tall.locator('.svc-week-calendar__event-narrow-name')
+  await expect(name).toHaveText('El señor arroz')
+  await expect(name).toHaveCSS('font-size','10px')
+  await expect(name).toHaveCSS('white-space','normal')
+  await expect(name).toHaveCSS('-webkit-line-clamp','2')
+  const detail=tall.locator('.svc-week-calendar__event-detail')
+  await expect(detail).toHaveCSS('opacity','0')
+  await tall.hover()
+  await expect(detail).toHaveCSS('opacity','1')
+  const short=narrow.filter({has:page.locator('.svc-week-calendar__event-short-time', {hasText:'4:00'})})
+  await expect(short.locator('.svc-week-calendar__event-narrow-name')).toHaveCSS('-webkit-line-clamp','1')
+  await expect(short.locator('.svc-week-calendar__event-short-time')).toHaveText('4:00')
+})
+
 test('weekly calendar confirms drag rescheduling, preserves the Refuerzo, and never saves on cancel',async({ page })=>{
   const api=await setup(page)
   const weekStart=addDateDays(day,-((new Date(day+'T00:00:00Z').getUTCDay()+6)%7)+7)
