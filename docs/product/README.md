@@ -111,6 +111,8 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 - La periodicidad de la Sede genera seguimiento en Próximos por confirmar, no Servicios futuros automáticos en la Agenda.
 - Un próximo por confirmar pasa a Servicio únicamente cuando el cliente confirma y el Administrador completa la acción Agendar.
 - Una Sede residencial no exige evaluación MIP por Áreas ni informe completo.
+- Para un Cliente Casa, el Administrador programa desde su Sede residencial interna sin mostrar un selector de Sede, registra el valor manual por cada visita y selecciona fecha, duración y técnicos. No hay Refuerzo ni periodicidad automática. El precio se congela en el Servicio, no en la Sede.
+- El Técnico puede iniciar un Servicio residencial Principal dentro de la ventana habitual, consultar Productos y finalizar directamente mediante las dos firmas; no se presentan Áreas, certificados ni envío de informe MIP completo.
 - Finalizar exige tiempos reales, completitud técnica, sincronización de archivos obligatorios y las firmas del Técnico y del responsable del cliente en cada Servicio.
 - El flujo completo de programación, Refuerzos y Próximos por confirmar está definido en [service-scheduling.md](service-scheduling.md).
 
