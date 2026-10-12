@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseSelect from '@/components/base/BaseSelect.vue'
 import BaseSearchSelect from '@/components/base/BaseSearchSelect.vue'
+import BaseInput from '@/components/base/BaseInput.vue'
 import { useAuthStore } from '@/stores/auth'
 import BaseTextarea from '@/components/base/BaseTextarea.vue'
 import ServiceScheduleFields from './ServiceScheduleFields.vue'
@@ -25,7 +26,8 @@ const clients=computed(()=>{
   if(props.record&&!byId.has(props.record.clientId))byId.set(props.record.clientId,{id:props.record.clientId,label:props.record.clienteNombre})
   return [...byId.values()].sort((a,b)=>a.label.localeCompare(b.label,'es'))
 })
-const clientSites=computed(()=>props.workspace.sedes.filter(site=>site.clientId===clientId.value))
+const clientSites=computed(()=>props.workspace.sedes.filter(site=>site.clientId===clientId.value && site.tipoSede!=='RESIDENCIAL'))
+const residential=computed(()=>selectedSite.value?.tipoSede==='RESIDENCIAL' || props.record?.tipoSede==='RESIDENCIAL')
 const cashReceivers=computed(()=>{
   const users=props.workspace.tecnicos.map(person=>({id:person.id,label:person.nombreCompleto}))
   const admin=auth.profile
@@ -34,20 +36,28 @@ const cashReceivers=computed(()=>{
 })
 const reinforcement=computed(()=>props.record?.tipoServicio==='REFUERZO')
 const confirmedPayment=computed(()=>props.record?.pago.estadoPago==='CONFIRMADO')
-const amount=computed(()=>props.record?.valorServicio ?? selectedSite.value?.valorServicio ?? 0)
+const amount=computed(()=>{
+  if(props.record) return props.record.valorServicio
+  if(residential.value) {
+    const value=Number(props.modelValue.valorServicio)
+    return props.modelValue.valorServicio?.trim() && Number.isSafeInteger(value) && value>=0 ? value : 0
+  }
+  return selectedSite.value?.valorServicio ?? 0
+})
 const technicians=computed(()=>{
   const map=new Map(props.workspace.tecnicos.map(person=>[person.id,person]))
   for(const person of props.record ? [props.record.responsable,...props.record.colaboradores] : []) if(!map.has(person.id)) map.set(person.id,person)
   return [...map.values()]
 })
-const localErrors=computed(()=>validateServiceInput(draftToServiceInput(props.modelValue),!props.record).errors)
+const localErrors=computed(()=>validateServiceInput(draftToServiceInput(props.modelValue),!props.record,new Date(),residential.value).errors)
 const visibleErrors=computed(()=>({ ...Object.fromEntries(Object.entries(localErrors.value).filter(([key])=>touched.value.has(key))),...props.errors }))
 function touch(key: string): void { touched.value.add(key) }
 function patch(value: Partial<ServiceEditorDraft>): void { emit('update:modelValue',{ ...props.modelValue,...value }); emit('changed') }
 function changeClient(id:string):void {
   if(id===clientId.value)return
   clientId.value=id
-  changeSite('')
+  const residentialSite=props.workspace.sedes.find(site=>site.clientId===id && site.tipoSede==='RESIDENCIAL')
+  changeSite(residentialSite?.id ?? '')
 }
 function changePaymentState(paid:boolean):void {
   patch({cobro:{...props.modelValue.cobro,pagado:paid,tecnicoRecaudoPrevistoId:paid ? null : props.modelValue.cobro.tecnicoRecaudoPrevistoId,recaudadoPorId:null}})
@@ -61,7 +71,7 @@ function changeSite(id: string): void {
   const site=props.workspace.sedes.find(item=>item.id===id)
   const programacion={ ...props.modelValue.programacion,duracionMinutos:String(site?.duracionServicioMinutos ?? 90) }
   automaticRefuerzo.value=true
-  patch({ sedeId:id,programacion,refuerzo:site?.manejaRefuerzo ? scheduleToDraft(suggestReinforcement(scheduleFromDraft(programacion))) : null })
+  patch({ sedeId:id,valorServicio:'',programacion,refuerzo:site?.manejaRefuerzo ? scheduleToDraft(suggestReinforcement(scheduleFromDraft(programacion))) : null })
   touch('sedeId')
 }
 function changeSchedule(programacion: ServiceScheduleDraft): void {
@@ -80,7 +90,7 @@ const responsibleName=computed(()=>technicians.value.find(person=>person.id===pr
           <BaseSearchSelect :model-value="clientId" :options="clients" name="servicio-cliente"
             label="Cliente" placeholder="Buscar cliente…" required :disabled="disabled || Boolean(record)"
             :error="!clientId ? visibleErrors.sedeId : undefined" @update:model-value="changeClient" />
-          <BaseSelect :model-value="modelValue.sedeId" name="servicio-sede" label="Sede" required
+          <BaseSelect v-if="!residential" :model-value="modelValue.sedeId" name="servicio-sede" label="Sede" required
             :disabled="disabled || Boolean(record) || !clientId" :error="visibleErrors.sedeId"
             @update:model-value="changeSite">
             <option value="">Selecciona una sede</option>
@@ -89,7 +99,8 @@ const responsibleName=computed(()=>technicians.value.find(person=>person.id===pr
           </BaseSelect>
         </div>
         <p v-if="reinforcement && record?.principal" class="svc-muted svc-small">Vinculado a {{ record.principal.solicitud }} · Sin cobro</p>
-        <p v-else-if="selectedSite" class="svc-muted svc-small">{{ selectedSite.direccion }}</p>
+        <p v-else-if="selectedSite" class="svc-muted svc-small">{{ residential ? 'Dirección de la visita: ' : '' }}{{ selectedSite.direccion }}</p>
+        <div v-if="residential" class="svc-form-grid"><BaseInput :model-value="modelValue.valorServicio ?? ''" name="servicio-valor" label="Valor del servicio (COP)" type="number" min="0" step="1" required :disabled="disabled || Boolean(record)" :error="visibleErrors.valorServicio" @update:model-value="patch({ valorServicio:$event })" @blur="touch('valorServicio')" /></div>
         <ServiceScheduleFields :future-only="!record" :model-value="modelValue.programacion" :technicians="technicians" :disabled="disabled" :errors="visibleErrors" @update:model-value="changeSchedule" @blur="touch" />
       </section>
       <section v-if="modelValue.refuerzo" class="svc-card">
@@ -140,7 +151,7 @@ const responsibleName=computed(()=>technicians.value.find(person=>person.id===pr
       <section class="svc-card">
         <h2>Resumen</h2>
         <dl>
-          <div><dt>Cliente y sede</dt><dd>{{ selectedSite ? `${selectedSite.clienteNombre} · ${selectedSite.nombre}` : record ? `${record.clienteNombre} · ${record.sedeNombre}` : 'Sin seleccionar' }}</dd></div>
+          <div><dt>{{ residential ? 'Cliente y dirección' : 'Cliente y sede' }}</dt><dd>{{ selectedSite ? residential ? `${selectedSite.clienteNombre} · ${selectedSite.direccion}` : `${selectedSite.clienteNombre} · ${selectedSite.nombre}` : record ? residential ? `${record.clienteNombre} · ${record.direccion}` : `${record.clienteNombre} · ${record.sedeNombre}` : 'Sin seleccionar' }}</dd></div>
           <div><dt>{{ reinforcement ? 'Refuerzo' : 'Principal' }}</dt><dd>{{ formatServiceDate(scheduleFromDraft(modelValue.programacion).inicioProgramado) }} · {{ formatServiceDate(scheduleFromDraft(modelValue.programacion).inicioProgramado,true) }}</dd></div>
           <div><dt>Equipo</dt><dd>{{ responsibleName }}<small v-if="modelValue.programacion.tecnicosColaboradoresIds.length" class="svc-muted"> + {{ modelValue.programacion.tecnicosColaboradoresIds.length }} colaboradores</small></dd></div>
           <div v-if="modelValue.refuerzo"><dt>Refuerzo gratuito</dt><dd>{{ formatServiceDate(scheduleFromDraft(modelValue.refuerzo).inicioProgramado) }} · {{ formatServiceDate(scheduleFromDraft(modelValue.refuerzo).inicioProgramado,true) }}</dd></div>
