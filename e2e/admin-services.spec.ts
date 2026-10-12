@@ -395,7 +395,38 @@ test('weekly calendar expands its time grid and reveals operational detail on ho
   await expect(popover).toBeVisible()
   await expect(popover).toContainText('Dirección sintética de prueba')
   await expect(popover).toContainText('Técnico: Camilo Ruiz')
-  await expect(popover).toContainText('Programado')
+  await expect(popover.locator('.svc-week-calendar__popover-state')).toContainText('Pendiente de realizar')
+  await expect(popover.locator('.svc-week-calendar__popover-state svg')).toHaveCount(1)
+})
+
+test('weekly calendar highlights every service state and preserves accent on hover',async({page})=>{
+  const api=await setup(page)
+  const states=['PROGRAMADO','EN_PROCESO','FINALIZADO','CANCELADO'] as const
+  const labels=['Pendiente de realizar','Servicio en proceso','Servicio finalizado','Servicio cancelado']
+  api.records.splice(0,api.records.length,...states.map((state,index)=>{
+    const item=record(uid(80+index))
+    item.estado=state
+    item.inicioProgramado=fromBogotaInput(`${day}T${String(9+index*2).padStart(2,'0')}:00`)
+    item.finProgramado=new Date(new Date(item.inicioProgramado).getTime()+90*60_000).toISOString()
+    return item
+  }))
+  await page.goto(`/servicios?view=week&from=${day}`)
+  const calendar=page.getByRole('region',{name:'Agenda semanal por horas'})
+  const colors:string[]=[]
+  for(const [index,state] of states.entries()) {
+    const event=calendar.locator('.svc-week-calendar__event--'+state)
+    await expect(event).toHaveCount(1)
+    await expect(event).toHaveCSS('border-left-width','4px')
+    const accent=await event.evaluate(element=>getComputedStyle(element).borderLeftColor)
+    colors.push(accent)
+    const indicator=event.locator('.svc-week-calendar__popover-state')
+    await expect(indicator).toContainText(labels[index]!)
+    await expect(indicator.locator('svg')).toHaveCount(1)
+    await event.hover()
+    await expect(event.locator('.svc-week-calendar__popover')).toBeVisible()
+    expect(await event.evaluate(element=>getComputedStyle(element).borderLeftColor)).toBe(accent)
+  }
+  expect(new Set(colors).size).toBe(4)
 })
 
 test('error retry, compact desktop, dark mode and mobile do not overflow the page',async({ page },info)=>{
