@@ -156,12 +156,13 @@
 .svc-week-calendar__slot-target:focus-visible, .svc-week-calendar__day-create:focus-visible, .svc-week-calendar__event-main:focus-visible, .svc-week-calendar__event-detail:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
 .svc-week-calendar__slot-indicator { position:absolute; left:0; right:0; z-index:3; height:1px; border-top:1px dashed var(--accent); pointer-events:none; color:var(--accent); font-size:0.625rem; font-weight:600; line-height:1; text-align:right; padding-right:0.2rem; text-shadow:0 0 4px var(--surface); }
 .svc-week-calendar__drop-preview { position:absolute; z-index:5; left:2px; right:2px; box-sizing:border-box; min-height:22px; border:1px dashed var(--accent); border-radius:var(--radius-sm); background:var(--accent-subtle); color:var(--text); padding:0.25rem 0.35rem; pointer-events:none; font-size:0.75rem; font-weight:600; }
-.svc-week-calendar__event { display:flex; padding:0; overflow:visible; background:var(--surface-raised); border-left-width:2px; font-size:0.6875rem; box-shadow:0 1px 2px color-mix(in srgb,var(--text) 6%,transparent); }
+.svc-week-calendar__event { display:flex; padding:0; overflow:visible; background:var(--surface-raised); border-left-width:4px; font-size:0.6875rem; box-shadow:0 1px 2px color-mix(in srgb,var(--text) 6%,transparent); }
 .svc-week-calendar__event.is-dragging { opacity:0.35; }
+.svc-week-calendar__event--PROGRAMADO { border-left-color:var(--warning); }
 .svc-week-calendar__event--EN_PROCESO { border-left-color:var(--info); }
 .svc-week-calendar__event--FINALIZADO { border-left-color:var(--success); }
-.svc-week-calendar__event--CANCELADO { border-left-color:var(--text-muted); opacity:0.75; }
-.svc-week-calendar__event:hover, .svc-week-calendar__event:focus-within { z-index:6; border-color:var(--border-strong); outline:1px solid var(--accent); outline-offset:0; }
+.svc-week-calendar__event--CANCELADO { border-left-color:var(--danger); }
+.svc-week-calendar__event:hover, .svc-week-calendar__event:focus-within { z-index:6; border-top-color:var(--border-strong); border-right-color:var(--border-strong); border-bottom-color:var(--border-strong); outline:1px solid var(--accent); outline-offset:0; }
 .svc-week-calendar__event-main { user-select:none; -webkit-user-select:none; display:flex; flex:1 1 auto; flex-direction:column; align-items:flex-start; gap:0.09rem; min-width:0; height:100%; padding:0.19rem 1.2rem 0.2rem 0.3rem; border:0; border-radius:inherit; background:transparent; color:inherit; font:inherit; text-align:left; cursor:pointer; }
 .svc-week-calendar__event-main:disabled { cursor:wait; }
 /* Clip event text to its own rectangle; keep the outer event overflow visible for its tooltip. */
@@ -177,6 +178,13 @@
 .svc-week-calendar__event-detail:hover { color:var(--text); background:var(--hover); }
 .svc-week-calendar__popover { width:14.5rem; padding:0.55rem 0.7rem; gap:0.3rem; box-shadow:var(--shadow-lg); }
 .svc-week-calendar__popover-hint { color:var(--text-secondary); font-size:0.7rem; }
+.svc-week-calendar__popover-state { display:flex; align-items:center; flex-wrap:wrap; gap:0.25rem 0.35rem; font-size:0.75rem; font-weight:600; }
+.svc-week-calendar__popover-state > svg { flex:none; }
+.svc-week-calendar__popover-state--PROGRAMADO { color:var(--warning); }
+.svc-week-calendar__popover-state--EN_PROCESO { color:var(--info); }
+.svc-week-calendar__popover-state--FINALIZADO { color:var(--success); }
+.svc-week-calendar__popover-state--CANCELADO { color:var(--danger); }
+.svc-week-calendar__popover-kind { margin-left:auto; font-weight:400; font-size:0.68rem; color:var(--text-secondary); }
 @media (max-width:1100px) { .svc-filters--week { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media (max-width:680px) {
   .svc-tab { min-height:44px; }
