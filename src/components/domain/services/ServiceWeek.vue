@@ -44,6 +44,10 @@ function eventStyle(startMinute: number,endMinute: number,lane: number,laneCount
     width:'calc('+(100/laneCount)+'% - '+gap+'px)',
   }
 }
+function shortHourLabel(minute: number): string {
+  const hour=Math.floor(minute/60)%12 || 12
+  return hour+':'+String(minute%60).padStart(2,'0')
+}
 function hourLabel(minute: number): string {
   const hour=Math.floor(minute/60)
   return new Intl.DateTimeFormat('es-CO',{ hour:'numeric',minute:'2-digit',hour12:true,timeZone:'UTC' }).format(new Date(Date.UTC(2026,0,1,hour,minute%60)))
@@ -174,20 +178,24 @@ function duration(record: AdminService): number {
             v-for="event in day.events"
             :key="event.record.id"
             class="svc-week-calendar__event"
-            :class="['svc-week-calendar__event--'+event.record.estado,{ 'popover-left':index>=5, 'is-dragging':dragging?.id===event.record.id }]"
+            :class="['svc-week-calendar__event--'+event.record.estado,{ 'popover-left':index>=5, 'is-dragging':dragging?.id===event.record.id, 'svc-week-calendar__event--narrow':event.laneCount>1 }]"
             :style="eventStyle(event.startMinute,event.endMinute,event.lane,event.laneCount)"
             :data-service-id="event.record.id"
           >
             <button
               type="button"
               class="svc-week-calendar__event-main"
-              :class="{ 'svc-week-calendar__event-main--brief':event.endMinute-event.startMinute<75 || event.laneCount>1 }"
+              :class="{ 'svc-week-calendar__event-main--narrow':event.laneCount>1, 'svc-week-calendar__event-main--brief':event.laneCount===1 && event.endMinute-event.startMinute<75 }"
               :disabled="busy"
               @pointerdown="pointerDown($event,event.record)"
               :aria-label="(event.record.estado==='PROGRAMADO' ? 'Reprogramar ' : 'Ver ')+event.record.solicitud+' · '+event.record.clienteNombre"
               @click="clickRecord($event,event.record)"
             >
-              <template v-if="event.endMinute-event.startMinute<75 || event.laneCount>1">
+              <template v-if="event.laneCount>1">
+                <span class="svc-week-calendar__event-short-time">{{ shortHourLabel(event.startMinute) }}</span>
+                <strong class="svc-week-calendar__event-narrow-name" :class="{ 'svc-week-calendar__event-narrow-name--short':event.endMinute-event.startMinute<60 }">{{ event.record.clienteNombre }}</strong>
+              </template>
+              <template v-else-if="event.endMinute-event.startMinute<75">
                 <span class="svc-week-calendar__event-brief">{{ hourLabel(event.startMinute) }} · {{ event.record.clienteNombre }}</span>
               </template>
               <template v-else>
