@@ -87,7 +87,10 @@ describe('administrator services · real PostgreSQL',()=>{
     expect((await transaction(client=>getService(client,first.id))).valorServicio).toBe(75000)
     await expect(create(f,{...firstInput,valorServicio:null})).rejects.toMatchObject({code:'VALIDATION'})
     await expect(create(f,{...firstInput,refuerzo:{...firstInput.programacion,inicioProgramado:'2030-10-27T09:00:00-05:00'}})).rejects.toMatchObject({code:'VALIDATION'})
-    const business=principal(await create(f,{...input(f),valorServicio:1}))
+    const businessInput=input(f)
+    businessInput.valorServicio=1
+    businessInput.programacion.inicioProgramado='2030-10-08T09:00:00-05:00'
+    const business=principal(await create(f,businessInput))
     expect(business.valorServicio).toBe(300000)
     const reprogrammed=principal(await transaction(client=>editService(client,f.admin,first.id,first.version,
       {...firstInput,programacion:{...firstInput.programacion,inicioProgramado:'2030-10-09T09:00:00-05:00'}},false)))
