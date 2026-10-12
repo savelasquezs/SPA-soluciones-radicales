@@ -25,9 +25,10 @@ export interface ServiceSite {
   clienteNombre: string
   nombre: string
   direccion: string
-  valorServicio: number
-  periodicidadMeses: number
-  duracionServicioMinutos: number
+  tipoSede?: 'NEGOCIO' | 'RESIDENCIAL'
+  valorServicio: number | null
+  periodicidadMeses: number | null
+  duracionServicioMinutos: number | null
   manejaRefuerzo: boolean
   contacto: ServiceContact
 }
@@ -75,13 +76,16 @@ export interface ServiceCollectionPlan {
 }
 export interface ServiceInput {
   sedeId: string
+  /** Manual value for a home visit; ignored by business-site scheduling. */
+  valorServicio?: number | null
   programacion: ServiceSchedule
   refuerzo: ServiceSchedule | null
   productos: ServiceProductInput[]
   cobro: ServiceCollectionPlan
   observaciones: string
 }
-export interface ServiceEditorDraft extends Omit<ServiceInput, 'programacion' | 'refuerzo'> {
+export interface ServiceEditorDraft extends Omit<ServiceInput, 'programacion' | 'refuerzo' | 'valorServicio'> {
+  valorServicio?: string
   programacion: ServiceScheduleDraft
   refuerzo: ServiceScheduleDraft | null
 }
@@ -122,6 +126,7 @@ export interface AdminService extends ServiceLink {
   clienteNombre: string
   sedeId: string
   sedeNombre: string
+  tipoSede?: 'NEGOCIO' | 'RESIDENCIAL'
   direccion: string
   servicioPrincipalId: string | null
   inicioReal: string | null
