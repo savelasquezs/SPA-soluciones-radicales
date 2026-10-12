@@ -245,7 +245,8 @@ async function retryCalendar(record: AdminService): Promise<void> {
       <button role="tab" class="svc-tab" :aria-selected="tab==='upcoming'" @click="changeTab('upcoming')">Próximos por confirmar <span v-if="store.pendingCount" class="svc-count" :aria-label="`${store.pendingCount} pendientes de confirmación en los próximos siete días`" title="Pendientes de confirmación · próximos 7 días">{{ store.pendingCount }}</span></button>
       <button role="tab" class="svc-tab" :aria-selected="tab==='history'" @click="changeTab('history')">Historial</button>
     </div>
-    <div v-if="tab==='agenda'" class="svc-agenda-bar">
+    <div class="svc-controls" :class="{ 'svc-controls--week': tab==='agenda' && view==='week' }">
+      <div v-if="tab==='agenda'" class="svc-agenda-bar">
       <div class="svc-segment" role="group" aria-label="Presentación de agenda">
         <button type="button" :aria-pressed="view==='table'" @click="changeView('table')">Tabla</button>
         <button type="button" :aria-pressed="view==='week'" @click="changeView('week')">Semana</button>
@@ -299,6 +300,7 @@ async function retryCalendar(record: AdminService): Promise<void> {
       <BaseSelect v-if="tab!=='upcoming' && (!compact || mobileFiltersOpen)" class="svc-filter-extra" :model-value="serviceFilter.tipo" name="service-type-filter" label="Tipo" @update:model-value="setQuery({ tipo:$event || undefined,page:'1' })"><option value="">Todos</option><option value="PRINCIPAL">Principal</option><option value="REFUERZO">Refuerzo</option></BaseSelect>
       <BaseSelect v-if="tab!=='upcoming' && (!compact || mobileFiltersOpen)" class="svc-filter-extra svc-filter-extra--team" :model-value="serviceFilter.tecnicoId" name="service-team-filter" label="Técnico" @update:model-value="setQuery({ tecnicoId:$event || undefined,page:'1' })"><option value="">Todo el equipo</option><option v-for="person in store.options?.tecnicos ?? []" :key="person.id" :value="person.id">{{ person.nombreCompleto }}</option></BaseSelect>
       <BaseButton v-if="compact && mobileFiltersOpen" size="compact" variant="ghost" class="svc-filter-clear" @click="clearAdvancedFilters">Limpiar filtros</BaseButton>
+    </div>
     </div>
     <div v-if="tab!=='agenda'" class="svc-toolbar"><span class="svc-muted svc-small">{{ tab==='upcoming' ? 'Las fechas son sugeridas. Agendar crea la visita confirmada.' : 'Servicios finalizados y cancelados' }}</span></div>
     <StatusPanel v-if="rangeError" title="Revisa el rango de fechas" :message="rangeError" tone="warning" />

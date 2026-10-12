@@ -562,3 +562,36 @@
   .svc-week-calendar--day .svc-week-calendar__event-brief { display:block; width:100%; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:0.72rem; line-height:1.2; }
   .svc-week-calendar--day .svc-week-calendar__event-detail { min-width:28px; min-height:26px; }
 }
+
+
+/* Compact Services header. Keep mobile touch targets and other modules unaffected. */
+.svc-controls { display:grid; gap:0.45rem; min-width:0; }
+.svc-page--agenda { gap:0.55rem; }
+.svc-page--agenda .svc-page-header { gap:0.5rem; }
+.svc-page--agenda .svc-page-header h1 { font-size:1.15rem; line-height:1.5rem; }
+.svc-page--agenda .svc-filters { gap:0.45rem; }
+@media (min-width:681px) {
+  .svc-page--agenda .svc-tabs { gap:1rem; }
+  .svc-page--agenda .svc-tab { min-height:32px; padding-block:0.25rem; }
+  .svc-page--agenda .svc-filters .base-field { gap:0.15rem; }
+  .svc-page--agenda .svc-filters input,
+  .svc-page--agenda .svc-filters select { min-height:36px; padding-block:0.35rem; }
+  .svc-page--agenda .svc-agenda-bar { gap:0.4rem; }
+}
+/* Wide desktop: navigation and filters share a single line above the calendar. */
+@media (min-width:1400px) {
+  .svc-controls--week { grid-template-columns:max-content minmax(0,1fr); align-items:end; column-gap:0.7rem; }
+  .svc-controls--week .svc-agenda-bar { flex-wrap:nowrap; }
+  .svc-controls--week .svc-agenda-bar__hint { display:none; }
+  .svc-controls--week .svc-week-navigation { gap:0.1rem; }
+  .svc-controls--week .svc-week-navigation__range { font-size:0.75rem; }
+  .svc-controls--week .svc-filters {
+    grid-template-columns:minmax(8rem,1.5fr) minmax(5.5rem,0.7fr) minmax(5rem,0.6fr) minmax(7.5rem,1fr);
+    gap:0.35rem;
+  }
+}
+
+@media (max-width:680px) {
+  .svc-page--agenda { gap:0.45rem; }
+  .svc-page--agenda .svc-page-header h1 { font-size:1rem; line-height:1.35; }
+}
