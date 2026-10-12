@@ -92,3 +92,22 @@ for (const width of [390,1280]) for (const theme of ['light','dark']) {
     await page.screenshot({ path: `test-results/site-finding-${width}-${theme}.png`, fullPage: true })
   })
 }
+
+test('historial de sede usa tarjetas móviles sin desbordar y tabla en escritorio', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 860 })
+  await setup(page)
+  await page.route(/\/api\/sites\/[^/]+\/services\?page=/, route => route.fulfill({ json: {
+    items: [{ id: ids.service, solicitud: 'SR-00000021', fecha: '2026-10-30T12:00:00Z', tipo: 'REFUERZO', tecnico: 'Técnico de prueba', estado: 'PROGRAMADO', valor: 105000 }],
+    page: 1, pageSize: 20, total: 1,
+  } }))
+  await page.getByRole('button', { name: 'Historial de servicios', exact: true }).click()
+  const mobile = page.locator('.history-mobile-card')
+  await expect(mobile).toHaveCount(1)
+  await expect(mobile.getByRole('link', { name: 'SR-00000021' })).toBeVisible()
+  await expect(page.locator('.history-table')).toBeHidden()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+
+  await page.setViewportSize({ width: 1280, height: 860 })
+  await expect(page.locator('.history-table')).toBeVisible()
+  await expect(mobile).toBeHidden()
+})

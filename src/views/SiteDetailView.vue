@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Pencil, RotateCcw, Trash2, X } from 'lucide-vue-next'
+import { Pencil, Plus, RotateCcw, Trash2, X } from 'lucide-vue-next'
 
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDialog from '@/components/base/BaseDialog.vue'
@@ -10,6 +10,8 @@ import EmptyState from '@/components/base/EmptyState.vue'
 import ErrorState from '@/components/base/ErrorState.vue'
 import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import StatusBadge from '@/components/base/StatusBadge.vue'
+import ResponsiveTable from '@/components/base/ResponsiveTable.vue'
+import ServiceHistoryList from '@/components/domain/clients/ServiceHistoryList.vue'
 import SiteMonitoringPanel from '@/components/domain/clients/SiteMonitoringPanel.vue'
 import SiteFindingsPanel from '@/components/domain/clients/SiteFindingsPanel.vue'
 import WhatsAppPhoneLink from '@/components/base/WhatsAppPhoneLink.vue'
@@ -41,6 +43,7 @@ const visited = ref({ devices: false, findings: false })
 const siteFormOpen = ref(false)
 const siteForm = ref<SiteInput>(blankSite())
 const newArea = ref<AreaInput>(blankArea())
+const areaCreateOpen = ref(false)
 const editingArea = ref<AreaRecord | null>(null)
 const editAreaForm = ref<AreaInput>(blankArea())
 const selectedArea = ref<AreaRecord | null>(null)
@@ -79,8 +82,9 @@ async function load(): Promise<void> {
   }
 }
 
-async function changeTab(next: Tab): Promise<void> {
+async function changeTab(next: Tab, event?: MouseEvent): Promise<void> {
   tab.value = next
+  ;(event?.currentTarget as HTMLElement | null)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })
   if (next === 'devices' || next === 'findings') visited.value[next] = true
   if (next === 'areas' && !store.areasBySiteId[siteId.value]) await loadAreas()
   if (next === 'history' && !history.value.length) await loadHistory()
@@ -142,11 +146,17 @@ async function saveSite(): Promise<void> {
   }
 }
 
+function openAreaCreate(): void {
+  newArea.value = blankArea()
+  areaCreateOpen.value = true
+}
+
 async function createArea(): Promise<void> {
   if (saving.value) return
   saving.value = true
   try {
     await store.createArea(siteId.value, newArea.value)
+    areaCreateOpen.value = false
     newArea.value = blankArea()
     notifications.show('Área creada correctamente.', 'success')
   } catch (error) { notifications.show(message(error, 'No fue posible crear el Área'), 'error') }
@@ -207,29 +217,101 @@ function blankSite(): SiteInput { return { nombre: '', direccion: '', correos: [
 function toSiteInput(record: SiteRecord): SiteInput { return { nombre: record.nombre, direccion: record.direccion, correos: [...record.correos], heredaCorreosCliente: record.heredaCorreosCliente, contactoPrincipalNombre: record.contactoPrincipalNombre, contactoPrincipalCorreo: record.contactoPrincipalCorreo, contactoPrincipalCelular: record.contactoPrincipalCelular, valorServicio: record.valorServicio, periodicidadMeses: record.periodicidadMeses, manejaRefuerzo: record.manejaRefuerzo, planoStoragePath: record.planoStoragePath, manejaVehiculos: record.manejaVehiculos, generaCertificadoVehiculo: record.generaCertificadoVehiculo, vigenciaCertificadoVehiculoMeses: record.vigenciaCertificadoVehiculoMeses, duracionServicioMinutos: record.duracionServicioMinutos, activo: record.activo, version: record.version } }
 function message(error: unknown, fallback: string): string { return error instanceof Error ? error.message : fallback }
 function formatMoney(value: number): string { return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(value) }
-function formatDate(value: string): string { return new Intl.DateTimeFormat('es-CO', { dateStyle: 'medium' }).format(new Date(value)) }
 </script>
 
 <template>
   <LoadingSkeleton v-if="loading" label="Cargando Sede" :lines="6" />
   <ErrorState v-else-if="loadError" title="No pudimos cargar la Sede" :message="loadError"><BaseButton variant="secondary" @click="load">Reintentar</BaseButton></ErrorState>
   <div v-else-if="site && client" class="site-detail">
-    <header class="detail-header"><div><button class="back" @click="router.push(`/clientes/${client.id}`)">← {{ client.nombre }}</button><h1>{{ site.nombre }}</h1><StatusBadge :tone="site.activo ? 'success' : 'neutral'">{{ site.activo ? 'Activa' : 'Inactiva' }}</StatusBadge></div><BaseButton size="compact" variant="secondary" @click="openSiteEdit"><Pencil :size="16" />Editar Sede</BaseButton></header>
-    <nav class="tabs" aria-label="Detalle de Sede"><button v-for="item in ([['summary','Resumen'],['areas','Áreas'],['devices','Puestos de monitoreo'],['findings','Hallazgos'],['history','Historial de servicios'],['settings','Configuración']] as const)" :key="item[0]" :aria-current="tab === item[0] ? 'page' : undefined" @click="changeTab(item[0])">{{ item[1] }}</button></nav>
+    <header class="detail-header">
+      <div class="identity">
+        <button class="back" @click="router.push('/clientes/' + client.id)">← {{ client.nombre }}</button>
+        <div class="site-title">
+          <h1>{{ site.nombre }}</h1>
+          <StatusBadge :tone="site.activo ? 'success' : 'neutral'">{{ site.activo ? 'Activa' : 'Inactiva' }}</StatusBadge>
+        </div>
+      </div>
+      <BaseButton size="compact" variant="secondary" @click="openSiteEdit"><Pencil :size="16" />Editar Sede</BaseButton>
+    </header>
+    <nav class="tabs" aria-label="Detalle de Sede">
+      <button v-for="item in ([['summary','Resumen'],['areas','Áreas'],['devices','Puestos de monitoreo'],['findings','Hallazgos'],['history','Historial de servicios'],['settings','Configuración']] as const)" :key="item[0]" :aria-current="tab === item[0] ? 'page' : undefined" @click="changeTab(item[0], $event)">{{ item[1] }}</button>
+    </nav>
 
     <section v-if="tab === 'summary'" class="summary-grid"><article><h2>Contacto principal</h2><p>{{ site.contactoPrincipalNombre }}</p><WhatsAppPhoneLink v-if="site.contactoPrincipalCelular" :phone="site.contactoPrincipalCelular" /><p>{{ site.contactoPrincipalCorreo ?? 'Sin correo' }}</p></article><article><h2>Operación</h2><p>{{ formatMoney(site.valorServicio) }} por Servicio</p><p>Cada {{ site.periodicidadMeses }} mes{{ site.periodicidadMeses === 1 ? '' : 'es' }}</p><p>{{ site.duracionServicioMinutos }} minutos</p></article><article><h2>Configuración</h2><p>{{ site.areasCount }} Áreas</p><p>{{ site.manejaVehiculos ? 'Maneja vehículos' : 'Sin vehículos' }}</p></article><article><h2>Plano</h2><p>{{ site.planoStoragePath?.split('/').slice(-1)[0] ?? 'Sin plano' }}</p><BaseButton v-if="site.planoStoragePath" size="compact" variant="secondary" @click="site.planoStoragePath && openPrivateFile(site.planoStoragePath)">Ver plano</BaseButton></article></section>
 
     <section v-else-if="tab === 'areas'" class="areas-layout">
-      <aside class="area-create"><h2>Agregar Área</h2><AreaForm v-model="newArea" mode="create" form-id="area-create-form" id-prefix="new-area" @submit="createArea" @invalid="notifications.show('Ingresa el nombre del Área.', 'error')" /><BaseButton size="compact" type="submit" form="area-create-form" :loading="saving">Agregar Área</BaseButton></aside>
-      <div class="areas-panel"><LoadingSkeleton v-if="areasLoading" label="Cargando Áreas" :lines="5" /><EmptyState v-else-if="areas.length === 0" title="No hay Áreas" message="Agrega la primera Área de esta Sede." /><div v-else class="areas-table-scroll"><table><thead><tr><th>Área</th><th>Ubicación</th><th>Puestos</th><th>Estado</th><th>Acciones</th></tr></thead><tbody><tr v-for="area in areas" :key="area.id"><td><button class="area-link" @click="selectedArea = area">{{ area.nombre }}</button></td><td>{{ area.esExterna ? 'Exterior / perímetro' : 'Interior' }}</td><td>{{ area.dispositivosCount }}</td><td><StatusBadge :tone="area.activo ? 'success' : 'neutral'">{{ area.activo ? 'Activa' : 'Inactiva' }}</StatusBadge></td><td><span class="row-actions"><button :aria-label="`Editar ${area.nombre}`" @click="openAreaEdit(area)"><Pencil :size="17" /></button><button v-if="area.activo" :aria-label="`Eliminar ${area.nombre}`" @click="deleteAreaTarget = area"><Trash2 :size="17" /></button><button v-else :aria-label="`Reactivar ${area.nombre}`" @click="setAreaActive(area, true)"><RotateCcw :size="17" /></button></span></td></tr></tbody></table></div></div>
-      <aside v-if="selectedArea" class="area-drawer" aria-label="Detalle del Área"><button class="drawer-close" aria-label="Cerrar detalle" @click="selectedArea = null"><X :size="20" /></button><h2>{{ selectedArea.nombre }}</h2><StatusBadge :tone="selectedArea.activo ? 'success' : 'neutral'">{{ selectedArea.activo ? 'Activa' : 'Inactiva' }}</StatusBadge><dl><dt>Ubicación</dt><dd>{{ selectedArea.esExterna ? 'Exterior / perímetro' : 'Interior' }}</dd><dt>Puestos de monitoreo</dt><dd>{{ selectedArea.dispositivosCount }}</dd></dl><BaseButton size="compact" variant="secondary" @click="openAreaEdit(selectedArea)">Editar Área</BaseButton></aside>
+      <div class="areas-toolbar">
+        <div><strong>Áreas</strong><span>{{ areas.length }} {{ areas.length === 1 ? 'área' : 'áreas' }}</span></div>
+        <BaseButton size="compact" @click="openAreaCreate"><Plus :size="16" />Agregar Área</BaseButton>
+      </div>
+      <div class="areas-panel">
+        <LoadingSkeleton v-if="areasLoading" label="Cargando Áreas" :lines="5" />
+        <EmptyState v-else-if="areas.length === 0" title="No hay Áreas" message="Agrega la primera Área de esta Sede." />
+        <ResponsiveTable v-else>
+          <template #table>
+            <div class="areas-table-scroll">
+              <table>
+                <thead><tr><th>Área</th><th>Ubicación</th><th>Puestos</th><th>Estado</th><th>Acciones</th></tr></thead>
+                <tbody>
+                  <tr v-for="area in areas" :key="area.id">
+                    <td><button class="area-link" @click="selectedArea = area">{{ area.nombre }}</button></td>
+                    <td>{{ area.esExterna ? 'Exterior / perímetro' : 'Interior' }}</td>
+                    <td>{{ area.dispositivosCount }}</td>
+                    <td><StatusBadge :tone="area.activo ? 'success' : 'neutral'">{{ area.activo ? 'Activa' : 'Inactiva' }}</StatusBadge></td>
+                    <td><span class="row-actions">
+                      <button :aria-label="'Editar ' + area.nombre" @click="openAreaEdit(area)"><Pencil :size="17" /></button>
+                      <button v-if="area.activo" :aria-label="'Eliminar ' + area.nombre" @click="deleteAreaTarget = area"><Trash2 :size="17" /></button>
+                      <button v-else :aria-label="'Reactivar ' + area.nombre" @click="setAreaActive(area, true)"><RotateCcw :size="17" /></button>
+                    </span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </template>
+          <template #cards>
+            <article v-for="area in areas" :key="area.id" class="area-mobile-card">
+              <div class="area-mobile-card__top">
+                <button class="area-link" @click="selectedArea = area">{{ area.nombre }}</button>
+                <StatusBadge :tone="area.activo ? 'success' : 'neutral'">{{ area.activo ? 'Activa' : 'Inactiva' }}</StatusBadge>
+              </div>
+              <div class="area-mobile-card__bottom">
+                <span>{{ area.esExterna ? 'Exterior / perímetro' : 'Interior' }} · {{ area.dispositivosCount }} {{ area.dispositivosCount === 1 ? 'puesto' : 'puestos' }}</span>
+                <span class="row-actions">
+                  <button :aria-label="'Editar ' + area.nombre" @click="openAreaEdit(area)"><Pencil :size="17" /></button>
+                  <button v-if="area.activo" :aria-label="'Eliminar ' + area.nombre" @click="deleteAreaTarget = area"><Trash2 :size="17" /></button>
+                  <button v-else :aria-label="'Reactivar ' + area.nombre" @click="setAreaActive(area, true)"><RotateCcw :size="17" /></button>
+                </span>
+              </div>
+            </article>
+          </template>
+        </ResponsiveTable>
+      </div>
+      <aside v-if="selectedArea" class="area-drawer" aria-label="Detalle del Área">
+        <button class="drawer-close" aria-label="Cerrar detalle" @click="selectedArea = null"><X :size="20" /></button>
+        <h2>{{ selectedArea.nombre }}</h2>
+        <StatusBadge :tone="selectedArea.activo ? 'success' : 'neutral'">{{ selectedArea.activo ? 'Activa' : 'Inactiva' }}</StatusBadge>
+        <dl><dt>Ubicación</dt><dd>{{ selectedArea.esExterna ? 'Exterior / perímetro' : 'Interior' }}</dd><dt>Puestos de monitoreo</dt><dd>{{ selectedArea.dispositivosCount }}</dd></dl>
+        <BaseButton size="compact" variant="secondary" @click="openAreaEdit(selectedArea)">Editar Área</BaseButton>
+      </aside>
     </section>
 
-    <section v-else-if="tab === 'history'" class="history-card"><LoadingSkeleton v-if="historyLoading" label="Cargando historial" :lines="5" /><EmptyState v-else-if="history.length === 0" title="Sin historial" message="Los Servicios de esta Sede aparecerán aquí." /><div v-else class="history-scroll"><table><thead><tr><th>Servicio</th><th>Fecha</th><th>Tipo</th><th>Técnico</th><th>Estado</th><th>Valor</th></tr></thead><tbody><tr v-for="item in history" :key="item.id"><td><button class="service-link" @click="router.push(`/servicios/${item.id}`)">{{ item.solicitud }}</button></td><td>{{ formatDate(item.fecha) }}</td><td>{{ item.tipo }}</td><td>{{ item.tecnico }}</td><td>{{ item.estado }}</td><td>{{ formatMoney(item.valor) }}</td></tr></tbody></table></div><div v-if="historyTotal > 20" class="pagination"><BaseButton size="compact" variant="secondary" :disabled="historyPage === 1" @click="loadHistory(historyPage - 1)">Anterior</BaseButton><span>Página {{ historyPage }}</span><BaseButton size="compact" variant="secondary" :disabled="historyPage * 20 >= historyTotal" @click="loadHistory(historyPage + 1)">Siguiente</BaseButton></div></section>
+    <section v-else-if="tab === 'history'" class="history-card">
+      <LoadingSkeleton v-if="historyLoading" label="Cargando historial" :lines="5" />
+      <EmptyState v-else-if="history.length === 0" title="Sin historial" message="Los Servicios de esta Sede aparecerán aquí." />
+      <ServiceHistoryList v-else :items="history" />
+      <div v-if="historyTotal > 20" class="pagination"><BaseButton size="compact" variant="secondary" :disabled="historyPage === 1" @click="loadHistory(historyPage - 1)">Anterior</BaseButton><span>Página {{ historyPage }}</span><BaseButton size="compact" variant="secondary" :disabled="historyPage * 20 >= historyTotal" @click="loadHistory(historyPage + 1)">Siguiente</BaseButton></div>
+    </section>
     <section v-else-if="tab === 'settings'" class="settings-card"><h2>Configuración de la Sede</h2><p>Modifica contacto, operación, vehículos y plano desde el formulario compartido.</p><BaseButton size="compact" @click="openSiteEdit">Editar configuración</BaseButton></section>
     <SiteMonitoringPanel v-if="visited.devices" v-show="tab === 'devices'" :site-id="siteId" :active="tab === 'devices'" />
     <SiteFindingsPanel v-if="visited.findings" v-show="tab === 'findings'" :site-id="siteId" :active="tab === 'findings'" />
 
+    <BaseDialog :model-value="areaCreateOpen" title="Agregar Área" @update:model-value="!saving && (areaCreateOpen = $event)">
+      <AreaForm v-model="newArea" mode="create" form-id="area-create-form" id-prefix="new-area" @submit="createArea" @invalid="notifications.show('Ingresa el nombre del Área.', 'error')" />
+      <template #footer>
+        <BaseButton variant="secondary" :disabled="saving" @click="areaCreateOpen = false">Cancelar</BaseButton>
+        <BaseButton type="submit" form="area-create-form" :loading="saving">Agregar Área</BaseButton>
+      </template>
+    </BaseDialog>
     <BaseDialog :model-value="siteFormOpen" title="Editar Sede" @update:model-value="!saving && (siteFormOpen = $event)"><SiteForm v-model="siteForm" mode="edit" :saving="saving" :client-name="client.nombre" @submit="saveSite" @invalid="notifications.show('Revisa los campos marcados.', 'error')" @file-selected="selectSiteFile" @view-plan="siteForm.planoStoragePath && openPrivateFile(siteForm.planoStoragePath)" /><template #footer><BaseButton variant="secondary" :disabled="saving" @click="siteFormOpen = false">Cancelar</BaseButton><BaseButton type="submit" form="site-form" :loading="saving">{{ savePhaseLabel ?? 'Guardar cambios' }}</BaseButton></template></BaseDialog>
     <BaseDialog :model-value="Boolean(editingArea)" title="Editar Área" @update:model-value="!$event && (editingArea = null)"><AreaForm v-model="editAreaForm" mode="edit" form-id="area-edit-form" id-prefix="edit-area" @submit="updateArea" @invalid="notifications.show('Ingresa el nombre del Área.', 'error')" /><template #footer><BaseButton variant="secondary" @click="editingArea = null">Cancelar</BaseButton><BaseButton type="submit" form="area-edit-form" :loading="saving">Guardar cambios</BaseButton></template></BaseDialog>
     <ConfirmDialog :open="Boolean(deleteAreaTarget)" title="Eliminar Área" :message="`Se eliminará ${deleteAreaTarget?.nombre ?? 'el Área'} si no tiene historial ni dependencias.`" confirm-label="Eliminar" danger :loading="saving" @cancel="deleteAreaTarget = null" @confirm="removeArea" />
@@ -238,48 +320,61 @@ function formatDate(value: string): string { return new Intl.DateTimeFormat('es-
 </template>
 
 <style scoped>
-.site-detail { display: grid; gap: 0.8rem; }
-.detail-header { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
-.detail-header h1 { margin: 0.15rem 0; font-size: 1.65rem; line-height: 1.15; }
-.back, .area-link { border: 0; background: transparent; padding: 0; font-weight: 600; cursor: pointer; }
-.back { color: var(--text-secondary); font-weight: 500; }
-.area-link { color: var(--text); }
-.back:hover, .back:focus-visible, .area-link:hover, .area-link:focus-visible { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
-.tabs { display: flex; overflow-x: auto; border-bottom: 1px solid var(--border); }
-.tabs button { min-width: max-content; min-height: 36px; border: 0; border-bottom: 2px solid transparent; background: transparent; padding: 0.4rem 0.7rem; color: var(--text-secondary); cursor: pointer; }
-.tabs button[aria-current='page'] { border-color: var(--accent); color: var(--accent); }
-.summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
-.summary-grid article { display: grid; min-width: 0; align-content: start; gap: 0.28rem; padding: 0.75rem 0.85rem; }
-.summary-grid article + article { border-left: 1px solid var(--border); }
-.summary-grid h2, .summary-grid p, .area-create h2, .settings-card h2 { margin: 0; }
-.summary-grid h2 { font-size: 0.9rem; }
-.summary-grid p { color: var(--text-secondary); font-size: 0.875rem; overflow-wrap: anywhere; }
-.area-create, .areas-panel, .history-card, .settings-card { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: 0.8rem; }
-.areas-layout { position: relative; display: grid; grid-template-columns: minmax(13rem, 0.25fr) minmax(0, 1fr); align-items: start; gap: 0.75rem; }
-.area-create { display: grid; gap: 0.75rem; }
-.areas-panel { min-width: 0; padding: 0; overflow: hidden; }
-.areas-table-scroll { height: min(68vh, 42rem); overflow: auto; }
-.areas-table-scroll thead { position: sticky; z-index: 2; top: 0; background: var(--sidebar); }
-.areas-table-scroll th, .areas-table-scroll td, .history-card th, .history-card td { padding: 0.6rem 0.7rem; }
-.row-actions { display: flex; gap: 0.2rem; }
-.row-actions button, .drawer-close { display: grid; min-width: 36px; min-height: 36px; place-items: center; border: 0; background: transparent; color: var(--text-secondary); cursor: pointer; }
-.row-actions button:hover, .drawer-close:hover { background: var(--hover); color: var(--text); }
-.area-drawer { position: fixed; z-index: 45; top: 64px; right: 0; bottom: 0; width: min(26rem, 100vw); overflow-y: auto; border-left: 1px solid var(--border); background: var(--surface-raised); padding: 1rem; box-shadow: var(--shadow-lg); }
-.drawer-close { margin-left: auto; }
-.area-drawer dl { display: grid; grid-template-columns: auto 1fr; gap: 0.5rem 1rem; }
-.area-drawer dt { color: var(--text-secondary); }
-.area-drawer dd { margin: 0; }
-.history-scroll { overflow-x: auto; }
-.pagination { display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; margin-top: 0.75rem; }
-.service-link { border: 0; background: transparent; padding: 0; color: var(--text); font-weight: 600; cursor: pointer; text-decoration: none; }
-.service-link:hover, .service-link:focus-visible { text-decoration: underline; text-underline-offset: 2px; }
-@media (max-width: 800px) {
-  .detail-header { align-items: stretch; flex-direction: column; }
-  .summary-grid, .areas-layout { grid-template-columns: 1fr; }
-  .summary-grid article + article { border-left: 0; border-top: 1px solid var(--border); }
-  .areas-table-scroll { height: auto; max-height: none; overflow-x: auto; }
-  .areas-panel { overflow-x: auto; }
-  .tabs button, .row-actions button, .drawer-close { min-height: 44px; }
-  .row-actions button, .drawer-close { min-width: 44px; }
+.site-detail { display:grid; gap:0.75rem; min-width:0; }
+.detail-header { display:flex; justify-content:space-between; align-items:center; gap:0.75rem; min-width:0; }
+.identity { min-width:0; }
+.site-title { display:flex; align-items:center; flex-wrap:wrap; gap:0.5rem; margin-top:0.15rem; }
+.site-title h1 { margin:0; font-size:1.5rem; line-height:1.2; overflow-wrap:anywhere; }
+.back, .area-link { border:0; background:transparent; padding:0; font-weight:600; cursor:pointer; }
+.back { color:var(--text-secondary); font-weight:500; }
+.area-link { color:var(--text); text-align:left; overflow-wrap:anywhere; }
+.back:hover, .back:focus-visible, .area-link:hover, .area-link:focus-visible { color:var(--text); text-decoration:underline; text-underline-offset:2px; }
+.tabs { display:flex; min-width:0; width:100%; max-width:100%; overflow-x:auto; overflow-y:hidden; overscroll-behavior-x:contain; scrollbar-width:thin; border-bottom:1px solid var(--border); scroll-snap-type:x proximity; }
+.tabs button { flex:none; scroll-snap-align:start; min-height:40px; border:0; border-bottom:2px solid transparent; background:transparent; padding:0.4rem 0.7rem; color:var(--text-secondary); cursor:pointer; white-space:nowrap; }
+.tabs button[aria-current='page'] { border-color:var(--accent); color:var(--accent); }
+.summary-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--surface); overflow:hidden; }
+.summary-grid article { display:grid; min-width:0; align-content:start; gap:0.2rem; padding:0.65rem 0.75rem; }
+.summary-grid article + article { border-left:1px solid var(--border); }
+.summary-grid h2, .summary-grid p, .settings-card h2 { margin:0; }
+.summary-grid h2 { font-size:0.87rem; }
+.summary-grid p { color:var(--text-secondary); font-size:0.82rem; overflow-wrap:anywhere; }
+.areas-layout { position:relative; display:grid; gap:0.6rem; align-items:start; min-width:0; }
+.areas-toolbar { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem; }
+.areas-toolbar > div { display:flex; align-items:center; flex-wrap:wrap; gap:0.65rem; }
+.areas-toolbar > div > span { color:var(--text-secondary); font-size:0.82rem; }
+.areas-panel, .history-card, .settings-card { min-width:0; border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--surface); padding:0.7rem; }
+.areas-panel { padding:0; overflow:hidden; }
+.areas-table-scroll { max-width:100%; max-height:min(68vh, 42rem); overflow:auto; overscroll-behavior-x:contain; -webkit-overflow-scrolling:touch; }
+.areas-table-scroll table { width:100%; border-collapse:collapse; }
+.areas-table-scroll thead { position:sticky; z-index:2; top:0; background:var(--surface); }
+.areas-table-scroll th, .areas-table-scroll td { padding:0.55rem 0.65rem; }
+.row-actions { display:flex; gap:0.2rem; }
+.row-actions button, .drawer-close { display:grid; place-items:center; min-width:36px; min-height:36px; border:0; background:transparent; color:var(--text-secondary); cursor:pointer; }
+.row-actions button:hover, .drawer-close:hover { background:var(--hover); color:var(--text); }
+.area-drawer { position:fixed; z-index:45; top:64px; right:0; bottom:0; width:min(26rem, 100vw); overflow-y:auto; border-left:1px solid var(--border); background:var(--surface-raised); padding:1rem; box-shadow:var(--shadow-lg); }
+.drawer-close { margin-left:auto; }
+.area-drawer dl { display:grid; grid-template-columns:auto 1fr; gap:0.5rem 1rem; }
+.area-drawer dt { color:var(--text-secondary); }
+.area-drawer dd { margin:0; }
+.pagination { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:0.5rem; margin-top:0.75rem; }
+.area-mobile-card { display:grid; gap:0.4rem; padding:0.65rem 0.7rem; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); }
+.area-mobile-card__top, .area-mobile-card__bottom { display:flex; justify-content:space-between; align-items:center; gap:0.5rem; }
+.area-mobile-card__bottom { color:var(--text-secondary); font-size:0.82rem; }
+.area-mobile-card__bottom > span:first-child { overflow-wrap:anywhere; }
+@media (max-width:800px) {
+  .detail-header { align-items:stretch; flex-direction:column; gap:0.5rem; }
+  .detail-header > :last-child { align-self:flex-start; }
+  .site-title h1 { font-size:1.4rem; }
+  .summary-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .summary-grid article:first-child { grid-column:span 2; }
+  .summary-grid article + article { border-left:0; border-top:1px solid var(--border); }
+  .summary-grid article:nth-child(3) { border-left:1px solid var(--border); }
+  .summary-grid article:last-child { grid-column:span 2; }
+  .summary-grid article { padding:0.55rem 0.65rem; }
+  .tabs button { min-height:44px; }
+  .areas-panel { border:0; background:transparent; overflow:visible; }
+  .history-card { border:0; background:transparent; padding:0; }
+  .row-actions button, .drawer-close { min-width:40px; min-height:40px; }
+  .area-mobile-card .area-link { min-height:40px; }
 }
 </style>

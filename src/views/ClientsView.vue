@@ -210,10 +210,23 @@ function message(error: unknown, fallback: string): string {
       </template>
       <template #cards>
         <article v-for="client in filteredClients" :key="client.id" class="client-card">
-          <button class="client-link" @click="router.push(`/clientes/${client.id}`)">{{ client.nombre }}</button>
-          <span><StatusBadge tone="info">{{ client.tipoCliente === 'NEGOCIO' ? 'Negocio' : 'Casa' }}</StatusBadge><StatusBadge :tone="client.activo ? 'success' : 'neutral'">{{ client.activo ? 'Activo' : 'Inactivo' }}</StatusBadge></span>
-          <p v-if="client.tipoCliente === 'NEGOCIO'">{{ client.nit }}</p><WhatsAppPhoneLink v-else-if="client.residenciaCelular" :phone="client.residenciaCelular" />
-          <div class="card-actions"><BaseButton size="compact" variant="secondary" @click="openEdit(client)">Editar</BaseButton><BaseButton v-if="client.activo" size="compact" variant="danger" @click="deleteTarget = client">Eliminar / desactivar</BaseButton><BaseButton v-else size="compact" variant="secondary" @click="setActive(client, true)">Reactivar</BaseButton></div>
+          <div class="client-card__top">
+            <button class="client-link" @click="router.push('/clientes/' + client.id)">{{ client.nombre }}</button>
+            <span class="client-card__badges">
+              <StatusBadge tone="info">{{ client.tipoCliente === 'NEGOCIO' ? 'Negocio' : 'Casa' }}</StatusBadge>
+              <StatusBadge :tone="client.activo ? 'success' : 'neutral'">{{ client.activo ? 'Activo' : 'Inactivo' }}</StatusBadge>
+            </span>
+          </div>
+          <div class="client-card__bottom">
+            <span v-if="client.tipoCliente === 'NEGOCIO'">NIT {{ client.nit }}</span>
+            <WhatsAppPhoneLink v-else-if="client.residenciaCelular" :phone="client.residenciaCelular" />
+            <span v-else>Sin celular</span>
+            <div class="card-actions">
+              <BaseIconButton size="small" :label="'Editar ' + client.nombre" @click="openEdit(client)"><Pencil :size="17" /></BaseIconButton>
+              <BaseIconButton v-if="client.activo" size="small" :label="'Eliminar o desactivar ' + client.nombre" @click="deleteTarget = client"><Trash2 :size="17" /></BaseIconButton>
+              <BaseIconButton v-else size="small" :label="'Reactivar ' + client.nombre" @click="setActive(client, true)"><RotateCcw :size="17" /></BaseIconButton>
+            </div>
+          </div>
         </article>
       </template>
     </ResponsiveTable>
@@ -229,25 +242,31 @@ function message(error: unknown, fallback: string): string {
 </template>
 
 <style scoped>
-.clients-page { display: grid; gap: 0.9rem; }
-.clients-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 0.75rem; }
-.clients-header h1, .clients-header p { margin: 0; }
-.clients-header p { color: var(--text-secondary); }
-.tabs { display: flex; gap: 0.2rem; border-bottom: 1px solid var(--border); }
-.tabs button { min-height: 36px; border: 0; border-bottom: 2px solid transparent; background: transparent; padding: 0.4rem 0.75rem; color: var(--text-secondary); cursor: pointer; }
-.tabs button[aria-selected='true'] { border-color: var(--accent); color: var(--accent); }
-.filters { display: grid; grid-template-columns: minmax(0, 1fr) minmax(10rem, 14rem); gap: 0.75rem; }
-.clients-table { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); border-spacing: 0; border-collapse: separate; overflow: hidden; }
-.clients-table th, .clients-table td { padding: 0.58rem 0.75rem; vertical-align: middle; }
-.client-link { border: 0; background: transparent; padding: 0; color: var(--text); font-weight: 600; text-align: left; cursor: pointer; text-decoration: none; }
-.client-link:hover, .client-link:focus-visible { text-decoration: underline; text-underline-offset: 2px; }
-.actions, .client-card > span, .card-actions { display: flex; flex-wrap: wrap; gap: 0.35rem; }
-.client-card { display: grid; gap: 0.6rem; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: 0.8rem; }
-.client-card p { margin: 0; color: var(--text-secondary); }
-@media (max-width: 680px) {
-  .clients-header { align-items: stretch; flex-direction: column; }
-  .filters { grid-template-columns: 1fr; }
-  .tabs button { min-height: 44px; }
-  .clients-table th, .clients-table td { padding: 0.7rem; }
+.clients-page { display:grid; gap:0.75rem; min-width:0; }
+.clients-header { display:flex; align-items:center; justify-content:space-between; gap:0.75rem; }
+.clients-header h1, .clients-header p { margin:0; }
+.clients-header h1 { font-size:1.6rem; }
+.clients-header p { color:var(--text-secondary); }
+.tabs { display:flex; gap:0.2rem; border-bottom:1px solid var(--border); }
+.tabs button { min-height:38px; border:0; border-bottom:2px solid transparent; background:transparent; padding:0.4rem 0.75rem; color:var(--text-secondary); cursor:pointer; }
+.tabs button[aria-selected='true'] { border-color:var(--accent); color:var(--accent); }
+.filters { display:grid; grid-template-columns:minmax(0,1fr) minmax(10rem,14rem); gap:0.6rem; }
+.clients-table { border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--surface); border-spacing:0; border-collapse:separate; overflow:hidden; }
+.clients-table th, .clients-table td { padding:0.55rem 0.7rem; vertical-align:middle; }
+.client-link { min-width:0; border:0; background:transparent; padding:0; color:var(--text); font-weight:600; text-align:left; cursor:pointer; text-decoration:none; overflow-wrap:anywhere; }
+.client-link:hover, .client-link:focus-visible { text-decoration:underline; text-underline-offset:2px; }
+.actions, .client-card__badges, .card-actions { display:flex; align-items:center; flex-wrap:wrap; gap:0.3rem; }
+.client-card { display:grid; gap:0.4rem; min-width:0; border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--surface); padding:0.65rem 0.7rem; }
+.client-card__top { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:0.4rem; }
+.client-card__bottom { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:0.4rem; color:var(--text-secondary); font-size:0.82rem; min-width:0; }
+.client-card__bottom > span { min-width:0; overflow-wrap:anywhere; }
+.card-actions { margin-left:auto; }
+@media (max-width:680px) {
+  .clients-header { align-items:center; gap:0.5rem; }
+  .clients-header h1 { font-size:1.4rem; }
+  .clients-header p { display:none; }
+  .filters { grid-template-columns:minmax(0,1fr) minmax(6.5rem,34%); gap:0.45rem; }
+  .tabs button { min-height:44px; }
+  .client-card { gap:0.3rem; }
 }
 </style>
