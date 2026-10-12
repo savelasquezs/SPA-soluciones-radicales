@@ -117,7 +117,7 @@ async function finish(): Promise<void> {
     <LoadingSkeleton v-if="loading" label="Revisando pendientes" :rows="5" />
     <StatusPanel v-else-if="error" title="No fue posible revisar el servicio" :message="error" tone="danger" />
     <template v-else-if="packageValue">
-      <StatusPanel v-if="residential && !finalized" compact title="Servicio residencial" message="No requiere recorrido por Áreas. Registra ambas firmas para finalizar." tone="info" />
+      <StatusPanel v-if="residential && !finalized" compact title="Servicio residencial" message="No requiere recorrido por Áreas. Registra ambas firmas para finalizar." tone="neutral" />
       <StatusPanel v-else-if="finalized" compact title="Servicio finalizado" message="Las firmas y el cierre fueron confirmados por el servidor." tone="success" />
       <StatusPanel v-else-if="pending.length" compact title="Aún hay Áreas pendientes" :message="`${pending.length} de ${areas.length} Áreas requieren información. Puedes revisar el cierre, pero no finalizar hasta completarlas.`" tone="warning" />
       <StatusPanel v-else compact title="Recorrido completo" message="Las Áreas están resueltas. Registra ambas firmas para finalizar." tone="success" />
