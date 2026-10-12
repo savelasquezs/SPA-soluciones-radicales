@@ -103,8 +103,10 @@ async function finish(): Promise<void> {
     actionMessage.value = result === 'synced' ? 'Servicio finalizado.' : result === 'conflict'
       ? 'Revisa la información pendiente antes de volver a intentar.' : 'Cierre guardado. Se finalizará al recuperar conexión.'
     if (result === 'synced') {
-      reportModalOpen.value = true
-      void emails.flushAll()
+      if (!residential.value) {
+        reportModalOpen.value = true
+        void emails.flushAll()
+      }
     }
   } catch (failure) {
     actionError.value = failure instanceof Error ? failure.message : 'No fue posible finalizar el servicio.'
@@ -154,7 +156,7 @@ async function finish(): Promise<void> {
       <BaseButton variant="secondary" @click="router.push({ name: 'technician-service-work', params: { id: serviceId } })">Volver al servicio</BaseButton>
     </template>
   </ServicePage>
-  <SendReportDialog v-if="reportModalOpen && packageValue" :service-id="serviceId"
+  <SendReportDialog v-if="reportModalOpen && packageValue && !residential" :service-id="serviceId"
     :solicitud="packageValue.service.solicitud" :cliente="packageValue.service.clienteNombre"
     :sede="packageValue.service.sedeNombre" mode="TECNICO"
     :cached-emails="cachedContactEmails" :completion-confirmed="finalized"
