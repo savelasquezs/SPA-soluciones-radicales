@@ -38,9 +38,11 @@ async function lockFamily(client: PoolClient, id: string): Promise<string[]> {
 function mutable(record: AdminService): void {
   if (record.estado !== 'PROGRAMADO') throw new ApiError(409, 'Solo puedes editar la programación de un servicio Programado.', 'SERVICE_NOT_PROGRAMMED')
 }
-async function siteForScheduling(client: PoolClient, id: string): Promise<{ maneja_refuerzo: boolean }> {
-  const site = (await client.query<{ maneja_refuerzo: boolean }>(`select s.maneja_refuerzo from public.sedes s join public.negocios n on n.id=s.negocio_id
-    where s.id=$1 and s.activo and n.activo and s.tipo_sede='NEGOCIO' and s.valor_servicio is not null and s.periodicidad_meses > 0 and s.duracion_servicio_minutos > 0`, [id])).rows[0]
+async function siteForScheduling(client: PoolClient, id: string): Promise<{ maneja_refuerzo: boolean; tipo_sede: 'NEGOCIO' | 'RESIDENCIAL' }> {
+  const site = (await client.query<{ maneja_refuerzo: boolean; tipo_sede: 'NEGOCIO' | 'RESIDENCIAL' }>(`select s.maneja_refuerzo,s.tipo_sede from public.sedes s join public.negocios n on n.id=s.negocio_id
+    where s.id=$1 and s.activo and n.activo and s.tipo_sede=n.tipo_cliente
+      and ((s.tipo_sede='NEGOCIO' and s.valor_servicio is not null and s.periodicidad_meses > 0 and s.duracion_servicio_minutos > 0)
+        or s.tipo_sede='RESIDENCIAL')`, [id])).rows[0]
   if (!site) throw new ApiError(422, 'Selecciona una sede activa con su configuración de servicio completa.', 'VALIDATION', { fields: { sedeId: 'Esta sede no está disponible para programación.' } })
   return site
 }
@@ -140,6 +142,7 @@ export async function createService(client: PoolClient, actorId: string, input: 
     assertVersion(proposal.version,upcoming.version)
     if (proposal.servicioAgendadoId || proposal.estado==='NO_DESEA' || proposal.sedeId!==input.sedeId || !upcoming.confirmed) throw new ApiError(409, 'Confirma con el cliente esta visita de la misma sede antes de agendar.', 'FOLLOW_UP_NOT_READY')
   }
+  if (site.tipo_sede==='RESIDENCIAL' && (input.valorServicio == null || !Number.isSafeInteger(input.valorServicio) || input.valorServicio < 0)) throw new ApiError(422, 'Ingresa el valor del servicio residencial.', 'VALIDATION', { fields:{ valorServicio:'Ingresa el valor del servicio residencial.' } })
   if (!site.maneja_refuerzo && input.refuerzo) throw new ApiError(422, 'Esta sede no maneja Refuerzo.', 'VALIDATION')
   const reinforcement = site.maneja_refuerzo ? input.refuerzo ?? suggestReinforcement(input.programacion) : null
   for (const [prefix,schedule] of [['programacion',input.programacion],['refuerzo',reinforcement]] as const) {
@@ -162,14 +165,14 @@ export async function createService(client: PoolClient, actorId: string, input: 
   await client.query(`insert into public.servicios(id,sede_id,tipo_servicio,inicio_programado,fin_programado,creado_por_id,
     tecnico_responsable_id,tecnicos_colaboradores_ids_json,valor_servicio,observaciones,metodo_pago,estado_pago,tecnico_recaudo_previsto_id,
     recaudado_por_id,tecnico_que_recauda_id,pago_fecha,pago_registrado_por_id,pago_confirmado_por_id,pago_confirmado_at)
-    values($1,$2,'PRINCIPAL',$3,$4,$5,$6,$7::jsonb,0,$8,$9,$10,$11,$12,$12,
+    values($1,$2,'PRINCIPAL',$3,$4,$5,$6,$7::jsonb,$14,$8,$9,$10,$11,$12,$12,
       case when $13::boolean then now() else null end,
       case when $13::boolean then $5::uuid else null end,
       case when $13::boolean then $5::uuid else null end,
       case when $13::boolean then now() else null end)`,
   [id,input.sedeId,schedule.inicioProgramado,scheduleEnd(schedule),actorId,schedule.tecnicoResponsableId,JSON.stringify(schedule.tecnicosColaboradoresIds),
     input.observaciones,input.cobro.metodoPago,wasPaid ? 'CONFIRMADO' : input.cobro.metodoPago ? 'PENDIENTE' : 'SIN_REGISTRAR',
-    input.cobro.tecnicoRecaudoPrevistoId,cashRecipient,wasPaid])
+    input.cobro.tecnicoRecaudoPrevistoId,cashRecipient,wasPaid,site.tipo_sede==='RESIDENCIAL' ? input.valorServicio : 0])
   if (reinforcement) {
     const reinforcementId=randomUUID(); ids.push(reinforcementId)
     await client.query(`insert into public.servicios(id,sede_id,tipo_servicio,servicio_principal_id,inicio_programado,fin_programado,
