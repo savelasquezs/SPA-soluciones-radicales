@@ -169,6 +169,21 @@
 .svc-week-calendar__event-main { overflow:hidden; }
 .svc-week-calendar__event-main--brief { justify-content:center; padding-block:0.1rem; }
 .svc-week-calendar__event-brief { display:block; width:100%; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:0.68rem; line-height:1.2; }
+/* Concurrent services: use vertical room for the time and a two-line client name. */
+.svc-week-calendar__event-main--narrow { gap:0; justify-content:flex-start; padding:1px 2px 1px 3px; }
+.svc-week-calendar__event-short-time { display:block; flex:none; width:100%; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; color:var(--text-secondary); font-size:10px; line-height:11px; font-variant-numeric:tabular-nums; }
+.svc-week-calendar__event-main > .svc-week-calendar__event-narrow-name {
+  display:-webkit-box; width:100%; max-width:100%; overflow:hidden; white-space:normal;
+  overflow-wrap:break-word; -webkit-box-orient:vertical; -webkit-line-clamp:2; line-clamp:2;
+  font-size:10px; line-height:11px; font-weight:600;
+}
+.svc-week-calendar__event-main > .svc-week-calendar__event-narrow-name--short { -webkit-line-clamp:1; line-clamp:1; }
+/* The detail link stays keyboard accessible, but no longer steals permanent width. */
+.svc-week-calendar__event--narrow .svc-week-calendar__event-detail { opacity:0; pointer-events:none; }
+.svc-week-calendar__event--narrow:hover .svc-week-calendar__event-detail,
+.svc-week-calendar__event--narrow:focus-within .svc-week-calendar__event-detail {
+  opacity:1; pointer-events:auto; background:var(--surface-raised);
+}
 .svc-week-calendar__event--PROGRAMADO .svc-week-calendar__event-main:not(:disabled) { cursor:grab; }
 .svc-week-calendar__event-main > strong, .svc-week-calendar__event-main > small, .svc-week-calendar__event-time { display:block; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .svc-week-calendar__event-main > strong { font-weight:600; font-size:0.71rem; }
