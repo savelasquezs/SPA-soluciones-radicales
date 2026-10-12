@@ -590,3 +590,8 @@
     gap:0.35rem;
   }
 }
+
+@media (max-width:680px) {
+  .svc-page--agenda { gap:0.45rem; }
+  .svc-page--agenda .svc-page-header h1 { font-size:1rem; line-height:1.35; }
+}
