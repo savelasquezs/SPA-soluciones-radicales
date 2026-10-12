@@ -175,13 +175,13 @@ function duration(record: AdminService): number {
             <button
               type="button"
               class="svc-week-calendar__event-main"
-              :class="{ 'svc-week-calendar__event-main--brief':singleDay && event.endMinute-event.startMinute<60 }"
+              :class="{ 'svc-week-calendar__event-main--brief':event.endMinute-event.startMinute<75 || event.laneCount>1 }"
               :disabled="busy"
               @pointerdown="pointerDown($event,event.record)"
               :aria-label="(event.record.estado==='PROGRAMADO' ? 'Reprogramar ' : 'Ver ')+event.record.solicitud+' · '+event.record.clienteNombre"
               @click="clickRecord($event,event.record)"
             >
-              <template v-if="singleDay && event.endMinute-event.startMinute<60">
+              <template v-if="event.endMinute-event.startMinute<75 || event.laneCount>1">
                 <span class="svc-week-calendar__event-brief">{{ hourLabel(event.startMinute) }} · {{ event.record.clienteNombre }}</span>
               </template>
               <template v-else>
