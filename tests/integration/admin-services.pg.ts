@@ -65,6 +65,35 @@ beforeEach(async()=>{
 afterAll(async()=>{ await pool.end() })
 
 describe('administrator services · real PostgreSQL',()=>{
+  it('schedules residential visits with individual prices and no reinforcement, preserving business pricing',async()=>{
+    const f=await fixture(false), homeClient=randomUUID(), homeSite=randomUUID()
+    await transaction(async client=>{
+      await client.query(`insert into public.negocios(id,tipo_cliente,nombre,nit,correos_json)
+        values($1,'RESIDENCIAL','Casa de prueba',null,'[]'::jsonb)`,[homeClient])
+      await client.query(`insert into public.sedes(id,negocio_id,nombre,direccion,correos_json,hereda_correos_negocio,
+        contacto_principal_nombre,contacto_principal_celular,valor_servicio,periodicidad_meses,maneja_refuerzo,tipo_sede,
+        maneja_vehiculos,genera_certificado_vehiculo,duracion_servicio_minutos)
+        values($1,$2,'Casa de prueba','Calle 123','[]'::jsonb,false,'Casa de prueba','+573001234567',
+          null,null,false,'RESIDENCIAL',false,false,null)`,[homeSite,homeClient])
+    })
+    const options=await transaction(client=>workspace(client))
+    expect(options.sedes.find(site=>site.id===homeSite)).toMatchObject({tipoSede:'RESIDENCIAL',clientId:homeClient,valorServicio:null})
+    const firstInput={...input(f),sedeId:homeSite,valorServicio:75000,refuerzo:null}
+    const first=principal(await create(f,firstInput))
+    expect(first).toMatchObject({clientId:homeClient,tipoSede:'RESIDENCIAL',valorServicio:75000,refuerzo:null})
+    expect(first.contacto.celular).toBe('+573001234567')
+    const second=principal(await create(f,{...firstInput,valorServicio:90000,programacion:{...firstInput.programacion,inicioProgramado:'2030-10-07T09:00:00-05:00'}}))
+    expect(second.valorServicio).toBe(90000)
+    expect((await transaction(client=>getService(client,first.id))).valorServicio).toBe(75000)
+    await expect(create(f,{...firstInput,valorServicio:null})).rejects.toMatchObject({code:'VALIDATION'})
+    await expect(create(f,{...firstInput,refuerzo:{...firstInput.programacion,inicioProgramado:'2030-10-27T09:00:00-05:00'}})).rejects.toMatchObject({code:'VALIDATION'})
+    const business=principal(await create(f,{...input(f),valorServicio:1}))
+    expect(business.valorServicio).toBe(300000)
+    const reprogrammed=principal(await transaction(client=>editService(client,f.admin,first.id,first.version,
+      {...firstInput,programacion:{...firstInput.programacion,inicioProgramado:'2030-10-09T09:00:00-05:00'}},false)))
+    expect(reprogrammed.valorServicio).toBe(75000)
+  })
+
 
   it('confirma efectivo recibido por administrador durante el alta, de forma atómica',async()=>{
     const f=await fixture()
