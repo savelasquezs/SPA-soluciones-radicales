@@ -4,7 +4,7 @@ import { addDateDays, addInstantDays, fromBogotaInput, scheduleEnd, suggestReinf
 import { serviceDateShortcutRange } from '../src/helpers/serviceDateRanges'
 
 const uid=(n: number)=>`10000000-0000-4000-8000-${String(n).padStart(12,'0')}`
-const ids={ admin:uid(1),tech:uid(2),other:uid(3),third:uid(4),site:uid(5),client:uid(6),product:uid(7),principal:uid(8),refuerzo:uid(9),upcoming:uid(10) }
+const ids={ admin:uid(1),tech:uid(2),other:uid(3),third:uid(4),site:uid(5),client:uid(6),product:uid(7),principal:uid(8),refuerzo:uid(9),upcoming:uid(10),homeSite:uid(11),homeClient:uid(12) }
 const day=todayBogota()
 const start=fromBogotaInput(`${day}T09:00`)
 const listUrl=`/servicios?from=${day}&to=${addDateDays(day,45)}`
@@ -12,7 +12,8 @@ const technician=(id: string,name: string): ServiceTechnician=>({ id,nombreCompl
 const people=[technician(ids.tech,'Camilo Ruiz'),technician(ids.other,'Ana Torres'),technician(ids.third,'Mateo Díaz')]
 const contact={ nombre:'Laura de prueba',celular:'+573000000001',correos:['cliente@example.invalid'] }
 const workspace: ServiceWorkspace={
-  sedes:[{ id:ids.site,clientId:ids.client,clienteNombre:'Casa Verde',nombre:'Laureles',direccion:'Dirección sintética de prueba',valorServicio:300000,periodicidadMeses:1,duracionServicioMinutos:90,manejaRefuerzo:true,contacto:contact }],
+  sedes:[{ id:ids.site,clientId:ids.client,clienteNombre:'Casa Verde',nombre:'Laureles',direccion:'Dirección sintética de prueba',valorServicio:300000,periodicidadMeses:1,duracionServicioMinutos:90,manejaRefuerzo:true,tipoSede:'NEGOCIO',contacto:contact },
+    { id:ids.homeSite,clientId:ids.homeClient,clienteNombre:'Santiago Velásquez',nombre:'Santiago Velásquez',direccion:'Carrera 12 # 34-56',tipoSede:'RESIDENCIAL',valorServicio:null,periodicidadMeses:null,duracionServicioMinutos:null,manejaRefuerzo:false,contacto:{nombre:'Santiago Velásquez',celular:'+573001234567',correos:[]} }],
   tecnicos:people,productos:[{ id:ids.product,nombre:'Producto de prueba',principioActivo:'Composición de prueba',dosisAplicacion:'5 mL/L',metodos:[{ codigo:'ASPERSION',nombre:'Aspersión' }],activo:true }],
 }
 function record(id=ids.principal,kind: 'PRINCIPAL' | 'REFUERZO'='PRINCIPAL'): AdminService {
@@ -20,7 +21,7 @@ function record(id=ids.principal,kind: 'PRINCIPAL' | 'REFUERZO'='PRINCIPAL'): Ad
   return {
     id,solicitud:isRef ? 'SR-0102' : 'SR-0101',tipoServicio:kind,estado:'PROGRAMADO',version:1,
     inicioProgramado:beginning,finProgramado:new Date(new Date(beginning).getTime()+90*60_000).toISOString(),
-    tecnicoResponsableId:ids.tech,tecnicosColaboradoresIds:[ids.other],clientId:ids.client,clienteNombre:'Casa Verde',sedeId:ids.site,sedeNombre:'Laureles',direccion:'Dirección sintética de prueba',
+    tecnicoResponsableId:ids.tech,tecnicosColaboradoresIds:[ids.other],clientId:ids.client,clienteNombre:'Casa Verde',sedeId:ids.site,sedeNombre:'Laureles',tipoSede:'NEGOCIO',direccion:'Dirección sintética de prueba',
     servicioPrincipalId:isRef ? ids.principal : null,inicioReal:null,finReal:null,responsable:people[0]!,colaboradores:[people[1]!],contacto:contact,
     valorServicio:isRef ? 0 : 300000,observaciones:'',productos:[],refuerzo:null,principal:null,
     pago:{ metodoPago:isRef ? null : 'EFECTIVO',estadoPago:isRef ? 'SIN_REGISTRAR' : 'PENDIENTE',tecnicoRecaudoPrevistoId:isRef ? null : ids.tech,
@@ -101,6 +102,11 @@ async function setup(page: Page, role: 'ADMINISTRADOR' | 'TECNICO'='ADMINISTRADO
     if(path===base && method==='POST' && body) {
       if(journal.has(body.requestId)) { await json(route,journal.get(body.requestId),201);return }
       const created=record(uid(counter++));created.solicitud=`SR-${counter}`;created.tecnicosColaboradoresIds=[]
+      const site=workspace.sedes.find(item=>item.id===body.input.sedeId)!
+      created.clientId=site.clientId;created.clienteNombre=site.clienteNombre;created.sedeId=site.id
+      created.sedeNombre=site.nombre;created.tipoSede=site.tipoSede;created.direccion=site.direccion
+      created.valorServicio=site.tipoSede==='RESIDENCIAL' ? body.input.valorServicio ?? 0 : site.valorServicio ?? 0
+      created.contacto=site.contacto
       schedule(created,body.input.programacion);created.observaciones=body.input.observaciones
       created.productos=body.input.productos.map(product=>({ ...product,id:uid(counter++),nombre:'Producto de prueba',dosis:'5 mL/L',metodoAplicacionNombre:'Aspersión',activo:true,aplicado:false }))
       created.pago={ ...created.pago,...body.input.cobro,
@@ -108,10 +114,14 @@ async function setup(page: Page, role: 'ADMINISTRADOR' | 'TECNICO'='ADMINISTRADO
         recaudadoPorId:body.input.cobro.pagado ? body.input.cobro.recaudadoPorId ?? null : null,
         recaudadoPorNombre:body.input.cobro.pagado && body.input.cobro.recaudadoPorId===ids.admin ? 'Admin de prueba' : null,
       }
-      const child=record(uid(counter++),'REFUERZO');child.solicitud=`SR-${counter}`;child.servicioPrincipalId=created.id
-      schedule(child,body.input.refuerzo ?? suggestReinforcement(body.input.programacion));records.push(created,child)
+      const createdItems=[created]
+      if(site.manejaRefuerzo) {
+        const child=record(uid(counter++),'REFUERZO');child.solicitud=`SR-${counter}`;child.servicioPrincipalId=created.id
+        schedule(child,body.input.refuerzo ?? suggestReinforcement(body.input.programacion));records.push(child);createdItems.push(child)
+      }
+      records.push(created)
       if(body.upcoming) next={ ...next,estado:'CONFIRMADO',servicioAgendadoId:created.id,version:next.version+1 }
-      const saved=result([created,child],body.upcoming ? next : null);journal.set(body.requestId,saved)
+      const saved=result(createdItems,body.upcoming ? next : null);journal.set(body.requestId,saved)
       if(lostResponse) { lostResponse=false;await route.abort('failed');return }
       await json(route,saved,201);return
     }
@@ -165,6 +175,28 @@ async function selectSiteAndTeam(page: Page): Promise<void> {
   await page.locator('#servicio-sede').selectOption(ids.site)
   await page.locator('#programacion-responsable').selectOption(ids.tech)
 }
+
+test('programa una visita residencial sin mostrar sede y exige el precio de esta visita',async({ page })=>{
+  const api=await setup(page)
+  await page.goto(listUrl)
+  await page.getByRole('button',{name:'Programar servicio',exact:true}).click()
+  await page.locator('#servicio-cliente').fill('Santiago')
+  await page.getByRole('listbox',{name:'Cliente'}).getByRole('option',{name:'Santiago Velásquez'}).click()
+  await expect(page.locator('#servicio-sede')).toHaveCount(0)
+  await expect(page.locator('#servicio-valor')).toBeVisible()
+  await expect(page.getByText('Dirección de la visita: Carrera 12 # 34-56')).toBeVisible()
+  await page.locator('#programacion-responsable').selectOption(ids.tech)
+  await page.getByRole('button',{name:'Agendar servicio',exact:true}).first().click()
+  await expect(page.locator('#servicio-valor')).toHaveAttribute('aria-invalid','true')
+  expect(api.calls.filter(call=>call.path==='/api/admin/services'&&call.method==='POST')).toHaveLength(0)
+  await page.locator('#servicio-valor').fill('85000')
+  await page.getByRole('button',{name:'Agendar servicio',exact:true}).first().click()
+  await expect(page).toHaveURL(url=>url.pathname==='/servicios')
+  const call=api.calls.find(item=>item.path==='/api/admin/services'&&item.method==='POST')!
+  expect(call.body?.input).toMatchObject({sedeId:ids.homeSite,valorServicio:85000,refuerzo:null})
+  const created=api.records.find(item=>item.sedeId===ids.homeSite)
+  expect(created).toMatchObject({clienteNombre:'Santiago Velásquez',valorServicio:85000,tipoSede:'RESIDENCIAL',refuerzo:null})
+})
 
 test('clickable team cell reuses the loaded snapshot and multiselect excludes the responsible',async({ page })=>{
   const api=await setup(page);await page.goto(listUrl)
