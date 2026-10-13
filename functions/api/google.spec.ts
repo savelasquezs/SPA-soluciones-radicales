@@ -53,7 +53,7 @@ describe('Google OAuth integration health', () => {
       error_description: 'Token has been expired or revoked.',
     }), { status: 400 }))
     vi.stubGlobal('fetch', remote)
-    const onDispatch = vi.fn()
+    const onDispatch = vi.fn<() => Promise<void>>()
 
     await expect(module.sendGmailMessage({
       to: 'cliente@example.com', subject: 'Informe', text: 'Mensaje', onDispatch,
