@@ -173,7 +173,7 @@ async function loadReassignments(client:PoolClient, input:ServiceReassignment[],
     await lockFamily(client,item.id)
     const before=await getService(client,item.id)
     assertVersion(before.version,item.version);mutable(before)
-    if(before.inicioProgramado!==item.programacion.inicioProgramado || before.finProgramado!==scheduleEnd(item.programacion))
+    if(new Date(before.inicioProgramado).getTime()!==new Date(item.programacion.inicioProgramado).getTime() || new Date(before.finProgramado).getTime()!==new Date(scheduleEnd(item.programacion)).getTime())
       throw new ApiError(422,'La solución del cruce solo puede modificar el equipo del servicio afectado.','VALIDATION')
     result.push({before,input:item})
   }
@@ -293,7 +293,7 @@ export async function editService(client: PoolClient, actorId: string, id: strin
     if (!before.refuerzo || reinforcementVersion===undefined) throw new ApiError(422,'Falta la versión del Refuerzo asociado.','VALIDATION')
     child=await getService(client,before.refuerzo.id); assertVersion(child.version,reinforcementVersion); mutable(child)
   }
-  const reassigned=await loadReassignments(client,reassignments,ids)
+  const reassigned=await loadReassignments(client,reassignments,[id,...(child ? [child.id] : [])])
   await checkSchedules(client,[
     {id,schedule:input.programacion},
     ...input.refuerzo ? [{id:child!.id,schedule:input.refuerzo}] : [],
@@ -324,7 +324,7 @@ export async function rescheduleService(client: PoolClient, actorId: string, id:
     if (!before.refuerzo) throw new ApiError(422,'No hay Refuerzo asociado.','VALIDATION')
     child=await getService(client,before.refuerzo.id); assertVersion(child.version,reinforcement.version); mutable(child)
   }
-  const reassigned=await loadReassignments(client,reassignments,ids)
+  const reassigned=await loadReassignments(client,reassignments,[id,...(child ? [child.id] : [])])
   await checkSchedules(client,[
     {id,schedule},
     ...reinforcement ? [{id:child!.id,schedule:reinforcement.schedule}] : [],
