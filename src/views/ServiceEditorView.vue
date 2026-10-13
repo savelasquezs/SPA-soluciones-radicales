@@ -30,6 +30,7 @@ const serialize=()=>JSON.stringify({ draft:draft.value,confirmed:confirmed.value
 const dirty=computed(()=>!loading.value && !completed.value && Boolean(baseline.value) && serialize()!==baseline.value)
 const { confirmOpen,cancelDiscard,confirmDiscard }=useUnsavedChanges(dirty,saving)
 const title=computed(()=>editing.value ? 'Editar servicio' : upcoming.value ? 'Agendar próxima visita' : 'Programar servicio')
+const conflictClientName=computed(()=>store.options?.sedes.find(site=>site.id===draft.value.sedeId)?.clienteNombre ?? record.value?.clienteNombre ?? upcoming.value?.clienteNombre ?? '')
 let generation=0, saveTimer: ReturnType<typeof setTimeout> | undefined, draftWrites: Promise<void>=Promise.resolve()
 onBeforeUnmount(()=>{ generation++; if(saveTimer) clearTimeout(saveTimer) })
 watch(()=>`${String(route.name)}:${String(route.params.id ?? '')}:${String(route.query.upcomingId ?? '')}`,()=>{ void load() },{ immediate:true })
@@ -150,7 +151,7 @@ async function save(): Promise<void> {
     <LoadingSkeleton v-if="loading" :rows="8" />
     <StatusPanel v-else-if="loadError" title="No fue posible preparar el servicio" :message="loadError" tone="danger"><BaseButton size="compact" variant="secondary" @click="load(true)">Reintentar</BaseButton></StatusPanel>
     <template v-else-if="store.options">
-      <ServiceSaveFeedback :error="errorMessage" :conflict="conflict" :overlaps="overlaps" :overlap-open="overlapOpen" :saving="saving" :technicians="store.options.tecnicos" :schedules="[parsedSchedule(draft.programacion),...(draft.refuerzo ? [parsedSchedule(draft.refuerzo)] : [])]" @reload="reloadOpen=true" @accept="acceptOverlap" @cancel="cancelOverlap" />
+      <ServiceSaveFeedback :error="errorMessage" :conflict="conflict" :overlaps="overlaps" :overlap-open="overlapOpen" :saving="saving" :technicians="store.options.tecnicos" :current-client-name="conflictClientName" :current-service-is-new="!editing" :schedules="[parsedSchedule(draft.programacion),...(draft.refuerzo ? [parsedSchedule(draft.refuerzo)] : [])]" @reload="reloadOpen=true" @accept="acceptOverlap" @cancel="cancelOverlap" />
       <small v-if="draftStatus" class="svc-muted" role="status">{{ draftStatus }}</small>
       <div v-if="upcoming" class="svc-notice"><BaseCheckbox v-model="confirmed" name="service-client-confirmed" label="El cliente confirmó la fecha y la hora de esta visita" required :disabled="saving || completed" :error="errors.confirmed" /></div>
       <ServiceForm :key="renderVersion" v-model="draft" :workspace="store.options" :record="record" :disabled="saving || completed" :errors="errors" @submit="save" @changed="clearValidation" />

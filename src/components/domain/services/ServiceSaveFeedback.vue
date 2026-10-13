@@ -5,7 +5,8 @@ import type { ScheduleConflict, ScheduleResolution, ServiceSchedule, ServiceTech
 withDefaults(defineProps<{
   error:string; conflict:boolean; overlaps:ScheduleConflict[]
   overlapOpen:boolean; saving:boolean; technicians?:ServiceTechnician[]; schedules?:ServiceSchedule[]
-}>(),{technicians:()=>[],schedules:()=>[]})
+  currentClientName?:string; currentServiceIsNew?:boolean
+}>(),{technicians:()=>[],schedules:()=>[],currentClientName:'',currentServiceIsNew:false})
 const emit=defineEmits<{reload:[];accept:[value:ScheduleResolution];cancel:[]}>()
 </script>
 <template>
@@ -15,5 +16,6 @@ const emit=defineEmits<{reload:[];accept:[value:ScheduleResolution];cancel:[]}>(
   </div>
   <ServiceConflictResolver v-if="overlapOpen" :open="overlapOpen" :conflicts="overlaps"
     :schedules="schedules" :technicians="technicians" :saving="saving"
+    :current-client-name="currentClientName" :current-service-is-new="currentServiceIsNew"
     @accept="emit('accept',$event)" @cancel="emit('cancel')" />
 </template>
