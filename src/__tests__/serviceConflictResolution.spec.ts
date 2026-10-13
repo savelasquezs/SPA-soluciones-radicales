@@ -83,6 +83,51 @@ describe('Resolver cruces de técnicos',()=>{
     expect(result.rows[0]?.options).toEqual([])
     expect(result.pending).toBe(1)
   })
+  it('reprograma el servicio actual sin cambiar técnicos ni duración',()=>{
+    const c=conflict(),newStart='2030-10-14T11:00'
+    const result=buildConflictResolution([c],[schedule(1,[5])],{
+      [key(c)]:{side:'current',action:'schedule',start:newStart,technicianId:''},
+    },technicians)
+    expect(result.pending).toBe(0)
+    expect(result.resolution.schedules[0]).toMatchObject({
+      inicioProgramado:'2030-10-14T16:00:00.000Z',duracionMinutos:90,
+      tecnicoResponsableId:id(1),tecnicosColaboradoresIds:[id(5)],
+    })
+    expect(result.resolution.reassignments).toEqual([])
+  })
+  it('permite mover la visita ya agendada y conserva su equipo completo',()=>{
+    const c=conflict({programacion:schedule(1,[5])})
+    const result=buildConflictResolution([c],[schedule(1)],{
+      [key(c)]:{side:'existing',action:'schedule',start:'2030-10-15T10:30',technicianId:''},
+    },technicians)
+    expect(result.pending).toBe(0)
+    expect(result.resolution.schedules[0]?.inicioProgramado).toBe(time)
+    expect(result.resolution.reassignments).toEqual([{
+      id:c.id,version:c.version,programacion:{
+        ...schedule(1,[5]),inicioProgramado:'2030-10-15T15:30:00.000Z',
+      },
+    }])
+  })
+  it('bloquea cambiar a un horario que sigue cruzado, igual o pasado',()=>{
+    const c=conflict()
+    for(const value of ['2030-10-13T10:00','2030-10-13T09:30','2020-10-13T09:30']) {
+      const result=buildConflictResolution([c],[schedule(1)],{
+        [key(c)]:{side:'current',action:'schedule',start:value,technicianId:''},
+      },technicians)
+      expect(result.pending).toBe(1)
+      expect(result.rows[0]?.valid).toBe(false)
+      expect(result.resolution.reassignments).toEqual([])
+    }
+  })
+  it('no permite modificar un servicio que ya está en ejecución mediante fecha u hora',()=>{
+    const c=conflict({existingEditable:false})
+    const result=buildConflictResolution([c],[schedule(1)],{
+      [key(c)]:{side:'existing',action:'schedule',start:'2030-10-15T11:00',technicianId:''},
+    },technicians)
+    expect(result.rows[0]?.selected.side).toBe('current')
+    expect(result.pending).toBe(0)
+    expect(result.resolution.reassignments).toEqual([])
+  })
   it('gestiona cruces simultáneos entre principal y refuerzo',()=>{
     const c=conflict({id:'internal:0:1',solicitud:'Servicios de esta operación',internal:true,
       proposedIndex:1,unavailableProposedTechnicianIds:[id(1)],programacion:schedule(1)})
