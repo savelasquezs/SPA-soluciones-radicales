@@ -43,6 +43,10 @@ describe('recuperación de chunks obsoletos', () => {
     expect(recoverStaleChunk(error, { location, storage, now: () => 1_000 })).toBe(true)
     location.href = 'https://develop.example.test/usuarios'
     expect(recoverStaleChunk(error, { location, storage, now: () => 2_000 })).toBe(true)
+    location.href = 'https://develop.example.test/integraciones'
+    expect(recoverStaleChunk(error, { location, storage, now: () => 3_000 })).toBe(false)
+    location.href = 'https://develop.example.test/usuarios'
+    expect(recoverStaleChunk(error, { location, storage, now: () => 4_000 })).toBe(false)
     expect(recoverStaleChunk(error, { location, storage, now: () => 63_000 })).toBe(true)
     expect(location.reload).toHaveBeenCalledTimes(3)
   })
