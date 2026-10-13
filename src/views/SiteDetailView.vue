@@ -238,9 +238,10 @@ function formatDate(value: string): string { return new Intl.DateTimeFormat('es-
 </template>
 
 <style scoped>
-.site-detail { display: grid; gap: 0.8rem; }
-.detail-header { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
-.detail-header h1 { margin: 0.15rem 0; font-size: 1.65rem; line-height: 1.15; }
+.site-detail { display: grid; gap: 0.625rem; }
+.detail-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.625rem; }
+.detail-header > div:first-child { display: flex; align-items: center; flex-wrap: wrap; gap: 0.25rem 0.6rem; }
+.detail-header h1 { margin: 0; font-size: 1.45rem; line-height: 1.3; }
 .back, .area-link { border: 0; background: transparent; padding: 0; font-weight: 600; cursor: pointer; }
 .back { color: var(--text-secondary); font-weight: 500; }
 .area-link { color: var(--text); }
@@ -249,12 +250,12 @@ function formatDate(value: string): string { return new Intl.DateTimeFormat('es-
 .tabs button { min-width: max-content; min-height: 36px; border: 0; border-bottom: 2px solid transparent; background: transparent; padding: 0.4rem 0.7rem; color: var(--text-secondary); cursor: pointer; }
 .tabs button[aria-current='page'] { border-color: var(--accent); color: var(--accent); }
 .summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
-.summary-grid article { display: grid; min-width: 0; align-content: start; gap: 0.28rem; padding: 0.75rem 0.85rem; }
+.summary-grid article { display: grid; min-width: 0; align-content: start; gap: 0.2rem; padding: 0.625rem 0.75rem; }
 .summary-grid article + article { border-left: 1px solid var(--border); }
 .summary-grid h2, .summary-grid p, .area-create h2, .settings-card h2 { margin: 0; }
 .summary-grid h2 { font-size: 0.9rem; }
 .summary-grid p { color: var(--text-secondary); font-size: 0.875rem; overflow-wrap: anywhere; }
-.area-create, .areas-panel, .history-card, .settings-card { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: 0.8rem; }
+.area-create, .areas-panel, .history-card, .settings-card { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: 0.675rem; }
 .areas-layout { position: relative; display: grid; grid-template-columns: minmax(13rem, 0.25fr) minmax(0, 1fr); align-items: start; gap: 0.75rem; }
 .area-create { display: grid; gap: 0.75rem; }
 .areas-panel { min-width: 0; padding: 0; overflow: hidden; }
