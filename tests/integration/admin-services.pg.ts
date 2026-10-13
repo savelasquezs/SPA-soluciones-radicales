@@ -192,6 +192,16 @@ describe('administrator services · real PostgreSQL',()=>{
     expect(Number((await pool.query("select count(*) from public.auditoria where registro_id=$1 and accion='SERVICIO_CREADO'",[p.id])).rows[0].count)).toBe(1)
     expect(Number((await pool.query("select count(*) from public.auditoria where registro_id=$1 and accion='SERVICIO_CREADO'",[newVisit.id])).rows[0].count)).toBe(1)
   })
+  it('serializes concurrent reservations of the same technician and commits only one',async()=>{
+    const f=await fixture(false), candidate=input(f)
+    const attempts=await Promise.allSettled([create(f,candidate),create(f,candidate)])
+    expect(attempts.filter(item=>item.status==='fulfilled')).toHaveLength(1)
+    expect(attempts.filter(item=>item.status==='rejected')).toHaveLength(1)
+    const failure=attempts.find(item=>item.status==='rejected')
+    expect(failure && failure.status==='rejected' ? failure.reason : null).toMatchObject({code:'SCHEDULE_CONFLICT'})
+    const count=await pool.query<{total:number}>('select count(*)::integer as total from public.servicios where sede_id=$1',[f.site])
+    expect(count.rows[0]?.total).toBe(1)
+  })
   it('cancels a programmed Refuerzo with its Principal and preserves finalized siblings',async()=>{
     const f=await fixture(), result=await create(f), p=principal(result)
     const cancelled=await transaction(client=>cancelService(client,f.admin,p.id,p.version,'El cliente solicitó cancelar'))
