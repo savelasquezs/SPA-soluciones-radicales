@@ -46,12 +46,12 @@ describe('Modal de cruces de horario',()=>{
     expect(wrapper.findAll('option').map(item=>item.text())).toEqual([
       'Seleccionar técnico disponible','Técnico disponible 2',
     ])
-    expect(wrapper.get('button:last-child').attributes('disabled')).toBeDefined()
+    expect(wrapper.findAll('button').find(button=>button.text().includes('Confirmar cambio'))!.attributes('disabled')).toBeDefined()
 
     await wrapper.findAll('input[type="radio"]')[1]!.setValue()
     expect(wrapper.text()).toContain('Nuevo técnico para Alejandro Pérez')
     await wrapper.get('select').setValue(id(2))
-    await wrapper.get('button:last-child').trigger('click')
+    await wrapper.findAll('button').find(button=>button.text().includes('Confirmar cambio'))!.trigger('click')
 
     const saved=wrapper.emitted('accept')?.[0]?.[0] as ScheduleResolution | undefined
     expect(saved).toBeDefined()
@@ -62,7 +62,7 @@ describe('Modal de cruces de horario',()=>{
     const wrapper=mountResolver({...conflict(),existingEditable:false})
     expect(wrapper.findAll('input[type="radio"]')[1]?.attributes('disabled')).toBeDefined()
     await wrapper.get('select').setValue(id(2))
-    await wrapper.get('button:last-child').trigger('click')
+    await wrapper.findAll('button').find(button=>button.text().includes('Confirmar cambio'))!.trigger('click')
     const saved=wrapper.emitted('accept')?.[0]?.[0] as ScheduleResolution | undefined
     expect(saved?.schedules[0]?.tecnicoResponsableId).toBe(id(2))
     expect(saved?.reassignments).toEqual([])
@@ -71,15 +71,15 @@ describe('Modal de cruces de horario',()=>{
     const wrapper=mountResolver()
     await wrapper.findAll('input[type="radio"]')[1]!.setValue()
     await wrapper.findAll('input[type="radio"]')[3]!.setValue()
-    expect(wrapper.findAll('select')).toHaveLength(0)
+    expect(wrapper.findAll('select[name^="conflict-replacement-"]')).toHaveLength(0)
     expect(wrapper.text()).toContain('Nueva fecha y hora para Alejandro Pérez')
     expect(wrapper.text()).toContain('Se conservarán los técnicos y la duración')
-    expect(wrapper.get('button:last-child').attributes('disabled')).toBeDefined()
+    expect(wrapper.findAll('button').find(button=>button.text().includes('Confirmar cambio'))!.attributes('disabled')).toBeDefined()
 
     wrapper.findComponent(BaseDateTimePicker).vm.$emit('update:modelValue','2030-10-15T11:00')
     await wrapper.vm.$nextTick()
-    expect(wrapper.get('button:last-child').attributes('disabled')).toBeUndefined()
-    await wrapper.get('button:last-child').trigger('click')
+    expect(wrapper.findAll('button').find(button=>button.text().includes('Confirmar cambio'))!.attributes('disabled')).toBeUndefined()
+    await wrapper.findAll('button').find(button=>button.text().includes('Confirmar cambio'))!.trigger('click')
     const saved=wrapper.emitted('accept')?.[0]?.[0] as ScheduleResolution | undefined
     expect(saved?.schedules[0]?.tecnicoResponsableId).toBe(id(1))
     expect(saved?.reassignments[0]?.programacion).toMatchObject({
@@ -92,12 +92,12 @@ describe('Modal de cruces de horario',()=>{
     wrapper.findComponent(BaseDateTimePicker).vm.$emit('update:modelValue','2030-10-13T10:00')
     await wrapper.vm.$nextTick()
     expect(wrapper.text()).toContain('todavía se cruza')
-    expect(wrapper.get('button:last-child').attributes('disabled')).toBeDefined()
+    expect(wrapper.findAll('button').find(button=>button.text().includes('Confirmar cambio'))!.attributes('disabled')).toBeDefined()
   })
   it('deshabilita confirmar cuando no hay técnicos disponibles',()=>{
     const wrapper=mountResolver(conflict(false))
     expect(wrapper.findAll('option')).toHaveLength(1)
     expect(wrapper.text()).toContain('No hay técnicos disponibles')
-    expect(wrapper.get('button:last-child').attributes('disabled')).toBeDefined()
+    expect(wrapper.findAll('button').find(button=>button.text().includes('Confirmar cambio'))!.attributes('disabled')).toBeDefined()
   })
 })
