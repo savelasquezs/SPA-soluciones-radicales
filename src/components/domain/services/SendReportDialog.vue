@@ -210,7 +210,13 @@ async function revoke(): Promise<void> {
             <BaseButton size="compact" variant="danger" :loading="revoking" @click="revoke">Revocar</BaseButton>
           </div>
         </div>
-        <p v-if="!options.gmailConnected" class="send-report__validation" role="alert">No hay una cuenta de Gmail conectada para enviar el informe.</p>
+        <p v-if="!options.gmailConnected" class="send-report__validation" role="alert">
+          {{ options.gmailNeedsReauthorization
+            ? 'La autorización de Google venció o fue revocada.'
+            : 'No hay una cuenta de Gmail conectada para enviar el informe.' }}
+          <RouterLink v-if="!technicianMode" to="/integraciones" @click="emit('close')">Ir a Integraciones</RouterLink>
+          <span v-else>Solicita al administrador que conecte nuevamente Google.</span>
+        </p>
         <p v-if="error" class="send-report__validation" role="alert">{{ error }}</p>
         <p v-if="deliveryUncertain" class="send-report__empty">El envío quedó sin confirmación. Revisa Gmail → Enviados antes de intentarlo nuevamente.</p>
       </template>
@@ -241,6 +247,7 @@ async function revoke(): Promise<void> {
 .send-report__add input{min-width:0;flex:1;padding:.6rem .7rem;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface);font-size:.83rem}
 .send-report__add input[aria-invalid='true']{border-color:var(--danger)}
 .send-report__validation{color:var(--danger);font-size:.75rem}
+.send-report__validation a{color:inherit;font-weight:600;text-decoration:underline;text-underline-offset:2px;margin-left:.3rem}
 .send-report__extras{display:flex;flex-wrap:wrap;gap:.35rem}
 .send-report__chip{display:inline-flex;align-items:center;gap:.35rem;border:1px solid var(--border);background:var(--hover);border-radius:6px;padding:.25rem .35rem;font-size:.73rem;max-width:100%;overflow-wrap:anywhere}
 .send-report__chip button{display:inline-flex;border:0;background:none;cursor:pointer;align-items:center}
