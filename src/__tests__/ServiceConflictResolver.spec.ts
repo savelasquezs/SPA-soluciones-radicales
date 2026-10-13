@@ -54,8 +54,8 @@ describe('Modal de cruces de horario',()=>{
 
     const saved=wrapper.emitted('accept')?.[0]?.[0] as ScheduleResolution | undefined
     expect(saved).toBeDefined()
-    expect(saved?.schedules[0].tecnicoResponsableId).toBe(id(1))
-    expect(saved?.reassignments[0].programacion.tecnicoResponsableId).toBe(id(2))
+    expect(saved?.schedules[0]?.tecnicoResponsableId).toBe(id(1))
+    expect(saved?.reassignments[0]?.programacion.tecnicoResponsableId).toBe(id(2))
   })
   it('solo permite reemplazar en el servicio actual cuando el otro está en ejecución',async()=>{
     const wrapper=mountResolver({...conflict(),existingEditable:false})
@@ -63,7 +63,7 @@ describe('Modal de cruces de horario',()=>{
     await wrapper.get('select').setValue(id(2))
     await wrapper.get('button:last-child').trigger('click')
     const saved=wrapper.emitted('accept')?.[0]?.[0] as ScheduleResolution | undefined
-    expect(saved?.schedules[0].tecnicoResponsableId).toBe(id(2))
+    expect(saved?.schedules[0]?.tecnicoResponsableId).toBe(id(2))
     expect(saved?.reassignments).toEqual([])
   })
   it('deshabilita confirmar cuando no hay técnicos disponibles',()=>{
