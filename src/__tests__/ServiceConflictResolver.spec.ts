@@ -1,7 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import ServiceConflictResolver from '@/components/domain/services/ServiceConflictResolver.vue'
-import type { ScheduleConflict, ServiceSchedule, ServiceTechnician } from '@/types/adminServices'
+import type { ScheduleConflict, ScheduleResolution, ServiceSchedule, ServiceTechnician } from '@/types/adminServices'
 
 const id=(n:number)=>'10000000-0000-4000-8000-'+String(n).padStart(12,'0')
 const start='2030-10-13T14:00:00.000Z'
@@ -52,7 +52,7 @@ describe('Modal de cruces de horario',()=>{
     await wrapper.get('select').setValue(id(2))
     await wrapper.get('button:last-child').trigger('click')
 
-    const saved=wrapper.emitted('accept')?.[0]?.[0]
+    const saved=wrapper.emitted('accept')?.[0]?.[0] as ScheduleResolution | undefined
     expect(saved).toBeDefined()
     expect(saved?.schedules[0].tecnicoResponsableId).toBe(id(1))
     expect(saved?.reassignments[0].programacion.tecnicoResponsableId).toBe(id(2))
@@ -62,7 +62,7 @@ describe('Modal de cruces de horario',()=>{
     expect(wrapper.findAll('input[type="radio"]')[1]?.attributes('disabled')).toBeDefined()
     await wrapper.get('select').setValue(id(2))
     await wrapper.get('button:last-child').trigger('click')
-    const saved=wrapper.emitted('accept')?.[0]?.[0]
+    const saved=wrapper.emitted('accept')?.[0]?.[0] as ScheduleResolution | undefined
     expect(saved?.schedules[0].tecnicoResponsableId).toBe(id(2))
     expect(saved?.reassignments).toEqual([])
   })
