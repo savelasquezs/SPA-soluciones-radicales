@@ -75,6 +75,15 @@ async function tokenRequest(params: URLSearchParams): Promise<TokenResponse> {
   const body = (await response.json()) as TokenResponse & { error?: string; error_description?: string }
 
   if (!response.ok || !body.access_token) {
+    // An invalid refresh token cannot be repaired by retrying the same request.
+    // OAuth applications in External/Testing mode expire refresh tokens after 7 days.
+    if (params.get('grant_type') === 'refresh_token' && body.error === 'invalid_grant') {
+      throw new ApiError(
+        409,
+        'La autorización de Google venció o fue revocada. Vuelve a autorizar la cuenta empresarial en Integraciones.',
+        'GOOGLE_REAUTH_REQUIRED',
+      )
+    }
     throw new ApiError(502, body.error_description ?? body.error ?? 'Google rechazó la autorización')
   }
 
@@ -289,11 +298,28 @@ export async function completeGoogleAuthorization(code: string, state: string): 
   return request.return_url
 }
 
-export async function getGoogleStatus(): Promise<{ connected: boolean; email: string | null }> {
+export async function getGoogleStatus(): Promise<{
+  connected: boolean
+  email: string | null
+  needsReauthorization: boolean
+}> {
   const { rows } = await pool.query<{ cuenta_correo: string }>(
     'select cuenta_correo from private.google_integrations where singleton',
   )
-  return { connected: Boolean(rows[0]), email: rows[0]?.cuenta_correo ?? null }
+  const email = rows[0]?.cuenta_correo ?? null
+  if (!email) return { connected: false, email: null, needsReauthorization: false }
+
+  // A stored refresh token is not proof that the Google connection still works.
+  // Verify it when checking integrations and before enabling report sharing.
+  try {
+    await getAccessToken()
+    return { connected: true, email, needsReauthorization: false }
+  } catch (error) {
+    if (error instanceof ApiError && error.code === 'GOOGLE_REAUTH_REQUIRED') {
+      return { connected: false, email, needsReauthorization: true }
+    }
+    throw error
+  }
 }
 
 export async function sendGmailMessage(input: MailInput): Promise<string> {

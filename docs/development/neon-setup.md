@@ -210,6 +210,19 @@ Neon inyecta además las variables administradas de conexión, Auth y Data API. 
 - Gmail registra cada intento en `private.integration_jobs` y audita el resultado sin guardar el cuerpo del mensaje.
 - Un Servicio se confirma en PostgreSQL antes de intentar Calendar. Si Google falla, queda en `ERROR`, conserva el último error y puede reintentarse de forma idempotente con el mismo identificador de evento.
 
+### Recuperar Gmail o Calendar cuando la autorización vence
+
+La cuenta empresarial comparte un único refresh token para `gmail.send`, `calendar.events` y `drive.file`; el inicio de sesión Google de los usuarios es independiente.
+
+Si el consentimiento OAuth de Google Cloud está configurado como **External / Testing**, Google caduca el refresh token a los **7 días** (salvo el caso de scopes básicos de identidad). Esto provoca `invalid_grant`, y el mensaje de Google puede ser «Token has been expired or revoked». No se corrige con reintentos, migraciones, reinicios ni despliegues.
+
+1. En **Google Cloud Console → Google Auth Platform → Audience**, comprobar el estado de publicación del cliente OAuth empresarial. Si sigue en **Testing**, completar la configuración necesaria y pasar a **In production** según las condiciones de Google (algunos scopes requieren verificación). Documentación oficial: https://developers.google.com/identity/protocols/oauth2#expiration.
+2. Con la misma cuenta empresarial, entrar a **SPA → Integraciones → Volver a autorizar** y completar el consentimiento para emitir un token nuevo. Cambiar el estado de publicación **no reactiva el token anterior**.
+3. Confirmar en Integraciones el estado **Conectada**, enviar un correo de prueba y verificar una sincronización de Calendar.
+4. Los correos fallidos antes de llegar a Gmail no se envían automáticamente al reconectar. Se pueden reintentar desde el informe, conservando la idempotencia correspondiente.
+
+El endpoint de estado verifica el refresh token con Google: un token almacenado no basta para declarar la integración conectada. El backend devuelve `GOOGLE_REAUTH_REQUIRED` ante `invalid_grant`, sin exponer secretos ni un error técnico sin contexto.
+
 ### Evidencia de desarrollo del 2026-10-04
 
 - La cuenta administrativa autorizada inició sesión mediante Neon Managed Better Auth.

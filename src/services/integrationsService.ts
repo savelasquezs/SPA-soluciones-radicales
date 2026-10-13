@@ -3,6 +3,7 @@ import { apiRequest } from '@/services/apiService'
 export type GoogleIntegrationStatus = {
   connected: boolean
   email: string | null
+  needsReauthorization: boolean
 }
 
 export function getGoogleIntegrationStatus(): Promise<GoogleIntegrationStatus> {
