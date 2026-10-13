@@ -199,10 +199,15 @@ async function confirmMove(): Promise<void> {
   const move=pendingMove.value
   if(!move || moving.value) return
   moveReviewOpen.value=false
+  try { await store.loadOptions() }
+  catch(failure) {
+    notifications.show(failure instanceof Error ? failure.message : 'No fue posible consultar técnicos disponibles.','error')
+    return
+  }
   await runMove(
-    (requestId,allowConflicts)=>reprogramAdminService(move.record,requestId,{
-      ...scheduleFromRecord(move.record),inicioProgramado:move.start,
-    },allowConflicts),
+    (requestId,resolution)=>reprogramAdminService(move.record,requestId,
+      resolution?.schedules[0] ?? {...scheduleFromRecord(move.record),inicioProgramado:move.start},
+      resolution?.reassignments ?? []),
     result=>{ store.applyMutation(result);pendingMove.value=null },
     'Servicio reprogramado. Calendar se actualizará en segundo plano.',
   )
@@ -319,7 +324,7 @@ async function retryCalendar(record: AdminService): Promise<void> {
       <StatusPanel v-else title="Sin servicios en este rango" message="Cambia las fechas o los filtros para consultar otra parte de la operación." />
     </template>
     <ServicePagination v-if="!rangeError && !loadError && view!=='week' && total>pageSize" :page="page" :page-size="pageSize" :total="total" :disabled="loading" @page="setQuery({ page:String($event) })" />
-    <ServiceSaveFeedback :error="moveError" :conflict="moveConflict" :overlaps="moveOverlaps" :overlap-open="moveOverlapOpen" :saving="moving" @reload="reloadMove" @accept="acceptMoveOverlap" @cancel="stopMoveOverlap" />
+    <ServiceSaveFeedback :error="moveError" :conflict="moveConflict" :overlaps="moveOverlaps" :overlap-open="moveOverlapOpen" :saving="moving" :technicians="store.options?.tecnicos ?? []" :schedules="pendingMove ? [{...scheduleFromRecord(pendingMove.record),inicioProgramado:pendingMove.start}] : []" @reload="reloadMove" @accept="acceptMoveOverlap" @cancel="stopMoveOverlap" />
     <div v-if="pendingMove && moveError && !moveConflict && !moveOverlapOpen" class="svc-dialog-actions"><BaseButton size="compact" variant="secondary" @click="cancelMove">Descartar cambio</BaseButton><BaseButton size="compact" @click="moveReviewOpen=true">Reintentar</BaseButton></div>
     <ConfirmDialog :open="moveReviewOpen" title="Confirmar nueva fecha" :message="moveMessage" confirm-label="Mover servicio" :loading="moving" @confirm="confirmMove" @cancel="cancelMove" />
     <ServiceResultsDialog v-if="results" :key="results.id" :service-id="results.id" :solicitud="results.solicitud" @close="results=null" />
