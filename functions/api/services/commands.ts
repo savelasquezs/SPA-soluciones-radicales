@@ -279,7 +279,7 @@ export async function createService(client: PoolClient, actorId: string, input: 
     await audit(client,actorId,'PROXIMO_AGENDADO',proposal.id,{ servicioId:id },'Próximos servicios')
   }
   const result=await mutation(client,[...ids,...reassigned.map(row=>row.input.id)],proposal?.id)
-  for (const service of result.services) await audit(client,actorId,'SERVICIO_CREADO',service.id,{ service })
+  for (const service of result.services.filter(row=>ids.includes(row.id))) await audit(client,actorId,'SERVICIO_CREADO',service.id,{ service })
   return result
 }
 export async function editService(client: PoolClient, actorId: string, id: string, expected: number, input: ServiceInput, reassignments: ServiceReassignment[], reinforcementVersion?: number): Promise<ServiceMutation> {
