@@ -36,11 +36,12 @@ export function recoverStaleChunk(error: unknown, options: RecoveryOptions = {})
   const now = (options.now ?? Date.now)()
 
   try {
-    const previous = JSON.parse(storage.getItem(RECOVERY_KEY) ?? 'null') as { href?: unknown; at?: unknown } | null
-    if (previous?.href === location.href && typeof previous.at === 'number' && now - previous.at < RECOVERY_WINDOW_MS) {
+    const routeKey = `${RECOVERY_KEY}:${location.href}`
+    const previous = JSON.parse(storage.getItem(routeKey) ?? 'null') as unknown
+    if (typeof previous === 'number' && now - previous < RECOVERY_WINDOW_MS) {
       return false
     }
-    storage.setItem(RECOVERY_KEY, JSON.stringify({ href: location.href, at: now }))
+    storage.setItem(routeKey, JSON.stringify(now))
   } catch {
     return false
   }
