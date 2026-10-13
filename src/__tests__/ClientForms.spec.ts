@@ -33,7 +33,7 @@ describe('formularios compartidos de Clientes', () => {
     const wrapper = mount(ClientForm, { props: { modelValue: client('RESIDENCIAL'), mode: 'edit' } })
     await wrapper.get('#client-service-value').setValue('120000')
     const emitted = wrapper.emitted('update:modelValue')
-    expect(emitted?.at(-1)?.[0]).toMatchObject({ residenciaValorServicio: 120000 })
+    expect(emitted?.[0]?.[0]).toMatchObject({ residenciaValorServicio: 120000 })
   })
 
   it('SiteForm exige contacto y no contiene certificado de establecimiento', async () => {
