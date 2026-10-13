@@ -201,7 +201,7 @@ describe('administrator services · real PostgreSQL',()=>{
     }]))
     const moved=result.services.find(row=>row.id===existing.id)!
     const created=result.services.find(row=>row.id!==existing.id)!
-    expect(moved.inicioProgramado).toBe(newSchedule.inicioProgramado)
+    expect(new Date(moved.inicioProgramado).getTime()).toBe(new Date(newSchedule.inicioProgramado).getTime())
     expect(moved.tecnicoResponsableId).toBe(existing.tecnicoResponsableId)
     expect(moved.tecnicosColaboradoresIds).toEqual(existing.tecnicosColaboradoresIds)
     expect(created.inicioProgramado).toBe(existing.inicioProgramado)
@@ -219,7 +219,7 @@ describe('administrator services · real PostgreSQL',()=>{
       }}]))
     expect(result.services.map(row=>row.id)).toContain(first.id)
     expect(result.services.map(row=>row.id)).toContain(second.id)
-    expect(result.services.find(row=>row.id===first.id)?.inicioProgramado).toBe(addInstantDays(first.inicioProgramado,1))
+    expect(new Date(result.services.find(row=>row.id===first.id)!.inicioProgramado).getTime()).toBe(new Date(addInstantDays(first.inicioProgramado,1)).getTime())
     expect(result.services.find(row=>row.id===second.id)?.inicioProgramado).toBe(first.inicioProgramado)
   })
   it('rejects a newly introduced clash and rolls back every proposed schedule change',async()=>{
