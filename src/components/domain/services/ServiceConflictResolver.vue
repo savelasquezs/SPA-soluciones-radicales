@@ -97,7 +97,7 @@ function save():void {
   display:flex;align-items:flex-start;gap:0.75rem;padding:0.875rem;border:1px solid var(--border);
   border-radius:var(--radius);cursor:pointer;
 }
-.svc-conflict__choice--selected { border-color:var(--text-secondary);background:var(--surface-secondary); }
+.svc-conflict__choice--selected { border-color:var(--text-secondary);background:var(--surface-secondary, var(--surface)); }
 .svc-conflict__choice:has(input:focus-visible) { outline:2px solid var(--text-secondary);outline-offset:2px; }
 .svc-conflict__choice:has(input:disabled) { opacity:0.6;cursor:not-allowed; }
 .svc-conflict__choice input { margin-top:0.25rem;flex-shrink:0; }
