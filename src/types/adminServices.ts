@@ -204,6 +204,15 @@ export interface ServiceMutation {
   upcoming: UpcomingService | null
   pendingCount: number
 }
+export interface ServiceReassignment {
+  id: string
+  version: number
+  programacion: ServiceSchedule
+}
+export interface ScheduleResolution {
+  schedules: ServiceSchedule[]
+  reassignments: ServiceReassignment[]
+}
 export interface ScheduleConflict {
   id: string
   solicitud: string
@@ -212,6 +221,13 @@ export interface ScheduleConflict {
   inicioProgramado: string
   finProgramado: string
   tecnicos: string[]
+  version: number
+  programacion: ServiceSchedule
+  conflictingTechnicianIds: string[]
+  proposedIndex: number
+  unavailableProposedTechnicianIds: string[]
+  unavailableTechnicianIds: string[]
+  internal?: boolean
 }
 export interface UpcomingPatch {
   estado: FollowUpState
