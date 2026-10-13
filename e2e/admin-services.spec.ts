@@ -198,6 +198,25 @@ test('programa una visita residencial sin mostrar sede y exige el precio de esta
   expect(created).toMatchObject({clienteNombre:'Santiago Velásquez',valorServicio:85000,tipoSede:'RESIDENCIAL',refuerzo:null})
 })
 
+test('precarga la tarifa residencial de la sede interna y permite sobrescribirla para la visita',async({ page })=>{
+  const api=await setup(page)
+  await page.route('https://api.example.test/api/admin/services/workspace',route=>route.fulfill({ json:{
+    ...workspace,
+    sedes:workspace.sedes.map(site=>site.id===ids.homeSite ? { ...site,valorServicio:105000 } : site),
+  } }))
+  await page.goto(listUrl)
+  await page.getByRole('button',{name:'Programar servicio',exact:true}).click()
+  await page.locator('#servicio-cliente').fill('Santiago')
+  await page.getByRole('listbox',{name:'Cliente'}).getByRole('option',{name:'Santiago Velásquez'}).click()
+  await expect(page.locator('#servicio-valor')).toHaveValue('105000')
+  await page.locator('#servicio-valor').fill('95000')
+  await page.locator('#programacion-responsable').selectOption(ids.tech)
+  await page.getByRole('button',{name:'Agendar servicio',exact:true}).first().click()
+  await expect(page).toHaveURL(url=>url.pathname==='/servicios')
+  const call=api.calls.find(item=>item.path==='/api/admin/services'&&item.method==='POST')!
+  expect(call.body?.input).toMatchObject({ sedeId:ids.homeSite,valorServicio:95000,refuerzo:null })
+})
+
 test('clickable team cell reuses the loaded snapshot and multiselect excludes the responsible',async({ page })=>{
   const api=await setup(page);await page.goto(listUrl)
   await page.getByRole('button',{ name:'Cambiar equipo de SR-0101',exact:true }).click()

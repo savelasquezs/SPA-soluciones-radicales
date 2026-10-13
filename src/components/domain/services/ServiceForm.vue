@@ -71,7 +71,7 @@ function changeSite(id: string): void {
   const site=props.workspace.sedes.find(item=>item.id===id)
   const programacion={ ...props.modelValue.programacion,duracionMinutos:String(site?.duracionServicioMinutos ?? 90) }
   automaticRefuerzo.value=true
-  patch({ sedeId:id,valorServicio:'',programacion,refuerzo:site?.manejaRefuerzo ? scheduleToDraft(suggestReinforcement(scheduleFromDraft(programacion))) : null })
+  patch({ sedeId:id,valorServicio:site?.tipoSede==='RESIDENCIAL' && site.valorServicio != null ? String(site.valorServicio) : '',programacion,refuerzo:site?.manejaRefuerzo ? scheduleToDraft(suggestReinforcement(scheduleFromDraft(programacion))) : null })
   touch('sedeId')
 }
 function changeSchedule(programacion: ServiceScheduleDraft): void {

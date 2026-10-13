@@ -26,7 +26,7 @@ vi.mock('@/services/clientsService', () => ({
   listSiteHistory: vi.fn<typeof import('@/services/clientsService').listSiteHistory>(),
 }))
 
-const loaded: ClientRecord = { id: 'client-1', tipoCliente: 'NEGOCIO', nombre: 'Acme SAS', nit: '900123', correos: ['admin@acme.co'], activo: true, version: 1, vigenciaCertificadoMeses: 12, residenciaDireccion: null, residenciaCelular: null, sedesCount: 2 }
+const loaded: ClientRecord = { id: 'client-1', tipoCliente: 'NEGOCIO', nombre: 'Acme SAS', nit: '900123', correos: ['admin@acme.co'], activo: true, version: 1, vigenciaCertificadoMeses: 12, residenciaDireccion: null, residenciaCelular: null, residenciaValorServicio: null, sedesCount: 2 }
 
 beforeAll(() => {
   HTMLDialogElement.prototype.showModal = function showModal() { this.setAttribute('open', '') }

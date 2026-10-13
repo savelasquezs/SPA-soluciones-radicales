@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { formatPhone, normalizePhone, validateClientInput, validateSiteInput } from '@/helpers/clients'
 import type { ClientInput, SiteInput } from '@/types/domain'
 
-const business = (): ClientInput => ({ tipoCliente: 'NEGOCIO', nombre: 'Acme SAS', nit: '900123456', correos: [], activo: true, vigenciaCertificadoMeses: 12, residenciaDireccion: null, residenciaCelular: null })
-const residence = (): ClientInput => ({ tipoCliente: 'RESIDENCIAL', nombre: 'María Gómez', nit: null, correos: [], activo: true, vigenciaCertificadoMeses: null, residenciaDireccion: 'Calle 1 # 2-3', residenciaCelular: '300 123 4567' })
+const business = (): ClientInput => ({ tipoCliente: 'NEGOCIO', nombre: 'Acme SAS', nit: '900123456', correos: [], activo: true, vigenciaCertificadoMeses: 12, residenciaDireccion: null, residenciaCelular: null, residenciaValorServicio: null })
+const residence = (): ClientInput => ({ tipoCliente: 'RESIDENCIAL', nombre: 'María Gómez', nit: null, correos: [], activo: true, vigenciaCertificadoMeses: null, residenciaDireccion: 'Calle 1 # 2-3', residenciaCelular: '300 123 4567', residenciaValorServicio: null })
 const site = (): SiteInput => ({ nombre: 'Principal', direccion: 'Calle 10', correos: [], heredaCorreosCliente: true, contactoPrincipalNombre: 'Ana', contactoPrincipalCorreo: null, contactoPrincipalCelular: '3001234567', valorServicio: 150000, periodicidadMeses: 1, manejaRefuerzo: false, planoStoragePath: null, manejaVehiculos: false, generaCertificadoVehiculo: false, vigenciaCertificadoVehiculoMeses: null, duracionServicioMinutos: 120, activo: true })
 
 describe('clientes helpers', () => {
@@ -15,6 +15,14 @@ describe('clientes helpers', () => {
   it('exige únicamente nombre, celular y dirección para Casa', () => {
     expect(validateClientInput(residence())).toEqual({})
     expect(validateClientInput({ ...residence(), residenciaCelular: '', residenciaDireccion: '' })).toMatchObject({ residenciaCelular: expect.any(String), residenciaDireccion: expect.any(String) })
+  })
+
+  it('permite una tarifa residencial opcional y valida montos enteros no negativos', () => {
+    expect(validateClientInput({ ...residence(), residenciaValorServicio: null })).toEqual({})
+    expect(validateClientInput({ ...residence(), residenciaValorServicio: 105000 })).toEqual({})
+    expect(validateClientInput({ ...residence(), residenciaValorServicio: 0 })).toEqual({})
+    expect(validateClientInput({ ...residence(), residenciaValorServicio: -1 }).residenciaValorServicio).toBeTruthy()
+    expect(validateClientInput({ ...residence(), residenciaValorServicio: 10.5 }).residenciaValorServicio).toBeTruthy()
   })
 
   it('normaliza y muestra celulares colombianos', () => {

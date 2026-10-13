@@ -6,7 +6,7 @@ import ClientForm from '@/components/domain/clients/ClientForm.vue'
 import SiteForm from '@/components/domain/clients/SiteForm.vue'
 import type { AreaInput, ClientInput, SiteInput } from '@/types/domain'
 
-const client = (type: ClientInput['tipoCliente']): ClientInput => ({ tipoCliente: type, nombre: type === 'NEGOCIO' ? 'Acme SAS' : 'María Gómez', nit: type === 'NEGOCIO' ? '900123' : null, correos: [], activo: true, vigenciaCertificadoMeses: type === 'NEGOCIO' ? 12 : null, residenciaDireccion: type === 'RESIDENCIAL' ? 'Calle 1' : null, residenciaCelular: type === 'RESIDENCIAL' ? '+573001234567' : null })
+const client = (type: ClientInput['tipoCliente']): ClientInput => ({ tipoCliente: type, nombre: type === 'NEGOCIO' ? 'Acme SAS' : 'María Gómez', nit: type === 'NEGOCIO' ? '900123' : null, correos: [], activo: true, vigenciaCertificadoMeses: type === 'NEGOCIO' ? 12 : null, residenciaDireccion: type === 'RESIDENCIAL' ? 'Calle 1' : null, residenciaCelular: type === 'RESIDENCIAL' ? '+573001234567' : null, residenciaValorServicio: type === 'RESIDENCIAL' ? 105000 : null })
 const site = (): SiteInput => ({ nombre: 'Principal', direccion: 'Calle 1', correos: [], heredaCorreosCliente: true, contactoPrincipalNombre: 'Ana', contactoPrincipalCorreo: null, contactoPrincipalCelular: '+573001234567', valorServicio: 100000, periodicidadMeses: 1, manejaRefuerzo: false, planoStoragePath: null, manejaVehiculos: false, generaCertificadoVehiculo: false, vigenciaCertificadoVehiculoMeses: null, duracionServicioMinutos: 120, activo: true })
 
 describe('formularios compartidos de Clientes', () => {
@@ -20,12 +20,20 @@ describe('formularios compartidos de Clientes', () => {
     expect(wrapper.text()).not.toContain('Certificado de establecimiento')
     expect(wrapper.find('#client-phone').exists()).toBe(true)
     expect(wrapper.find('#client-address').exists()).toBe(true)
+    expect(wrapper.get<HTMLInputElement>('#client-service-value').element.value).toBe('105000')
   })
 
   it('ClientForm en edición recibe el snapshot inicial y bloquea el tipo', () => {
     const wrapper = mount(ClientForm, { props: { modelValue: client('NEGOCIO'), mode: 'edit' } })
     expect(wrapper.get<HTMLInputElement>('#client-name').element.value).toBe('Acme SAS')
     expect(wrapper.get<HTMLSelectElement>('#client-type').element.disabled).toBe(true)
+  })
+
+  it('ClientForm permite editar la tarifa residencial desde la ficha del cliente', async () => {
+    const wrapper = mount(ClientForm, { props: { modelValue: client('RESIDENCIAL'), mode: 'edit' } })
+    await wrapper.get('#client-service-value').setValue('120000')
+    const emitted = wrapper.emitted('update:modelValue')
+    expect(emitted?.at(-1)?.[0]).toMatchObject({ residenciaValorServicio: 120000 })
   })
 
   it('SiteForm exige contacto y no contiene certificado de establecimiento', async () => {

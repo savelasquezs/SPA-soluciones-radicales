@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { ServiceSite } from '@/types/adminServices'
 import {
   draftToServiceInput, emptyServiceDraft, validateServiceInput, fromBogotaInput,
 } from '@/helpers/adminServices'
@@ -14,6 +15,20 @@ function input() {
 }
 
 describe('Formularios de programación: fecha y pago real',()=>{
+  it('precarga la tarifa de Casa sin impedir modificar el valor de una visita', () => {
+    const home: ServiceSite = {
+      id: uuid(1), clientId: uuid(2), clienteNombre: 'Cliente residencial',
+      nombre: 'Casa', direccion: 'Calle 1', tipoSede: 'RESIDENCIAL',
+      valorServicio: 105000, periodicidadMeses: null, duracionServicioMinutos: null,
+      manejaRefuerzo: false, contacto: { nombre: 'Cliente residencial', celular: null, correos: [] },
+    }
+    const draft = emptyServiceDraft(home)
+    expect(draft.valorServicio).toBe('105000')
+    expect(draftToServiceInput({ ...draft, valorServicio: '95000' }).valorServicio).toBe(95000)
+    expect(home.valorServicio).toBe(105000)
+    expect(emptyServiceDraft({ ...home, valorServicio: null }).valorServicio).toBe('')
+  })
+
   it('rechaza pasado y fecha igual al momento de guardar; respeta histórico durante edición',()=>{
     const data=input()
     data.programacion.inicioProgramado=fromBogotaInput('2024-01-01T09:00')
