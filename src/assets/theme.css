@@ -185,8 +185,11 @@ a {
   line-height: 1.4;
 }
 @media (min-width: 681px) {
-  .admin-compact-filters .base-field { gap: 0.2rem; }
-  .admin-compact-filters .base-field__label { font-size: 0.75rem; line-height: 1rem; }
+  .admin-compact-filters {
+    --base-field-gap: 0.2rem;
+    --base-field-label-size: 0.75rem;
+    --base-field-label-line-height: 1rem;
+  }
   .admin-compact-filters .base-field input,
   .admin-compact-filters .base-field select {
     min-height: 36px;
