@@ -189,6 +189,8 @@ describe('administrator services · real PostgreSQL',()=>{
     expect(newVisit.tecnicoResponsableId).toBe(f.responsible)
     expect(now.inicioProgramado).toBe(newVisit.inicioProgramado)
     expect(Number((await pool.query("select count(*) from public.auditoria where registro_id=$1 and accion='SERVICIO_EQUIPO_REASIGNADO'",[p.id])).rows[0].count)).toBe(1)
+    expect(Number((await pool.query("select count(*) from public.auditoria where registro_id=$1 and accion='SERVICIO_CREADO'",[p.id])).rows[0].count)).toBe(1)
+    expect(Number((await pool.query("select count(*) from public.auditoria where registro_id=$1 and accion='SERVICIO_CREADO'",[newVisit.id])).rows[0].count)).toBe(1)
   })
   it('cancels a programmed Refuerzo with its Principal and preserves finalized siblings',async()=>{
     const f=await fixture(), result=await create(f), p=principal(result)
