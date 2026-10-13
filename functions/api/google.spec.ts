@@ -48,7 +48,7 @@ describe('Google OAuth integration health', () => {
   it('detects a revoked refresh token and prevents Gmail dispatch', async () => {
     mockIntegrationQuery()
     const module = await googleModule()
-    const remote = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+    const remote = vi.fn<typeof fetch>().mockImplementation(async () => new Response(JSON.stringify({
       error: 'invalid_grant',
       error_description: 'Token has been expired or revoked.',
     }), { status: 400 }))
