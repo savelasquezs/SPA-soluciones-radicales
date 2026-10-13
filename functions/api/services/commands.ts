@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import type { PoolClient } from 'pg'
-import type { AdminService, ConfirmationEmail, ScheduleConflict, ServiceInput, ServiceMutation, ServicePaymentInput, ServiceSchedule, UpcomingPatch, UpcomingService } from '../../../src/types/adminServices'
+import type { AdminService, ConfirmationEmail, ScheduleConflict, ServiceInput, ServiceMutation, ServicePaymentInput, ServiceSchedule, ServiceReassignment, UpcomingPatch, UpcomingService } from '../../../src/types/adminServices'
 import { formatServiceDate, isServiceId, scheduleEnd, scheduleFromRecord, suggestReinforcement, toBogotaInput } from '../../../src/helpers/adminServices'
 import { ApiError } from '../auth'
 import { getService, getServices, getUpcoming, pendingCount } from './queries'
@@ -76,30 +76,114 @@ async function validatePaymentReceiver(client: PoolClient, id: string | null, ac
     { fields: { [field]: 'Selecciona un técnico o el administrador que está registrando el pago.' } },
   )
 }
-export async function checkSchedules(client: PoolClient, schedules: ServiceSchedule[], ignoreIds: string[], accepted: boolean): Promise<ScheduleConflict[]> {
-  const conflicts: ScheduleConflict[] = []
-  for (const [index,schedule] of schedules.entries()) {
-    await validateTeam(client,schedule,index ? 'refuerzo' : 'programacion')
-    const ids = [schedule.tecnicoResponsableId,...schedule.tecnicosColaboradoresIds]
-    const { rows } = await client.query<{ record: ScheduleConflict }>(`select jsonb_build_object('id',s.id,'solicitud',s.solicitud,'clienteNombre',n.nombre,
-      'sedeNombre',se.nombre,'inicioProgramado',s.inicio_programado,'finProgramado',s.fin_programado,
-      'tecnicos',(select coalesce(jsonb_agg(u.nombre_completo),'[]'::jsonb) from public.usuarios u where u.id=any($3::uuid[])
-        and (u.id=s.tecnico_responsable_id or coalesce(s.tecnicos_colaboradores_ids_json,'[]'::jsonb) ? u.id::text))) as record
-      from public.servicios s join public.sedes se on se.id=s.sede_id join public.negocios n on n.id=se.negocio_id
-      where s.estado in ('PROGRAMADO','EN_PROCESO') and s.inicio_programado < $2::timestamptz and s.fin_programado > $1::timestamptz
-        and not(s.id=any($4::uuid[])) and (s.tecnico_responsable_id=any($3::uuid[]) or exists(
-          select 1 from jsonb_array_elements_text(coalesce(s.tecnicos_colaboradores_ids_json,'[]'::jsonb)) c where c.value::uuid=any($3::uuid[])))
-      order by s.inicio_programado,s.id limit 20`, [schedule.inicioProgramado,scheduleEnd(schedule),ids,ignoreIds])
-    conflicts.push(...rows.map(row => row.record))
+type ScheduledCandidate = { id: string | null; schedule: ServiceSchedule; version?: number }
+type OccupiedService = {
+  id: string; solicitud: string; clienteNombre: string; sedeNombre: string
+  version: number; inicioProgramado: string; finProgramado: string
+  tecnicoResponsableId: string; tecnicosColaboradoresIds: string[]
+}
+const teamIds = (schedule: ServiceSchedule) => [schedule.tecnicoResponsableId, ...schedule.tecnicosColaboradoresIds]
+const overlapsTime = (a: ServiceSchedule,b: ServiceSchedule) =>
+  new Date(a.inicioProgramado).getTime() < new Date(scheduleEnd(b)).getTime()
+  && new Date(b.inicioProgramado).getTime() < new Date(scheduleEnd(a)).getTime()
+const busyIds = (item: OccupiedService) => [item.tecnicoResponsableId,...item.tecnicosColaboradoresIds]
+const storedSchedule = (item: OccupiedService): ServiceSchedule => ({
+  inicioProgramado:item.inicioProgramado,
+  duracionMinutos:Math.round((new Date(item.finProgramado).getTime()-new Date(item.inicioProgramado).getTime())/60_000),
+  tecnicoResponsableId:item.tecnicoResponsableId,
+  tecnicosColaboradoresIds:item.tecnicosColaboradoresIds,
+})
+async function occupiedServices(client:PoolClient, schedule:ServiceSchedule, ignored:string[]):Promise<OccupiedService[]> {
+  const {rows}=await client.query<{record:OccupiedService}>(`select jsonb_build_object(
+    'id',s.id,'solicitud',s.solicitud,'clienteNombre',n.nombre,'sedeNombre',se.nombre,
+    'version',s.version,'inicioProgramado',s.inicio_programado,'finProgramado',s.fin_programado,
+    'tecnicoResponsableId',s.tecnico_responsable_id,
+    'tecnicosColaboradoresIds',coalesce(s.tecnicos_colaboradores_ids_json,'[]'::jsonb)) as record
+    from public.servicios s join public.sedes se on se.id=s.sede_id join public.negocios n on n.id=se.negocio_id
+    where s.estado in ('PROGRAMADO','EN_PROCESO') and s.inicio_programado < $2::timestamptz
+      and s.fin_programado > $1::timestamptz and not(s.id=any($3::uuid[]))
+    order by s.inicio_programado,s.id`,[schedule.inicioProgramado,scheduleEnd(schedule),ignored])
+  return rows.map(row=>row.record)
+}
+async function lockTechnicianSchedules(client:PoolClient, schedules:ServiceSchedule[]):Promise<void> {
+  for(const id of [...new Set(schedules.flatMap(teamIds))].sort()) {
+    await client.query("select pg_advisory_xact_lock(hashtextextended($1,0))",[`service-technician:${id}`])
   }
-  if (schedules[0] && schedules[1]) {
-    const [a,b] = schedules, aIds=[a.tecnicoResponsableId,...a.tecnicosColaboradoresIds], bIds=[b.tecnicoResponsableId,...b.tecnicosColaboradoresIds]
-    if (new Date(a.inicioProgramado) < new Date(scheduleEnd(b)) && new Date(b.inicioProgramado) < new Date(scheduleEnd(a)) && aIds.some(id => bIds.includes(id))) {
-      conflicts.push({ id: 'principal-refuerzo', solicitud: 'Principal y Refuerzo', clienteNombre: '', sedeNombre: '', inicioProgramado: b.inicioProgramado, finProgramado: scheduleEnd(b), tecnicos: ['Comparten técnicos en el mismo horario'] })
+}
+export async function checkSchedules(client: PoolClient, candidates: ScheduledCandidate[], ignored: string[], previousTeams: ServiceSchedule[] = []): Promise<void> {
+  for(const [index,candidate] of candidates.entries()) await validateTeam(client,candidate.schedule,index===1 ? 'refuerzo' : 'programacion')
+  // Lock all old and new assignments. Every administrative scheduling write must use
+  // this lock so a second transaction cannot book the same technician concurrently.
+  await lockTechnicianSchedules(client,[...candidates.map(row=>row.schedule),...previousTeams])
+  const conflicts: ScheduleConflict[]=[]
+  for(const [index,candidate] of candidates.entries()) {
+    const schedule=candidate.schedule
+    const occupied=await occupiedServices(client,schedule,ignored)
+    const unavailableProposedTechnicianIds=[...new Set([
+      ...occupied.flatMap(busyIds),
+      ...candidates.filter((other,i)=>i!==index && overlapsTime(schedule,other.schedule)).flatMap(other=>teamIds(other.schedule)),
+    ])]
+    for(const existing of occupied) {
+      const duplicate=teamIds(schedule).filter(id=>busyIds(existing).includes(id))
+      if(!duplicate.length)continue
+      const existingSchedule=storedSchedule(existing)
+      const elsewhere=await occupiedServices(client,existingSchedule,[existing.id,...ignored])
+      const unavailableTechnicianIds=[...new Set([
+        ...elsewhere.flatMap(busyIds),
+        ...candidates.filter(other=>overlapsTime(other.schedule,existingSchedule)).flatMap(other=>teamIds(other.schedule)),
+      ])]
+      const names=(await client.query<{nombre_completo:string}>(
+        'select nombre_completo from public.usuarios where id=any($1::uuid[]) order by nombre_completo',[duplicate],
+      )).rows.map(row=>row.nombre_completo)
+      conflicts.push({
+        id:existing.id,solicitud:existing.solicitud,clienteNombre:existing.clienteNombre,
+        sedeNombre:existing.sedeNombre,inicioProgramado:existing.inicioProgramado,
+        finProgramado:existing.finProgramado,tecnicos:names,version:existing.version,
+        programacion:existingSchedule,conflictingTechnicianIds:duplicate,proposedIndex:index,
+        unavailableProposedTechnicianIds,unavailableTechnicianIds,
+      })
+    }
+    // Other records changed in this transaction are excluded from occupiedServices;
+    // compare their final schedules explicitly, including Principal/Refuerzo.
+    for(let j=0;j<index;j++) {
+      const other=candidates[j]!
+      if(!overlapsTime(schedule,other.schedule))continue
+      const duplicate=teamIds(schedule).filter(id=>teamIds(other.schedule).includes(id))
+      if(!duplicate.length)continue
+      conflicts.push({
+        id:`internal:${j}:${index}`,solicitud:'Servicios de esta operación',clienteNombre:'',
+        sedeNombre:'',inicioProgramado:other.schedule.inicioProgramado,
+        finProgramado:scheduleEnd(other.schedule),tecnicos:['Comparten técnicos en el mismo horario'],
+        proposedIndex:index,conflictingTechnicianIds:duplicate,internal:true,
+        unavailableProposedTechnicianIds:[...new Set([...unavailableProposedTechnicianIds,...teamIds(other.schedule)])],
+        unavailableTechnicianIds:[],programacion:other.schedule,version:0,
+      })
     }
   }
-  if (conflicts.length && !accepted) throw new ApiError(409, 'El equipo tiene visitas que se cruzan con este horario. Puedes continuar conservando las asignaciones.', 'SCHEDULE_CONFLICT', { conflicts })
-  return conflicts
+  if(conflicts.length)throw new ApiError(409,
+    'Hay técnicos asignados a servicios simultáneos. Reasigna los equipos antes de guardar.',
+    'SCHEDULE_CONFLICT',{conflicts})
+}
+type ReassignmentRecord = { before: AdminService; input: ServiceReassignment }
+async function loadReassignments(client:PoolClient, input:ServiceReassignment[], protectedIds:string[]):Promise<ReassignmentRecord[]> {
+  const seen=new Set<string>(),result:ReassignmentRecord[]=[]
+  for(const item of [...input].sort((a,b)=>a.id.localeCompare(b.id))) {
+    if(seen.has(item.id) || protectedIds.includes(item.id))throw new ApiError(422,'No se puede modificar dos veces el mismo servicio.','VALIDATION')
+    seen.add(item.id)
+    await lockFamily(client,item.id)
+    const before=await getService(client,item.id)
+    assertVersion(before.version,item.version);mutable(before)
+    result.push({before,input:item})
+  }
+  return result
+}
+async function saveReassignments(client:PoolClient,actorId:string,records:ReassignmentRecord[],source:string):Promise<void> {
+  for(const {before,input} of records) {
+    await saveSchedule(client,input.id,input.programacion,input.version)
+    await audit(client,actorId,'SERVICIO_EQUIPO_REASIGNADO',input.id,{
+      causa:source,antes:scheduleFromRecord(before),despues:input.programacion,
+    })
+  }
 }
 async function saveProducts(client: PoolClient, service: AdminService | null, serviceId: string, input: ServiceInput['productos']): Promise<void> {
   const ids = input.map(product => product.productoId)
@@ -133,7 +217,7 @@ async function mutation(client: PoolClient, ids: string[], upcomingId?: string):
   return { services: await getServices(client,ids), upcoming: upcomingId ? await getUpcoming(client,upcomingId) : null, pendingCount: await pendingCount(client) }
 }
 
-export async function createService(client: PoolClient, actorId: string, input: ServiceInput, accepted: boolean, upcoming?: { id: string; version: number; confirmed: boolean }): Promise<ServiceMutation> {
+export async function createService(client: PoolClient, actorId: string, input: ServiceInput, reassignments: ServiceReassignment[], upcoming?: { id: string; version: number; confirmed: boolean }): Promise<ServiceMutation> {
   const site = await siteForScheduling(client,input.sedeId)
   let proposal: UpcomingService | null = null
   if (upcoming) {
@@ -156,7 +240,12 @@ export async function createService(client: PoolClient, actorId: string, input: 
     if(!input.cobro.recaudadoPorId)throw new ApiError(422,'Indica quién recibió el efectivo.','VALIDATION',{fields:{'cobro.recaudadoPorId':'Selecciona quién recibió el efectivo.'}})
     await validatePaymentReceiver(client,input.cobro.recaudadoPorId,actorId,null,'cobro.recaudadoPorId')
   }
-  const overlaps = await checkSchedules(client,[input.programacion,...reinforcement ? [reinforcement] : []],[],accepted)
+  const reassigned=await loadReassignments(client,reassignments,[])
+  await checkSchedules(client,[
+    {id:null,schedule:input.programacion},
+    ...reinforcement ? [{id:null,schedule:reinforcement}] : [],
+    ...reassigned.map(row=>({id:row.input.id,schedule:row.input.programacion})),
+  ],reassigned.map(row=>row.input.id),reassigned.map(row=>scheduleFromRecord(row.before)))
   await validatePlannedCollector(client,input.cobro.tecnicoRecaudoPrevistoId)
   const id = randomUUID(), ids = [id]
   const schedule = input.programacion
@@ -180,17 +269,18 @@ export async function createService(client: PoolClient, actorId: string, input: 
       values($1,$2,'REFUERZO',$3,$4,$5,$6,$7,$8::jsonb,0)`,
     [reinforcementId,input.sedeId,id,reinforcement.inicioProgramado,scheduleEnd(reinforcement),actorId,reinforcement.tecnicoResponsableId,JSON.stringify(reinforcement.tecnicosColaboradoresIds)])
   }
+  await saveReassignments(client,actorId,reassigned,'SERVICIO_NUEVO')
   await saveProducts(client,null,id,input.productos)
   if (proposal) {
     await client.query(`update public.proximos_servicios set servicio_agendado_id=$2,estado='CONFIRMADO',confirmado_at=coalesce(confirmado_at,now()),
       confirmado_por_id=coalesce(confirmado_por_id,$3) where id=$1`,[proposal.id,id,actorId])
     await audit(client,actorId,'PROXIMO_AGENDADO',proposal.id,{ servicioId:id },'Próximos servicios')
   }
-  const result=await mutation(client,ids,proposal?.id)
-  for (const service of result.services) await audit(client,actorId,'SERVICIO_CREADO',service.id,{ service, crucesAceptados:overlaps })
+  const result=await mutation(client,[...ids,...reassigned.map(row=>row.input.id)],proposal?.id)
+  for (const service of result.services) await audit(client,actorId,'SERVICIO_CREADO',service.id,{ service })
   return result
 }
-export async function editService(client: PoolClient, actorId: string, id: string, expected: number, input: ServiceInput, accepted: boolean, reinforcementVersion?: number): Promise<ServiceMutation> {
+export async function editService(client: PoolClient, actorId: string, id: string, expected: number, input: ServiceInput, reassignments: ServiceReassignment[], reinforcementVersion?: number): Promise<ServiceMutation> {
   const ids=await lockFamily(client,id), before=await getService(client,id)
   assertVersion(before.version,expected); mutable(before)
   if (input.sedeId!==before.sedeId) throw new ApiError(422, 'La sede de un servicio existente no se cambia.', 'VALIDATION', { fields: { sedeId: 'Cancela y programa otro servicio para cambiar de sede.' } })
@@ -201,7 +291,15 @@ export async function editService(client: PoolClient, actorId: string, id: strin
     if (!before.refuerzo || reinforcementVersion===undefined) throw new ApiError(422,'Falta la versión del Refuerzo asociado.','VALIDATION')
     child=await getService(client,before.refuerzo.id); assertVersion(child.version,reinforcementVersion); mutable(child)
   }
-  const overlaps=await checkSchedules(client,[input.programacion,...input.refuerzo ? [input.refuerzo] : []],[id,...(child ? [child.id] : [])],accepted)
+  const reassigned=await loadReassignments(client,reassignments,ids)
+  await checkSchedules(client,[
+    {id,schedule:input.programacion},
+    ...input.refuerzo ? [{id:child!.id,schedule:input.refuerzo}] : [],
+    ...reassigned.map(row=>({id:row.input.id,schedule:row.input.programacion})),
+  ],[...ids,...reassigned.map(row=>row.input.id)],[
+    scheduleFromRecord(before),...child ? [scheduleFromRecord(child)] : [],
+    ...reassigned.map(row=>scheduleFromRecord(row.before)),
+  ])
   const planChanged=input.cobro.metodoPago!==before.pago.metodoPago || input.cobro.tecnicoRecaudoPrevistoId!==before.pago.tecnicoRecaudoPrevistoId
   if (planChanged && before.pago.estadoPago==='CONFIRMADO') throw new ApiError(409,'El pago ya está confirmado. No se modifica desde la programación.','PAYMENT_CONFIRMED')
   if (planChanged) await validatePlannedCollector(client,input.cobro.tecnicoRecaudoPrevistoId)
@@ -211,11 +309,12 @@ export async function editService(client: PoolClient, actorId: string, id: strin
   [id,input.observaciones,input.cobro.metodoPago,input.cobro.tecnicoRecaudoPrevistoId])
   await saveProducts(client,before,id,input.productos)
   if (child && input.refuerzo) await saveSchedule(client,child.id,input.refuerzo,child.version)
-  const result=await mutation(client,ids)
-  await audit(client,actorId,'SERVICIO_EDITADO',id,{ before, after:result.services.find(row=>row.id===id), refuerzoAnterior:child, crucesAceptados:overlaps })
+  await saveReassignments(client,actorId,reassigned,id)
+  const result=await mutation(client,[...ids,...reassigned.map(row=>row.input.id)])
+  await audit(client,actorId,'SERVICIO_EDITADO',id,{ before, after:result.services.find(row=>row.id===id), refuerzoAnterior:child })
   return result
 }
-export async function rescheduleService(client: PoolClient, actorId: string, id: string, expected: number, schedule: ServiceSchedule, accepted: boolean, reinforcement?: { version: number; schedule: ServiceSchedule }): Promise<ServiceMutation> {
+export async function rescheduleService(client: PoolClient, actorId: string, id: string, expected: number, schedule: ServiceSchedule, reassignments: ServiceReassignment[], reinforcement?: { version: number; schedule: ServiceSchedule }): Promise<ServiceMutation> {
   const ids=await lockFamily(client,id), before=await getService(client,id)
   assertVersion(before.version,expected); mutable(before); await siteForScheduling(client,before.sedeId)
   let child: AdminService | null=null
@@ -223,11 +322,20 @@ export async function rescheduleService(client: PoolClient, actorId: string, id:
     if (!before.refuerzo) throw new ApiError(422,'No hay Refuerzo asociado.','VALIDATION')
     child=await getService(client,before.refuerzo.id); assertVersion(child.version,reinforcement.version); mutable(child)
   }
-  const overlaps=await checkSchedules(client,[schedule,...reinforcement ? [reinforcement.schedule] : []],[id,...(child ? [child.id] : [])],accepted)
+  const reassigned=await loadReassignments(client,reassignments,ids)
+  await checkSchedules(client,[
+    {id,schedule},
+    ...reinforcement ? [{id:child!.id,schedule:reinforcement.schedule}] : [],
+    ...reassigned.map(row=>({id:row.input.id,schedule:row.input.programacion})),
+  ],[...ids,...reassigned.map(row=>row.input.id)],[
+    scheduleFromRecord(before),...child ? [scheduleFromRecord(child)] : [],
+    ...reassigned.map(row=>scheduleFromRecord(row.before)),
+  ])
   await saveSchedule(client,id,schedule,expected)
   if (child && reinforcement) await saveSchedule(client,child.id,reinforcement.schedule,child.version)
+  await saveReassignments(client,actorId,reassigned,id)
   const result=await mutation(client,ids)
-  await audit(client,actorId,'SERVICIO_REPROGRAMADO',id,{ before:scheduleFromRecord(before), after:schedule, refuerzoAnterior:child ? scheduleFromRecord(child) : null, refuerzoNuevo:reinforcement?.schedule ?? null, crucesAceptados:overlaps })
+  await audit(client,actorId,'SERVICIO_REPROGRAMADO',id,{ before:scheduleFromRecord(before), after:schedule, refuerzoAnterior:child ? scheduleFromRecord(child) : null, refuerzoNuevo:reinforcement?.schedule ?? null })
   return result
 }
 export async function cancelService(client: PoolClient, actorId: string, id: string, expected: number, reason: string): Promise<ServiceMutation> {
