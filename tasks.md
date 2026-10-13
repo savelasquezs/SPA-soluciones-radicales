@@ -1,5 +1,11 @@
 # Tareas aprobadas
 
+## Publicación y verificación Google OAuth
+
+- [x] Cambiar la aplicación OAuth empresarial de Google Cloud de modo Prueba a **En producción** (2026-10-13) para eliminar el vencimiento automático de refresh tokens a los 7 días asociado al modo Prueba.
+- [x] Renovar la autorización de `solucionesradicales1@gmail.com` y comprobar que Gmail vuelve a enviar correos (2026-10-13).
+- [ ] **Completar y enviar la verificación oficial de la aplicación en Google Auth Platform → Centro de verificación**, incluyendo los permisos sensibles/restringidos de Gmail, Calendar y Drive, las páginas legales públicas y, si Google lo requiere, la verificación del dominio. Revisar y resolver las observaciones de Google antes del lanzamiento definitivo.
+
 ## Fundación frontend reutilizable
 
 - [x] Integrar Neon Auth, Data API y Functions mediante services compartidos.
