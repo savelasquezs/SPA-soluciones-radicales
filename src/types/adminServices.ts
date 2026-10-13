@@ -228,6 +228,7 @@ export interface ScheduleConflict {
   unavailableProposedTechnicianIds: string[]
   unavailableTechnicianIds: string[]
   internal?: boolean
+  existingEditable?: boolean
 }
 export interface UpcomingPatch {
   estado: FollowUpState
