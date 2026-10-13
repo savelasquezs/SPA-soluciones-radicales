@@ -2,13 +2,13 @@ import { nextTick, onBeforeUnmount, ref } from 'vue'
 import { ApiClientError } from '@/services/apiService'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
-import type { ScheduleConflict, ServiceErrors } from '@/types/adminServices'
+import type { ScheduleConflict, ScheduleResolution, ServiceErrors } from '@/types/adminServices'
 
 export function useServiceMutation() {
   const auth=useAuthStore(), notifications=useNotificationsStore()
   const saving=ref(false), errors=ref<ServiceErrors>({}), errorMessage=ref(''), conflict=ref(false)
   const overlapOpen=ref(false), overlaps=ref<ScheduleConflict[]>([]), operationId=ref(crypto.randomUUID())
-  let alive=true, retryWithOverlap: (()=>Promise<void>) | null=null
+  let alive=true, retryWithOverlap: ((resolution:ScheduleResolution)=>Promise<void>) | null=null
   const session=()=>`${auth.profile?.id ?? ''}:${auth.activeRole ?? ''}`
   onBeforeUnmount(()=>{ alive=false; retryWithOverlap=null })
   function clearValidation(): void { errors.value={}; if(!conflict.value) errorMessage.value='' }
@@ -22,18 +22,18 @@ export function useServiceMutation() {
     await nextTick()
     document.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
   }
-  async function run<T>(work: (requestId: string, allowConflicts: boolean)=>Promise<T>, success: (result: T)=>void | Promise<void>, label: string, allowConflicts=false): Promise<void> {
+  async function run<T>(work: (requestId: string, resolution?: ScheduleResolution)=>Promise<T>, success: (result: T)=>void | Promise<void>, label: string, resolution?:ScheduleResolution): Promise<void> {
     if(saving.value || conflict.value || !auth.isAdmin) return
     const stamp=session()
     saving.value=true; errorMessage.value=''; errors.value={}; overlapOpen.value=false
     let result: T
     try {
-      result=await work(operationId.value,allowConflicts)
+      result=await work(operationId.value,resolution)
     } catch(failure) {
       if(!alive || stamp!==session()) return
       if(failure instanceof ApiClientError && failure.code==='SCHEDULE_CONFLICT') {
         overlaps.value=Array.isArray(failure.details?.conflicts) ? failure.details.conflicts as ScheduleConflict[] : []
-        retryWithOverlap=()=>run(work,success,label,true); overlapOpen.value=true
+        retryWithOverlap=(selected)=>run(work,success,label,selected); overlapOpen.value=true
         return
       }
       errorMessage.value=failure instanceof Error ? failure.message : 'No fue posible guardar. Tus datos se conservan.'
@@ -54,7 +54,7 @@ export function useServiceMutation() {
     try { await success(result) }
     catch { notifications.show('Los datos se guardaron, pero no se pudo actualizar la pantalla. Vuelve a consultar el registro antes de repetir la operación.','warning') }
   }
-  async function acceptOverlap(): Promise<void> { const retry=retryWithOverlap; overlapOpen.value=false; if(retry) await retry() }
+  async function acceptOverlap(resolution:ScheduleResolution): Promise<void> { const retry=retryWithOverlap; overlapOpen.value=false; if(retry) await retry(resolution) }
   function cancelOverlap(): void { overlapOpen.value=false; retryWithOverlap=null }
   return { operationId,saving,errors,errorMessage,conflict,overlapOpen,overlaps,run,invalid,reset,clearValidation,acceptOverlap,cancelOverlap }
 }

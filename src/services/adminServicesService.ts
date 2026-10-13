@@ -1,5 +1,5 @@
 import { apiRequest } from '@/services/apiService'
-import type { AdminService, ConfirmationEmail, PagedResult, ServiceFilter, ServiceInput, ServiceMutation, ServicePaymentInput, ServiceSchedule, ServiceWorkspace, UpcomingFilter, UpcomingPatch, UpcomingService } from '@/types/adminServices'
+import type { AdminService, ConfirmationEmail, PagedResult, ServiceFilter, ServiceInput, ServiceMutation, ServicePaymentInput, ServiceReassignment, ServiceSchedule, ServiceWorkspace, UpcomingFilter, UpcomingPatch, UpcomingService } from '@/types/adminServices'
 
 const base = 'api/admin/services'
 function query(value: ServiceFilter | UpcomingFilter): string {
@@ -15,12 +15,12 @@ export const fetchAdminService = (id: string) => apiRequest<AdminService>(`${bas
 export const fetchUpcomingService = (id: string) => apiRequest<UpcomingService>(`${base}/upcoming/${id}`)
 export const fetchServiceCommand = (requestId: string) => apiRequest<{ result: ServiceMutation | null }>(`${base}/commands/${requestId}`)
 export const fetchPendingCount = () => apiRequest<{ count: number }>(`${base}/pending-count`)
-export const createAdminService = (requestId: string, input: ServiceInput, allowConflicts = false, upcoming?: { id: string; version: number; confirmed: boolean }) =>
-  apiRequest<ServiceMutation>(base,json('POST',{ requestId,input,allowConflicts,upcoming }))
-export const updateAdminService = (record: AdminService, requestId: string, input: ServiceInput, allowConflicts = false) =>
-  apiRequest<ServiceMutation>(`${base}/${record.id}`,json('PUT',{ requestId,version:record.version,reinforcementVersion:record.refuerzo?.version,input,allowConflicts }))
-export const reprogramAdminService = (record: AdminService, requestId: string, programacion: ServiceSchedule, allowConflicts = false, refuerzo?: ServiceSchedule) =>
-  apiRequest<ServiceMutation>(`${base}/${record.id}/reschedule`,json('POST',{ requestId,version:record.version,programacion,allowConflicts,refuerzo:refuerzo && record.refuerzo ? { version:record.refuerzo.version,programacion:refuerzo } : undefined }))
+export const createAdminService = (requestId: string, input: ServiceInput, reassignments:ServiceReassignment[] = [], upcoming?: { id: string; version: number; confirmed: boolean }) =>
+  apiRequest<ServiceMutation>(base,json('POST',{ requestId,input,reassignments,upcoming }))
+export const updateAdminService = (record: AdminService, requestId: string, input: ServiceInput, reassignments:ServiceReassignment[] = []) =>
+  apiRequest<ServiceMutation>(`${base}/${record.id}`,json('PUT',{ requestId,version:record.version,reinforcementVersion:record.refuerzo?.version,input,reassignments }))
+export const reprogramAdminService = (record: AdminService, requestId: string, programacion: ServiceSchedule, reassignments:ServiceReassignment[] = [], refuerzo?: ServiceSchedule) =>
+  apiRequest<ServiceMutation>(`${base}/${record.id}/reschedule`,json('POST',{ requestId,version:record.version,programacion,reassignments,refuerzo:refuerzo && record.refuerzo ? { version:record.refuerzo.version,programacion:refuerzo } : undefined }))
 export const cancelAdminService = (record: AdminService, requestId: string, reason: string) =>
   apiRequest<ServiceMutation>(`${base}/${record.id}/cancel`,json('POST',{ requestId,version:record.version,reason }))
 export const saveServicePayment = (record: AdminService, requestId: string, input: ServicePaymentInput) =>

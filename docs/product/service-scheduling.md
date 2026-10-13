@@ -38,6 +38,16 @@ Al ingresar en una semana, se selecciona hoy si pertenece a ella; si no, el prim
 - Cruces de horarios y conflictos de versión siguen las validaciones y confirmaciones existentes. Ante un fallo no se altera la posición guardada; el usuario puede reintentar o revisar la versión actual. Google Calendar se actualiza desde la outbox tras el guardado, nunca desde el navegador.
 - La alternativa accesible por teclado o teléfono son los controles de crear y reprogramar del calendario; el arrastre no es la única manera de modificar una fecha.
 
+## Cruces de técnicos (regla obligatoria)
+
+- No se admite que un mismo técnico sea responsable o colaborador de dos Servicios con intervalos simultáneos. Se consideran los Servicios Programados y En proceso; las visitas Finalizadas y Canceladas no bloquean disponibilidad.
+- El aviso de cruce **no** ofrece guardar de todos modos: abre una resolución que informa las visitas afectadas, los técnicos coincidentes y permite cambiar el equipo del Servicio que se está guardando o el de un Servicio afectado todavía Programado.
+- Los selects son reactivos: excluyen al técnico en conflicto, integrantes ya asignados al mismo equipo, técnicos no activos, certificados vencidos y técnicos ocupados en otros Servicios que coinciden con el intervalo. Al cambiar el tipo de resolución o una selección se recalculan las opciones.
+- Si un técnico coincide con varios Servicios, su reemplazo en el Servicio nuevo puede resolver varios cruces automáticamente. Solo se habilita guardar cuando se han resuelto todos.
+- La confirmación aplica las programaciones y reasignaciones de los Servicios afectados dentro de **una única transacción**, comprobando sus versiones y revalidando disponibilidad en el servidor. Se guarda todo o nada; cambios simultáneos vuelven a exigir resolución.
+- Un Servicio En proceso no puede reasignarse desde este diálogo. La reprogramación mediante arrastre de la agenda respeta la misma regla.
+- Se conserva el rol del técnico reemplazado (responsable o colaborador), las fechas y duración de las visitas existentes y se registra auditoría individual. La outbox de Google Calendar actualiza todos los eventos cambiados después de confirmar.
+
 ## Servicio Principal
 
 El Administrador crea el Servicio Principal y el servidor genera su consecutivo.
