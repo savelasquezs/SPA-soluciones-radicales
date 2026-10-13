@@ -184,7 +184,7 @@ describe('administrator services · real PostgreSQL',()=>{
         ...scheduleFromRecord(p),tecnicoResponsableId:other.responsible,tecnicosColaboradoresIds:[other.collaborator],
       },
     }]))
-    const now=await readService(p.id),newVisit=principal(changed)
+    const now=await readService(p.id),newVisit=changed.services.find(row=>row.id!==p.id && row.tipoServicio==='PRINCIPAL')!
     expect(now.tecnicoResponsableId).toBe(other.responsible)
     expect(newVisit.tecnicoResponsableId).toBe(f.responsible)
     expect(now.inicioProgramado).toBe(newVisit.inicioProgramado)
