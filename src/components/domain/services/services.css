@@ -105,7 +105,7 @@
   .svc-filters .base-field { gap:0.15rem; }
   .svc-filters .base-field__label { font-size:0.75rem; line-height:1rem; }
   .svc-filters input, .svc-filters select { min-height:36px; padding:0.25rem 0.55rem; font-size:0.8125rem; }
-  .svc-filters .date-range-control { min-height:36px; }
+  .svc-page--agenda .svc-filters .date-range-control { min-height:36px; }
   .svc-page--agenda .svc-filters .date-segments__part { min-height:36px; font-size:0.875rem; }
   .svc-filters .date-range-control .icon-button { min-height:36px; }
 }
