@@ -54,6 +54,7 @@ const blankClient = (): ClientInput => ({
   vigenciaCertificadoMeses: 12,
   residenciaDireccion: null,
   residenciaCelular: null,
+  residenciaValorServicio: null,
 })
 const form = ref<ClientInput>(blankClient())
 const currentClients = computed(() => tab.value === 'active' ? store.activeClients : store.inactiveClients)
@@ -159,6 +160,7 @@ function toInput(client: ClientRecord): ClientInput {
     vigenciaCertificadoMeses: client.vigenciaCertificadoMeses,
     residenciaDireccion: client.residenciaDireccion,
     residenciaCelular: client.residenciaCelular,
+    residenciaValorServicio: client.residenciaValorServicio,
     version: client.version,
   }
 }

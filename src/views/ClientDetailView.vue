@@ -254,7 +254,7 @@ function openPlan(storagePath: string | null): void {
 }
 
 function blankClient(): ClientInput {
-  return { tipoCliente: 'NEGOCIO', nombre: '', nit: null, correos: [], activo: true, vigenciaCertificadoMeses: 12, residenciaDireccion: null, residenciaCelular: null }
+  return { tipoCliente: 'NEGOCIO', nombre: '', nit: null, correos: [], activo: true, vigenciaCertificadoMeses: 12, residenciaDireccion: null, residenciaCelular: null, residenciaValorServicio: null }
 }
 
 function blankSite(): SiteInput {
@@ -262,7 +262,7 @@ function blankSite(): SiteInput {
 }
 
 function toClientInput(record: ClientRecord): ClientInput {
-  return { tipoCliente: record.tipoCliente, nombre: record.nombre, nit: record.nit, correos: [...record.correos], activo: record.activo, vigenciaCertificadoMeses: record.vigenciaCertificadoMeses, residenciaDireccion: record.residenciaDireccion, residenciaCelular: record.residenciaCelular, version: record.version }
+  return { tipoCliente: record.tipoCliente, nombre: record.nombre, nit: record.nit, correos: [...record.correos], activo: record.activo, vigenciaCertificadoMeses: record.vigenciaCertificadoMeses, residenciaDireccion: record.residenciaDireccion, residenciaCelular: record.residenciaCelular, residenciaValorServicio: record.residenciaValorServicio, version: record.version }
 }
 
 function toSiteInput(site: SiteRecord): SiteInput {
@@ -285,7 +285,7 @@ function formatDate(value: string): string { return new Intl.DateTimeFormat('es-
 
     <section class="summary-card">
       <template v-if="client.tipoCliente === 'NEGOCIO'"><div><span>NIT</span><strong>{{ client.nit }}</strong></div><div><span>Sedes</span><strong>{{ client.sedesCount }}</strong></div><div><span>Vigencia certificado</span><strong>{{ client.vigenciaCertificadoMeses }} meses</strong></div></template>
-      <template v-else><div><span>Celular</span><WhatsAppPhoneLink v-if="client.residenciaCelular" :phone="client.residenciaCelular" /></div><div><span>Dirección</span><strong>{{ client.residenciaDireccion }}</strong></div></template>
+      <template v-else><div><span>Celular</span><WhatsAppPhoneLink v-if="client.residenciaCelular" :phone="client.residenciaCelular" /></div><div><span>Dirección</span><strong>{{ client.residenciaDireccion }}</strong></div><div><span>Valor del servicio</span><strong>{{ client.residenciaValorServicio == null ? 'Sin configurar' : '$' + client.residenciaValorServicio.toLocaleString('es-CO') }}</strong></div></template>
     </section>
 
     <div v-if="client.tipoCliente === 'NEGOCIO'" class="tabs" role="tablist"><button :aria-selected="tab === 'sites'" @click="changeTab('sites')">Sedes</button><button :aria-selected="tab === 'history'" @click="changeTab('history')">Historial de servicios</button></div>

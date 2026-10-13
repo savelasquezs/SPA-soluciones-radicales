@@ -89,6 +89,18 @@ function submit(): void {
     <template v-else>
       <BaseInput :model-value="modelValue.residenciaCelular ?? ''" name="client-phone" label="Celular" required autocomplete="tel" :error="error('residenciaCelular')" @update:model-value="update('residenciaCelular', $event)" @blur="touch('residenciaCelular')" />
       <BaseInput :model-value="modelValue.residenciaDireccion ?? ''" name="client-address" label="Dirección" required autocomplete="street-address" :error="error('residenciaDireccion')" @update:model-value="update('residenciaDireccion', $event)" @blur="touch('residenciaDireccion')" />
+      <BaseInput
+        :model-value="modelValue.residenciaValorServicio?.toString() ?? ''"
+        name="client-service-value"
+        label="Valor del servicio (COP)"
+        type="number"
+        min="0"
+        step="1"
+        hint="Tarifa sugerida para futuras visitas. Opcional."
+        :error="error('residenciaValorServicio')"
+        @update:model-value="update('residenciaValorServicio', $event.trim() ? Number($event) : null)"
+        @blur="touch('residenciaValorServicio')"
+      />
     </template>
   </form>
 </template>

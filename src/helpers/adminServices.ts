@@ -64,7 +64,7 @@ export function emptyServiceDraft(site?: ServiceSite, now = new Date()): Service
     inicioProgramado: fromBogotaInput(`${addDateDays(todayBogota(now), 1)}T09:00`),
     duracionMinutos: site?.duracionServicioMinutos ?? 90, tecnicoResponsableId: '', tecnicosColaboradoresIds: [],
   }
-  return { sedeId: site?.id ?? '', valorServicio:'', programacion: scheduleToDraft(schedule), refuerzo: site?.manejaRefuerzo ? scheduleToDraft(suggestReinforcement(schedule)) : null, productos: [], cobro: { metodoPago: null, tecnicoRecaudoPrevistoId: null, pagado:false,recaudadoPorId:null }, observaciones: '' }
+  return { sedeId: site?.id ?? '', valorServicio:site?.tipoSede==='RESIDENCIAL' && site.valorServicio != null ? String(site.valorServicio) : '', programacion: scheduleToDraft(schedule), refuerzo: site?.manejaRefuerzo ? scheduleToDraft(suggestReinforcement(schedule)) : null, productos: [], cobro: { metodoPago: null, tecnicoRecaudoPrevistoId: null, pagado:false,recaudadoPorId:null }, observaciones: '' }
 }
 export function serviceToDraft(record: AdminService): ServiceEditorDraft {
   return {
