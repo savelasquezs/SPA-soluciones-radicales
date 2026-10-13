@@ -116,6 +116,7 @@ async function load(force=false): Promise<void> {
   } catch(failure) { if(current===generation) loadError.value=failure instanceof Error ? failure.message : 'No fue posible preparar el formulario.' }
   finally { if(current===generation) loading.value=false }
 }
+const parsedSchedule = scheduleFromDraft
 async function save(): Promise<void> {
   if(completed.value || saving.value || loading.value) return
   const invalidDate=document.querySelector<HTMLElement>('#admin-service-form .date-time-control input[aria-invalid="true"]')
@@ -126,9 +127,15 @@ async function save(): Promise<void> {
   if(Object.keys(parsed.errors).length) { await invalid(parsed.errors); return }
   if(!editing.value) await persistDraft()
   const actorId=auth.profile?.id, context=draftContext.value
-  await run((requestId,allowConflicts)=>record.value
-    ? updateAdminService(record.value,requestId,parsed.value,allowConflicts)
-    : createAdminService(requestId,parsed.value,allowConflicts,upcoming.value ? { id:upcoming.value.id,version:upcoming.value.version,confirmed:confirmed.value } : undefined),
+  await run((requestId,resolution)=>record.value
+    ? updateAdminService(record.value,requestId,{
+      ...parsed.value,programacion:resolution?.schedules[0] ?? parsed.value.programacion,
+      refuerzo:parsed.value.refuerzo ? resolution?.schedules[1] ?? parsed.value.refuerzo : null,
+    },resolution?.reassignments ?? [])
+    : createAdminService(requestId,{
+      ...parsed.value,programacion:resolution?.schedules[0] ?? parsed.value.programacion,
+      refuerzo:parsed.value.refuerzo ? resolution?.schedules[1] ?? parsed.value.refuerzo : null,
+    },resolution?.reassignments ?? [],upcoming.value ? { id:upcoming.value.id,version:upcoming.value.version,confirmed:confirmed.value } : undefined),
   async result=>{
     store.applyMutation(result,!record.value)
     completed.value=true; baseline.value=serialize()
@@ -143,7 +150,7 @@ async function save(): Promise<void> {
     <LoadingSkeleton v-if="loading" :rows="8" />
     <StatusPanel v-else-if="loadError" title="No fue posible preparar el servicio" :message="loadError" tone="danger"><BaseButton size="compact" variant="secondary" @click="load(true)">Reintentar</BaseButton></StatusPanel>
     <template v-else-if="store.options">
-      <ServiceSaveFeedback :error="errorMessage" :conflict="conflict" :overlaps="overlaps" :overlap-open="overlapOpen" :saving="saving" @reload="reloadOpen=true" @accept="acceptOverlap" @cancel="cancelOverlap" />
+      <ServiceSaveFeedback :error="errorMessage" :conflict="conflict" :overlaps="overlaps" :overlap-open="overlapOpen" :saving="saving" :technicians="store.options.tecnicos" :schedules="[parsedSchedule(draft.programacion),...(draft.refuerzo ? [parsedSchedule(draft.refuerzo)] : [])]" @reload="reloadOpen=true" @accept="acceptOverlap" @cancel="cancelOverlap" />
       <small v-if="draftStatus" class="svc-muted" role="status">{{ draftStatus }}</small>
       <div v-if="upcoming" class="svc-notice"><BaseCheckbox v-model="confirmed" name="service-client-confirmed" label="El cliente confirmó la fecha y la hora de esta visita" required :disabled="saving || completed" :error="errors.confirmed" /></div>
       <ServiceForm :key="renderVersion" v-model="draft" :workspace="store.options" :record="record" :disabled="saving || completed" :errors="errors" @submit="save" @changed="clearValidation" />
