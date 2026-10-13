@@ -192,6 +192,66 @@ describe('administrator services · real PostgreSQL',()=>{
     expect(Number((await pool.query("select count(*) from public.auditoria where registro_id=$1 and accion='SERVICIO_CREADO'",[p.id])).rows[0].count)).toBe(1)
     expect(Number((await pool.query("select count(*) from public.auditoria where registro_id=$1 and accion='SERVICIO_CREADO'",[newVisit.id])).rows[0].count)).toBe(1)
   })
+  it('reschedules the existing appointment atomically and preserves its assigned team and Calendar outbox',async()=>{
+    const f=await fixture(false), existing=principal(await create(f))
+    const candidate=input(f), before=scheduleFromRecord(existing)
+    const newSchedule={...before,inicioProgramado:addInstantDays(existing.inicioProgramado,2)}
+    const result=await transaction(client=>createService(client,f.admin,candidate,[{
+      id:existing.id,version:existing.version,programacion:newSchedule,
+    }]))
+    const moved=result.services.find(row=>row.id===existing.id)!
+    const created=result.services.find(row=>row.id!==existing.id)!
+    expect(moved.inicioProgramado).toBe(newSchedule.inicioProgramado)
+    expect(moved.tecnicoResponsableId).toBe(existing.tecnicoResponsableId)
+    expect(moved.tecnicosColaboradoresIds).toEqual(existing.tecnicosColaboradoresIds)
+    expect(created.inicioProgramado).toBe(existing.inicioProgramado)
+    expect(created.tecnicoResponsableId).toBe(existing.tecnicoResponsableId)
+    expect(moved.calendar.estado).toBe('PENDIENTE')
+    expect((await pool.query("select count(*)::integer as count from public.auditoria where registro_id=$1 and accion='SERVICIO_REPROGRAMADO_POR_CRUCE'",[existing.id])).rows[0].count).toBe(1)
+  })
+  it('returns the rescheduled existing service as part of an atomic rescheduling operation',async()=>{
+    const f=await fixture(false)
+    const first=principal(await create(f)), second=principal(await create(f,input(f,'2030-10-08T09:00:00-05:00')))
+    const result=await transaction(client=>rescheduleService(client,f.admin,second.id,second.version,
+      {...scheduleFromRecord(second),inicioProgramado:first.inicioProgramado},
+      [{id:first.id,version:first.version,programacion:{
+        ...scheduleFromRecord(first),inicioProgramado:addInstantDays(first.inicioProgramado,1),
+      }}]))
+    expect(result.services.map(row=>row.id)).toContain(first.id)
+    expect(result.services.map(row=>row.id)).toContain(second.id)
+    expect(result.services.find(row=>row.id===first.id)?.inicioProgramado).toBe(addInstantDays(first.inicioProgramado,1))
+    expect(result.services.find(row=>row.id===second.id)?.inicioProgramado).toBe(first.inicioProgramado)
+  })
+  it('rejects a newly introduced clash and rolls back every proposed schedule change',async()=>{
+    const f=await fixture(false)
+    const first=principal(await create(f))
+    await create(f,input(f,'2030-10-09T09:00:00-05:00'))
+    const proposed=input(f)
+    await expect(transaction(client=>createService(client,f.admin,proposed,[{
+      id:first.id,version:first.version,programacion:{
+        ...scheduleFromRecord(first),inicioProgramado:'2030-10-09T09:00:00-05:00',
+      },
+    }]))).rejects.toMatchObject({code:'SCHEDULE_CONFLICT'})
+    const fresh=await readService(first.id)
+    expect(fresh.version).toBe(first.version)
+    expect(fresh.inicioProgramado).toBe(first.inicioProgramado)
+    expect((await pool.query('select count(*)::integer as count from public.servicios where sede_id=$1',[f.site])).rows[0].count).toBe(2)
+  })
+  it('rejects rescheduling affected visits in the past or tampering with duration and team simultaneously',async()=>{
+    const f=await fixture(false), first=principal(await create(f))
+    const initial=scheduleFromRecord(first)
+    const base=input(f)
+    for(const schedule of [
+      {...initial,inicioProgramado:'2020-10-09T09:00:00-05:00'},
+      {...initial,duracionMinutos:120},
+      {...initial,inicioProgramado:addInstantDays(first.inicioProgramado,2),tecnicosColaboradoresIds:[]},
+    ]) {
+      await expect(transaction(client=>createService(client,f.admin,base,[{
+        id:first.id,version:first.version,programacion:schedule,
+      }]))).rejects.toMatchObject({code:'VALIDATION'})
+      expect((await readService(first.id)).version).toBe(first.version)
+    }
+  })
   it('serializes concurrent reservations of the same technician and commits only one',async()=>{
     const f=await fixture(false), candidate=input(f)
     const attempts=await Promise.allSettled([create(f,candidate),create(f,candidate)])
