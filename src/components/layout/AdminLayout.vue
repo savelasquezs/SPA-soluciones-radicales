@@ -58,6 +58,8 @@ onUnmounted(() => {
   document.removeEventListener('visibilitychange', onVisibilityChange)
 })
 const route = useRoute()
+const compactRoutes = new Set(['dashboard', 'clients', 'client-detail', 'site-detail', 'payments', 'my-profile', 'users', 'settings', 'catalogs', 'certificates', 'integrations'])
+const compactLayout = computed(() => compactRoutes.has(String(route.name)))
 const navigationOpen = ref(false)
 const groups: NavigationGroup[] = [
   { label: 'OPERACIÓN', items: [
@@ -65,7 +67,6 @@ const groups: NavigationGroup[] = [
   ] },
   { label: 'GESTIÓN', items: [
     { to: '/clientes', label: 'Clientes', icon: Building2, admin: true },
-    { to: '/documentos', label: 'Documentos', icon: FileText, admin: true },
     { to: '/pagos', label: 'Pagos y caja', icon: WalletCards, admin: true },
   ] },
   { label: 'ADMINISTRACIÓN', items: [
@@ -105,20 +106,20 @@ function setTheme(event: Event): void { app.setTheme((event.target as HTMLSelect
       <aside id="admin-navigation" class="sidebar" :class="{ 'sidebar--open': navigationOpen }">
         <nav aria-label="Navegación principal"><section v-for="group in visibleGroups" :key="group.label"><h2>{{ group.label }}</h2><RouterLink v-for="item in group.items" :key="item.to" :to="item.to" :class="{ 'nav-active': isActive(item.to) }" @click="navigationOpen = false"><component :is="item.icon" :size="17" aria-hidden="true" />{{ item.label }}</RouterLink></section></nav>
         <div class="sidebar__footer">
-          <a href="https://github.com/savelasquezs/SPA-soluciones-radicales/tree/develop/docs" target="_blank" rel="noreferrer">
+          <a href="https://soluciones-radicales.mintlify.app" target="_blank" rel="noreferrer">
             <CircleHelp :size="17" aria-hidden="true" /> Ayuda y documentación
           </a>
           <AccountMenu placement="sidebar" />
         </div>
       </aside>
-      <main class="content" :class="{ 'content--services': route.name==='agenda' || route.name==='services' }"><nav v-if="breadcrumbItems.length" class="breadcrumb" :class="{ 'breadcrumb--agenda':route.name==='agenda' || (route.name==='services' && route.query.view==='week') }" aria-label="Ruta de navegación"><template v-for="(item,index) in breadcrumbItems" :key="`${item.label}-${index}`"><RouterLink v-if="item.to" :to="item.to">{{ item.label }}</RouterLink><span v-else :aria-current="index===breadcrumbItems.length-1 ? 'page' : undefined">{{ item.label }}</span><span v-if="index<breadcrumbItems.length-1" class="breadcrumb__separator" aria-hidden="true">/</span></template></nav><RouterView /></main>
+      <main class="content" :class="{ 'content--services': route.name==='agenda' || route.name==='services', 'content--compact': compactLayout }"><nav v-if="breadcrumbItems.length && (!compactLayout || breadcrumbItems.length > 1)" class="breadcrumb" :class="{ 'breadcrumb--agenda':route.name==='agenda' || (route.name==='services' && route.query.view==='week') }" aria-label="Ruta de navegación"><template v-for="(item,index) in breadcrumbItems" :key="`${item.label}-${index}`"><RouterLink v-if="item.to" :to="item.to">{{ item.label }}</RouterLink><span v-else :aria-current="index===breadcrumbItems.length-1 ? 'page' : undefined">{{ item.label }}</span><span v-if="index<breadcrumbItems.length-1" class="breadcrumb__separator" aria-hidden="true">/</span></template></nav><RouterView /></main>
     </div>
   </div>
 </template>
 
 <style scoped>
 .admin-layout { min-width: 0; min-height: 100vh; overflow-x: clip; background: var(--bg); }
-.topbar { position: sticky; top: 0; z-index: 40; display: grid; height: 64px; grid-template-columns: 260px minmax(16rem, 330px) 1fr; align-items: center; gap: 1.5rem; border-bottom: 1px solid var(--border); background: var(--surface); padding: 0 1.5rem; }
+.topbar { position: sticky; top: 0; z-index: 40; display: grid; height: 64px; grid-template-columns: 240px minmax(16rem, 330px) 1fr; align-items: center; gap: 1.5rem; border-bottom: 1px solid var(--border); background: var(--surface); padding: 0 1.5rem; }
 .brand { display: inline-flex; width: fit-content; min-width: 0; align-items: center; gap: 0.65rem; color: var(--text); text-decoration: none; }
 .brand__symbol { display: block; width: 42px; height: 42px; flex: 0 0 auto; object-fit: contain; }
 .brand__copy { min-width: 0; }
@@ -133,20 +134,23 @@ function setTheme(event: Event): void { app.setTheme((event.target as HTMLSelect
 .theme-select select { min-height: 36px; border: 0; background: transparent; color: var(--text-secondary); font-size: 0.8125rem; }
 .topbar__activity :deep(.account-control--topbar) { width: min(16rem, 30vw); }
 .menu-button { display: none; justify-self: end; }
-.shell-body { display: grid; min-width: 0; grid-template-columns: 240px minmax(0, 1fr); }
-.sidebar { position: sticky; top: 64px; display: flex; height: calc(100vh - 64px); flex-direction: column; overflow-y: auto; background: var(--sidebar); padding: 1.5rem 1rem 1rem; }
-.sidebar nav { display: grid; gap: 0.25rem; }
-.sidebar nav section { display: grid; gap: 0.25rem; }
-.sidebar nav h2 { margin: 0; padding: 0.5rem; color: var(--text-secondary); font-size: 0.75rem; font-weight: 500; line-height: 1rem; }
-.sidebar nav a { display: flex; min-height: 44px; align-items: center; gap: 0.5rem; border-radius: var(--radius-panel); padding: 0.75rem; color: var(--text-secondary); font-size: 0.875rem; font-weight: 500; line-height: 1.25rem; text-decoration: none; }
+.shell-body { display: grid; min-width: 0; grid-template-columns: 220px minmax(0, 1fr); }
+.sidebar { position: sticky; top: 64px; display: flex; height: calc(100vh - 64px); flex-direction: column; overflow-y: auto; background: var(--sidebar); padding: 0.875rem 0.625rem 0.75rem; scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+.sidebar nav { display: grid; gap: 0.375rem; }
+.sidebar nav section { display: grid; gap: 0.125rem; }
+.sidebar nav h2 { display: flex; align-items: center; gap: 0.5rem; margin: 0.2rem 0 0.1rem; padding: 0.35rem 0.625rem; color: var(--accent); font-size: 0.625rem; font-weight: 700; letter-spacing: 0.075em; line-height: 1rem; }
+.sidebar nav h2::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+.sidebar nav a { display: flex; min-height: 38px; align-items: center; gap: 0.625rem; border-radius: var(--radius-button); padding: 0.4rem 0.75rem; color: var(--text-secondary); font-size: 0.8125rem; font-weight: 500; line-height: 1.25rem; text-decoration: none; }
 .sidebar nav a:hover { background: var(--hover); color: var(--text); }
 .sidebar nav a.nav-active { background: var(--accent-subtle); color: var(--accent); }
-.sidebar__footer { display: grid; gap: 0.75rem; margin-top: auto; }
-.sidebar__footer a { display: flex; min-height: 44px; align-items: center; gap: 0.5rem; padding: 0 0.5rem; color: var(--text-secondary); font-size: 0.8125rem; text-decoration: none; }
+.sidebar__footer { display: grid; gap: 0.25rem; margin-top: auto; padding-top: 0.5rem; border-top: 1px solid var(--border); }
+.sidebar__footer a { display: flex; min-height: 38px; align-items: center; gap: 0.625rem; padding: 0 0.75rem; color: var(--text-secondary); font-size: 0.8125rem; text-decoration: none; }
 .sidebar__footer a:hover { color: var(--text); text-decoration: underline; }
 .content { width: 100%; max-width: 1184px; min-width: 0; margin: 0 auto; padding: 1.75rem 2rem 3rem; }
 .breadcrumb { display:flex; align-items:center; gap:0.35rem; margin:0 0 1rem; color:var(--text-secondary); font-size:0.75rem; }
 .content--services { padding-top:1rem; }
+.content--compact { max-width: none; padding: 1rem 1.5rem 2rem; }
+.content--compact .breadcrumb { margin-bottom: 0.625rem; }
 .content--services .breadcrumb { display:none; }
 .breadcrumb a { color:inherit; text-decoration:none; }
 .breadcrumb a:hover, .breadcrumb a:focus-visible { color:var(--text); text-decoration:underline; text-underline-offset:2px; }
@@ -164,6 +168,8 @@ function setTheme(event: Event): void { app.setTheme((event.target as HTMLSelect
   .sidebar--open { visibility: visible; transform: translateX(0); }
   .drawer-backdrop { position: fixed; z-index: 30; inset: 64px 0 0; display: block; border: 0; background: var(--backdrop); }
   .content { padding: 1.5rem; }
+  .content--compact { padding: 1rem 1.25rem 2rem; }
+  .sidebar nav a, .sidebar__footer a { min-height: 44px; }
 }
 @media (max-width: 680px) {
   .breadcrumb--agenda { display:none; }
@@ -177,5 +183,6 @@ function setTheme(event: Event): void { app.setTheme((event.target as HTMLSelect
   .sidebar { top: 60px; }
   .drawer-backdrop { inset-block-start: 60px; }
   .content { padding: 1.25rem 1rem 5rem; }
+  .content--compact { padding: 0.875rem 0.875rem 4rem; }
 }
 </style>

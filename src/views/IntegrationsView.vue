@@ -92,11 +92,11 @@ async function sendTest(): Promise<void> {
 </script>
 
 <template>
-  <div class="page">
-      <header class="page-header">
-        <div>
+  <div class="page integrations-page">
+      <header class="page-header admin-page-header">
+        <div class="admin-page-heading">
           <h1>Integraciones</h1>
-          <p>Gmail y Calendar operan exclusivamente con la cuenta empresarial.</p>
+          <p>— Gmail y Calendar de la cuenta empresarial</p>
         </div>
       </header>
 
@@ -169,6 +169,7 @@ async function sendTest(): Promise<void> {
 </template>
 
 <style scoped>
+.integrations-page { gap: 0.75rem; }
 .integration-card {
   display: flex;
   align-items: center;
@@ -177,7 +178,7 @@ async function sendTest(): Promise<void> {
 }
 
 .integration-card h2 {
-  margin-top: 0.8rem;
+  margin-top: 0.35rem;
 }
 
 .integration-card p {
@@ -186,7 +187,7 @@ async function sendTest(): Promise<void> {
 }
 
 .email-form {
-  margin-top: 1.25rem;
+  margin-top: 0.75rem;
 }
 
 @media (max-width: 620px) {

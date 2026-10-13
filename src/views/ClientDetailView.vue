@@ -316,15 +316,16 @@ function formatDate(value: string): string { return new Intl.DateTimeFormat('es-
 </template>
 
 <style scoped>
-.client-detail { display: grid; gap: 0.8rem; }
-.detail-header { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
-.detail-header h1 { margin: 0.15rem 0; font-size: 1.65rem; line-height: 1.15; }
+.client-detail { display: grid; gap: 0.625rem; }
+.detail-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.625rem; }
+.detail-header > div:first-child { display: flex; align-items: center; flex-wrap: wrap; gap: 0.25rem 0.6rem; }
+.detail-header h1 { margin: 0; font-size: 1.45rem; line-height: 1.3; }
 .detail-header > div > span, .header-actions, .site-actions { display: flex; flex-wrap: wrap; gap: 0.35rem; }
 .back { border: 0; background: transparent; padding: 0; color: var(--text-secondary); font-weight: 500; cursor: pointer; }
 .back:hover, .back:focus-visible { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
 .site-actions a { display: inline-flex; min-width: 36px; min-height: 36px; align-items: center; justify-content: center; color: var(--text-secondary); text-decoration: none; }
 .site-actions a:hover, .site-actions a:focus-visible { color: var(--text); }
-.summary-card { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: 0.7rem 0.85rem; }
+.summary-card { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.625rem; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: 0.55rem 0.75rem; }
 .summary-card div { display: grid; align-content: start; gap: 0.1rem; min-width: 0; }
 .summary-card span, .site-card p, dt { color: var(--text-secondary); }
 .summary-card > div > span { font-size: 0.75rem; }
@@ -333,7 +334,7 @@ function formatDate(value: string): string { return new Intl.DateTimeFormat('es-
 .tabs button { min-height: 36px; border: 0; border-bottom: 2px solid transparent; background: transparent; padding: 0.4rem 0.75rem; color: var(--text-secondary); cursor: pointer; }
 .tabs button[aria-selected='true'] { border-color: var(--accent); color: var(--accent); }
 .sites-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
-.site-card, .history-card { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: 0.8rem; }
+.site-card, .history-card { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: 0.675rem; }
 .site-card header { display: flex; justify-content: space-between; gap: 0.65rem; }
 .site-card header button, .service-link { border: 0; background: transparent; padding: 0; color: var(--text); font-weight: 600; cursor: pointer; text-decoration: none; }
 .site-card header button:hover, .site-card header button:focus-visible, .service-link:hover, .service-link:focus-visible { text-decoration: underline; text-underline-offset: 2px; }

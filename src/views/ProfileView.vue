@@ -270,9 +270,9 @@ function filename(path: string): string {
 
 <template>
   <div class="profile-page">
-    <header class="profile-page__heading">
+    <header class="profile-page__heading admin-page-heading">
       <h1>Mi perfil</h1>
-      <p>Actualiza tus datos y credenciales personales.</p>
+      <p>— Datos y credenciales personales</p>
     </header>
 
     <LoadingSkeleton v-if="loading" label="Cargando perfil" :lines="5" />
@@ -461,13 +461,12 @@ function filename(path: string): string {
 </template>
 
 <style scoped>
-.profile-page { width: 100%; max-width: 960px; min-width: 0; margin-inline: auto; display: grid; gap: 1.1rem; padding-bottom: 2rem; }
-.profile-page__heading h1 { margin: 0; color: var(--text); font-size: 1.6rem; font-weight: 600; letter-spacing: -0.02em; }
-.profile-page__heading p { margin: 0.3rem 0 0; color: var(--text-secondary); font-size: 0.9rem; }
+.profile-page { width: 100%; max-width: 960px; min-width: 0; margin-inline: auto; display: grid; gap: 0.75rem; padding-bottom: 2rem; }
+
 .profile-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; min-width: 0; }
 .profile-stack { display: grid; gap: 1rem; min-width: 0; align-content: start; }
 .profile-card { min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); padding: clamp(1rem, 2vw, 1.25rem); }
-.profile-card__header { display: flex; align-items: center; justify-content: space-between; gap: 0.65rem; margin-bottom: 1rem; }
+.profile-card__header { display: flex; align-items: center; justify-content: space-between; gap: 0.65rem; margin-bottom: 0.75rem; }
 .profile-card__header h2 { margin: 0; font-size: 1rem; font-weight: 600; }
 .profile-card__header svg { color: var(--text-secondary); }
 .profile-fields { display: grid; gap: 0.9rem; min-width: 0; }
@@ -494,7 +493,6 @@ function filename(path: string): string {
 }
 @media (max-width: 560px) {
   .profile-page { gap: 0.95rem; }
-  .profile-page__heading h1 { font-size: 1.35rem; }
   .photo-preview { width: 64px; height: 64px; flex-basis: 64px; }
   .photo-row { gap: 0.7rem; }
   .profile-actions { justify-content: stretch; }
