@@ -3,8 +3,9 @@ import { computed, ref, watch } from 'vue'
 import BaseDialog from '@/components/base/BaseDialog.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseSelect from '@/components/base/BaseSelect.vue'
-import { formatServiceDate } from '@/helpers/adminServices'
-import { buildConflictResolution, type ConflictChoices } from '@/helpers/serviceConflictResolution'
+import BaseDateTimePicker from '@/components/base/BaseDateTimePicker.vue'
+import { formatServiceDate, toBogotaInput } from '@/helpers/adminServices'
+import { buildConflictResolution, type ConflictAction, type ConflictChoices } from '@/helpers/serviceConflictResolution'
 import type { ScheduleConflict, ScheduleResolution, ServiceSchedule, ServiceTechnician } from '@/types/adminServices'
 
 const props=withDefaults(defineProps<{
@@ -22,11 +23,29 @@ const clientName=(value:string)=>value || 'Cliente del servicio'
 const currentDescription=(index:number)=>index===1 ? 'Refuerzo que estás programando' :
   props.currentServiceIsNew ? 'Servicio que estás creando' : 'Servicio que estás modificando'
 const currentName=computed(()=>clientName(props.currentClientName))
+const minimumDate=toBogotaInput(new Date().toISOString())
+const targetName=(side:string, existing:string)=>side==='current' ? currentName.value : clientName(existing)
 function setSide(key:string,value:string):void {
-  choices.value={...choices.value,[key]:{side:value==='existing' ? 'existing' : 'current',technicianId:''}}
+  const choice=choices.value[key]
+  choices.value={...choices.value,[key]:{
+    side:value==='existing' ? 'existing' : 'current',
+    action:choice?.action ?? 'technician',technicianId:'',start:'',
+  }}
+}
+function setAction(key:string,action:ConflictAction):void {
+  const choice=choices.value[key]
+  choices.value={...choices.value,[key]:{
+    side:choice?.side ?? 'current',action,technicianId:'',start:'',
+  }}
 }
 function setTechnician(key:string,value:string):void {
-  choices.value={...choices.value,[key]:{side:choices.value[key]?.side ?? 'current',technicianId:value}}
+  choices.value={...choices.value,[key]:{...choices.value[key],side:choices.value[key]?.side ?? 'current',technicianId:value}}
+}
+function setStart(key:string,value:string|null):void {
+  choices.value={...choices.value,[key]:{
+    ...choices.value[key],side:choices.value[key]?.side ?? 'current',
+    action:'schedule',technicianId:'',start:value ?? '',
+  }}
 }
 function save():void {
   if(canSave.value)emit('accept',preview.value.resolution)
@@ -35,7 +54,7 @@ function save():void {
 
 <template>
   <BaseDialog :model-value="open" title="Conflicto de horarios"
-    description="Un técnico está asignado a dos servicios en el mismo horario. Elige en cuál reemplazarlo."
+    description="Un técnico tiene dos servicios en el mismo horario. Elige qué servicio modificar y cómo resolverlo."
     class="svc-action-dialog" :close-on-escape="!saving" @update:model-value="!$event && emit('cancel')">
     <div class="svc-dialog-stack">
       <section v-for="row in preview.rows" :key="row.key" class="svc-conflict">
@@ -44,7 +63,7 @@ function save():void {
           {{ formatServiceDate(row.conflict.inicioProgramado) }} a las {{ formatServiceDate(row.conflict.inicioProgramado,true) }}.
         </p>
         <fieldset class="svc-conflict__choices" :disabled="saving">
-          <legend>¿En cuál servicio deseas cambiar el técnico?</legend>
+          <legend>¿Qué servicio deseas modificar?</legend>
           <label class="svc-conflict__choice" :class="{ 'svc-conflict__choice--selected': row.selected.side==='current' }">
             <input type="radio" :name="'conflict-side-'+row.key" value="current"
               :checked="row.selected.side==='current'" @change="setSide(row.key,'current')" />
@@ -66,17 +85,41 @@ function save():void {
           </label>
           <p v-else class="svc-muted svc-small">El otro servicio pertenece a esta misma programación.</p>
         </fieldset>
-        <BaseSelect :model-value="row.selected.technicianId" :name="'conflict-replacement-'+row.key"
-          :label="'Nuevo técnico para '+(row.selected.side==='current' ? currentName : clientName(row.conflict.clienteNombre))"
-          required :disabled="saving" @update:model-value="setTechnician(row.key,$event)">
-          <option value="">Seleccionar técnico disponible</option>
-          <option v-for="person in row.options" :key="person.id" :value="person.id">{{ person.nombreCompleto }}</option>
-        </BaseSelect>
-        <p v-if="!row.options.length" class="svc-inline-error" role="alert">
-          No hay técnicos disponibles para este servicio. Cambia el horario o la asignación.
-        </p>
+        <fieldset class="svc-conflict__choices" :disabled="saving">
+          <legend>¿Qué deseas cambiar?</legend>
+          <label class="svc-conflict__choice" :class="{ 'svc-conflict__choice--selected': row.selected.action==='technician' }">
+            <input type="radio" :name="'conflict-action-'+row.key" value="technician"
+              :checked="row.selected.action==='technician'" @change="setAction(row.key,'technician')" />
+            <span class="svc-conflict__choice-text">Cambiar técnico</span>
+          </label>
+          <label class="svc-conflict__choice" :class="{ 'svc-conflict__choice--selected': row.selected.action==='schedule' }">
+            <input type="radio" :name="'conflict-action-'+row.key" value="schedule"
+              :checked="row.selected.action==='schedule'" @change="setAction(row.key,'schedule')" />
+            <span class="svc-conflict__choice-text">Cambiar fecha y hora</span>
+          </label>
+        </fieldset>
+        <template v-if="row.selected.action==='schedule'">
+          <BaseDateTimePicker :model-value="row.selected.start ?? ''" mode="datetime"
+            :name="'conflict-start-'+row.key" :label="'Nueva fecha y hora para '+targetName(row.selected.side,row.conflict.clienteNombre)"
+            :min="minimumDate" :minute-step="5" required :disabled="saving"
+            :error="row.validationMessage && row.selected.start ? row.validationMessage : undefined"
+            @update:model-value="setStart(row.key,$event)" />
+          <p class="svc-muted svc-small">Se conservarán los técnicos y la duración del servicio. Comprobaremos nuevamente que no haya cruces.</p>
+          <p v-if="row.validationMessage && row.selected.start" class="svc-inline-error" role="alert">{{ row.validationMessage }}</p>
+        </template>
+        <template v-else>
+          <BaseSelect :model-value="row.selected.technicianId" :name="'conflict-replacement-'+row.key"
+            :label="'Nuevo técnico para '+targetName(row.selected.side,row.conflict.clienteNombre)"
+            required :disabled="saving" @update:model-value="setTechnician(row.key,$event)">
+            <option value="">Seleccionar técnico disponible</option>
+            <option v-for="person in row.options" :key="person.id" :value="person.id">{{ person.nombreCompleto }}</option>
+          </BaseSelect>
+          <p v-if="!row.options.length" class="svc-inline-error" role="alert">
+            No hay técnicos disponibles para este servicio. Puedes cambiar su fecha y hora.
+          </p>
+        </template>
       </section>
-      <p v-if="preview.pending" class="svc-muted svc-small">Selecciona un técnico disponible para resolver todos los cruces.</p>
+      <p v-if="preview.pending" class="svc-muted svc-small">Resuelve todos los cruces antes de confirmar el cambio.</p>
     </div>
     <template #footer>
       <div class="svc-dialog-actions">
