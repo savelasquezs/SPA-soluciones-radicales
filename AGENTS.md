@@ -23,15 +23,14 @@ Consultar en este orden:
 4. `docs/frontend/reuse.md` para reutilización, componentes, composables y stores.
 5. `docs/architecture/` para decisiones técnicas vigentes.
 6. `database/README.md` para reglas de esquema y migraciones.
-7. Linear para alcance, prioridad, dependencias y estado.
-8. Código y pruebas como evidencia de lo implementado.
+7. Código y pruebas como evidencia de lo implementado.
 
 No inventar requisitos. Ante una contradicción, detener únicamente la parte afectada.
 
 ## Antes de implementar
 
-- Partir de `main` actualizado salvo instrucción contraria.
-- Leer la issue completa y comprobar el comportamiento solicitado.
+- Partir de `origin/develop` actualizado salvo autorización explícita para trabajar sobre otra base.
+- Leer el alcance aprobado en `docs/` y comprobar el comportamiento solicitado.
 - Revisar reglas, entidades y criterios de aceptación afectados.
 - Inspeccionar el flujo existente cuando ya sea ejecutable.
 - Buscar piezas reutilizables antes de crear otras.
@@ -49,6 +48,8 @@ No inventar requisitos. Ante una contradicción, detener únicamente la parte af
 - Centralizar Neon Auth/Data API y otros I/O en `services`; componentes y vistas no consultan proveedores directamente.
 - Centralizar tipos de dominio y contratos.
 - Extraer una segunda implementación equivalente antes de aceptar duplicación.
+- Crear y Editar comparten formulario y validación cuando sus campos son equivalentes.
+- Editar usa el snapshot ya cargado cuando contiene los campos necesarios; create/update actualizan con la respuesta definitiva sin recargar toda la colección.
 
 ## Autoridad y seguridad
 
@@ -67,6 +68,7 @@ No inventar requisitos. Ante una contradicción, detener únicamente la parte af
 - Managed Better Auth provee identidad; el registro de aplicación en `usuarios` sigue decidiendo si una identidad está autorizada y qué roles internos posee.
 - Data API es la vía HTTP desde la SPA y trabaja con JWT + RLS.
 - Functions ejecuta operaciones que requieren secretos o privilegios y las integraciones asíncronas.
+- **Antes de desplegar la Function api**, seguir `docs/development/neon-functions-deploy.md`: comprobar `develop` y rama Neon `desarrollo`, preferir actualización de **solo código**, conservar el environment existente, validar deployment `completed` + `active` y `GET /health`. Si falta Neon CLI autenticado, usar el fallback ZIP Base64 y conector Neon descrito allí. Nunca declarar éxito por `pending`.
 - No usar una conexión PostgreSQL administrativa desde el navegador.
 - Las migraciones activas viven exclusivamente en `database/migrations/`.
 - Formato obligatorio: `YYYYMMDD_NNN_descripcion.sql`.
@@ -81,13 +83,17 @@ No inventar requisitos. Ante una contradicción, detener únicamente la parte af
 - Conservar montos en COP como enteros.
 - No agregar multitenancy.
 
-## Respuestas de formularios
+## Ejecución MIP
 
-- `formularios` define campos y versiones de forma normalizada.
-- Las respuestas históricas se agrupan por Servicio + formulario + versión + Área.
-- No crear una fila PostgreSQL por cada campo respondido.
-- Cada grupo conserva las respuestas de campos en JSONB, incluyendo valor, evaluación, observación y referencias a evidencias cuando apliquen.
-- El documento histórico debe permanecer interpretable contra la versión exacta del formulario.
+- No crear ni extender un motor genérico de formularios para la operación MIP.
+- La pantalla del Técnico se compone desde Servicio, Sede, Áreas, Criterios MIP, Productos, Dispositivos, Plagas, Hallazgos, Evidencias y Firmas.
+- Los Criterios MIP son catálogo administrable; `C/CP/NC/NA` y sus reglas de cálculo son constantes del dominio.
+- Un Área externa incorpora los criterios exclusivos de exterior además de los generales.
+- Al iniciar un Servicio, conservar snapshots suficientes para que cambios posteriores de criterios, plagas o dispositivos no reinterpreten el histórico.
+- Los dispositivos son entidades permanentes de Sede/Área y sus revisiones pertenecen al Servicio; no son campos dinámicos.
+- El modelo legacy de formularios MIP fue retirado por la migración `20261006_011_remove_legacy_mip_forms.sql`.
+- No reintroducir `formularios`, `respuestas_formulario`, `formularios_aplicables_json` ni `formularios_versiones_json`.
+- Leer `docs/product/service-execution.md` antes de implementar ejecución técnica o monitoreo.
 
 ## Cloudflare Workers
 
@@ -105,7 +111,7 @@ No inventar requisitos. Ante una contradicción, detener únicamente la parte af
 - R2 es el almacén de archivos; PostgreSQL guarda claves/rutas y metadatos, no blobs.
 - Buckets privados: `sr-master-files`, `sr-service-media`, `sr-generated-documents`.
 - Imágenes operativas: eliminar siete días después de validar el documento final.
-- PDF generados: conservar hasta un año.
+- Los PDF corresponden a certificados. Los informes MIP serán páginas web imprimibles; no generar PDF de informes en backend.
 - Archivos maestros: conservar mientras estén activos.
 - Acceso y firma de URLs ocurren en backend; nunca exponer credenciales R2 al navegador.
 
@@ -120,6 +126,9 @@ No inventar requisitos. Ante una contradicción, detener únicamente la parte af
 
 - Diseñar mobile-first para el Técnico.
 - Mantener contexto Negocio → Sede → Área → Servicio.
+- En desktop administrativo priorizar densidad y área útil: metadatos secundarios no deben desplazar listas, tablas o historiales innecesariamente bajo el fold.
+- Todo celular visible y accionable usa el componente compartido de WhatsApp con icono inline y número; no duplicar un botón de WhatsApp separado.
+- Los nombres de entidades navegables usan color normal de texto y comunican interacción mediante cursor, hover/focus y subrayado, no mediante color de acento permanente.
 - Usar loading, toast, confirmación y errores globales.
 - Prevenir doble envío y preservar datos ante fallos.
 - Toda pantalla contempla carga, contenido, vacío, error y reintento.
@@ -152,8 +161,14 @@ Antes de terminar una tarea:
 
 ## Git y entrega
 
+- `develop` es la rama permanente de integración y la base normal de todo trabajo nuevo.
+- Crear cada rama de feature/fix desde `origin/develop` actualizado, nunca desde `main`, salvo autorización explícita.
+- Todo PR de desarrollo debe apuntar a `develop` por defecto.
+- `main` queda reservada para producción y solo recibe cambios mediante un PR de promoción `develop` → `main` autorizado explícitamente por Santiago.
+- Antes de iniciar una nueva tarea, ejecutar el equivalente a `git fetch origin` y basar la rama nueva en el último `origin/develop` para no reimplementar trabajo ya integrado.
+- Si una tarea ya comenzó desde una base anterior, actualizarla con `develop` antes de duplicar funcionalidad existente y resolver cualquier conflicto de forma explícita.
 - Cambios pequeños y trazables.
-- No hacer merge ni desplegar a producción sin autorización explícita.
+- No hacer merge a `main` ni desplegar a producción sin autorización explícita.
 - No mezclar issues independientes.
 - Actualizar documentación y pruebas junto con el comportamiento.
 - Informar: rama/PR, commit, pruebas, validación real, estado de merge/producción y bloqueos.

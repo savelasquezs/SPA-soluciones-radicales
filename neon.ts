@@ -16,10 +16,25 @@ export default defineConfig({
       source: "./functions/api/index.ts",
       env: {
         ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS!,
+        ...(process.env.CALENDAR_APP_ORIGIN ? { CALENDAR_APP_ORIGIN: process.env.CALENDAR_APP_ORIGIN } : {}),
         GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID!,
         GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET!,
         GOOGLE_OAUTH_REDIRECT_URI: process.env.GOOGLE_OAUTH_REDIRECT_URI!,
+        R2_ACCOUNT_ID: process.env.R2_ACCOUNT_ID!,
+        R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID!,
+        R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY!,
+        R2_BUCKET_MASTER_FILES: process.env.R2_BUCKET_MASTER_FILES!,
+        R2_BUCKET_SERVICE_MEDIA: process.env.R2_BUCKET_SERVICE_MEDIA || 'sr-service-media',
+        R2_BUCKET_GENERATED_DOCUMENTS: process.env.R2_BUCKET_GENERATED_DOCUMENTS || 'sr-generated-documents',
       },
+    },
+  },
+  triggers: {
+    'services-outbox': {
+      type: 'schedule',
+      function: 'api',
+      cron: '0 13-23 * * *',
+      functionPath: '/jobs/services',
     },
   },
 });

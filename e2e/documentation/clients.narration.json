@@ -1,0 +1,94 @@
+{
+  "title": "Gestión de clientes",
+  "subtitle": "Negocios y casas en Soluciones Radicales",
+  "segments": [
+    {
+      "id": "intro",
+      "text": "En este video aprenderás a crear y administrar clientes, diferenciando claramente entre Negocio y Casa."
+    },
+    {
+      "id": "open-clients",
+      "text": "Desde el menú Gestión, abre Clientes. Aquí encontrarás los clientes activos e inactivos registrados en el sistema."
+    },
+    {
+      "id": "list-filter",
+      "text": "Puedes buscar por nombre, NIT o celular y filtrar la lista por tipo de cliente: Negocio o Casa."
+    },
+    {
+      "id": "new-client",
+      "text": "Para crear un registro, selecciona Nuevo cliente."
+    },
+    {
+      "id": "two-types",
+      "text": "Existen dos tipos de cliente. Negocio utiliza la configuración completa, mientras Casa usa un formulario simplificado."
+    },
+    {
+      "id": "business-name",
+      "text": "Para un Negocio registra el nombre o razón social y el NIT."
+    },
+    {
+      "id": "business-emails",
+      "text": "También puedes registrar correos generales del cliente, uno por línea o separados por coma."
+    },
+    {
+      "id": "business-certificate",
+      "text": "Los Negocios manejan certificado de establecimiento. Aquí defines cuántos meses tendrá vigencia."
+    },
+    {
+      "id": "create-business",
+      "text": "Cuando la información esté completa, selecciona Crear cliente."
+    },
+    {
+      "id": "business-created",
+      "text": "El Negocio aparece en la lista de Activos y queda disponible para agregar sus Sedes."
+    },
+    {
+      "id": "business-detail",
+      "text": "Al abrir el cliente puedes consultar su NIT, cantidad de Sedes y vigencia configurada para el certificado."
+    },
+    {
+      "id": "back-to-list",
+      "text": "Regresa a Clientes para crear ahora un cliente de tipo Casa."
+    },
+    {
+      "id": "choose-home",
+      "text": "Selecciona Casa. El formulario se simplifica automáticamente."
+    },
+    {
+      "id": "home-fields",
+      "text": "Para una Casa solo necesitas nombre, celular y dirección."
+    },
+    {
+      "id": "home-rules",
+      "text": "Las Casas no manejan certificado de establecimiento y no se utilizan para el envío de informes."
+    },
+    {
+      "id": "create-home",
+      "text": "Completa los datos y selecciona Crear cliente."
+    },
+    {
+      "id": "home-created",
+      "text": "La Casa aparece en la lista con su celular y sin Sedes asociadas."
+    },
+    {
+      "id": "home-whatsapp",
+      "text": "El celular se muestra con acceso rápido a WhatsApp para contactar al cliente directamente."
+    },
+    {
+      "id": "home-detail",
+      "text": "Al abrir una Casa verás su celular y dirección. No aparece la administración de Sedes."
+    },
+    {
+      "id": "client-actions",
+      "text": "Desde el listado puedes editar un cliente, eliminarlo si no tiene dependencias o desactivarlo para conservar su historial."
+    },
+    {
+      "id": "inactive-tab",
+      "text": "Los clientes desactivados se consultan desde la pestaña Inactivos y pueden reactivarse cuando sea necesario."
+    },
+    {
+      "id": "outro",
+      "text": "Con esto puedes registrar y distinguir correctamente clientes Negocio y Casa dentro de Soluciones Radicales."
+    }
+  ]
+}

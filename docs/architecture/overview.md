@@ -106,19 +106,25 @@ Las tablas funcionales conservan el modelo de negocio. Las tablas privadas sopor
 - Auditoría es append-only.
 - Las entidades del dominio usan UUID estables e idempotencia cuando aplica.
 
-## Respuestas MIP
+## Ejecución MIP
 
-`formularios` conserva la definición versionada de secciones y campos.
-
-Las respuestas históricas no se almacenan como una fila por campo. Se agrupan por:
+La operación técnica no utiliza un motor genérico de formularios. La SPA compone la pantalla del Servicio directamente desde las entidades del dominio.
 
 ```text
-Servicio + Formulario + Versión + Área
+Servicio
+  ├─ Productos previstos/aplicados
+  └─ Áreas de la Sede
+      ├─ Criterios MIP aplicables
+      ├─ Dispositivos y revisiones
+      └─ Hallazgos y evidencias
+  └─ Firmas y cierre
 ```
 
-Cada fila contiene un objeto JSONB con las respuestas de sus campos. Cada campo puede conservar valor, evaluación, observación y referencias a evidencias.
+Los Criterios MIP son catálogo administrable. Las Áreas externas reciben además los criterios exclusivos de exterior. Los valores `C/CP/NC/NA` y sus reglas de cálculo son constantes del dominio.
 
-Esto reduce filas e índices repetidos sin perder la capacidad de interpretar el histórico contra la versión exacta del formulario.
+Al iniciar un Servicio se conservan snapshots suficientes de criterios, dispositivos y opciones de monitoreo para que un cambio posterior de catálogo no altere el histórico. La persistencia histórica no depende de reconstruir una versión de formulario.
+
+La migración `20261006_011_remove_legacy_mip_forms.sql` retiró las tablas y columnas del modelo anterior de formularios. El histórico MIP futuro no depende de versiones de formulario.
 
 ## Archivos
 
@@ -126,17 +132,21 @@ Cloudflare R2 reemplaza a Supabase Storage. Los buckets privados son:
 
 - `sr-master-files`: planos, fichas, plantillas y certificados vigentes de técnicos.
 - `sr-service-media`: fotografías, evidencias y firmas operativas.
-- `sr-generated-documents`: informes y certificados generados.
+- `sr-generated-documents`: certificados PDF generados; no informes MIP.
 
 PostgreSQL almacena únicamente claves/rutas, metadatos y estado del archivo.
 
-Las imágenes se optimizan antes de persistir y los PDF se generan comprimidos.
+Las imágenes se optimizan en el navegador antes de subirlas. Los certificados se convierten a PDF mediante Google Drive; los informes MIP son datos estructurados para HTML.
 
 Retención:
 
-- fotografías y firmas operativas: siete días después de validar el documento final;
-- informes y certificados PDF: hasta un año;
-- archivos maestros: mientras estén activos.
+- fotografías de revisiones, áreas y criterios: tres meses después de finalizar el Servicio;
+- fotografías de Hallazgos pendientes: un año máximo desde apertura; tras cierre, tres meses desde cierre para apertura y corrección si siguen disponibles;
+- informes MIP: no se persiste ningún PDF; las evidencias fotográficas siguen la retención propia;
+- certificados, firmas y maestros: políticas separadas, sin borrado por esta regla;
+- registros históricos estructurados: permanentes.
+
+La política completa y los casos límite se especifican en `docs/product/file-retention.md`. La limpieza programada dependerá de un **Cloudflare Worker con Cron Trigger independiente** (`docs/development/cloudflare-retention.md`), no de Neon scheduled triggers ni del Worker Static Assets de la SPA. Esta automatización todavía debe implementarse y desplegarse.
 
 ## Cloudflare Workers y assets estáticos
 

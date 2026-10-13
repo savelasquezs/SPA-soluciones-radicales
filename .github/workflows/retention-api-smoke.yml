@@ -1,0 +1,24 @@
+name: Smoke Neon retention API
+on:
+  push:
+    branches: [develop]
+    paths: ['.github/workflows/retention-api-smoke.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Health and authenticated-route guard
+        shell: bash
+        env:
+          BASE_URL: https://br-nameless-violet-b7y48a5v-api.compute.c-13.us-east-1.aws.neon.tech
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 20 "$BASE_URL/health"
+          echo
+          STATUS=$(curl --silent --show-error --max-time 20 -o /tmp/retention-response.txt -w "%{http_code}" -X POST "$BASE_URL/jobs/retention" -H 'Content-Type: application/json' -d '{"mode":"dry-run"}')
+          echo "Unauthenticated POST /jobs/retention status: $STATUS"
+          test "$STATUS" = "401"

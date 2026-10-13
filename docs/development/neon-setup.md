@@ -35,7 +35,7 @@ npx -y neon@6.2.4 checkout desarrollo
 Para una feature aislada puede usarse, por ejemplo:
 
 ```bash
-npx -y neon@6.2.4 checkout dev-formularios-jsonb
+npx -y neon@6.2.4 checkout dev-ejecucion-mip
 ```
 
 ## 4. Habilitar Managed Better Auth
@@ -132,7 +132,7 @@ database/migrations/20261004_001_initial_schema.sql
 database/migrations/20261004_002_integrity_and_rls.sql
 ```
 
-El modelo debe incluir `respuestas_formulario` agrupada por Servicio + Formulario + Versión + Área con `respuestas_jsonb`; no recuperar el diseño anterior de una fila por campo.
+El baseline histórico incluyó `formularios` y `respuestas_formulario`. ADR-019 los descartó y la migración `20261006_011_remove_legacy_mip_forms.sql` los elimina junto con las columnas legacy de Sede y Servicio. No reintroducir ese modelo.
 
 Validar:
 
@@ -167,10 +167,21 @@ npm run db:bootstrap
 La Function `api` centraliza operaciones privilegiadas, Google OAuth, Gmail y Calendar. Sus secretos se cargan en Neon y no se exponen como variables `VITE_*`.
 
 ```bash
-npx -y neon@6.2.4 deploy
+npx -y neon@6.2.4 checkout desarrollo --no-env-pull
+npx -y neon@6.2.4 functions get api
+npx -y neon@6.2.4 functions deploy api --src functions/api/index.ts
+npx -y neon@6.2.4 functions get api
 ```
 
+**Runbook obligatorio para desplegar la API:** [Despliegue de Neon Functions](neon-functions-deploy.md). Incluye el camino CLI de solo código y la alternativa **ZIP compilado + conector Neon**, verificada con el deployment **#46** en `desarrollo` el 2026-10-10. Es el procedimiento de recuperación cuando no hay CLI autenticado o un `neon deploy` completo falla por variables privadas locales ausentes.
+
+No ejecutar `neon deploy` sin revisar el `neon.ts` y las variables locales: ese comando reconcilia más recursos que la Function y requiere valores definidos para sus secretos. **Nunca** enviarlos vacíos. La alternativa mediante conector solo transmite código y **hereda el environment de la versión anterior**. Los ZIP/Base64 pueden usarse **solo temporalmente**, nunca se suben al repositorio.
+
+La API actual no usa dependencias nativas `sharp`/`libvips`; verificar el empaquetado si eso cambia.
+
 `ALLOWED_ORIGINS` debe incluir solo los orígenes locales, productivos y de preview realmente autorizados.
+
+Para vincular cada invitación de **Google Calendar** con el servicio en la SPA, configurar opcionalmente `CALENDAR_APP_ORIGIN` con la **URL estable del entorno** (solo origen HTTPS, sin rutas, incluida en `ALLOWED_ORIGINS`). Esto es especialmente importante al tener varios dominios permitidos. Por ejemplo, en la rama de desarrollo: `https://develop-soluciones-radicales.solucionesradicales1.workers.dev`. No utilizar URLs de previews efímeros ni URLs de Neon Functions. Esta variable es opcional para no borrar valores privados en despliegues existentes; el backend puede resolver automáticamente una sola URL estable conocida si está en la allowlist.
 
 La Function requiere estos nombres de configuración de servidor:
 
@@ -179,6 +190,11 @@ ALLOWED_ORIGINS
 GOOGLE_CLIENT_ID
 GOOGLE_CLIENT_SECRET
 GOOGLE_OAUTH_REDIRECT_URI
+R2_ACCOUNT_ID
+R2_ACCESS_KEY_ID
+R2_SECRET_ACCESS_KEY
+R2_BUCKET_MASTER_FILES
+R2_BUCKET_GENERATED_DOCUMENTS
 ```
 
 Neon inyecta además las variables administradas de conexión, Auth y Data API. Sus valores no se copian al repositorio ni a variables públicas de Vite.
@@ -186,7 +202,9 @@ Neon inyecta además las variables administradas de conexión, Auth y Data API. 
 ### Integración empresarial Google
 
 - El OAuth empresarial es independiente del Google OAuth de los usuarios.
-- Los únicos permisos solicitados son `openid`, `email`, `gmail.send` y `calendar.events`.
+- Los únicos permisos solicitados son `openid`, `email`, `gmail.send`, `calendar.events` y `drive.file`.
+- `drive.file` permite importar y eliminar únicamente los documentos creados o abiertos por la aplicación; no concede acceso general a Drive.
+- Al incorporar este scope, la cuenta empresarial debe volver a autorizarse para actualizar el refresh token almacenado.
 - El flujo usa `access_type=offline` y exige que la cuenta autorizada sea `solucionesradicales1@gmail.com`.
 - El refresh token se cifra con AES-256-GCM antes de persistirse en `private.google_integrations`; nunca llega a la SPA ni se registra en logs.
 - Gmail registra cada intento en `private.integration_jobs` y audita el resultado sin guardar el cuerpo del mensaje.
@@ -213,7 +231,23 @@ sr-service-media
 sr-generated-documents
 ```
 
-Las credenciales R2 se guardan solo en el runtime backend correspondiente.
+Las credenciales R2 se guardan solo en Neon Functions. La SPA solicita al backend una URL PUT/GET firmada de corta duración y transfiere el archivo directamente contra el endpoint S3 de R2; PostgreSQL conserva únicamente la ruta.
+
+Para `sr-master-files`, la política CORS versionada vive en `cloudflare/r2-master-cors.json`. Aplicarla una vez con una sesión Wrangler autorizada:
+
+```bash
+npm run r2:cors:apply
+npm run r2:cors:check
+```
+
+La política permite PUT con `Content-Type` desde `http://localhost:5173` y desde los Workers de la cuenta `solucionesradicales1.workers.dev`. Si se incorpora un dominio personalizado, añadir explícitamente ese origen antes de usar cargas desde navegador.
+
+Para `sr-service-media`, la política equivalente vive en `cloudflare/r2-service-media-cors.json`. El build de la rama `develop` la aplica antes del despliegue usando el token de Workers Builds; los builds locales, de `main` y de previews no modifican el bucket. La comprobación manual sigue disponible con:
+
+```bash
+npm run r2:service-cors:apply
+npm run r2:service-cors:check
+```
 
 ## 13. Producción
 

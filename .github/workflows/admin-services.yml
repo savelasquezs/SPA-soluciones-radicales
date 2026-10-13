@@ -1,0 +1,69 @@
+name: Services verification
+on:
+  pull_request:
+    branches: [develop]
+    paths: ['src/**','functions/api/**','database/**','scripts/database/**','e2e/**','tests/**','vitest.services.config.ts','neon.ts','package*.json','.github/workflows/admin-services.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: services-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: public.ecr.aws/docker/library/postgres:17
+        env:
+          POSTGRES_PASSWORD: ci-only-not-a-real-secret
+          POSTGRES_DB: sr_certificates_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sr_certificates_test"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      CI: 'true'
+      TEST_DATABASE_URL: postgresql://postgres:ci-only-not-a-real-secret@127.0.0.1:5432/sr_certificates_test
+      VITE_NEON_AUTH_URL: https://auth.example.test
+      VITE_NEON_DATA_API_URL: https://data.example.test
+      VITE_NEON_FUNCTION_URL: https://api.example.test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+        id: install
+      - run: npm run lint
+        id: lint
+      - run: npm run test:unit:run
+        if: always() && steps.install.outcome == 'success'
+      - run: npm run build
+        if: always() && steps.install.outcome == 'success'
+      - run: npm run db:check
+        if: always() && steps.install.outcome == 'success'
+      - name: Apply all migrations in isolated PostgreSQL
+        id: database
+        if: always() && steps.install.outcome == 'success'
+        run: node scripts/database/test-certificates.mjs
+      - name: Real service scheduling, execution and RLS integration tests
+        if: always() && steps.database.outcome == 'success'
+        run: npx vitest run --config vitest.services.config.ts
+      - run: npx playwright install --with-deps chromium
+        if: always() && steps.install.outcome == 'success'
+      - name: Administrator and Technician service flows and responsive review
+        if: always() && steps.install.outcome == 'success'
+        run: npx playwright test e2e/admin-services.spec.ts e2e/admin-service-report.spec.ts e2e/technician-services.spec.ts e2e/site-insights.spec.ts e2e/idle-recovery.spec.ts e2e/profile.spec.ts --project=chromium --retries=0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: services-review
+          path: |
+            playwright-report
+            test-results
+          retention-days: 7

@@ -1,0 +1,110 @@
+name: Documentation video
+
+on:
+  push:
+    branches:
+      - 'video/**'
+  workflow_dispatch:
+    inputs:
+      video_id:
+        description: 'ID definido en e2e/documentation/videos.json'
+        required: true
+        default: 'mip-gestion-productos-v4'
+        type: string
+      voice:
+        description: 'Voz femenina Chirp 3 HD'
+        required: false
+        default: 'es-US-Chirp3-HD-Kore'
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: documentation-video-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      TTS_LANGUAGE_CODE: es-US
+      TTS_VOICE: ${{ inputs.voice || vars.GOOGLE_TTS_VOICE || 'es-US-Chirp3-HD-Kore' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Resolve video target
+        id: target
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VIDEO_ID="${{ inputs.video_id }}"
+          else
+            VIDEO_ID="${GITHUB_REF_NAME#video/}"
+          fi
+          echo "DOCS_VIDEO_ID=${VIDEO_ID}" >> "$GITHUB_ENV"
+          DOCS_VIDEO_ID="${VIDEO_ID}" node scripts/documentation/video-target.mjs
+
+      - name: Validate Google Cloud configuration
+        shell: bash
+        env:
+          WIF_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          SERVICE_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          test -n "$GCP_PROJECT_ID" || { echo "::error::Falta la variable GCP_PROJECT_ID"; exit 1; }
+          test -n "$WIF_PROVIDER" || { echo "::error::Falta la variable GCP_WORKLOAD_IDENTITY_PROVIDER"; exit 1; }
+          test -n "$SERVICE_ACCOUNT" || { echo "::error::Falta la variable GCP_SERVICE_ACCOUNT"; exit 1; }
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v3
+
+      - run: npm ci
+
+      - name: Install media tools
+        shell: bash
+        run: |
+          if ! command -v ffmpeg >/dev/null 2>&1 || ! command -v ffprobe >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+          fi
+
+      - name: Generate narration
+        run: npm run docs:tts
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Record 1080p interface flow
+        run: npm run docs:record
+
+      - name: Render and validate final video
+        run: npm run docs:render
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ${{ steps.target.outputs.artifact }}
+          path: |
+            docs-media/final/
+            docs-media/audio/
+            docs-media/timeline.json
+            docs-media/playwright/
+          if-no-files-found: warn
+          retention-days: 30

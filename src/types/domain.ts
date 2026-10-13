@@ -1,5 +1,10 @@
 export type ActiveRole = 'ADMINISTRADOR' | 'TECNICO'
 
+export type ThemePreference = 'light' | 'dark' | 'system'
+export type DateOnly = string
+export type TimeOnly = string
+export type LocalDateTime = string
+
 export type SessionProfile = {
   id: string
   nombreCompleto: string
@@ -8,6 +13,21 @@ export type SessionProfile = {
   esTecnico: boolean
   rolActivo: ActiveRole | null
   requiereSeleccionRol: boolean
+  avatarUrl?: string | null
+}
+
+export type PersonalProfile = {
+  id: string
+  nombreCompleto: string
+  correoGoogle: string
+  telefono: string | null
+  fotoStoragePath: string | null
+  esAdmin: boolean
+  esTecnico: boolean
+  certificadoStoragePath: string | null
+  certificadoFechaEmision: DateOnly | null
+  certificadoFechaVencimiento: DateOnly | null
+  version: number
 }
 
 export type UserRecord = {
@@ -19,8 +39,8 @@ export type UserRecord = {
   esTecnico: boolean
   activo: boolean
   certificadoStoragePath: string | null
-  certificadoFechaEmision: string | null
-  certificadoFechaVencimiento: string | null
+  certificadoFechaEmision: DateOnly | null
+  certificadoFechaVencimiento: DateOnly | null
   certificadoObservaciones: string | null
   version: number
 }
@@ -31,6 +51,111 @@ export type Technician = {
   id: string
   nombreCompleto: string
   correoGoogle: string
+}
+
+export type ClientType = 'NEGOCIO' | 'RESIDENCIAL'
+
+export type ClientRecord = {
+  id: string
+  tipoCliente: ClientType
+  nombre: string
+  nit: string | null
+  correos: string[]
+  activo: boolean
+  version: number
+  vigenciaCertificadoMeses: number | null
+  residenciaDireccion: string | null
+  residenciaCelular: string | null
+  residenciaValorServicio: number | null
+  sedesCount: number
+}
+
+export type ClientInput = Pick<
+  ClientRecord,
+  | 'tipoCliente'
+  | 'nombre'
+  | 'nit'
+  | 'correos'
+  | 'activo'
+  | 'vigenciaCertificadoMeses'
+  | 'residenciaDireccion'
+  | 'residenciaCelular'
+  | 'residenciaValorServicio'
+> & { version?: number }
+
+export type SiteRecord = {
+  id: string
+  clientId: string
+  nombre: string
+  direccion: string
+  correos: string[]
+  heredaCorreosCliente: boolean
+  contactoPrincipalNombre: string
+  contactoPrincipalCorreo: string | null
+  contactoPrincipalCelular: string
+  valorServicio: number
+  periodicidadMeses: number
+  manejaRefuerzo: boolean
+  tipoSede: 'NEGOCIO' | 'RESIDENCIAL'
+  planoStoragePath: string | null
+  manejaVehiculos: boolean
+  generaCertificadoVehiculo: boolean
+  vigenciaCertificadoVehiculoMeses: number | null
+  duracionServicioMinutos: number
+  activo: boolean
+  version: number
+  areasCount: number
+  proximoServicio: string | null
+}
+
+export type SiteInput = Pick<
+  SiteRecord,
+  | 'nombre'
+  | 'direccion'
+  | 'correos'
+  | 'heredaCorreosCliente'
+  | 'contactoPrincipalNombre'
+  | 'contactoPrincipalCorreo'
+  | 'contactoPrincipalCelular'
+  | 'valorServicio'
+  | 'periodicidadMeses'
+  | 'manejaRefuerzo'
+  | 'planoStoragePath'
+  | 'manejaVehiculos'
+  | 'generaCertificadoVehiculo'
+  | 'vigenciaCertificadoVehiculoMeses'
+  | 'duracionServicioMinutos'
+  | 'activo'
+> & { version?: number }
+
+export type AreaRecord = {
+  id: string
+  siteId: string
+  nombre: string
+  esExterna: boolean
+  activo: boolean
+  version: number
+  dispositivosCount: number
+}
+
+export type AreaInput = Pick<AreaRecord, 'nombre' | 'esExterna' | 'activo'> & { version?: number }
+
+
+export type ServiceHistoryItem = {
+  id: string
+  solicitud: string
+  fecha: string
+  tipo: string
+  tecnico: string
+  estado: string
+  valor: number
+}
+
+export type PaginatedResult<T> = {
+  items: T[]
+  page: number
+  pageSize: number
+  total: number
 }
 
 export type ClientSite = {
@@ -59,16 +184,9 @@ export type ServiceRecord = {
   warning?: string
 }
 
-export type ServiceDraft = {
-  sedeId: string
-  tecnicoResponsableId: string
-  tecnicosColaboradoresIds: string[]
-  inicioProgramado: string
-  duracionMinutos: string
-  observaciones: string
-}
 
-export type NotificationTone = 'success' | 'warning' | 'danger' | 'info'
+
+export type NotificationTone = 'success' | 'error' | 'warning' | 'info'
 
 export type AppNotification = {
   id: string

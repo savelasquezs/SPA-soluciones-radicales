@@ -4,14 +4,15 @@ import { useRoute, useRouter } from 'vue-router'
 
 import BaseButton from '@/components/base/BaseButton.vue'
 import { useNotificationsStore } from '@/stores/notifications'
-import { useSessionStore } from '@/stores/session'
+import { useAuthStore } from '@/stores/auth'
 import type { ActiveRole } from '@/types/domain'
 
-const session = useSessionStore()
+const session = useAuthStore()
 const notifications = useNotificationsStore()
 const route = useRoute()
 const router = useRouter()
 const loadingRole = ref<ActiveRole | null>(null)
+const changingAccount = ref(false)
 
 async function choose(role: ActiveRole): Promise<void> {
   loadingRole.value = role
@@ -24,9 +25,19 @@ async function choose(role: ActiveRole): Promise<void> {
       : '/'
     await router.replace(redirect)
   } catch (error) {
-    notifications.show(error instanceof Error ? error.message : 'No fue posible seleccionar el rol', 'danger')
+    notifications.show(error instanceof Error ? error.message : 'No fue posible seleccionar el rol', 'error')
   } finally {
     loadingRole.value = null
+  }
+}
+
+async function changeAccount(): Promise<void> {
+  changingAccount.value = true
+  try {
+    await session.useAnotherAccount()
+  } catch (error) {
+    notifications.show(error instanceof Error ? error.message : 'No fue posible cambiar de cuenta', 'error')
+    changingAccount.value = false
   }
 }
 </script>
@@ -38,13 +49,16 @@ async function choose(role: ActiveRole): Promise<void> {
       <h1>¿Cómo vas a trabajar hoy?</h1>
       <p>La autorización del servidor cambiará según el rol que elijas para esta sesión.</p>
       <div class="role-actions">
-        <BaseButton :loading="loadingRole === 'ADMINISTRADOR'" @click="choose('ADMINISTRADOR')">
+        <BaseButton :loading="loadingRole === 'ADMINISTRADOR'" :disabled="changingAccount" @click="choose('ADMINISTRADOR')">
           Administrador
         </BaseButton>
-        <BaseButton variant="secondary" :loading="loadingRole === 'TECNICO'" @click="choose('TECNICO')">
+        <BaseButton variant="secondary" :loading="loadingRole === 'TECNICO'" :disabled="changingAccount" @click="choose('TECNICO')">
           Técnico
         </BaseButton>
       </div>
+      <BaseButton variant="ghost" :loading="changingAccount" :disabled="Boolean(loadingRole)" @click="changeAccount">
+        Cambiar cuenta
+      </BaseButton>
     </section>
   </main>
 </template>

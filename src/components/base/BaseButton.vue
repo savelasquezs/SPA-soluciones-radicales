@@ -1,24 +1,27 @@
 <script setup lang="ts">
+import BaseSpinner from '@/components/base/BaseSpinner.vue'
+
 withDefaults(
   defineProps<{
     type?: 'button' | 'submit'
     variant?: 'primary' | 'secondary' | 'danger' | 'ghost'
+    size?: 'medium' | 'compact'
     loading?: boolean
     disabled?: boolean
   }>(),
-  { type: 'button', variant: 'primary', loading: false, disabled: false },
+  { type: 'button', variant: 'primary', size: 'medium', loading: false, disabled: false },
 )
 </script>
 
 <template>
   <button
     class="base-button"
-    :class="`base-button--${variant}`"
+    :class="[`base-button--${variant}`, `base-button--${size}`]"
     :type="type"
     :disabled="disabled || loading"
     :aria-busy="loading"
   >
-    <span v-if="loading" class="base-button__spinner" aria-hidden="true"></span>
+    <BaseSpinner v-if="loading" size="small" label="Procesando" />
     <slot />
   </button>
 </template>
@@ -26,17 +29,27 @@ withDefaults(
 <style scoped>
 .base-button {
   display: inline-flex;
-  min-height: 44px;
   align-items: center;
   justify-content: center;
   gap: 0.55rem;
   border: 1px solid transparent;
   border-radius: var(--radius);
-  padding: 0.65rem 1rem;
   font-weight: 700;
   line-height: 1.2;
   cursor: pointer;
   transition: 150ms ease;
+}
+
+.base-button--medium {
+  min-height: 44px;
+  padding: 0.65rem 1rem;
+}
+
+.base-button--compact {
+  min-height: 36px;
+  gap: 0.4rem;
+  padding: 0.42rem 0.75rem;
+  font-size: 0.875rem;
 }
 
 .base-button:hover:not(:disabled) {
@@ -73,18 +86,11 @@ withDefaults(
   color: var(--text-secondary);
 }
 
-.base-button__spinner {
-  width: 1rem;
-  height: 1rem;
-  border: 2px solid currentcolor;
-  border-right-color: transparent;
-  border-radius: 50%;
-  animation: spin 700ms linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
+@media (max-width: 680px) {
+  .base-button--compact {
+    min-height: 44px;
+    padding: 0.6rem 0.8rem;
   }
 }
+
 </style>

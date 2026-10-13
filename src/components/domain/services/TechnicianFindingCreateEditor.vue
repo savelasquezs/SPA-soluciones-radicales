@@ -1,0 +1,49 @@
+<script setup lang="ts">
+import { ref } from 'vue'
+import BaseButton from '@/components/base/BaseButton.vue'
+import BaseTextarea from '@/components/base/BaseTextarea.vue'
+import TechnicianEvidencePicker from '@/components/domain/services/TechnicianEvidencePicker.vue'
+import type { TechnicianFindingCreateInput } from '@/types/technicianServices'
+
+defineProps<{ saving: boolean }>()
+const emit = defineEmits<{ save: [input: TechnicianFindingCreateInput, files: File[]]; cancel: [] }>()
+const descripcion = ref('')
+const recomendacionAccion = ref('')
+const evidences = ref<File[]>([])
+const errors = ref<Partial<Record<keyof TechnicianFindingCreateInput, string>>>({})
+
+function submit(): void {
+  const input = {
+    descripcion: descripcion.value.trim(),
+    recomendacionAccion: recomendacionAccion.value.trim(),
+  }
+  errors.value = {
+    ...(!input.descripcion ? { descripcion: 'Describe el Hallazgo.' } : {}),
+    ...(!input.recomendacionAccion ? { recomendacionAccion: 'Indica la recomendación o acción correctiva.' } : {}),
+  }
+  if (Object.keys(errors.value).length) return
+  emit('save', input, evidences.value)
+}
+</script>
+
+<template>
+  <form class="finding-create" @submit.prevent="submit">
+    <div><h3>Nuevo Hallazgo</h3><p>Quedará disponible para seguimiento en servicios posteriores de esta Sede.</p></div>
+    <BaseTextarea v-model="descripcion" name="finding-description" label="Descripción" required :rows="3" maxlength="2000" :disabled="saving" :error="errors.descripcion" />
+    <BaseTextarea v-model="recomendacionAccion" name="finding-action" label="Recomendación o acción correctiva" required :rows="3" maxlength="2000" :disabled="saving" :error="errors.recomendacionAccion" />
+    <TechnicianEvidencePicker v-model="evidences" name="finding-opening-evidence" label="Evidencias de apertura" :disabled="saving" />
+    <div class="finding-create__actions">
+      <BaseButton type="submit" :loading="saving">Registrar Hallazgo</BaseButton>
+      <BaseButton variant="secondary" :disabled="saving" @click="emit('cancel')">Cancelar</BaseButton>
+    </div>
+  </form>
+</template>
+
+<style scoped>
+.finding-create { display:grid; gap:0.85rem; border:1px solid var(--border-strong); border-radius:var(--radius); background:var(--surface-raised); padding:0.85rem; }
+.finding-create h3, .finding-create p { margin:0; }
+.finding-create h3 { font-size:0.95rem; }
+.finding-create > div:first-child p { margin-top:0.2rem; color:var(--text-secondary); font-size:0.8125rem; }
+.finding-create__actions { display:flex; flex-wrap:wrap; gap:0.55rem; }
+@media (max-width:520px) { .finding-create__actions { grid-template-columns:1fr; } }
+</style>

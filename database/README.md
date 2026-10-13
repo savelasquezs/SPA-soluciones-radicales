@@ -32,6 +32,7 @@ Baseline activo y extensiones del MVP:
 20261004_002_integrity_and_rls.sql
 20261004_003_fix_correlated_rls_policies.sql
 20261004_004_mvp_backend_support.sql
+20261004_005_usuario_certificado_fechas_obligatorias.sql
 ```
 
 `NNN` es secuencial dentro del día. La descripción usa minúsculas y guion bajo.
@@ -59,17 +60,13 @@ SQL activo no debe contener dependencias de Supabase como:
 
 Para Data API, los roles esperados son `authenticated` y `anonymous`, y la identidad se obtiene mediante el contexto JWT de Neon.
 
-## Modelo de formularios
+## Ejecución MIP
 
-`formularios` conserva definición normalizada y versionada de campos.
+ADR-019 eliminó el motor genérico de formularios del modelo objetivo. La ejecución se compone desde Áreas, Criterios MIP, Productos, Dispositivos, Plagas, Hallazgos, Evidencias y Firmas, con snapshots históricos al iniciar el Servicio.
 
-La respuesta histórica se agrupa en `respuestas_formulario` con una fila por:
+La migración `20261006_011_remove_legacy_mip_forms.sql` retira `formularios`, `respuestas_formulario`, `sedes.formularios_aplicables_json` y `servicios.formularios_versiones_json`. No deben reintroducirse. La migración `20261006_012_mip_criteria.sql` añade el catálogo independiente `criterios_mip` sin clave, orden ni versión.
 
-```text
-servicio_id + formulario_id + version_formulario + area_id
-```
-
-y un objeto `respuestas_jsonb` con las respuestas de los campos.
+La especificación funcional vigente está en `docs/product/service-execution.md`.
 
 ## Ejecución
 
@@ -81,3 +78,7 @@ npm run db:migrate
 ```
 
 El repo debe estar enlazado a Neon mediante `neon link`. Confirmar siempre la rama Neon antes de migrar. Los runners de migración y bootstrap bloquean `production` salvo autorización explícita mediante `ALLOW_NEON_PRODUCTION=true`.
+
+## Herencia de plantillas de certificados
+
+`20261006_007_certificate_template_defaults.sql` permite path personalizado nulo (herencia de configuración general), manteniendo vigencia positiva y exclusión de residencias. No crea tablas. Aplicar solo con el flujo autorizado; los tests de CI contra PostgreSQL efímero no son una migración a Neon.

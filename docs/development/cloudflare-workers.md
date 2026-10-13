@@ -136,6 +136,12 @@ Rutas como:
 
 deben poder abrirse directamente y recargarse sin devolver 404.
 
+## Worker independiente de conservación R2
+
+La limpieza de evidencias e informes de servicios utiliza un **Worker independiente** con Cron Trigger diario. No añadir `main` ni `triggers.crons` al Worker `soluciones-radicales` que publica la SPA: ese Worker conserva el despliegue de Static Assets.
+
+La política aprobada está en `docs/product/file-retention.md` y el diseño técnico, controles de seguridad y activación pendiente en `docs/development/cloudflare-retention.md`. Los trabajos programados de Neon existentes para integraciones no sirven como planificador de esta nueva limpieza.
+
 ## Código Worker futuro
 
 No agregar un Worker dinámico por anticipación.

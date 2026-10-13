@@ -32,13 +32,13 @@ describe('base form fields', () => {
         label: 'Correo Google',
         name: 'correoGoogle',
         disabled: true,
-        help: 'La identidad Google ya está vinculada.',
+        hint: 'La identidad Google ya está vinculada.',
       },
     })
 
     expect(wrapper.get('input').attributes('disabled')).toBeDefined()
-    expect(wrapper.get('input').attributes('aria-describedby')).toBe('correoGoogle-help')
-    expect(wrapper.get('#correoGoogle-help').text()).toContain('identidad Google')
+    expect(wrapper.get('input').attributes('aria-describedby')).toBe('correoGoogle-hint')
+    expect(wrapper.get('#correoGoogle-hint').text()).toContain('identidad Google')
   })
 
   it('emits select and textarea values', async () => {

@@ -31,6 +31,10 @@
   --radius: 8px;
   --radius-lg: 12px;
   --focus-ring: 0 0 0 3px rgb(8 119 185 / 24%);
+  --brand-secondary: #5b8f18;
+  --brand-secondary-hover: #4b7814;
+  --brand-secondary-subtle: #f1f8ea;
+  --control-border: #84919a;
 }
 
 :root[data-theme='dark'] {
@@ -61,38 +65,27 @@
   --shadow-sm: 0 2px 8px rgb(0 0 0 / 24%);
   --shadow-lg: 0 20px 60px rgb(0 0 0 / 48%);
   --focus-ring: 0 0 0 3px rgb(139 131 255 / 32%);
+  --brand-secondary: #8ebf50;
+  --brand-secondary-hover: #a2ce6d;
+  --brand-secondary-subtle: #1d3515;
+  --control-border: #858c98;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    color-scheme: dark;
-    --background: #0b0c0e;
-    --sidebar: #111318;
-    --surface: #17191d;
-    --surface-raised: #1d2025;
-    --surface-hover: #22262c;
-    --border: #30343b;
-    --border-strong: #454b55;
-    --text: #f5f6f8;
-    --text-secondary: #b3b8c2;
-    --text-muted: #858c98;
-    --accent: #8b83ff;
-    --accent-hover: #9a93ff;
-    --accent-contrast: #101116;
-    --accent-subtle: #282451;
-    --success: #3fb950;
-    --success-subtle: #15351f;
-    --warning: #d9a441;
-    --warning-subtle: #3a2c13;
-    --danger: #f05d5e;
-    --danger-subtle: #421e22;
-    --info: #579dff;
-    --info-subtle: #172d4d;
-    --backdrop: rgb(0 0 0 / 68%);
-    --shadow-sm: 0 2px 8px rgb(0 0 0 / 24%);
-    --shadow-lg: 0 20px 60px rgb(0 0 0 / 48%);
-    --focus-ring: 0 0 0 3px rgb(139 131 255 / 32%);
-  }
+:root {
+  --bg: var(--background);
+  --hover: var(--surface-hover);
+  --on-accent: var(--accent-contrast);
+  --radius-button: 6px;
+  --radius-input: 8px;
+  --radius-panel: 10px;
+  --space-0: 0;
+  --space-4: 4px;
+  --space-8: 8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-20: 20px;
+  --space-24: 24px;
+  --space-32: 32px;
 }
 
 *,
@@ -114,12 +107,28 @@ body {
   background: var(--background);
   color: var(--text);
   font-family: var(--font-family);
+  font-size: 14px;
+  line-height: 1.5;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
 
 a {
   color: var(--accent);
+}
+
+/* Accessible labels remain in the accessibility tree without duplicating visible copy. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 .page {
@@ -144,6 +153,49 @@ a {
 .page-header p {
   margin-top: 0.35rem;
   color: var(--text-secondary);
+}
+
+/* Administrative density only: keep forms and technician views unchanged. */
+.admin-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.625rem;
+}
+.admin-page-heading {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  min-width: 0;
+  gap: 0.2rem 0.55rem;
+}
+.admin-page-heading h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.admin-page-heading p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 400;
+  line-height: 1.4;
+}
+@media (min-width: 681px) {
+  .admin-compact-filters {
+    --base-field-gap: 0.2rem;
+    --base-field-label-size: 0.75rem;
+    --base-field-label-line-height: 1rem;
+  }
+  .admin-compact-filters .base-field input,
+  .admin-compact-filters .base-field select {
+    min-height: 36px;
+    padding: 0.3rem 0.625rem;
+    font-size: 0.8125rem;
+  }
 }
 
 .card {
@@ -234,6 +286,14 @@ textarea {
   font: inherit;
 }
 
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
@@ -255,6 +315,7 @@ a:focus-visible {
 }
 
 @media (max-width: 680px) {
+  .admin-page-heading h1 { font-size: 1.25rem; }
   .page-header {
     display: grid;
   }
@@ -265,5 +326,11 @@ a:focus-visible {
 
   .form-grid__wide {
     grid-column: auto;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px;
   }
 }

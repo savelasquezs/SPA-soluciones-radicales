@@ -4,9 +4,9 @@ import { useRouter } from 'vue-router'
 
 import BaseButton from '@/components/base/BaseButton.vue'
 import { useNotificationsStore } from '@/stores/notifications'
-import { useSessionStore } from '@/stores/session'
+import { useAuthStore } from '@/stores/auth'
 
-const session = useSessionStore()
+const session = useAuthStore()
 const notifications = useNotificationsStore()
 const router = useRouter()
 const loading = ref(false)
@@ -16,7 +16,7 @@ async function useAnotherAccount(): Promise<void> {
   try {
     await session.useAnotherAccount()
   } catch (error) {
-    notifications.show(error instanceof Error ? error.message : 'No fue posible cambiar de cuenta', 'danger')
+    notifications.show(error instanceof Error ? error.message : 'No fue posible cambiar de cuenta', 'error')
   } finally {
     loading.value = false
   }
@@ -28,7 +28,7 @@ async function logout(): Promise<void> {
     await session.logout()
     await router.replace('/acceso')
   } catch (error) {
-    notifications.show(error instanceof Error ? error.message : 'No fue posible cerrar sesión', 'danger')
+    notifications.show(error instanceof Error ? error.message : 'No fue posible cerrar sesión', 'error')
   } finally {
     loading.value = false
   }

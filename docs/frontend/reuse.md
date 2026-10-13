@@ -52,6 +52,7 @@ Crear estas capacidades cuando comience la implementación de UI, antes de repli
 - paginación;
 - contenedor responsive para tabla/cards;
 - selector de archivos con progreso y error.
+- selectores reutilizables de fecha, hora, fecha-hora y rango sin depender de los controles nativos del navegador; `BaseDateInputSegments` concentra la entrada `DD / MM / AAAA`, `BaseCalendar` el calendario compartido, `BaseDateTimePicker` la selección simple y `BaseDateRangePicker` el rango en un único control.
 
 Un componente base expone una API pequeña, tipada y consistente. No incorpora nombres ni reglas de una entidad.
 
@@ -119,6 +120,8 @@ Una consulta usada por más de un módulo tiene una sola implementación. Los no
 ## Formularios
 
 - Los esquemas, normalizadores y mensajes reutilizables tienen una única implementación.
+- Cuando alta y edición comparten campos y reglas, reutilizar un único formulario con modo `create | edit` en lugar de mantener dos árboles de controles que puedan divergir.
+- En modo edición, cargar el registro definitivo antes de habilitar cambios y conservar bloqueados los campos inmutables por reglas de identidad o negocio.
 - Los errores de campo permanecen junto al campo.
 - Los errores globales pasan por el sistema común de feedback.
 - El submit se bloquea mientras está en curso.
@@ -126,9 +129,37 @@ Una consulta usada por más de un módulo tiene una sola implementación. Los no
 - La navegación con cambios sin guardar exige confirmación.
 - El servidor repite todas las validaciones de integridad y autorización.
 
+### Regla Create/Edit
+
+Cuando Crear y Editar usan los mismos campos y reglas deben compartir un único Form Component y un único esquema de validación. El modo, valores iniciales, estado de guardado y errores son entradas del mismo componente; no se mantienen árboles de controles paralelos.
+
+### Regla de reutilización de datos
+
+Si una lista o detalle ya contiene el snapshot editable de un registro, la acción Editar usa ese objeto. No se consulta nuevamente `GET /entidad/:id` solo para abrir el formulario.
+
+El DTO de listado de un CRUD pequeño incluye los campos ligeros necesarios para renderizar y editar, aunque algunos no aparezcan como columnas. Un fetch adicional sí corresponde cuando hay un deep link o recarga sin caché, datos pesados, historiales paginados, archivos, información deliberadamente omitida o un conflicto de versión.
+
+### Regla de actualización
+
+Crear y actualizar devuelven el registro definitivo. El store o listado hace upsert por ID y mueve el registro entre subconjuntos activos/inactivos cuando corresponda. No se recarga automáticamente toda la colección ni se pierden búsqueda, filtros, tab, scroll o página.
+
+### Caso aplicado: Usuarios
+
+El módulo `/usuarios` usa la tabla únicamente como superficie de consulta y acciones. Cada fila expone **Editar** y abre el mismo diálogo utilizado para el alta, precargado con el registro ya devuelto por `GET /api/users`.
+
+- Crear y editar comparten campos, validaciones y feedback.
+- El formulario de edición no se renderiza debajo de la tabla.
+- El correo queda bloqueado cuando `auth_user_id` ya está vinculado a Google.
+- Roles, estado y datos del certificado se editan dentro del mismo flujo.
+- La desactivación conserva confirmación destructiva y el historial del usuario.
+- En móvil, las cards conservan una acción explícita **Editar usuario**.
+- La carga o reemplazo del archivo del certificado continúa bloqueada hasta disponer del backend autorizado de R2.
+
 ## Errores y feedback
 
 Los services no muestran toasts. Devuelven datos o errores normalizados. La vista o composable decide el feedback según el contexto.
+
+La carga de archivos requiere un backend autorizado. Mientras no exista el endpoint que entregue una operación segura sobre R2, la SPA conserva el contrato en `services`, informa el bloqueo y nunca intenta usar credenciales R2 ni persistir archivos como base64.
 
 Usar una forma común de error con:
 
@@ -185,3 +216,7 @@ Debe recibir datos tipados y emitir intenciones. La vista o composable ejecuta l
 - [ ] La mutación invalida o actualiza la caché correcta.
 - [ ] Los estados loading, vacío, error y éxito usan primitivas comunes.
 - [ ] La autorización sigue siendo responsabilidad del servidor.
+
+## Certificados
+
+`CertificatesView` ensambla `CertificateTemplateCard`, `CertificateVariableGuide` y las primitivas existentes. `useCertificateTemplates` conserva archivos y revisiones; `useCertificateGeneration` administra selección contextual, respuestas obsoletas, idempotencia y correo editable. `certificatesService` usa los clientes JSON/Blob autorizados compartidos. El catálogo de variables vive en `types/certificates.ts`, compartido con el backend. `BaseMultiSelect` permite labels de dominio sin duplicar el control; `useUnsavedChanges` acepta opcionalmente estado busy para impedir navegación/advertir recarga durante mutaciones.

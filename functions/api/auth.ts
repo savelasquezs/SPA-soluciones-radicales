@@ -30,6 +30,8 @@ export class ApiError extends Error {
   constructor(
     public readonly status: number,
     message: string,
+    public readonly code?: string,
+    public readonly details?: Record<string, unknown>,
   ) {
     super(message)
   }
@@ -93,6 +95,19 @@ export async function requireAdmin(
 
   if (!profile.esAdmin || profile.rolActivo !== 'ADMINISTRADOR') {
     throw new ApiError(403, 'Se requiere el rol Administrador')
+  }
+
+  return profile
+}
+
+export async function requireTechnician(
+  client: PoolClient,
+  identity: Identity,
+): Promise<DomainProfile> {
+  const profile = await bootstrapProfile(client, identity)
+
+  if (!profile.esTecnico || profile.rolActivo !== 'TECNICO') {
+    throw new ApiError(403, 'Se requiere el rol Técnico')
   }
 
   return profile

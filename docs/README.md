@@ -13,7 +13,9 @@ La documentación versionada es la referencia viva de Soluciones Radicales MIP.
 | Arquitectura y decisiones | `docs/architecture/` |
 | Base de datos y migraciones | `database/README.md` |
 | Proceso de implementación | `docs/development/workflow.md` |
-| Estado de ejecución | Linear |
+| **Despliegue de la API Neon** | **`docs/development/neon-functions-deploy.md`** |
+| Producción de videos de usuario | `docs/development/documentation-videos.md` y `docs/development/user-manual-video-standard.md` |
+| Estado de implementación | `tasks.md`, código y pruebas |
 | Comportamiento implementado | Código y pruebas |
 
 ## Jerarquía
@@ -34,13 +36,21 @@ docs/
 │   └── overview.md
 ├── development/
 │   ├── cloudflare-workers.md
+│   ├── documentation-videos.md
 │   ├── neon-setup.md
+│   ├── neon-functions-deploy.md
+│   ├── user-manual-video-standard.md
 │   └── workflow.md
 ├── frontend/
 │   └── reuse.md
 └── product/
-    └── README.md
+    ├── README.md
+    ├── certificates.md
+    ├── mip-catalogs.md
+    └── service-execution.md
 ```
+
+Los storyboards ejecutables de cada video viven junto a sus pruebas en `e2e/documentation/`.
 
 ## Gobierno de cambios
 
@@ -50,5 +60,23 @@ docs/
 - Un patrón reutilizable cambia en `docs/frontend/reuse.md`.
 - Un criterio transversal de interacción cambia en `docs/ux-guidelines.md`.
 - Un token o componente visual cambia en `docs/design-system.md`.
+- Una regla editorial de videos cambia en `docs/development/user-manual-video-standard.md`.
+- El alcance y orden de un video cambia en su `e2e/documentation/*.storyboard.md`.
 - Una mejora aprobada fuera de alcance se registra en `tasks.md`.
 - No duplicar la misma regla en varios documentos; enlazar su fuente principal.
+
+### Almacenamiento y retención
+
+- [Plazos y tratamiento especial de Hallazgos](product/file-retention.md).
+- [Automatización diaria mediante Cloudflare Worker](development/cloudflare-retention.md).
+
+### Certificados
+
+- [Comportamiento manual y variables](product/certificates.md).
+- [Motor, configuración privada y comprobación de despliegue](architecture/certificates.md).
+
+## Portal de ayuda
+
+La opción «Ayuda y documentación» del sidebar abre el portal publicado de Mintlify:
+https://soluciones-radicales.mintlify.app. El repositorio técnico conserva las guías
+versionadas, pero no se utiliza como punto de entrada de ayuda para usuarios.

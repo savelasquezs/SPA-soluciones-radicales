@@ -1,17 +1,15 @@
 <script setup lang="ts">
-import AppShell from '@/components/layout/AppShell.vue'
-import { useSessionStore } from '@/stores/session'
+import { useAuthStore } from '@/stores/auth'
 
-const session = useSessionStore()
+const session = useAuthStore()
 </script>
 
 <template>
-  <AppShell>
-    <div class="page">
-      <header class="page-header">
-        <div>
+  <div class="page dashboard-page">
+      <header class="page-header admin-page-header">
+        <div class="admin-page-heading">
           <h1>Hola, {{ session.profile?.nombreCompleto.split(' ')[0] }}</h1>
-          <p>Este es el punto de partida de tu operación MIP.</p>
+          <p>— Tu operación MIP</p>
         </div>
         <span class="badge">{{ session.profile?.rolActivo }}</span>
       </header>
@@ -33,22 +31,23 @@ const session = useSessionStore()
           <p>Verifica Gmail y Calendar de la cuenta empresarial.</p>
         </RouterLink>
       </section>
-    </div>
-  </AppShell>
+  </div>
 </template>
 
 <style scoped>
+.dashboard-page { gap: 0.75rem; }
 .quick-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .quick-card {
   display: grid;
-  min-height: 12rem;
+  min-height: 8.25rem;
   align-content: end;
-  gap: 0.55rem;
+  gap: 0.35rem;
+  padding: 0.875rem;
   color: var(--text);
   text-decoration: none;
   transition: 150ms ease;

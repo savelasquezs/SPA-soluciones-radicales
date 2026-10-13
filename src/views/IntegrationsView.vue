@@ -8,10 +8,9 @@ import BaseTextarea from '@/components/base/BaseTextarea.vue'
 import ConfirmDialog from '@/components/base/ConfirmDialog.vue'
 import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import StatusPanel from '@/components/base/StatusPanel.vue'
-import AppShell from '@/components/layout/AppShell.vue'
 import { useFormValidation } from '@/composables/useFormValidation'
 import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
-import { apiRequest } from '@/services/apiService'
+import { getGoogleAuthorizationUrl, getGoogleIntegrationStatus, sendTestEmail } from '@/services/integrationsService'
 import { useNotificationsStore } from '@/stores/notifications'
 
 const route = useRoute()
@@ -56,7 +55,7 @@ async function loadStatus(): Promise<void> {
   loading.value = true
   error.value = null
   try {
-    const status = await apiRequest<{ connected: boolean; email: string | null }>('api/google/status')
+    const status = await getGoogleIntegrationStatus()
     connected.value = status.connected
     connectedEmail.value = status.email
   } catch (loadError) {
@@ -69,13 +68,10 @@ async function loadStatus(): Promise<void> {
 async function connectGoogle(): Promise<void> {
   connecting.value = true
   try {
-    const result = await apiRequest<{ authorizationUrl: string }>('api/google/authorization-url', {
-      method: 'POST',
-      body: JSON.stringify({ returnUrl: `${window.location.origin}/integraciones` }),
-    })
-    window.location.assign(result.authorizationUrl)
+    const authorizationUrl = await getGoogleAuthorizationUrl(`${window.location.origin}/integraciones`)
+    window.location.assign(authorizationUrl)
   } catch (connectError) {
-    notifications.show(connectError instanceof Error ? connectError.message : 'No fue posible iniciar la autorización', 'danger')
+    notifications.show(connectError instanceof Error ? connectError.message : 'No fue posible iniciar la autorización', 'error')
     connecting.value = false
   }
 }
@@ -84,14 +80,11 @@ async function sendTest(): Promise<void> {
   if (!emailValidation.validate()) return
   sending.value = true
   try {
-    await apiRequest<{ sent: boolean; messageId: string }>('api/email/test', {
-      method: 'POST',
-      body: JSON.stringify({ to: emailForm.recipient, subject: emailForm.subject, text: emailForm.body }),
-    })
+    await sendTestEmail({ to: emailForm.recipient, subject: emailForm.subject, text: emailForm.body })
     emailBaseline.value = JSON.stringify(emailForm)
     notifications.show('Correo de prueba enviado por Gmail', 'success')
   } catch (sendError) {
-    notifications.show(sendError instanceof Error ? sendError.message : 'No fue posible enviar el correo', 'danger')
+    notifications.show(sendError instanceof Error ? sendError.message : 'No fue posible enviar el correo', 'error')
   } finally {
     sending.value = false
   }
@@ -99,12 +92,11 @@ async function sendTest(): Promise<void> {
 </script>
 
 <template>
-  <AppShell>
-    <div class="page">
-      <header class="page-header">
-        <div>
+  <div class="page integrations-page">
+      <header class="page-header admin-page-header">
+        <div class="admin-page-heading">
           <h1>Integraciones</h1>
-          <p>Gmail y Calendar operan exclusivamente con la cuenta empresarial.</p>
+          <p>— Gmail y Calendar de la cuenta empresarial</p>
         </div>
       </header>
 
@@ -173,11 +165,11 @@ async function sendTest(): Promise<void> {
         @cancel="cancelDiscard"
         @confirm="confirmDiscard"
       />
-    </div>
-  </AppShell>
+  </div>
 </template>
 
 <style scoped>
+.integrations-page { gap: 0.75rem; }
 .integration-card {
   display: flex;
   align-items: center;
@@ -186,7 +178,7 @@ async function sendTest(): Promise<void> {
 }
 
 .integration-card h2 {
-  margin-top: 0.8rem;
+  margin-top: 0.35rem;
 }
 
 .integration-card p {
@@ -195,7 +187,7 @@ async function sendTest(): Promise<void> {
 }
 
 .email-form {
-  margin-top: 1.25rem;
+  margin-top: 0.75rem;
 }
 
 @media (max-width: 620px) {

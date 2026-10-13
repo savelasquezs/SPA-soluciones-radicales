@@ -93,7 +93,9 @@ Las variantes se expresan con props tipadas. No duplicar clases completas en com
 
 ## Controles
 
-- Altura táctil mínima: 44 px.
+- Altura táctil mínima: 44 px en mobile y superficies de campo.
+- `BaseButton` ofrece `size="compact"` para acciones administrativas de desktop; visualmente puede bajar a 36 px, pero recupera 44 px en viewport móvil.
+- `BaseIconButton size="small"` es la variante compacta para acciones por fila en desktop.
 - Foco visible en todos los controles interactivos.
 - Disabled y loading son estados diferentes y perceptibles.
 - Botones con solo icono requieren nombre accesible y tooltip cuando aporte contexto.
@@ -103,10 +105,31 @@ Las variantes se expresan con props tipadas. No duplicar clases completas en com
 ## Formularios
 
 - Label visible sobre el control salvo patrón accesible equivalente.
+- Usar labels breves y descriptivos; el contexto adicional pertenece al texto de ayuda, no al label.
+- Evitar repetir el mismo concepto en título de sección, label y control. Si una sección ya identifica claramente una carga de archivo, el label puede quedar visualmente oculto manteniendo su asociación accesible.
 - Ayuda antes del error; error inmediatamente después del control.
+- Dividir formularios medianos en secciones por intención, con título y descripción breve, en lugar de una lista continua de campos.
+- Usar dos columnas solo para controles relacionados cuando ambos puedan encogerse sin overflow; volver a una columna en mobile.
 - Ancho limitado para campos cortos y fechas.
 - Formularios a una columna en mobile.
 - Agrupar por significado, no por columnas de base de datos.
+
+Estas reglas siguen patrones consolidados de formularios de GitHub Primer y Atlassian: labels permanentes y concisos, captions para contexto, validación junto al campo y agrupación visual que reduce carga cognitiva.
+
+### Fechas y rangos
+
+- Las fechas editables usan una entrada segmentada `DD / MM / AAAA`: los separadores son parte del control, los segmentos pendientes permanecen como ayuda visual tenue y el foco avanza al completar día o mes. También se admite pegar una fecha completa.
+- En escritorio el calendario muestra un solo mes en un diálogo compacto; en móvil conserva objetivos táctiles de al menos 44 px.
+- Los rangos usan un único control `Desde – Hasta` y el mismo calendario en modo rango, con inicio y fin acentuados y los días intermedios en un tono sutil.
+- La navegación por teclado del calendario cubre flechas, `PageUp`/`PageDown`, `Home`/`End` y cierre por `Escape`.
+
+## Enlaces de entidad y WhatsApp
+
+- Un nombre de Cliente, Sede, Área o Servicio navegable usa `--text` por defecto, no `--accent`.
+- Hover/focus puede subrayar el texto y cambiar el cursor; el foco visible sigue siendo obligatorio.
+- El acento de marca se reserva para CTA, foco, selección y navegación activa.
+- `WhatsAppPhoneLink` es la única representación interactiva aprobada para celulares visibles: icono de WhatsApp inline, número legible y destino `wa.me`.
+- El icono de WhatsApp no convierte toda la fila en un bloque verde; permanece discreto y puede enfatizarse solo en interacción.
 
 ## Responsive
 
@@ -127,3 +150,13 @@ Las variantes se expresan con props tipadas. No duplicar clases completas en com
 ## Regla de implementación
 
 Si una pantalla necesita una variante visual no contemplada, primero se evalúa extender el componente base. Solo se crea un componente aislado cuando el comportamiento o semántica realmente difieren.
+
+## Densidad de la interfaz administrativa
+
+- `AdminLayout` usa un sidebar de 220 px en escritorio: grupos en color `--accent` y separadores con `--border`, sin añadir tonos rígidos.
+- En escritorio los enlaces laterales tienen 38 px de altura. En el drawer móvil recuperan al menos 44 px.
+- Las vistas administrativas principales utilizan `content--compact`: menor margen superior y más espacio horizontal para tablas e historiales. No se aplica a edición ni trabajo de campo.
+- Usar `admin-page-header` y `admin-page-heading` para un título de 24 px con descripción en línea, pequeña y en `--text-secondary` (p. ej., «Clientes — Negocios y casas atendidos»). La descripción puede pasar a otra línea en móvil.
+- Usar `admin-compact-filters` en barras de búsqueda y filtros administrativos: controles de 36 px y labels cercanos en escritorio, sin cambiar `BaseInput`/`BaseSelect` dentro de formularios; conservar 44 px o más en móvil.
+- No repetir el breadcrumb simple si ya existe el título de la vista; conservar breadcrumbs navegables en las vistas de detalle.
+- Documentos y certificados pertenecen a Configuración, no a una entrada vacía del sidebar. El enlace de Ayuda lleva a [Mintlify](https://soluciones-radicales.mintlify.app).

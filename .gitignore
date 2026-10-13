@@ -45,3 +45,10 @@ test-results/
 playwright-report/
 .neon
 .env.local
+
+# Generated documentation media
+docs-media/
+
+# Generated Neon artifacts must not be committed
+.neon-bundle/
+.github/generated/

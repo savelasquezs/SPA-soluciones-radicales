@@ -60,10 +60,15 @@ Este archivo registra decisiones permanentes. Las tareas pendientes se mantienen
 
 ## ADR-009 · Almacenamiento y retención
 
-- **Estado:** Aprobada
-- **Fecha:** 2026-10-04
-- **Decisión:** Cloudflare R2 es el almacenamiento de objetos. Buckets: `sr-master-files`, `sr-service-media`, `sr-generated-documents`.
-- **Consecuencia:** Fotos/firmas operativas se eliminan siete días después de validar el documento final; PDF generados se conservan hasta un año; archivos maestros mientras estén activos.
+- **Estado:** Aprobada; revisada el 2026-10-08.
+- **Fecha inicial:** 2026-10-04.
+- **Decisión:** Cloudflare R2 es el almacenamiento de objetos. Buckets: `sr-master-files`, `sr-service-media`, `sr-generated-documents`. El plazo anterior de siete días para fotos y firmas queda **derogado**.
+- **Fotografías ordinarias:** tres meses calendario después de finalizar el Servicio.
+- **Hallazgos pendientes:** fotografías como máximo un año desde la apertura, aunque el hallazgo continúe abierto; si se cierra antes del vencimiento, las fotografías de apertura y cierre se conservan tres meses después del cierre.
+- **Informes PDF:** doce meses desde su generación. Certificados, firmas y archivos maestros tienen políticas separadas; nunca someterlos a expiración indiscriminada.
+- **Automatización:** Cloudflare Worker independiente con Cron Trigger diario. PostgreSQL/Neon determina elegibilidad y conserva el historial; **no** usar Neon scheduled triggers ni agregar cron al Worker Static Assets de la SPA.
+- **Referencia normativa del producto:** `docs/product/file-retention.md`; diseño de despliegue `docs/development/cloudflare-retention.md`.
+- **Implementación:** pendiente; la aprobación de esta ADR **no** implica que el cron ya esté activo.
 
 ## ADR-010 · Gmail y Calendar
 
@@ -109,10 +114,10 @@ Este archivo registra decisiones permanentes. Las tareas pendientes se mantienen
 
 ## ADR-016 · Respuestas de formularios agrupadas en JSONB
 
-- **Estado:** Aprobada
+- **Estado:** Supersedida por ADR-019
 - **Fecha:** 2026-10-04
-- **Decisión:** Se reemplaza el modelo de una fila por campo de `respuestas_mip` por una fila por Servicio + Formulario + Versión + Área, con las respuestas de campos agrupadas en JSONB.
-- **Consecuencia:** Se reduce drásticamente la cantidad de filas, claves e índices repetidos. `formularios` continúa normalizado y versionado para poder interpretar el histórico.
+- **Decisión original:** Se reemplazaba el modelo de una fila por campo de `respuestas_mip` por una fila por Servicio + Formulario + Versión + Área, con las respuestas de campos agrupadas en JSONB.
+- **Consecuencia histórica:** El baseline original creó `formularios` y `respuestas_formulario`; ADR-019 y la migración 011 retiraron ese modelo.
 
 ## ADR-017 · Migraciones independientes del proveedor
 
@@ -131,3 +136,26 @@ Este archivo registra decisiones permanentes. Las tareas pendientes se mantienen
 - **Implementación inicial:** `wrangler.jsonc` publica `./dist` con `not_found_handling = "single-page-application"` y no declara un script `main`.
 - **Consecuencia:** La SPA permanece estática en esta fase. No se ejecuta código Worker dinámico para servir los assets. Cualquier Worker futuro debe responder a una necesidad concreta y preferir rutas selectivas.
 - **Despliegue:** Cloudflare Builds ejecuta `npm run build` y luego `npx wrangler deploy`; los preview builds permanecen habilitados.
+
+
+## ADR-019 · Ejecución MIP sin motor genérico de formularios
+
+- **Estado:** Aprobada
+- **Fecha:** 2026-10-06
+- **Decisión:** La ejecución técnica no usa un constructor, definición ni versionado administrativo de formularios. La interfaz es estable y se compone directamente desde Servicio, Sede, Áreas, Criterios MIP, Productos, Dispositivos, Plagas, Hallazgos, Evidencias y Firmas.
+- **Criterios:** Los criterios son un catálogo administrable independiente. Conservan identidad estable, nombre, estado y aplicabilidad exclusiva a Áreas externas/perimetrales cuando corresponda; se presentan alfabéticamente y no tienen orden administrable. `C/CP/NC/NA` y sus reglas de cálculo son constantes del dominio.
+- **Histórico:** Al iniciar un Servicio se congelan los datos necesarios para interpretar posteriormente la evaluación y las revisiones, sin depender del nombre, estado o composición futura de los catálogos.
+- **Monitoreo:** Los dispositivos permanecen como entidades de Sede/Área y cada Servicio crea revisiones; no se modelan como campos de formulario.
+- **Transición completada:** `20261006_011_remove_legacy_mip_forms.sql` elimina `formularios`, `respuestas_formulario`, `formularios_aplicables_json` y `formularios_versiones_json` sin modificar migraciones ya aplicadas.
+- **Referencia:** La composición funcional se especifica en `docs/product/service-execution.md`.
+
+## ADR-020 · Inicio autoritativo y exclusividad móvil del Servicio
+
+- **Estado:** Aprobada
+- **Fecha:** 2026-10-07
+- **Decisión:** La ejecución inicial aplica únicamente a Servicios `PRINCIPAL` de Sedes Negocio. Iniciar requiere conexión y confirmación del servidor desde una hora antes de la programación.
+- **Snapshot:** La misma transacción crea la composición congelada de Áreas, Criterios, Dispositivos y Productos, registra `inicio_real` y cambia el estado a `EN_PROCESO`.
+- **Exclusividad:** Un bloqueo persistente por Servicio, usuario y dispositivo permite un solo celular editor. No expira por inactividad; un Administrador puede liberarlo mediante una operación idempotente y auditada.
+- **Productos:** El Administrador completa lote, dosis y método. El Técnico los consulta en modo de solo lectura y el inicio congela su significado histórico.
+- **Offline:** La preparación puede almacenarse antes, pero no autoriza edición. El trabajo offline comienza después del inicio online confirmado.
+- **Autoridad:** Neon Function valida rol, asignación, versión, tipo, estado, ventana temporal y completitud de Productos. RLS limita la lectura de snapshots y no concede escritura directa al rol autenticado.

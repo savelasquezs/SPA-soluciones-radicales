@@ -1,0 +1,98 @@
+{
+  "title": "Gestión de sedes",
+  "subtitle": "Configurar contactos, operación y vehículos",
+  "segments": [
+    {
+      "id": "intro",
+      "text": "En este video aprenderás a crear y configurar una Sede dentro de un cliente de tipo Negocio."
+    },
+    {
+      "id": "open-client",
+      "text": "Desde Clientes, abre el Negocio al que pertenece la Sede."
+    },
+    {
+      "id": "sites-section",
+      "text": "En la pestaña Sedes puedes consultar las sucursales del cliente y agregar una nueva."
+    },
+    {
+      "id": "new-site",
+      "text": "Selecciona Agregar Sede para abrir el formulario de configuración."
+    },
+    {
+      "id": "site-data",
+      "text": "Registra el nombre de la Sede, su dirección y el nombre del contacto principal."
+    },
+    {
+      "id": "contact-phone",
+      "text": "El celular del contacto queda disponible con acceso rápido a WhatsApp después de guardar la Sede."
+    },
+    {
+      "id": "contact-email",
+      "text": "El correo también tendrá un acceso rápido para redactar un mensaje desde el cliente de correo del usuario."
+    },
+    {
+      "id": "extra-emails",
+      "text": "Puedes añadir correos adicionales e incluir los correos generales definidos en el cliente."
+    },
+    {
+      "id": "operation",
+      "text": "En Configuración operativa registra el valor del servicio, la periodicidad y la duración estimada."
+    },
+    {
+      "id": "reinforcement",
+      "text": "También puedes indicar si esta Sede maneja una visita de refuerzo."
+    },
+    {
+      "id": "vehicles-toggle",
+      "text": "Activa Maneja vehículos cuando esta Sede tendrá vehículos asociados."
+    },
+    {
+      "id": "vehicle-certificate",
+      "text": "Si los vehículos necesitan certificado, activa Genera certificado para vehículos."
+    },
+    {
+      "id": "vehicle-validity",
+      "text": "Luego define la vigencia del certificado vehicular en meses. Esta configuración aplicará a los vehículos de la Sede."
+    },
+    {
+      "id": "future-vehicles",
+      "text": "Los vehículos se podrán registrar posteriormente dentro de esta misma Sede; aquí solo dejamos definida su configuración."
+    },
+    {
+      "id": "plan",
+      "text": "El plano de la Sede es opcional y puede adjuntarse como archivo privado."
+    },
+    {
+      "id": "create-site",
+      "text": "Cuando la información esté completa, selecciona Crear Sede."
+    },
+    {
+      "id": "site-created",
+      "text": "La Sede aparece en la ficha del cliente con su dirección, contacto y estado."
+    },
+    {
+      "id": "whatsapp-action",
+      "text": "El número de celular incluye el acceso rápido a WhatsApp para contactar al responsable."
+    },
+    {
+      "id": "email-action",
+      "text": "El botón de correo permite escribir directamente al correo principal registrado para la Sede."
+    },
+    {
+      "id": "open-site-detail",
+      "text": "Selecciona el nombre de la Sede para abrir su detalle."
+    },
+    {
+      "id": "site-summary",
+      "text": "En el resumen puedes consultar el contacto, la operación y confirmar si la Sede maneja vehículos."
+    },
+    {
+      "id": "edit-site",
+      "text": "Desde Editar Sede puedes actualizar estos datos y conservar la configuración vehicular definida."
+    },
+    {
+      "id": "outro",
+      "text": "Con esto la Sede queda preparada para operar, contactar responsables y administrar vehículos cuando se habilite su registro."
+    }
+  ]
+}

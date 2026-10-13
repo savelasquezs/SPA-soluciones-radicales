@@ -3,16 +3,15 @@ import { createPinia } from 'pinia'
 
 import App from './App.vue'
 import router from './router'
+import { useAppStore } from './stores/app'
 import './assets/theme.css'
 
-const savedTheme = localStorage.getItem('theme')
-if (savedTheme === 'light' || savedTheme === 'dark') {
-  document.documentElement.dataset.theme = savedTheme
-}
-
 const app = createApp(App)
+const pinia = createPinia()
 
-app.use(createPinia())
+app.use(pinia)
 app.use(router)
+
+useAppStore(pinia).initializeTheme()
 
 app.mount('#app')

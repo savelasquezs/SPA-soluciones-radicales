@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sr-storage-retention-dev",
+  "main": "./index.mjs",
+  "compatibility_date": "2026-10-08",
+  "triggers": { "crons": ["0 7 * * *"] },
+  "vars": {
+    "RETENTION_API_URL": "https://br-nameless-violet-b7y48a5v-api.compute.c-13.us-east-1.aws.neon.tech/jobs/retention",
+    "RETENTION_MODE": "delete"
+  },
+  "workers_dev": false
+}

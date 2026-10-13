@@ -3,16 +3,21 @@ import type { PoolClient } from 'pg'
 
 import { ApiError } from './auth'
 import { pool, transaction } from './db'
+import { readBounded } from './documents/limits'
+import { buildMailMessage, type MailInput } from './mailMessage'
+import { writeCalendarEvent, type CalendarEventInput } from './calendarClient'
 
 const clientId = requiredEnvironment('GOOGLE_CLIENT_ID')
 const clientSecret = requiredEnvironment('GOOGLE_CLIENT_SECRET')
 const redirectUri = requiredEnvironment('GOOGLE_OAUTH_REDIRECT_URI')
 const integrationEmail = 'solucionesradicales1@gmail.com'
+export const GOOGLE_DRIVE_FILE_SCOPE = 'https://www.googleapis.com/auth/drive.file'
 const scopes = [
   'openid',
   'email',
   'https://www.googleapis.com/auth/gmail.send',
   'https://www.googleapis.com/auth/calendar.events',
+  GOOGLE_DRIVE_FILE_SCOPE,
 ]
 
 const encryptionKey = createHash('sha256')
@@ -98,6 +103,86 @@ async function getAccessToken(): Promise<string> {
   )
 
   return token.access_token
+}
+
+async function enqueueGoogleDriveCleanup(fileId: string): Promise<void> {
+  await pool.query(
+    `insert into private.integration_jobs (job_type, idempotency_key, payload, run_after)
+     values ('STORAGE_CLEANUP', $1, $2::jsonb, now() + interval '5 minutes')
+     on conflict (job_type, idempotency_key) do nothing`,
+    [`google-drive-temp:${fileId}`, JSON.stringify({ scope: 'GOOGLE_DRIVE_TEMP', fileId })],
+  )
+}
+
+export async function deleteGoogleDriveTemporaryFile(fileId: string, accessToken?: string): Promise<void> {
+  if (!fileId || fileId.length > 256) throw new ApiError(422, 'Identificador temporal de Google Drive no válido')
+  const token = accessToken ?? await getAccessToken()
+  const cleanup = await googleFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(20_000),
+  })
+  if (!cleanup.ok && cleanup.status !== 404) {
+    throw new ApiError(502, 'No fue posible eliminar el archivo temporal de Google Drive')
+  }
+}
+
+export async function convertDocumentToPdfWithGoogleDrive(docx: Uint8Array, maxBytes: number): Promise<Buffer> {
+  const accessToken = await getAccessToken()
+  const boundary = `sr-${randomBytes(18).toString('hex')}`
+  const metadata = JSON.stringify({
+    name: `documento-temporal-${randomBytes(12).toString('hex')}.docx`,
+    mimeType: 'application/vnd.google-apps.document',
+  })
+  const body = Buffer.concat([
+    Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n`),
+    Buffer.from(`--${boundary}\r\nContent-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document\r\n\r\n`),
+    Buffer.from(docx),
+    Buffer.from(`\r\n--${boundary}--\r\n`),
+  ])
+  let fileId: string | null = null
+  let result: Buffer | null = null
+  let failure: unknown = null
+
+  try {
+    const upload = await googleFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': `multipart/related; boundary=${boundary}` },
+      body,
+      signal: AbortSignal.timeout(60_000),
+    })
+    const uploaded = (await upload.json()) as { id?: string; error?: { message?: string } }
+    if (!upload.ok || !uploaded.id) throw new ApiError(502, uploaded.error?.message ?? 'Google Drive no pudo importar el Word')
+    fileId = uploaded.id
+
+    const exported = await googleFetch(
+      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}/export?mimeType=application%2Fpdf`,
+      { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(60_000) },
+    )
+    if (!exported.ok || !exported.headers.get('content-type')?.toLowerCase().includes('application/pdf')) {
+      await exported.body?.cancel()
+      throw new ApiError(502, 'Google Drive no pudo exportar el documento como PDF')
+    }
+    result = await readBounded(exported, maxBytes)
+    if (result.subarray(0, 5).toString() !== '%PDF-') throw new ApiError(502, 'Google Drive devolvió un PDF no válido')
+  } catch (error) {
+    failure = error
+  }
+
+  if (fileId) {
+    try {
+      await deleteGoogleDriveTemporaryFile(fileId, accessToken)
+    } catch {
+      await enqueueGoogleDriveCleanup(fileId).catch(() => undefined)
+      if (!failure) failure = new ApiError(502, 'El PDF fue creado, pero no fue posible eliminar el archivo temporal de Google Drive')
+    }
+  }
+
+  if (failure) {
+    if (failure instanceof ApiError) throw failure
+    throw new ApiError(502, 'No fue posible convertir el documento Word a PDF mediante Google Drive')
+  }
+  return result!
 }
 
 export async function createGoogleAuthorization(
@@ -211,86 +296,35 @@ export async function getGoogleStatus(): Promise<{ connected: boolean; email: st
   return { connected: Boolean(rows[0]), email: rows[0]?.cuenta_correo ?? null }
 }
 
-export async function sendGmailMessage(input: {
-  to: string
-  subject: string
-  text: string
-}): Promise<string> {
+export async function sendGmailMessage(input: MailInput): Promise<string> {
+  const mime = buildMailMessage(input, integrationEmail)
   const accessToken = await getAccessToken()
-  const mime = [
-    `From: Soluciones Radicales <${integrationEmail}>`,
-    `To: ${input.to}`,
-    `Subject: ${input.subject}`,
-    'MIME-Version: 1.0',
-    'Content-Type: text/plain; charset=UTF-8',
-    '',
-    input.text,
-  ].join('\r\n')
-  const raw = Buffer.from(mime).toString('base64url')
-  const response = await googleFetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ raw }),
-  })
-  const result = (await response.json()) as { id?: string; error?: { message?: string } }
-
-  if (!response.ok || !result.id) {
-    throw new ApiError(502, result.error?.message ?? 'No fue posible enviar el correo')
+  await input.onDispatch?.()
+  try {
+    const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+      method: 'POST', signal: AbortSignal.timeout(20_000), redirect: 'error',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ raw: Buffer.from(mime).toString('base64url') }),
+    })
+    if (response.status >= 400 && response.status < 500) {
+      throw new ApiError(502, 'Google rechazó el envío. Revisa la conexión de Gmail y los destinatarios.', 'EMAIL_REJECTED')
+    }
+    const result = (await response.json()) as { id?: string }
+    if (!response.ok || !result.id) throw new Error('Unknown delivery')
+    return result.id
+  } catch (error) {
+    if (error instanceof ApiError) throw error
+    throw new ApiError(502, 'No fue posible confirmar la entrega. Revisa Enviados en Gmail antes de iniciar otro envío.', 'EMAIL_DELIVERY_UNKNOWN')
   }
-
-  return result.id
 }
 
-export async function upsertCalendarEvent(input: {
-  serviceId: string
-  summary: string
-  description: string
-  location: string
-  start: string
-  end: string
-}): Promise<string> {
-  const accessToken = await getAccessToken()
-  const eventId = `sr${input.serviceId.replaceAll('-', '')}`
-  const event = {
-    id: eventId,
-    summary: input.summary,
-    description: input.description,
-    location: input.location,
-    start: { dateTime: input.start, timeZone: 'America/Bogota' },
-    end: { dateTime: input.end, timeZone: 'America/Bogota' },
-  }
-  const headers = {
-    Authorization: `Bearer ${accessToken}`,
-    'Content-Type': 'application/json',
-  }
-  let response = await googleFetch(
-    `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
-    { method: 'PUT', headers, body: JSON.stringify(event) },
-  )
-
-  if (response.status === 404) {
-    response = await googleFetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(event),
-    })
-  }
-
-  const result = (await response.json()) as { id?: string; error?: { message?: string } }
-
-  if (!response.ok || !result.id) {
-    throw new ApiError(502, result.error?.message ?? 'No fue posible sincronizar Calendar')
-  }
-
-  return result.id
+export async function upsertCalendarEvent(input: CalendarEventInput): Promise<string> {
+  return writeCalendarEvent(input, await getAccessToken())
 }
 
 async function googleFetch(input: string, init: RequestInit): Promise<Response> {
   try {
-    return await fetch(input, { ...init, signal: AbortSignal.timeout(20_000) })
+    return await fetch(input, { ...init, signal: init.signal ?? AbortSignal.timeout(20_000) })
   } catch {
     throw new ApiError(502, 'No fue posible comunicarse con Google')
   }

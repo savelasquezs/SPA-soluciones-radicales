@@ -20,7 +20,7 @@ El comportamiento funcional aprobado del proyecto anterior se conserva. La reimp
 
 - consulta únicamente servicios asignados;
 - inicia y ejecuta servicios dentro de las reglas permitidas;
-- diligencia formularios, productos, dispositivos, hallazgos, evidencias y firmas;
+- diligencia la evaluación MIP por Áreas, puestos de monitoreo, hallazgos, evidencias y firmas, y consulta los Productos definidos por el Administrador;
 - trabaja offline cuando la aplicación fue cargada y autenticada previamente;
 - no administra catálogos ni datos globales.
 
@@ -33,18 +33,23 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 | Entidad | Responsabilidad |
 |---|---|
 | `usuarios` | Identidad autorizada, roles y certificado del Técnico |
-| `negocios` | Cliente atendido y correos generales |
+| `negocios` | Cliente tipo Negocio o Casa; conserva identidad, estado y configuración compartida |
 | `sedes` | Lugar de servicio, contacto, precio y configuración operativa |
-| `areas` | Espacios de una Sede utilizados en formularios y monitoreo |
+| `areas` | Espacios de una Sede utilizados en evaluación MIP y monitoreo |
 | `plantillas_areas` | Conjuntos reutilizables de Áreas globales o privadas |
 | `servicios` | Programación, ejecución, pago, firmas, informe y publicación |
-| `formularios` | Definición versionada de secciones y campos |
-| `respuestas_formulario` | Respuestas históricas agrupadas por Servicio, formulario, versión y Área |
+| Próximos por confirmar | Preagenda derivada de periodicidad para contacto y confirmación antes de crear un Servicio |
+| `criterios_mip` | Catálogo administrable de criterios de inspección aplicables a Áreas |
+| `servicio_areas` | Snapshot, recorrido y excepción de acceso de cada Área dentro del Servicio |
+| `evaluaciones_mip_area` | Histórico de criterios evaluados por Servicio y Área, independiente del catálogo vivo |
 | `productos` | Catálogo de productos utilizados |
 | `productos_aplicados` | Planeación y aplicación de productos por Servicio |
-| `configuracion` | Métodos, plagas, tipos de dispositivo y parámetros globales |
-| `dispositivos` | Identidad permanente de trampas y dispositivos por Sede y Área |
-| `revisiones_dispositivos` | Estado, capturas y evidencia observada durante un Servicio |
+| `configuracion` | Métodos, plagas y parámetros globales |
+| `trampas` | Catálogo administrable de tipos de Trampa y su clasificación de monitoreo |
+| `dispositivos` | Persistencia técnica de los Puestos de monitoreo por Sede y Área |
+| `servicio_dispositivos` | Snapshot técnico de los Puestos de monitoreo al iniciar el Servicio |
+| `servicio_tipos_dispositivo` | Tipos, clasificación y Plagas disponibles congelados para altas técnicas durante el Servicio |
+| `revisiones_dispositivos` | Revisión histórica de los Puestos de monitoreo durante un Servicio |
 | `hallazgos` | No conformidades, seguimiento y cierre posterior |
 | `vehiculos` | Vehículos asociados a Sedes habilitadas |
 | `certificados` | Certificados de establecimiento o vehículo |
@@ -57,17 +62,34 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 
 - El acceso interno requiere Google, un registro activo en `usuarios` y al menos un rol.
 - Un usuario con dos roles opera con uno activo por sesión.
-- El correo puede corregirse antes del primer acceso; después de vincular `auth_user_id` permanece inmutable para no romper la identidad Google.
+- El correo puede corregirse antes del primer acceso; después de vincular `auth_user_id`, solo puede cambiarse mediante una autenticación Google nueva, verificada y confirmada con transferencia de identidad de un solo uso. La identidad interna del usuario, sus roles y su historial se conservan.
 - El servidor valida autorización en cada operación protegida.
 - Los clientes y contactos no son usuarios del sistema.
 
+### Perfil personal
+
+- Todo usuario interno autorizado puede abrir **Mi perfil** desde la fotografía/nombre, tanto en la cabecera como en el sidebar.
+- El propio usuario puede cambiar nombre, teléfono y fotografía, restaurar su imagen Google y consultar sus roles, que permanecen de solo lectura.
+- El cambio de identidad Google exige autenticación con la nueva cuenta, validación del proveedor, comprobación de unicidad, estado aleatorio de diez minutos y una sola utilización, sin alterar el ID interno.
+- Los archivos de perfil se guardan en R2 por carpeta individual, con URLs firmadas de corta duración y acceso controlado por la sesión. El Técnico puede mantener su certificado, sin permisos de administración sobre otros usuarios.
+- Véase [user-profile.md](user-profile.md) para alcance y criterios de aceptación.
+
+### Certificado del Técnico
+
+- Un Técnico puede no tener certificado.
+- Si se registra un certificado, fecha de emisión y fecha de vencimiento son obligatorias.
+- Si el certificado registrado está vencido, el Técnico no puede ser asignado como responsable.
+- El certificado es una credencial opcional del usuario; no existe una bandera de certificación obligatoria.
+
 ### Clientes y contexto
 
-- Un Negocio puede tener varias Sedes.
-- Áreas, Dispositivos y Vehículos pertenecen a una Sede.
+- El concepto visible es Cliente. Un Cliente puede ser Negocio o Casa.
+- Un Cliente Negocio puede tener varias Sedes y su vigencia de certificado de establecimiento aplica a todas ellas.
+- Un Cliente Casa conserva una única Sede residencial interna, invisible en la interfaz, sin Áreas, recorrido MIP completo, certificados ni vehículos.
+- Áreas, Puestos de monitoreo y Vehículos pertenecen a una Sede.
 - El nombre de Área es único dentro de su Sede.
-- El número de Dispositivo y la placa de Vehículo son únicos de forma normalizada dentro de su Sede.
-- Una plantilla privada pertenece a un Negocio; una global no pertenece a ninguno.
+- El número de Puesto de monitoreo y la placa de Vehículo son únicos de forma normalizada dentro de su Sede.
+- Las plantillas de certificados son globales por tipo y se administran únicamente desde Configuración → Certificados.
 
 ### Servicios
 
@@ -79,41 +101,51 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 - El responsable debe ser Técnico activo y cumplir vigencia de certificado cuando tenga uno registrado.
 - Colaboradores activos, únicos y diferentes del responsable.
 - Un Técnico solo accede a Servicios donde está asignado.
-- La edición técnica usa un lease exclusivo renovable.
+- Iniciar requiere conexión y solo se permite desde una hora antes de `inicio_programado`; preparar no equivale a iniciar.
+- Un bloqueo persistente permite un solo celular editor durante todo `EN_PROCESO`; un Administrador puede liberarlo con auditoría.
 - El valor del Servicio Principal se deriva de la Sede.
-- El Refuerzo pertenece a un Principal de la misma Sede, es gratuito, existe máximo uno y se programa exactamente 20 días después.
-- El Refuerzo no usa formularios ni genera informe MIP completo.
-- Una Sede residencial no exige formularios MIP ni informe completo.
-- Finalizar exige tiempos reales, datos técnicos requeridos y firmas aplicables.
+- Si la Sede maneja Refuerzo, al confirmar un Principal se crea máximo un Refuerzo asociado, gratuito y de la misma Sede.
+- La fecha inicial del Refuerzo se propone 21 días después del Principal para conservar el mismo día de la semana y la misma hora; es un valor predeterminado editable, no una restricción permanente.
+- Principal y Refuerzo pueden reprogramarse. Al reprogramar conjuntamente un Principal y su Refuerzo, los cambios internos se guardan de forma transaccional y ambas fechas permanecen editables.
+- El Refuerzo no ejecuta la evaluación MIP por Áreas ni genera informe MIP completo.
+- La periodicidad de la Sede genera seguimiento en Próximos por confirmar, no Servicios futuros automáticos en la Agenda.
+- Un próximo por confirmar pasa a Servicio únicamente cuando el cliente confirma y el Administrador completa la acción Agendar.
+- Una Sede residencial no exige evaluación MIP por Áreas ni informe completo.
+- Para un Cliente Casa, el Administrador programa desde su Sede residencial interna sin mostrar un selector de Sede, registra el valor manual por cada visita y selecciona fecha, duración y técnicos. No hay Refuerzo ni periodicidad automática. El precio se congela en el Servicio, no en la Sede.
+- El Técnico puede iniciar un Servicio residencial Principal dentro de la ventana habitual, consultar Productos y finalizar directamente mediante las dos firmas; no se presentan Áreas, certificados ni envío de informe MIP completo.
+- Finalizar exige tiempos reales, completitud técnica, sincronización de archivos obligatorios y las firmas del Técnico y del responsable del cliente en cada Servicio.
+- El flujo completo de programación, Refuerzos y Próximos por confirmar está definido en [service-scheduling.md](service-scheduling.md).
 
-### Formularios
+### Ejecución MIP
 
-- Los formularios son dinámicos y versionados.
-- Solo un borrador es editable.
-- Publicar una versión no altera versiones ni respuestas históricas.
-- Un Servicio Programado usa la configuración vigente de la Sede al iniciar.
-- Al iniciar, el Servicio conserva el snapshot exacto de versiones.
-- Formularios iniciales: FO-PS-02 v03, FO-PS-10 v01 y FO-PS-09 v01.
-- Las respuestas pueden pertenecer a un Área y conservar evidencias.
-- La persistencia agrupa una fila por Servicio + Formulario + Versión + Área; los campos respondidos viven en `respuestas_jsonb`.
-- Cada entrada de `respuestas_jsonb` puede conservar valor, evaluación (`C`, `CP`, `NC`, `NA`), observación y referencias de evidencias.
-- No se crea una fila PostgreSQL por cada campo respondido.
+- No existe un constructor ni un CRUD de formularios dinámicos para la operación MIP.
+- La interfaz del Técnico tiene una estructura funcional fija y se compone con los datos del dominio: Servicio, Sede, Áreas, criterios, productos, puestos de monitoreo, plagas, hallazgos, evidencias y firmas.
+- FO-PS-02 v03, FO-PS-10 y FO-PS-09 se conservan como referencias funcionales de los datos y del informe, no como plantillas editables almacenadas en un motor de formularios.
+- Los criterios de inspección son un catálogo administrable. Cada criterio conserva identidad estable, nombre, estado y si aplica únicamente a Áreas externas/perimetrales; se presentan alfabéticamente y no administran orden propio.
+- Los estados de evaluación `C`, `CP`, `NC` y `NA` son reglas fijas del sistema, no registros administrables.
+- Un Área externa recibe los criterios generales más los criterios exclusivos de Áreas externas.
+- Un Servicio Programado toma la configuración vigente al iniciar. Desde ese momento conserva snapshots suficientes para que cambios posteriores en catálogos no reinterpreten el histórico.
+- La evaluación histórica debe conservar, como mínimo, la identidad del criterio, nombre y aplicabilidad observados al iniciar, evaluación, observación y referencias de evidencia cuando apliquen.
+- El Técnico puede recorrer las Áreas en cualquier orden y volver a una anterior sin perder el borrador.
+- Los puestos de monitoreo son entidades permanentes de Sede/Área; cada Servicio crea revisiones históricas y puede registrar nuevos puestos de monitoreo para visitas futuras.
+- El flujo detallado y las reglas de composición están en [service-execution.md](service-execution.md).
 
 ### Productos
 
 - V1 no implementa inventario ni consumo de stock.
 - Los productos pueden desactivarse sin romper referencias históricas.
 - Un Producto aplicado requiere lote, dosis y método de aplicación.
+- El Administrador completa esos datos antes del inicio; el Técnico consulta los Productos destinados al Servicio en modo de solo lectura.
 - La fecha de vencimiento no puede ser anterior a fabricación.
 - Existe máximo una fila por Servicio y Producto.
 
 ### Monitoreo
 
 - Catálogo inicial de plagas: Polilla, Mosca doméstica, Mosca de fruta, Zancudo, Cucarrones, Cucaracha, Roedor y Otros.
-- Los tipos de dispositivo son administrables.
+- Los tipos de Trampa son administrables.
 - Cada revisión conserva snapshots de número, ubicación y tipo.
 - Capturas puede registrar varias plagas y cantidades.
-- Dispositivos dañados o fuera de uso pueden exigir fotografía según el flujo aprobado.
+- Una revisión exige fotografía únicamente cuando el estado cambia a `DANADO` o `FUERA_DE_USO`.
 
 ### Hallazgos
 
@@ -127,7 +159,8 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 
 - Pueden ser de establecimiento o vehículo.
 - Un certificado de vehículo exige un Vehículo de la Sede atendida.
-- La vigencia y plantilla se derivan de la configuración de la Sede.
+- La vigencia del certificado de establecimiento se deriva del Cliente Negocio; su plantilla es la global de establecimiento.
+- La vigencia de certificados vehiculares se deriva de la Sede; su plantilla es la global de vehículo.
 - La fecha de vencimiento se calcula desde expedición y vigencia.
 - Generación y envío son efectos reintentables.
 
@@ -140,6 +173,9 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 - Venta, pago, recaudo y entrega de efectivo conservan identidades separadas.
 
 ### Informes y acceso público
+
+La consulta administrativa de resultados MIP permanece disponible. La futura página pública HTML imprimible está definida en [service-report.md](service-report.md); no se generan PDF de informe.
+
 
 - Los documentos se generan desde el histórico persistido.
 - Regenerar no duplica el resultado ni rompe el enlace público.
@@ -159,7 +195,7 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 
 - Datos estructurados: conservación indefinida.
 - Fotografías y firmas operativas: siete días después de validar el documento final.
-- Informes y certificados PDF: un año.
+- Los informes MIP son HTML, sin PDF persistido. Los certificados PDF conservan su política independiente.
 - Archivos maestros: mientras estén activos.
 
 ## Exclusiones vigentes
@@ -169,7 +205,12 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 - Migración automática de datos reales desde Spreadsheets.
 - Dependencia de Docker o de una instancia PostgreSQL local como requisito de desarrollo.
 - Acceso directo de la SPA a secretos de Google o privilegios de servicio.
+- Constructor genérico, versionado administrativo o CRUD de formularios MIP.
 
 ## Cambios funcionales
 
 Una issue que cambie estas reglas debe actualizar este documento o agregar un documento específico en `docs/product/` dentro del mismo PR. No se modifica una regla únicamente para simplificar el código.
+
+### Operación manual de certificados
+
+El flujo vigente de plantillas, pruebas, generación manual y correo está definido en [certificates.md](certificates.md). Existe una única plantilla global por tipo; Clientes y Sedes solo definen la vigencia correspondiente. La generación automática al finalizar sigue fuera de alcance.

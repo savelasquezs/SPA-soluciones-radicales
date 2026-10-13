@@ -3,14 +3,14 @@ import { ref } from 'vue'
 import { useRoute } from 'vue-router'
 
 import BaseButton from '@/components/base/BaseButton.vue'
-import { useSessionStore } from '@/stores/session'
+import { useAuthStore } from '@/stores/auth'
 
-const session = useSessionStore()
+const session = useAuthStore()
 const route = useRoute()
 const loading = ref(false)
 const error = ref<string | null>(null)
 
-async function login(): Promise<void> {
+async function login(selectAccount = false): Promise<void> {
   loading.value = true
   error.value = null
   try {
@@ -18,7 +18,7 @@ async function login(): Promise<void> {
     const redirect = requestedRedirect.startsWith('/') && !requestedRedirect.startsWith('//')
       ? requestedRedirect
       : '/'
-    await session.login(false, new URL(redirect, window.location.origin).toString())
+    await session.login(selectAccount, new URL(redirect, window.location.origin).toString())
   } catch (loginError) {
     error.value = loginError instanceof Error ? loginError.message : 'No fue posible iniciar sesión'
   } finally {
@@ -30,11 +30,14 @@ async function login(): Promise<void> {
 <template>
   <main class="auth-page">
     <section class="auth-card">
-      <div class="brand-mark">SR</div>
-      <p class="eyebrow">SOLUCIONES RADICALES</p>
+      <div class="brand-logo" aria-label="Soluciones Radicales">
+        <img class="brand-logo__image brand-logo__image--light" src="/logo-light.png" alt="" aria-hidden="true" />
+        <img class="brand-logo__image brand-logo__image--dark" src="/logo-dark.png" alt="" aria-hidden="true" />
+      </div>
       <h1>Gestión MIP en un solo lugar</h1>
       <p class="intro">Programa servicios, coordina técnicos y conserva el histórico operativo con seguridad.</p>
-      <BaseButton :loading="loading" @click="login">Continuar con Google</BaseButton>
+      <BaseButton :loading="loading" @click="login(false)">Continuar con Google</BaseButton>
+      <BaseButton variant="ghost" :disabled="loading" @click="login(true)">Elegir otra cuenta</BaseButton>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
       <small>El acceso requiere una cuenta Google autorizada y activa.</small>
     </section>
@@ -64,25 +67,28 @@ async function login(): Promise<void> {
   text-align: center;
 }
 
-.brand-mark {
+.brand-logo {
   display: grid;
-  width: 64px;
-  height: 64px;
-  margin: 0 auto;
-  place-items: center;
-  border-radius: 18px;
-  background: var(--accent);
-  color: var(--accent-contrast);
-  font-size: 1.35rem;
-  font-weight: 850;
+  width: min(18rem, 88%);
+  margin: 0 auto 0.25rem;
 }
 
-.eyebrow {
-  margin: 0;
-  color: var(--accent);
-  font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: 0.12em;
+.brand-logo__image {
+  grid-area: 1 / 1;
+  width: 100%;
+  height: auto;
+}
+
+.brand-logo__image--dark {
+  display: none;
+}
+
+:global(:root[data-theme='dark']) .brand-logo__image--light {
+  display: none;
+}
+
+:global(:root[data-theme='dark']) .brand-logo__image--dark {
+  display: block;
 }
 
 h1,

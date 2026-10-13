@@ -2,12 +2,14 @@
 
 ## Inicio de una tarea
 
-1. Confirmar issue y alcance.
-2. Leer `AGENTS.md` y documentación aplicable.
-3. Verificar dependencias y decisiones.
-4. Revisar código y flujo actual.
-5. Buscar piezas reutilizables.
-6. Definir pruebas y evidencia antes de editar.
+1. Ejecutar `git fetch origin` y confirmar que `origin/develop` está actualizado.
+2. Crear la rama de trabajo desde `origin/develop`; no usar `main` como base salvo autorización explícita.
+3. Confirmar issue y alcance.
+4. Leer `AGENTS.md` y documentación aplicable.
+5. Verificar dependencias y decisiones.
+6. Revisar código y flujo actual.
+7. Buscar piezas reutilizables antes de implementar para no repetir trabajo ya integrado.
+8. Definir pruebas y evidencia antes de editar.
 
 ## Cambios de base de datos
 
@@ -91,11 +93,21 @@ Una validación en una capa no demuestra las demás.
 
 Crear los mínimos, identificarlos claramente y eliminarlos incluso tras fallos. No modificar registros reales para facilitar pruebas.
 
+## Ramas Git
+
+- `develop` es la rama permanente de integración y acumula el trabajo aprobado de desarrollo.
+- Toda rama `codex/*`, feature o fix parte de `origin/develop` actualizado.
+- Los PR normales apuntan a `develop`.
+- `main` representa producción y no se usa como rama cotidiana de integración.
+- La promoción a producción se realiza mediante PR `develop` → `main` únicamente cuando Santiago lo autorice.
+- Después de integrar un PR a `develop`, las tareas nuevas deben refrescar `origin/develop` antes de crear su rama.
+
 ## Pull requests
 
 - Una issue por PR salvo decisión explícita.
 - Incluir código, pruebas y documentación.
-- No hacer merge sin autorización.
+- El destino normal es `develop`.
+- No hacer merge a `main` sin autorización explícita.
 - No modificar producción para validar desarrollo.
 
 ## Entrega
