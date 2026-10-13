@@ -19,7 +19,7 @@ const linkJson = (alias: string) => `jsonb_build_object('id',${alias}.id,'solici
 export const SERVICE_FROM = `from public.servicios s join public.sedes se on se.id=s.sede_id
   join public.negocios n on n.id=se.negocio_id join public.usuarios responsible on responsible.id=s.tecnico_responsable_id`
 export const SERVICE_SELECT = `select ${linkJson('s')} || jsonb_build_object(
-  'clientId',n.id,'clienteNombre',n.nombre,'sedeId',se.id,'sedeNombre',se.nombre,'direccion',se.direccion,
+  'clientId',n.id,'clienteNombre',n.nombre,'sedeId',se.id,'sedeNombre',se.nombre,'tipoSede',se.tipo_sede,'direccion',se.direccion,
   'servicioPrincipalId',s.servicio_principal_id,'inicioReal',s.inicio_real,'finReal',s.fin_real,
   'responsable',${technicianJson('responsible')},
   'colaboradores',(select coalesce(jsonb_agg(${technicianJson('u')} order by u.nombre_completo),'[]'::jsonb)
@@ -95,10 +95,10 @@ export async function listServices(client: PoolClient, filter: ServiceFilter): P
 }
 export async function workspace(client: PoolClient): Promise<ServiceWorkspace> {
   const sedes = (await client.query<{ record: ServiceSite }>(`select jsonb_build_object('id',se.id,'clientId',n.id,'clienteNombre',n.nombre,
-    'nombre',se.nombre,'direccion',se.direccion,'valorServicio',se.valor_servicio,'periodicidadMeses',se.periodicidad_meses,
+    'nombre',se.nombre,'direccion',se.direccion,'tipoSede',se.tipo_sede,'valorServicio',se.valor_servicio,'periodicidadMeses',se.periodicidad_meses,
     'duracionServicioMinutos',se.duracion_servicio_minutos,'manejaRefuerzo',se.maneja_refuerzo,'contacto',${contactJson}) as record
     from public.sedes se join public.negocios n on n.id=se.negocio_id
-    where se.activo and n.activo and se.tipo_sede='NEGOCIO' and se.valor_servicio is not null order by n.nombre,se.nombre`)).rows.map(row => row.record)
+    where se.activo and n.activo and ((se.tipo_sede='NEGOCIO' and n.tipo_cliente='NEGOCIO' and se.valor_servicio is not null) or (se.tipo_sede='RESIDENCIAL' and n.tipo_cliente='RESIDENCIAL')) order by n.nombre,se.nombre`)).rows.map(row => row.record)
   const tecnicos = (await client.query<{ record: ServiceTechnician }>(`select ${technicianJson('u')} as record from public.usuarios u where u.activo and u.es_tecnico order by u.nombre_completo`)).rows.map(row => row.record)
   const productos = (await client.query<{ record: ServiceProductOption }>(`select jsonb_build_object('id',p.id,'nombre',p.nombre,'principioActivo',p.principio_activo_composicion,
     'dosisAplicacion',p.dosis_aplicacion,'metodos',(select coalesce(jsonb_agg(jsonb_build_object('codigo',c.clave,'nombre',c.nombre) order by coalesce(c.orden,2147483647),c.nombre,c.id),'[]'::jsonb)

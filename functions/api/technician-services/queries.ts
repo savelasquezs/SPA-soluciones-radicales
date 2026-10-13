@@ -23,11 +23,11 @@ type ServiceStateRow = {
 const assignment = `(s.tecnico_responsable_id=$1::uuid or coalesce(s.tecnicos_colaboradores_ids_json,'[]'::jsonb) ? $1::text)`
 const summaryJson = `jsonb_build_object('id',s.id,'solicitud',s.solicitud,'tipoServicio',s.tipo_servicio,'estado',s.estado,
   'version',s.version,'inicioProgramado',s.inicio_programado,'finProgramado',s.fin_programado,'inicioReal',s.inicio_real,
-  'clienteNombre',n.nombre,'sedeNombre',se.nombre,'direccion',se.direccion,
+  'clienteNombre',n.nombre,'sedeNombre',se.nombre,'tipoSede',se.tipo_sede,'direccion',se.direccion,
   'contactoPrincipalNombre',se.contacto_principal_nombre,'contactoPrincipalCorreo',se.contacto_principal_correo,
   'contactEmails',coalesce(n.correos_json,'[]'::jsonb) || coalesce(se.correos_json,'[]'::jsonb)
     || case when se.contacto_principal_correo is not null then jsonb_build_array(se.contacto_principal_correo) else '[]'::jsonb end,
-  'autoPrepareEligible',(s.estado='EN_PROCESO' or (s.estado='PROGRAMADO' and s.tipo_servicio='PRINCIPAL' and se.tipo_sede='NEGOCIO' and now() >= s.inicio_programado-interval '1 hour')))`
+  'autoPrepareEligible',(s.estado='EN_PROCESO' or (s.estado='PROGRAMADO' and s.tipo_servicio='PRINCIPAL' and now() >= s.inicio_programado-interval '1 hour')))`
 
 export async function listTechnicianServices(client: PoolClient, userId: string): Promise<TechnicianServiceSummary[]> {
   const { rows } = await client.query<{ record: TechnicianServiceSummary }>(`select ${summaryJson} as record
@@ -41,7 +41,7 @@ export async function listTechnicianServices(client: PoolClient, userId: string)
 
 export async function assignedServiceState(client: PoolClient, userId: string, serviceId: string, lock = false): Promise<ServiceStateRow> {
   const { rows } = await client.query<ServiceStateRow>(`select s.id,s.estado,s.tipo_servicio,s.version,s.inicio_programado,
-    (se.tipo_sede='NEGOCIO' and s.tipo_servicio='PRINCIPAL' and now() >= s.inicio_programado-interval '1 hour') as eligible
+    (s.tipo_servicio='PRINCIPAL' and now() >= s.inicio_programado-interval '1 hour') as eligible
     from public.servicios s join public.sedes se on se.id=s.sede_id
     where s.id=$2::uuid and ${assignment}${lock ? ' for update of s' : ''}`, [userId, serviceId])
   if (!rows[0]) throw new ApiError(404, 'El servicio no está disponible.', 'SERVICE_NOT_FOUND')
@@ -56,7 +56,7 @@ async function serviceHeader(client: PoolClient, userId: string, serviceId: stri
 }> {
   const { rows } = await client.query<{ service: TechnicianServiceSummary; serverNow: string; canStart: boolean; startAvailableAt: string }>(`select
     ${summaryJson} as service,to_jsonb(now()) #>> '{}' as "serverNow",
-    (s.estado='PROGRAMADO' and s.tipo_servicio='PRINCIPAL' and se.tipo_sede='NEGOCIO' and now() >= s.inicio_programado-interval '1 hour') as "canStart",
+    (s.estado='PROGRAMADO' and s.tipo_servicio='PRINCIPAL' and now() >= s.inicio_programado-interval '1 hour') as "canStart",
     to_jsonb(s.inicio_programado-interval '1 hour') #>> '{}' as "startAvailableAt"
     from public.servicios s join public.sedes se on se.id=s.sede_id join public.negocios n on n.id=se.negocio_id
     where s.id=$2::uuid and ${assignment}`, [userId, serviceId])

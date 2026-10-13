@@ -251,3 +251,12 @@ El Técnico previsto para recaudar durante la visita y la persona que finalmente
 - **Pago** permite indicar durante el alta si el cliente ya pagó. Si no pagó, se conserva el cobro previsto. Si pagó, se exige método; para efectivo es obligatorio indicar el receptor, que puede ser el administrador que está programando o un técnico activo. Transferencia confirmada no exige receptor de efectivo. La confirmación se registra en la misma transacción que crea el servicio con fecha, actor y receptor. Las correcciones posteriores siguen desde «Registrar pago».
 - No se crean tablas ni migraciones adicionales.
 
+
+
+## Visitas residenciales (Clientes Casa)
+
+- El buscador de Cliente incluye Negocio y Casa activos. Casa conserva su Sede interna `RESIDENCIAL`, creada junto con el Cliente, pero el Administrador no ve ni selecciona esa Sede: ve directamente la dirección registrada.
+- El importe en pesos colombianos se introduce manualmente en cada Servicio Principal residencial, como un entero no negativo. No se guarda en la configuración de la Casa. El valor de visitas anteriores es inmutable; una visita nueva puede tener otro precio.
+- La duración se propone en 90 minutos y puede cambiarse por visita. Responsable, colaboradores, Productos, cobro y Calendar siguen el contrato del Servicio Principal.
+- Casa no crea Refuerzos ni propuestas periódicas. El backend y la base de datos impiden agendar sin precio o con Refuerzo residencial. Para Negocio el servidor sigue calculando el importe desde la Sede e ignora un precio manipulado por el navegador.
+- El Técnico puede ejecutar la visita sin Áreas, firmar y cerrar. Las superficies de certificados e informe MIP completo no se ofrecen para Casa.

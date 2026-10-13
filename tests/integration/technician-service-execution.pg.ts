@@ -75,6 +75,34 @@ beforeAll(async () => {
 afterAll(async () => { await pool.end() })
 
 describe('technician service execution · real PostgreSQL', () => {
+  it('starts and closes a residential visit with signatures, without Areas or a full MIP route',async()=>{
+    const value=await fixture(), homeClient=randomUUID(),homeSite=randomUUID(),homeService=randomUUID(),phoneId=randomUUID()
+    await transaction(async client=>{
+      await client.query(`insert into public.negocios(id,tipo_cliente,nombre,nit,correos_json)
+        values($1,'RESIDENCIAL','Hogar técnico',null,'[]'::jsonb)`,[homeClient])
+      await client.query(`insert into public.sedes(id,negocio_id,nombre,direccion,correos_json,hereda_correos_negocio,
+        contacto_principal_nombre,contacto_principal_celular,valor_servicio,periodicidad_meses,maneja_refuerzo,tipo_sede,
+        maneja_vehiculos,genera_certificado_vehiculo,duracion_servicio_minutos)
+        values($1,$2,'Hogar técnico','Calle 123','[]'::jsonb,false,'Hogar técnico','+573001234568',
+          null,null,false,'RESIDENCIAL',false,false,null)`,[homeSite,homeClient])
+      await client.query(`insert into public.servicios(id,sede_id,tipo_servicio,inicio_programado,fin_programado,
+        creado_por_id,tecnico_responsable_id,tecnicos_colaboradores_ids_json,valor_servicio)
+        values($1,$2,'PRINCIPAL',now()+interval '20 minutes',now()+interval '110 minutes',$3,$4,'[]'::jsonb,85000)`,
+        [homeService,homeSite,value.admin,value.technician])
+    })
+    const ready=await transaction(client=>getTechnicianPackage(client,value.technician,homeService))
+    expect(ready.service.tipoSede).toBe('RESIDENCIAL')
+    expect(ready.canStart).toBe(true)
+    expect(ready.areas).toHaveLength(0)
+    const session=await transaction(client=>startTechnicianService(client,value.technician,homeService,1,phoneId))
+    expect(session.package.service.estado).toBe('EN_PROCESO')
+    expect(session.package.areas).toHaveLength(0)
+    const closed=await transaction(client=>finalizeTechnicianService(client,value.technician,homeService,phoneId,
+      session.lock.token,'ci/tech.png','ci/client.png','Responsable del hogar'))
+    expect(closed.package.service.estado).toBe('FINALIZADO')
+    expect((await pool.query('select count(*)::integer as count from public.proximos_servicios where sede_id=$1',[homeSite])).rows[0].count).toBe(0)
+  })
+
   it('rejects an online start before the one-hour window without leaving snapshots or a lock', async () => {
     const value = await fixture('2 hours')
     await expect(transaction(client => startTechnicianService(client, value.technician, value.service, 1, randomUUID()))).rejects.toMatchObject({ code: 'SERVICE_TOO_EARLY' })

@@ -120,7 +120,8 @@ async function save(): Promise<void> {
   if(completed.value || saving.value || loading.value) return
   const invalidDate=document.querySelector<HTMLElement>('#admin-service-form .date-time-control input[aria-invalid="true"]')
   if(invalidDate) { invalidDate.focus(); notifications.show('Revisa las fechas y horas antes de guardar.','error'); return }
-  const parsed=validateServiceInput(draftToServiceInput(draft.value),!editing.value)
+  const isResidential=store.options?.sedes.some(site=>site.id===draft.value.sedeId && site.tipoSede==='RESIDENCIAL') || record.value?.tipoSede==='RESIDENCIAL'
+  const parsed=validateServiceInput(draftToServiceInput(draft.value),!editing.value,new Date(),isResidential)
   if(upcoming.value && !confirmed.value) parsed.errors.confirmed='Confirma que el cliente aceptó este horario.'
   if(Object.keys(parsed.errors).length) { await invalid(parsed.errors); return }
   if(!editing.value) await persistDraft()

@@ -201,14 +201,14 @@ function duration(record: AdminService): number {
               <template v-else>
                 <span class="svc-week-calendar__event-time">{{ hourLabel(event.startMinute) }} <span v-if="event.record.tipoServicio==='REFUERZO'">· Ref.</span></span>
                 <strong>{{ event.record.clienteNombre }}</strong>
-                <small v-if="event.record.sedeNombre">{{ event.record.sedeNombre }}</small>
+                <small v-if="event.record.sedeNombre && event.record.tipoSede!=='RESIDENCIAL'">{{ event.record.sedeNombre }}</small>
               </template>
             </button>
             <RouterLink class="svc-week-calendar__event-detail" :to="{ name:'service-detail',params:{ id:event.record.id },query:returnTo ? {returnTo} : {} }" :aria-label="'Ver detalle de '+event.record.solicitud" title="Ver detalle" @click.stop>
               <ArrowUpRight :size="13" aria-hidden="true" />
             </RouterLink>
             <span class="svc-week-calendar__popover" role="tooltip">
-              <strong>{{ event.record.solicitud }} · {{ event.record.clienteNombre }} · {{ event.record.sedeNombre }}</strong>
+              <strong>{{ event.record.solicitud }} · {{ event.record.clienteNombre }}<template v-if="event.record.tipoSede!=='RESIDENCIAL'"> · {{ event.record.sedeNombre }}</template></strong>
               <span>{{ formatServiceDate(event.record.inicioProgramado) }} · {{ formatServiceDate(event.record.inicioProgramado,true) }} – {{ formatServiceDate(event.record.finProgramado,true) }}</span>
               <span>{{ event.record.direccion }}</span>
               <span>Técnico: {{ event.record.responsable.nombreCompleto }}</span>

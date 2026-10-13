@@ -82,7 +82,7 @@ async function reload(): Promise<void> {
 }
 </script>
 <template>
-  <BaseDialog :model-value="true" :title="title" :description="`${original.solicitud} · ${original.clienteNombre} · ${original.sedeNombre}`" class="svc-action-dialog" :close-on-escape="!saving" @update:model-value="!$event && close()">
+  <BaseDialog :model-value="true" :title="title" :description="`${original.solicitud} · ${original.clienteNombre}${original.tipoSede==='RESIDENCIAL' ? '' : ' · '+original.sedeNombre}`" class="svc-action-dialog" :close-on-escape="!saving" @update:model-value="!$event && close()">
     <form id="service-quick-form" class="svc-dialog-stack" novalidate @submit.prevent="save">
       <ServiceSaveFeedback :error="errorMessage" :conflict="conflict" :overlaps="overlaps" :overlap-open="overlapOpen" :saving="saving" @reload="reloadOpen=true" @accept="acceptOverlap" @cancel="cancelOverlap" />
       <template v-if="mode==='schedule' || mode==='team'">
