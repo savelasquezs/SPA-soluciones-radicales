@@ -160,7 +160,7 @@ describe('administrator services · real PostgreSQL',()=>{
     expect((await readService(p.id)).inicioProgramado).toBe(p.inicioProgramado)
     const edit=draftToServiceInput(serviceToDraft(p));edit.programacion.inicioProgramado=addInstantDays(p.inicioProgramado,2)
     edit.productos=[{ productoId:randomUUID(),lote:'x',fechaVencimiento:null }]
-    await expect(transaction(client=>editService(client,f.admin,p.id,p.version,edit,true,r.version))).rejects.toMatchObject({ code:'VALIDATION' })
+    await expect(transaction(client=>editService(client,f.admin,p.id,p.version,edit,[],r.version))).rejects.toMatchObject({ code:'VALIDATION' })
     expect((await readService(p.id)).version).toBe(p.version)
     expect((await readService(r.id)).version).toBe(r.version)
   })
