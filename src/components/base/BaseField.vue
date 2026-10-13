@@ -36,14 +36,14 @@ const describedBy = computed(() => [hintId.value, errorId.value].filter(Boolean)
 .base-field {
   display: grid;
   min-width: 0;
-  gap: 0.5rem;
+  gap: var(--base-field-gap, 0.5rem);
 }
 
 .base-field__label {
   color: var(--text);
-  font-size: 0.875rem;
+  font-size: var(--base-field-label-size, 0.875rem);
   font-weight: 500;
-  line-height: 1.25rem;
+  line-height: var(--base-field-label-line-height, 1.25rem);
 }
 
 .base-field__required,
