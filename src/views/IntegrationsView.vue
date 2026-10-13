@@ -174,7 +174,7 @@ async function sendTest(): Promise<void> {
 </template>
 
 <style scoped>
-.integration-warning { color: var(--danger) !important; max-width: 32rem; }
+.integration-card .integration-warning { color: var(--danger); max-width: 32rem; }
 .integrations-page { gap: 0.75rem; }
 .integration-card {
   display: flex;
