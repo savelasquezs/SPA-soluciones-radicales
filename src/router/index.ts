@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
+import { recoverStaleChunk } from '@/helpers/staleChunkRecovery'
 import { authGuard } from '@/router/guards'
 import type { ActiveRole } from '@/types/domain'
 
@@ -50,4 +51,5 @@ const router = createRouter({
   ],
 })
 router.beforeEach(authGuard)
+router.onError(error => { recoverStaleChunk(error) })
 export default router

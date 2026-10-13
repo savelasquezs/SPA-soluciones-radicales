@@ -74,3 +74,26 @@ test('un guardado fallido conserva el formulario y no se reenvía', async ({ pag
   await expect(dialog.getByRole('button', { name: 'Crear usuario' })).toBeEnabled()
   expect(writes).toBe(1)
 })
+
+test('recarga una sola vez cuando un despliegue retiró un chunk de una ruta', async ({ page }) => {
+  let chunkRequests = 0
+  await page.route(/\/get-session(?:\?.*)?$/, route => route.fulfill({ json: session('e2e-token') }))
+  await page.route('**/api/session', route => route.fulfill({ json: profile }))
+  await page.route(/\/assets\/DashboardView-[^/]+\.js$/, async route => {
+    chunkRequests++
+    if (chunkRequests === 1) await route.fulfill({ status: 404, body: 'Not found' })
+    else await route.continue()
+  })
+
+  await page.goto('/integraciones')
+  const reloaded = page.waitForEvent('framenavigated')
+  await page.getByRole('navigation', { name: 'Navegación principal' }).getByRole('link', { name: 'Resumen', exact: true }).click()
+  await reloaded
+
+  await expect(page).toHaveURL(/\/integraciones$/)
+  expect(chunkRequests).toBe(1)
+  await page.getByRole('navigation', { name: 'Navegación principal' }).getByRole('link', { name: 'Resumen', exact: true }).click()
+  await expect(page).toHaveURL(/\/$/)
+  await expect(page.getByRole('heading', { name: 'Hola, Ana' })).toBeVisible()
+  expect(chunkRequests).toBe(2)
+})
