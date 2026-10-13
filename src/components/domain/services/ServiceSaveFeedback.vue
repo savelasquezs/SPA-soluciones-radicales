@@ -2,10 +2,10 @@
 import BaseButton from '@/components/base/BaseButton.vue'
 import ServiceConflictResolver from './ServiceConflictResolver.vue'
 import type { ScheduleConflict, ScheduleResolution, ServiceSchedule, ServiceTechnician } from '@/types/adminServices'
-defineProps<{
+withDefaults(defineProps<{
   error:string; conflict:boolean; overlaps:ScheduleConflict[]
-  overlapOpen:boolean; saving:boolean; technicians:ServiceTechnician[]; schedules:ServiceSchedule[]
-}>()
+  overlapOpen:boolean; saving:boolean; technicians?:ServiceTechnician[]; schedules?:ServiceSchedule[]
+}>(),{technicians:()=>[],schedules:()=>[]})
 const emit=defineEmits<{reload:[];accept:[value:ScheduleResolution];cancel:[]}>()
 </script>
 <template>
