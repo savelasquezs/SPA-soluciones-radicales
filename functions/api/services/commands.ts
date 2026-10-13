@@ -78,7 +78,7 @@ async function validatePaymentReceiver(client: PoolClient, id: string | null, ac
 }
 type ScheduledCandidate = { id: string | null; schedule: ServiceSchedule; version?: number }
 type OccupiedService = {
-  id: string; solicitud: string; clienteNombre: string; sedeNombre: string
+  id: string; solicitud: string; clienteNombre: string; sedeNombre: string; estado: string
   version: number; inicioProgramado: string; finProgramado: string
   tecnicoResponsableId: string; tecnicosColaboradoresIds: string[]
 }
@@ -95,7 +95,7 @@ const storedSchedule = (item: OccupiedService): ServiceSchedule => ({
 })
 async function occupiedServices(client:PoolClient, schedule:ServiceSchedule, ignored:string[]):Promise<OccupiedService[]> {
   const {rows}=await client.query<{record:OccupiedService}>(`select jsonb_build_object(
-    'id',s.id,'solicitud',s.solicitud,'clienteNombre',n.nombre,'sedeNombre',se.nombre,
+    'id',s.id,'solicitud',s.solicitud,'clienteNombre',n.nombre,'sedeNombre',se.nombre,'estado',s.estado,
     'version',s.version,'inicioProgramado',s.inicio_programado,'finProgramado',s.fin_programado,
     'tecnicoResponsableId',s.tecnico_responsable_id,
     'tecnicosColaboradoresIds',coalesce(s.tecnicos_colaboradores_ids_json,'[]'::jsonb)) as record
@@ -140,7 +140,7 @@ export async function checkSchedules(client: PoolClient, candidates: ScheduledCa
         sedeNombre:existing.sedeNombre,inicioProgramado:existing.inicioProgramado,
         finProgramado:existing.finProgramado,tecnicos:names,version:existing.version,
         programacion:existingSchedule,conflictingTechnicianIds:duplicate,proposedIndex:index,
-        unavailableProposedTechnicianIds,unavailableTechnicianIds,
+        unavailableProposedTechnicianIds,unavailableTechnicianIds,existingEditable:existing.estado==='PROGRAMADO',
       })
     }
     // Other records changed in this transaction are excluded from occupiedServices;
