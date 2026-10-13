@@ -173,6 +173,8 @@ async function loadReassignments(client:PoolClient, input:ServiceReassignment[],
     await lockFamily(client,item.id)
     const before=await getService(client,item.id)
     assertVersion(before.version,item.version);mutable(before)
+    if(before.inicioProgramado!==item.programacion.inicioProgramado || before.finProgramado!==scheduleEnd(item.programacion))
+      throw new ApiError(422,'La solución del cruce solo puede modificar el equipo del servicio afectado.','VALIDATION')
     result.push({before,input:item})
   }
   return result
@@ -296,7 +298,7 @@ export async function editService(client: PoolClient, actorId: string, id: strin
     {id,schedule:input.programacion},
     ...input.refuerzo ? [{id:child!.id,schedule:input.refuerzo}] : [],
     ...reassigned.map(row=>({id:row.input.id,schedule:row.input.programacion})),
-  ],[...ids,...reassigned.map(row=>row.input.id)],[
+  ],[id,...(child ? [child.id] : []),...reassigned.map(row=>row.input.id)],[
     scheduleFromRecord(before),...child ? [scheduleFromRecord(child)] : [],
     ...reassigned.map(row=>scheduleFromRecord(row.before)),
   ])
@@ -327,7 +329,7 @@ export async function rescheduleService(client: PoolClient, actorId: string, id:
     {id,schedule},
     ...reinforcement ? [{id:child!.id,schedule:reinforcement.schedule}] : [],
     ...reassigned.map(row=>({id:row.input.id,schedule:row.input.programacion})),
-  ],[...ids,...reassigned.map(row=>row.input.id)],[
+  ],[id,...(child ? [child.id] : []),...reassigned.map(row=>row.input.id)],[
     scheduleFromRecord(before),...child ? [scheduleFromRecord(child)] : [],
     ...reassigned.map(row=>scheduleFromRecord(row.before)),
   ])
