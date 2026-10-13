@@ -170,8 +170,8 @@ function message(error: unknown, fallback: string): string {
 
 <template>
   <div class="clients-page">
-    <header class="clients-header">
-      <div><h1>Clientes</h1><p>Negocios y casas atendidos por Soluciones Radicales.</p></div>
+    <header class="clients-header admin-page-header">
+      <div class="admin-page-heading"><h1>Clientes</h1><p>— Negocios y casas atendidos</p></div>
       <BaseButton size="compact" @click="openCreate">Nuevo cliente</BaseButton>
     </header>
 
@@ -180,7 +180,7 @@ function message(error: unknown, fallback: string): string {
       <button role="tab" :aria-selected="tab === 'inactive'" @click="loadTab('inactive')">Inactivos</button>
     </div>
 
-    <div class="filters">
+    <div class="filters admin-compact-filters">
       <BaseInput v-model="search" name="client-search" label="Buscar cliente" type="search" placeholder="Nombre, NIT o celular" />
       <BaseSelect v-model="typeFilter" name="client-type-filter" label="Tipo">
         <option value="ALL">Todos</option><option value="NEGOCIO">Negocio</option><option value="RESIDENCIAL">Casa</option>
@@ -229,16 +229,14 @@ function message(error: unknown, fallback: string): string {
 </template>
 
 <style scoped>
-.clients-page { display: grid; gap: 0.9rem; }
-.clients-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 0.75rem; }
-.clients-header h1, .clients-header p { margin: 0; }
-.clients-header p { color: var(--text-secondary); }
+.clients-page { display: grid; gap: 0.75rem; }
+.clients-header { align-items: center; }
 .tabs { display: flex; gap: 0.2rem; border-bottom: 1px solid var(--border); }
 .tabs button { min-height: 36px; border: 0; border-bottom: 2px solid transparent; background: transparent; padding: 0.4rem 0.75rem; color: var(--text-secondary); cursor: pointer; }
 .tabs button[aria-selected='true'] { border-color: var(--accent); color: var(--accent); }
-.filters { display: grid; grid-template-columns: minmax(0, 1fr) minmax(10rem, 14rem); gap: 0.75rem; }
+.filters { display: grid; grid-template-columns: minmax(0, 1fr) minmax(10rem, 14rem); gap: 0.5rem; }
 .clients-table { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); border-spacing: 0; border-collapse: separate; overflow: hidden; }
-.clients-table th, .clients-table td { padding: 0.58rem 0.75rem; vertical-align: middle; }
+.clients-table th, .clients-table td { padding: 0.5rem 0.675rem; vertical-align: middle; }
 .client-link { border: 0; background: transparent; padding: 0; color: var(--text); font-weight: 600; text-align: left; cursor: pointer; text-decoration: none; }
 .client-link:hover, .client-link:focus-visible { text-decoration: underline; text-underline-offset: 2px; }
 .actions, .client-card > span, .card-actions { display: flex; flex-wrap: wrap; gap: 0.35rem; }
