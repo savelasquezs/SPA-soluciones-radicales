@@ -109,6 +109,7 @@ function setTheme(event: Event): void { app.setTheme((event.target as HTMLSelect
           <a href="https://soluciones-radicales.mintlify.app" target="_blank" rel="noreferrer">
             <CircleHelp :size="17" aria-hidden="true" /> Ayuda y documentación
           </a>
+          <AccountMenu placement="sidebar" />
         </div>
       </aside>
       <main class="content" :class="{ 'content--services': route.name==='agenda' || route.name==='services', 'content--compact': compactLayout }"><nav v-if="breadcrumbItems.length && (!compactLayout || breadcrumbItems.length > 1)" class="breadcrumb" :class="{ 'breadcrumb--agenda':route.name==='agenda' || (route.name==='services' && route.query.view==='week') }" aria-label="Ruta de navegación"><template v-for="(item,index) in breadcrumbItems" :key="`${item.label}-${index}`"><RouterLink v-if="item.to" :to="item.to">{{ item.label }}</RouterLink><span v-else :aria-current="index===breadcrumbItems.length-1 ? 'page' : undefined">{{ item.label }}</span><span v-if="index<breadcrumbItems.length-1" class="breadcrumb__separator" aria-hidden="true">/</span></template></nav><RouterView /></main>
@@ -142,7 +143,7 @@ function setTheme(event: Event): void { app.setTheme((event.target as HTMLSelect
 .sidebar nav a { display: flex; min-height: 38px; align-items: center; gap: 0.625rem; border-radius: var(--radius-button); padding: 0.4rem 0.75rem; color: var(--text-secondary); font-size: 0.8125rem; font-weight: 500; line-height: 1.25rem; text-decoration: none; }
 .sidebar nav a:hover { background: var(--hover); color: var(--text); }
 .sidebar nav a.nav-active { background: var(--accent-subtle); color: var(--accent); }
-.sidebar__footer { display: grid; margin-top: auto; padding-top: 0.5rem; border-top: 1px solid var(--border); }
+.sidebar__footer { display: grid; gap: 0.25rem; margin-top: auto; padding-top: 0.5rem; border-top: 1px solid var(--border); }
 .sidebar__footer a { display: flex; min-height: 38px; align-items: center; gap: 0.625rem; padding: 0 0.75rem; color: var(--text-secondary); font-size: 0.8125rem; text-decoration: none; }
 .sidebar__footer a:hover { color: var(--text); text-decoration: underline; }
 .content { width: 100%; max-width: 1184px; min-width: 0; margin: 0 auto; padding: 1.75rem 2rem 3rem; }
