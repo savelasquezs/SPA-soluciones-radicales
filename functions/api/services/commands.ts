@@ -161,7 +161,7 @@ export async function checkSchedules(client: PoolClient, candidates: ScheduledCa
     }
   }
   if(conflicts.length)throw new ApiError(409,
-    'Hay técnicos asignados a servicios simultáneos. Reasigna los equipos antes de guardar.',
+    'Hay técnicos asignados a servicios simultáneos. Cambia el equipo o el horario antes de guardar.',
     'SCHEDULE_CONFLICT',{conflicts})
 }
 type ReassignmentRecord = { before: AdminService; input: ServiceReassignment }
@@ -173,8 +173,14 @@ async function loadReassignments(client:PoolClient, input:ServiceReassignment[],
     await lockFamily(client,item.id)
     const before=await getService(client,item.id)
     assertVersion(before.version,item.version);mutable(before)
-    if(new Date(before.inicioProgramado).getTime()!==new Date(item.programacion.inicioProgramado).getTime() || new Date(before.finProgramado).getTime()!==new Date(scheduleEnd(item.programacion)).getTime())
-      throw new ApiError(422,'La solución del cruce solo puede modificar el equipo del servicio afectado.','VALIDATION')
+    const previous=scheduleFromRecord(before), next=item.programacion
+    const changedTime=new Date(previous.inicioProgramado).getTime()!==new Date(next.inicioProgramado).getTime()
+    const changedTeam=previous.tecnicoResponsableId!==next.tecnicoResponsableId ||
+      [...previous.tecnicosColaboradoresIds].sort().join(',')!==[...next.tecnicosColaboradoresIds].sort().join(',')
+    if(next.duracionMinutos!==previous.duracionMinutos || (changedTime && changedTeam))
+      throw new ApiError(422,'Para resolver un cruce cambia el horario o el equipo, sin alterar la duración de la visita.','VALIDATION')
+    if(changedTime && new Date(next.inicioProgramado).getTime()<=Date.now())
+      throw new ApiError(422,'La nueva fecha y hora deben ser futuras.','VALIDATION')
     result.push({before,input:item})
   }
   return result
@@ -182,7 +188,9 @@ async function loadReassignments(client:PoolClient, input:ServiceReassignment[],
 async function saveReassignments(client:PoolClient,actorId:string,records:ReassignmentRecord[],source:string):Promise<void> {
   for(const {before,input} of records) {
     await saveSchedule(client,input.id,input.programacion,input.version)
-    await audit(client,actorId,'SERVICIO_EQUIPO_REASIGNADO',input.id,{
+    const oldStart=new Date(before.inicioProgramado).getTime()
+    const changedTime=oldStart!==new Date(input.programacion.inicioProgramado).getTime()
+    await audit(client,actorId,changedTime ? 'SERVICIO_REPROGRAMADO_POR_CRUCE' : 'SERVICIO_EQUIPO_REASIGNADO',input.id,{
       causa:source,antes:scheduleFromRecord(before),despues:input.programacion,
     })
   }
@@ -336,7 +344,7 @@ export async function rescheduleService(client: PoolClient, actorId: string, id:
   await saveSchedule(client,id,schedule,expected)
   if (child && reinforcement) await saveSchedule(client,child.id,reinforcement.schedule,child.version)
   await saveReassignments(client,actorId,reassigned,id)
-  const result=await mutation(client,ids)
+  const result=await mutation(client,[...ids,...reassigned.map(row=>row.input.id)])
   await audit(client,actorId,'SERVICIO_REPROGRAMADO',id,{ before:scheduleFromRecord(before), after:schedule, refuerzoAnterior:child ? scheduleFromRecord(child) : null, refuerzoNuevo:reinforcement?.schedule ?? null })
   return result
 }
