@@ -126,3 +126,5 @@ Informar rama/PR, commit, pruebas, validación remota/visual, estado de producci
 - Para validar la selección sin instalar dependencias: `node --test scripts/ci/test-select-verification.mjs` (Node 24).
 
 Cuando todas las suites aplican, lint/unitarias/build pasan de cuatro ejecuciones a una, Chromium de cuatro instalaciones a una, y las comprobaciones SQL de certificados de tres ejecuciones a dos. Se mantienen todos los casos de prueba. Los workflows Neon API bundle, retention y documentation-video son independientes y no cambian.
+
+Los servicios PostgreSQL usan `docker.io/library/postgres:17`, la imagen oficial, tras observar límites de datos del espejo ECR en CI. Se conserva el major 17 y el comportamiento anterior de etiqueta móvil; no se afirma igualdad de digest entre registros ni se introduce una fijación a una versión patch. Las dos bases siguen aisladas y no requieren credenciales del registro.
