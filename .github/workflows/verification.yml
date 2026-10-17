@@ -1,0 +1,197 @@
+name: SPA verification
+'on':
+  pull_request:
+    branches:
+    - develop
+    paths:
+    - src/**
+    - functions/api/**
+    - database/**
+    - scripts/database/**
+    - e2e/**
+    - tests/**
+    - vitest.services.config.ts
+    - neon.ts
+    - package*.json
+    - .github/workflows/admin-services.yml
+    - functions/**
+    - scripts/database/test-certificates.mjs
+    - '*config*'
+    - .github/workflows/certificates.yml
+    - functions/api/r2*
+    - e2e/file-optimization.spec.ts
+    - .github/workflows/file-optimization.yml
+    - e2e/mip-catalogs.spec.ts
+    - scripts/database/test-mip-catalogs.mjs
+    - .github/workflows/mip-catalogs.yml
+    - .github/workflows/verification.yml
+    - scripts/ci/**
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: Verification scope (services preserves the previous manual workflow)
+        type: choice
+        default: services
+        options:
+        - all
+        - services
+        - certificates
+        - catalogs
+        - files
+permissions:
+  contents: read
+concurrency:
+  group: verification-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  CI: 'true'
+  VITE_NEON_AUTH_URL: https://auth.example.test
+  VITE_NEON_DATA_API_URL: https://data.example.test
+  VITE_NEON_FUNCTION_URL: https://api.example.test
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      services: ${{ steps.select.outputs.services }}
+      certificates: ${{ steps.select.outputs.certificates }}
+      files: ${{ steps.select.outputs.files }}
+      catalogs: ${{ steps.select.outputs.catalogs }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        persist-credentials: false
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+    - name: Test suite selection
+      run: node --test scripts/ci/test-select-verification.mjs
+    - name: Select affected suites
+      id: select
+      env:
+        CI_SUITE: ${{ inputs.suite }}
+      run: node scripts/ci/select-verification.mjs
+  frontend:
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+    - &id001
+      uses: actions/checkout@v4
+      with:
+        persist-credentials: false
+    - &id002
+      uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+        cache: npm
+    - &id003
+      run: npm ci
+      id: install
+    - name: Lint
+      run: npm run lint
+    - name: Unit tests
+      if: always() && steps.install.outcome == 'success'
+      run: npm run test:unit:run
+    - name: Build once for all browser suites
+      id: build
+      if: always() && steps.install.outcome == 'success'
+      run: npm run build
+    - name: Check migrations
+      if: always() && steps.install.outcome == 'success' && (needs.changes.outputs.services == 'true' || needs.changes.outputs.certificates ==
+        'true' || needs.changes.outputs.catalogs == 'true')
+      run: npm run db:check
+    - name: Install Chromium once
+      id: chromium
+      if: always() && steps.build.outcome == 'success'
+      run: npx playwright install --with-deps chromium
+    - name: Services browser tests
+      if: always() && steps.chromium.outcome == 'success' && needs.changes.outputs.services == 'true'
+      run: npx playwright test e2e/admin-services.spec.ts e2e/admin-service-report.spec.ts e2e/technician-services.spec.ts e2e/site-insights.spec.ts
+        e2e/idle-recovery.spec.ts e2e/profile.spec.ts --project=chromium --output=test-results/services --retries=0
+      env:
+        PLAYWRIGHT_HTML_OUTPUT_DIR: playwright-report/services
+    - name: Certificates browser tests
+      if: always() && steps.chromium.outcome == 'success' && needs.changes.outputs.certificates == 'true'
+      run: npx playwright test e2e/certificates.spec.ts --project=chromium --output=test-results/certificates --reporter=line
+    - name: Catalogs browser tests
+      if: always() && steps.chromium.outcome == 'success' && needs.changes.outputs.catalogs == 'true'
+      run: npx playwright test e2e/mip-catalogs.spec.ts --project=chromium --output=test-results/catalogs --reporter=line
+    - name: Files browser tests
+      if: always() && steps.chromium.outcome == 'success' && (needs.changes.outputs.files == 'true' || needs.changes.outputs.certificates == 'true')
+      run: npx playwright test e2e/file-optimization.spec.ts --project=chromium --output=test-results/files --reporter=line
+    - uses: actions/upload-artifact@v4
+      if: always() && needs.changes.outputs.services == 'true'
+      with:
+        name: services-review
+        path: |-
+          playwright-report/services
+          test-results/services
+          test-results/site-*.png
+        retention-days: 7
+    - uses: actions/upload-artifact@v4
+      if: always() && needs.changes.outputs.certificates == 'true'
+      with:
+        name: certificate-test-results
+        path: |-
+          test-results/certificates
+          test-results/files
+        retention-days: 7
+    - uses: actions/upload-artifact@v4
+      if: always() && needs.changes.outputs.catalogs == 'true'
+      with:
+        name: mip-catalogs-qa
+        path: test-results/catalogs
+        retention-days: 7
+  services-database:
+    needs: changes
+    if: (needs.changes.outputs.services == 'true' || needs.changes.outputs.certificates == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: public.ecr.aws/docker/library/postgres:17
+        env:
+          POSTGRES_PASSWORD: ci-only-not-a-real-secret
+          POSTGRES_DB: sr_certificates_test
+        ports:
+        - 5432:5432
+        options: --health-cmd "pg_isready -U postgres -d sr_certificates_test" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:ci-only-not-a-real-secret@127.0.0.1:5432/sr_certificates_test
+    steps:
+    - *id001
+    - *id002
+    - *id003
+    - name: Apply migrations and certificate SQL checks in a fresh database
+      id: database
+      run: node scripts/database/test-certificates.mjs
+    - name: Real service scheduling, execution and RLS integration tests
+      if: always() && steps.database.outcome == 'success' && needs.changes.outputs.services == 'true'
+      run: npx vitest run --config vitest.services.config.ts
+  catalogs-database:
+    needs: changes
+    if: needs.changes.outputs.catalogs == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: public.ecr.aws/docker/library/postgres:17
+        env:
+          POSTGRES_PASSWORD: ci-only-not-a-real-secret
+          POSTGRES_DB: sr_certificates_test
+        ports:
+        - 5432:5432
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:ci-only-not-a-real-secret@127.0.0.1:5432/sr_certificates_test
+    steps:
+    - *id001
+    - *id002
+    - *id003
+    - name: Apply migrations and certificate SQL checks in a fresh database
+      id: database
+      run: node scripts/database/test-certificates.mjs
+    - name: Catalog bootstrap, integrity and RLS checks
+      run: node scripts/database/test-mip-catalogs.mjs
