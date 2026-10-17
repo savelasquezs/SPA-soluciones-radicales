@@ -1,0 +1,114 @@
+{
+  "title": "Gestión de criterios MIP",
+  "subtitle": "Crear y administrar criterios de evaluación",
+  "segments": [
+    {
+      "id": "intro",
+      "text": "En este video aprenderás a crear y administrar los criterios MIP utilizados durante la evaluación de las áreas."
+    },
+    {
+      "id": "open-catalogs",
+      "text": "Desde Configuración, abre Catálogos MIP para administrar los maestros utilizados durante la operación técnica."
+    },
+    {
+      "id": "open-criteria",
+      "text": "Selecciona la pestaña Criterios. Aquí se define qué aspectos evaluará el técnico durante un servicio principal."
+    },
+    {
+      "id": "criteria-list",
+      "text": "El listado muestra el nombre del criterio, dónde aplica, su estado y las acciones disponibles."
+    },
+    {
+      "id": "search",
+      "text": "Puedes utilizar el buscador para localizar rápidamente un criterio por su nombre."
+    },
+    {
+      "id": "new-criterion",
+      "text": "Para registrar un criterio, selecciona Nuevo criterio."
+    },
+    {
+      "id": "criterion-name",
+      "text": "Escribe un nombre claro que describa el aspecto que debe evaluar el técnico."
+    },
+    {
+      "id": "scope-intro",
+      "text": "Cada criterio debe indicar dónde aplica: Todas las áreas o Solo exterior y perímetro."
+    },
+    {
+      "id": "scope-general",
+      "text": "Los criterios de Todas las áreas se incluyen tanto en áreas internas como externas."
+    },
+    {
+      "id": "scope-external",
+      "text": "Los criterios de Solo exterior y perímetro se agregan únicamente cuando el área está marcada como externa."
+    },
+    {
+      "id": "fixed-states",
+      "text": "Los estados de evaluación C, CP, NC y NA son valores fijos del sistema y no se administran desde este catálogo."
+    },
+    {
+      "id": "create-criterion",
+      "text": "Para esta demostración elegiremos Solo exterior y perímetro. Después selecciona Crear criterio."
+    },
+    {
+      "id": "created-criterion",
+      "text": "El nuevo criterio aparece inmediatamente en la lista de Activos."
+    },
+    {
+      "id": "open-detail",
+      "text": "Selecciona el nombre del criterio para consultar su detalle."
+    },
+    {
+      "id": "criterion-detail",
+      "text": "El detalle muestra el estado y el alcance de aplicación configurado."
+    },
+    {
+      "id": "edit-criterion",
+      "text": "Desde el detalle puedes abrir Editar para modificar el nombre o el alcance antes de utilizar el criterio en nuevos servicios."
+    },
+    {
+      "id": "save-edit",
+      "text": "Actualiza el nombre y selecciona Guardar cambios."
+    },
+    {
+      "id": "row-actions",
+      "text": "En la fila encontrarás las acciones Editar, Desactivar y Eliminar."
+    },
+    {
+      "id": "deactivate-criterion",
+      "text": "Usa Desactivar cuando el criterio ya no deba utilizarse en servicios nuevos, pero necesites conservar el histórico."
+    },
+    {
+      "id": "confirm-deactivation",
+      "text": "Confirma la desactivación para retirarlo de la lista de Activos."
+    },
+    {
+      "id": "inactive-criterion",
+      "text": "El criterio queda disponible en la pestaña Inactivos."
+    },
+    {
+      "id": "reactivate-criterion",
+      "text": "Si necesitas volver a utilizarlo, selecciona Reactivar y confirma la acción."
+    },
+    {
+      "id": "active-again",
+      "text": "El criterio vuelve a Activos y queda disponible para nuevos servicios."
+    },
+    {
+      "id": "delete-criterion",
+      "text": "Eliminar solo debe usarse cuando el criterio no tiene referencias ni historial. Si ya fue utilizado, la opción correcta es desactivarlo."
+    },
+    {
+      "id": "confirm-delete",
+      "text": "Como este criterio de demostración no tiene historial, confirmaremos su eliminación."
+    },
+    {
+      "id": "deleted-criterion",
+      "text": "Al finalizar, el registro desaparece del catálogo sin afectar los demás criterios."
+    },
+    {
+      "id": "outro",
+      "text": "Con esto puedes crear, consultar y administrar los criterios MIP del sistema."
+    }
+  ]
+}
