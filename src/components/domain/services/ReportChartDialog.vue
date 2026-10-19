@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import BaseDialog from '@/components/base/BaseDialog.vue'
 
-defineProps<{open:boolean;title:string;description:string}>()
+defineProps<{open:boolean;title:string}>()
 const emit=defineEmits<{close:[]}>()
 </script>
 
 <template>
   <BaseDialog class="report-chart-dialog" size="wide" :model-value="open"
-    :title="title" :description="description"
+    :title="title"
     @update:model-value="value => { if (!value) emit('close') }">
     <div class="report-chart-dialog__content"><slot /></div>
   </BaseDialog>
@@ -18,6 +18,12 @@ const emit=defineEmits<{close:[]}>()
    Set the tokens at the actual dialog root, outside .report-document's scope. */
 .report-chart-dialog{
   --report-ink:#203645;
+  --report-chart-grid:#dde7ed;
+  --report-chart-guide:#718b9d;
+  --report-chart-compliance:#287fa8;
+  --report-chart-voladores:#2786b3;
+  --report-chart-rastreros:#e29462;
+  --report-chart-point-outline:#fff;
   --report-muted:#536b7b;
   --report-border:#dbe5eb;
   --report-accent:#247d9f;

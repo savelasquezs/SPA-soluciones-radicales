@@ -4,7 +4,7 @@ import { Maximize2 } from 'lucide-vue-next'
 import type { ReportHistoricalVisit } from '@/types/serviceResults'
 import type { SpeciesChart } from '@/helpers/serviceSpecies'
 import { SPECIES_CHART as geometry } from '@/helpers/serviceSpecies'
-import { REPORT_CHART_COLORS as colors, reportCapturePlaces } from '@/helpers/reportCharts'
+import { reportCapturePlaces } from '@/helpers/reportCharts'
 import { bogotaDate } from '@/helpers/serviceReport'
 
 const props=withDefaults(defineProps<{
@@ -49,9 +49,6 @@ const locations=computed(()=>sourceVisit.value
   :[])
 const fullLocations=computed(()=>sourceVisit.value
   ?reportCapturePlaces(sourceVisit.value,props.chart.classification):[])
-const description=computed(()=>props.chart.classification==='VOLADORES'
-  ?'Cada color es un tipo de insecto que vuela. Sumamos lo encontrado en todas las lámparas UV durante cada visita.'
-  :'Cada color es un tipo de plaga. Sumamos lo encontrado en todas las trampas y cebaderos durante cada visita.')
 const showTooltip=computed(()=>visit.value!==null)
 function activate(index:number,code?:string){
   selectedIndex.value=index
@@ -82,7 +79,6 @@ const y=(value:number)=>geometry.bottom-value/props.chart.max*(geometry.bottom-g
     <div v-if="!expanded" class="report-species-figure__head">
       <div class="report-species-figure__head-text">
         <h3>{{ chart.title }}</h3>
-        <p>{{ description }}</p>
       </div>
       <button class="report-chart-expand" type="button"
         :aria-label="'Ampliar ' + chart.title"
@@ -104,18 +100,18 @@ const y=(value:number)=>geometry.bottom-value/props.chart.max*(geometry.bottom-g
           <title :id="titleId">{{ chart.title }} por fecha de visita</title>
           <g v-for="tick in [...new Set([0,Math.round(chart.max/2),chart.max])]" :key="tick">
             <line :x1="plotLeft" :x2="plotRight" :y1="y(tick)" :y2="y(tick)"
-              :stroke="colors.grid" stroke-width="1" :stroke-dasharray="tick===0?undefined:'3 4'"/>
+              stroke="var(--report-chart-grid)" stroke-width="1" :stroke-dasharray="tick===0?undefined:'3 4'"/>
             <text :x="plotLeft-8" :y="y(tick)+3" text-anchor="end"
               class="report-species-figure__axis">{{ countFormat.format(tick) }}</text>
           </g>
           <g v-for="(date,index) in chart.visits" :key="date.solicitud+':bars'">
             <line v-if="visibleIndex===index" class="report-species-figure__guide"
               :x1="chartX(date.center)" :x2="chartX(date.center)" :y1="geometry.top-6"
-              :y2="geometry.bottom" :stroke="colors.guide" stroke-width="1.6" stroke-dasharray="4 3" />
+              :y2="geometry.bottom" stroke="var(--report-chart-guide)" stroke-width="1.6" stroke-dasharray="4 3" />
             <template v-if="date.hasMonitoring">
               <rect v-for="bar in date.bars.filter(item=>item.count>0)" :key="bar.code"
                 :x="chartX(bar.x)" :y="bar.y" :width="chartWidth(bar.width)" :height="bar.height"
-                :fill="bar.color" :opacity="visibleIndex===null||visibleIndex!==index||selectedBar?.code===bar.code?1:.62"
+                :fill="bar.color" class="report-species-figure__bar" :opacity="visibleIndex===null||visibleIndex!==index||selectedBar?.code===bar.code?1:.62"
                 rx="2" :aria-label="bar.name+': '+countFormat.format(bar.count)+' capturas el '+bogotaDate(date.fecha)">
                 <title>{{ bogotaDate(date.fecha) }} · {{ bar.name }}: {{ countFormat.format(bar.count) }}</title>
               </rect>
@@ -160,7 +156,7 @@ const y=(value:number)=>geometry.bottom-value/props.chart.max*(geometry.bottom-g
           <i :style="{backgroundColor:item.color}" aria-hidden="true"/>{{ item.name }}
         </span>
       </div>
-      <p class="report-species-figure__note">S/M significa que no se revisaron puestos; 0 significa que se revisaron, pero no hubo capturas.</p>
+      <p class="report-species-figure__note">S/M: sin monitoreo · 0: sin capturas.</p>
       <section v-if="expanded&&visit&&visit.hasMonitoring" class="report-species-figure__detail">
         <h4>¿Dónde se encontraron en esta visita?</h4>
         <p v-if="!fullLocations.length" class="report-species-figure__empty">No hubo capturas registradas.</p>
@@ -181,12 +177,11 @@ const y=(value:number)=>geometry.bottom-value/props.chart.max*(geometry.bottom-g
 </template>
 
 <style scoped>
-.report-species-figure{margin:0;min-width:0;padding:.85rem;border:1px solid var(--report-border);border-radius:8px;background:#fff;color:var(--report-ink,#203645);break-inside:avoid}
+.report-species-figure{margin:0;min-width:0;padding:.85rem;border:1px solid var(--report-border);border-radius:8px;background:var(--report-surface);break-inside:avoid}
 .report-species-figure__head{display:flex;align-items:flex-start;justify-content:space-between;gap:.7rem}
 .report-species-figure__head-text{min-width:0}
 .report-species-figure h3{font-size:.86rem;font-weight:670;line-height:1.35}
-.report-species-figure__head p{font-size:.72rem;color:var(--report-muted);margin:.25rem 0 .5rem!important;line-height:1.45}
-.report-chart-expand{flex-shrink:0;display:inline-flex;gap:.3rem;align-items:center;border:1px solid var(--report-border);color:var(--report-accent);background:#fff;padding:.35rem .42rem;border-radius:6px;font-size:.7rem;cursor:pointer}
+.report-chart-expand{flex-shrink:0;display:inline-flex;gap:.3rem;align-items:center;border:1px solid var(--report-border);color:var(--report-accent);background:var(--report-surface);padding:.35rem .42rem;border-radius:6px;font-size:.7rem;cursor:pointer}
 .report-chart-expand:hover,.report-chart-expand:focus-visible{border-color:var(--report-accent);outline-offset:2px}
 .report-species-figure__empty{font-size:.74rem;color:var(--report-muted);padding:.5rem 0}
 .report-species-figure__visual{position:relative;min-width:0}
@@ -195,7 +190,7 @@ const y=(value:number)=>geometry.bottom-value/props.chart.max*(geometry.bottom-g
 .report-species-figure__value{font-size:9px;font-weight:650;fill:var(--report-ink)}
 .report-species-figure__hit{cursor:crosshair;outline:none}
 .report-species-figure__hit:focus-visible{stroke:var(--report-accent);stroke-width:1.5;stroke-dasharray:3 4}
-.report-species-figure__tooltip{position:absolute;right:4px;top:3px;display:grid;gap:.22rem;max-width:min(75%,260px);padding:.55rem .65rem;border:1px solid var(--report-border);border-radius:7px;background:#f4f8fa;color:#203645;box-shadow:0 6px 16px rgba(22,48,70,.12);font-size:.73rem;line-height:1.45;z-index:2;pointer-events:none}
+.report-species-figure__tooltip{position:absolute;right:4px;top:3px;display:grid;gap:.22rem;max-width:min(75%,260px);padding:.55rem .65rem;border:1px solid var(--report-border);border-radius:7px;background:var(--report-tooltip);color:var(--report-ink);box-shadow:0 6px 16px rgba(22,48,70,.12);font-size:.73rem;line-height:1.45;z-index:2;pointer-events:none}
 .report-species-figure__tooltip strong{color:#203645}
 .report-species-figure__tooltip small{font-size:.7rem;color:#536b7b}
 .report-species-figure__place{font-size:.71rem;line-height:1.4;color:#536b7b}

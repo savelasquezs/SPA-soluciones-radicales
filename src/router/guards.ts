@@ -1,5 +1,6 @@
 import type { NavigationGuard, RouteLocationNormalized } from 'vue-router'
 
+import { readPendingGoogleHandoff } from '@/helpers/googleHandoff'
 import { useAuthStore } from '@/stores/auth'
 import type { ActiveRole } from '@/types/domain'
 
@@ -9,6 +10,7 @@ declare module 'vue-router' {
   interface RouteMeta {
     public?: boolean
     publicReport?: boolean
+    googleHandoff?: boolean
     roles?: ActiveRole[]
     breadcrumb?: BreadcrumbMeta
     placeholderTitle?: string
@@ -21,11 +23,17 @@ export function hasRequiredRole(activeRole: ActiveRole | null, required: ActiveR
 }
 
 export const authGuard: NavigationGuard = async (to) => {
-  if (to.meta.publicReport) return true
+  if (to.meta.publicReport || to.meta.googleHandoff) return true
   const auth = useAuthStore()
   await auth.initialize()
 
-  if (auth.status === 'denied') return namedUnlessCurrent(to, 'access-denied')
+  if (auth.status === 'denied') {
+    // A new Google account has no SPA record *until* the pending transfer finishes.
+    // Recover when the provider returns to the default landing page instead of
+    // our handoff callback. This does not grant access or change a user by itself.
+    if (readPendingGoogleHandoff()) return namedUnlessCurrent(to, 'google-change-confirm')
+    return namedUnlessCurrent(to, 'access-denied')
+  }
   if (auth.status === 'error') return namedUnlessCurrent(to, 'session-error')
   if (auth.status === 'unauthenticated') return to.meta.public ? true : { name: 'login', query: { redirect: to.fullPath } }
   if (auth.status !== 'authenticated') return true

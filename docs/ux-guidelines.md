@@ -25,6 +25,15 @@ En desktop administrativo se prioriza la información operativa por encima de me
 - Cuando una lista operativa se consulta repetidamente por periodos conocidos, ofrecer accesos rápidos inmediatamente asociados al selector de fechas. Los presets cambian el rango; no duplican ni alteran la lógica interna del datepicker.
 - La densidad no elimina estados, labels necesarios ni feedback; elimina espacio y superficies redundantes.
 
+### Compactación administrativa transversal
+
+- El encabezado de listados, ajustes y perfiles coloca título y subtítulo en la misma línea cuando hay espacio; el subtítulo conserva menor tamaño y contraste, sin negrita. En móvil puede envolverse.
+- Reducir alto y padding de los **filtros** en escritorio, no de todos los formularios. La lectura de fechas segmentadas y los objetivos táctiles móviles siguen siendo accesibles.
+- Servicios y Agenda conservan sus flujos; extender el layout compacto a Clientes, Sedes, Usuarios, Catálogos, Certificados, Configuración, Integraciones, Resumen y Perfil sin alterar reglas funcionales ni peticiones.
+- El sidebar separa Operación, Gestión y Administración mediante títulos acentuados y líneas sutiles; usa enlaces de 38 px en escritorio y al menos 44 px en móvil.
+- **Documentos** no se muestra en la navegación principal; un enlace antiguo `/documentos` redirige a `/configuracion/certificados`. La opción de Certificados se conserva en Configuración.
+- **Ayuda y documentación** abre [el portal Mintlify](https://soluciones-radicales.mintlify.app), no el árbol de código en GitHub.
+
 ## Enlaces de entidades y celulares
 
 - Los nombres de entidades navegables usan el color normal de texto. La interacción se comunica mediante cursor, foco visible y subrayado en hover/focus, no mediante color de acento permanente.
@@ -119,7 +128,12 @@ Una confirmación destructiva identifica el objeto, explica la consecuencia y us
 - Actualizar con la respuesta definitiva de la mutación en lugar de recargar todo.
 - En desktop usar tabla si se comparan columnas.
 - En agenda semanal, representar el tiempo como una cuadrícula horaria: 08:00–21:00 por defecto, ampliable cuando existan Servicios fuera del rango. Las tarjetas muestran solo Cliente/Sede y revelan detalle en hover/focus.
+- En Semana móvil, priorizar una lista cronológica del día con tira de siete días e indicadores completos; la cuadrícula de una sola columna se activa mediante Horario. Evitar instrucciones de arrastrar con mouse en táctil, recortes de servicios cortos y dobles desplazamientos. Mantener la fecha seleccionada en la URL y reutilizar el editor existente.
 - En mobile transformar a cards o filas apiladas cuando la tabla no sea legible.
+- En Servicios (Agenda/Historial), mostrar las filas como tarjetas de lectura rápida, no como ocho campos de formulario apilados: encabezado fecha/hora y estado; cliente/sede y consecutivo/tipo; equipo y pago; contacto y accesos. La persona que recibió el efectivo, el equipo completo y la auditoría permanecen disponibles en el detalle.
+- En las tarjetas móviles, las acciones frecuentes conservan acceso directo o un menú compacto que muestra solo opciones válidas por estado; nunca eliminar acciones administrativas existentes. Mantener el celular con WhatsApp inline, la semántica independiente del estado del servicio y el estado del pago, y objetivos táctiles de al menos 44 px.
+- Mantener densidad móvil en Agenda, Historial y Próximos por confirmar: minimizar márgenes y paddings de tarjetas, agrupar datos de seguimiento en cuatro filas cuando quepan, sin ocultar contacto, programación, cobros ni acciones y sin reducir los objetivos táctiles por debajo de 44 px.
+- En la vista móvil de Servicios, mostrar búsqueda y el contador de filtros activos, con Estado, Tipo y Técnico detrás de un control desplegable. Fecha y rango se ajustan con navegación compacta; los rangos rápidos siguen accesibles sin desplegarlos permanentemente. Preservar los filtros y la posición en la URL. El patrón existente de filtros de Sede es la referencia para minimizar código duplicado.
 - Las acciones por fila deben ser identificables por teclado y lector de pantalla.
 - En listados administrativos, no renderizar un formulario de edición persistente debajo de la tabla si su contenido depende de la fila seleccionada; ese patrón alarga la página y pierde previsibilidad a medida que crece la lista.
 - Para CRUD compacto, preferir una acción explícita por fila que abra un diálogo o drawer de edición. Crear y editar deben reutilizar el mismo contrato de formulario cuando los campos y validaciones sean equivalentes.

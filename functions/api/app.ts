@@ -26,6 +26,7 @@ import {
   assertMasterStoragePath,
   createMasterReadUrl,
   createMasterUploadUrl,
+  createProfileReadUrl,
   deleteMasterObject,
 } from './r2'
 
@@ -71,16 +72,17 @@ const CLIENT_SELECT = `select n.id,
                               n.vigencia_cert_establecimiento_meses as "vigenciaCertificadoMeses",
                               residence.direccion as "residenciaDireccion",
                               residence.contacto_principal_celular as "residenciaCelular",
+                              residence.valor_servicio as "residenciaValorServicio",
                               count(s.id) filter (where s.tipo_sede = 'NEGOCIO')::integer as "sedesCount"
                        from public.negocios n
                        left join public.sedes s on s.negocio_id = n.id
                        left join lateral (
-                         select direccion, contacto_principal_celular
+                         select direccion, contacto_principal_celular, valor_servicio
                          from public.sedes
                          where negocio_id = n.id and tipo_sede = 'RESIDENCIAL'
                          limit 1
                        ) residence on true`
-const CLIENT_GROUP = `group by n.id, residence.direccion, residence.contacto_principal_celular`
+const CLIENT_GROUP = `group by n.id, residence.direccion, residence.contacto_principal_celular, residence.valor_servicio`
 const SITE_SELECT = `select s.id,
                             s.negocio_id as "clientId",
                             s.nombre,
@@ -147,7 +149,17 @@ app.get('/health', (context) =>
 )
 
 app.get('/api/session', async (context) => {
-  const profile = await transaction((client) => bootstrapProfile(client, context.get('identity')))
+  const profile = await transaction(async client => {
+    const current = await bootstrapProfile(client, context.get('identity'))
+    const { rows } = await client.query<{ foto_storage_path: string | null }>(
+      'select foto_storage_path from public.usuarios where id=$1', [current.id],
+    )
+    const path = rows[0]?.foto_storage_path
+    return {
+      ...current,
+      avatarUrl: path ? createProfileReadUrl('AVATAR', current.id, path) : null,
+    }
+  })
   return context.json(profile)
 })
 
@@ -426,9 +438,9 @@ app.post('/api/clients', async (context) => {
            valor_servicio, periodicidad_meses, maneja_refuerzo, tipo_sede,
            maneja_vehiculos, genera_certificado_vehiculo,
            duracion_servicio_minutos, activo
-         ) values ($1, $2, $3, '[]'::jsonb, false, $2, null, $4, null, null,
-                   false, 'RESIDENCIAL', false, false, null, $5)`,
-        [id, input.nombre, input.residenciaDireccion, input.residenciaCelular, input.activo],
+         ) values ($1, $2, $3, '[]'::jsonb, false, $2, null, $4, $5, null,
+                   false, 'RESIDENCIAL', false, false, null, $6)`,
+        [id, input.nombre, input.residenciaDireccion, input.residenciaCelular, input.residenciaValorServicio, input.activo],
       )
     }
     await audit(client, admin.id, 'CLIENTE_CREADO', 'Clientes', id, { tipoCliente: input.tipoCliente })
@@ -465,9 +477,9 @@ app.patch('/api/clients/:id', async (context) => {
       await client.query(
         `update public.sedes
          set nombre = $1, direccion = $2, contacto_principal_nombre = $1,
-             contacto_principal_celular = $3, activo = $4
-         where negocio_id = $5 and tipo_sede = 'RESIDENCIAL'`,
-        [input.nombre, input.residenciaDireccion, input.residenciaCelular, input.activo, id],
+             contacto_principal_celular = $3, valor_servicio = $4, activo = $5
+         where negocio_id = $6 and tipo_sede = 'RESIDENCIAL'`,
+        [input.nombre, input.residenciaDireccion, input.residenciaCelular, input.residenciaValorServicio, input.activo, id],
       )
     }
     const auditEvent = current.rows[0].activo === input.activo
@@ -952,6 +964,7 @@ function clientInput(body: Record<string, unknown>, editing = false) {
       vigenciaCertificadoMeses: requiredPositiveInteger(body, 'vigenciaCertificadoMeses'),
       residenciaDireccion: null,
       residenciaCelular: null,
+      residenciaValorServicio: null,
       version,
     }
   }
@@ -965,6 +978,8 @@ function clientInput(body: Record<string, unknown>, editing = false) {
     vigenciaCertificadoMeses: null,
     residenciaDireccion: requiredString(body, 'residenciaDireccion'),
     residenciaCelular: requiredPhone(body, 'residenciaCelular'),
+    residenciaValorServicio: body.residenciaValorServicio == null || body.residenciaValorServicio === ''
+      ? null : requiredInteger(body, 'residenciaValorServicio'),
     version,
   }
 }

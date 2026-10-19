@@ -35,7 +35,7 @@ El orden del recorrido es editable dentro del Servicio. Lista, selector y navega
 
 Los Servicios de Refuerzo y los Servicios residenciales conservan sus reglas simplificadas y no ejecutan este recorrido MIP completo.
 
-La primera versión de trabajo de campo implementa únicamente Servicios `PRINCIPAL` de Sedes tipo Negocio. Refuerzos y Servicios residenciales no se habilitan por inferencia en esta superficie.
+La ejecución móvil admite Servicios `PRINCIPAL` tanto de Negocio como de Casa. Las visitas residenciales usan el mismo control de acceso por Técnico, la ventana de inicio de una hora, el bloqueo de dispositivo, los Productos y ambas firmas, pero no congelan Áreas ni exigen criterios, puestos de monitoreo o hallazgos. Se abre directamente **Revisión y cierre** y no se ofrece informe MIP completo. Los Refuerzos mantienen su ejecución deshabilitada.
 
 ## Preparación e inicio
 

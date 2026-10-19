@@ -20,11 +20,14 @@ import { getReportShareOptions, resolvePublicServiceReport, publicReportPhotoUrl
 import { openProtectedDocument } from '@/helpers/openProtectedDocument'
 import type { ServiceReportShareOptions } from '@/types/reportSharing'
 import { useNotificationsStore } from '@/stores/notifications'
+import { useAppStore } from '@/stores/app'
+import type { ThemePreference } from '@/types/domain'
 import type { ServiceResultsData } from '@/types/serviceResults'
 import '@/components/domain/services/service-report.css'
 
 const route = useRoute()
 const notifications = useNotificationsStore()
+const app = useAppStore()
 const publicView = computed(() => route.name === 'public-service-report')
 const publicToken = computed(() => String(route.params.token ?? ''))
 const serviceId = computed(() => String(route.params.id ?? ''))
@@ -191,6 +194,9 @@ function retryImage(): void {
   if (activeImage.value) void loadImage(activeImage.value.path, true, version)
 }
 const grade: Record<string, string> = { C: 'Cumple', CP: 'Cumple parcialmente', NC: 'No cumple', NA: 'No aplica' }
+function setReportTheme(event: Event): void {
+  app.setTheme((event.target as HTMLSelectElement).value as ThemePreference)
+}
 watch(() => [serviceId.value, publicToken.value], () => { void loadReport() }, { immediate: true })
 </script>
 
@@ -207,7 +213,17 @@ watch(() => [serviceId.value, publicToken.value], () => { void loadReport() }, {
     </div>
     <div v-else class="report-public-head">
       <span>Soluciones Radicales · Informe técnico de servicio</span>
-      <BaseButton size="compact" variant="secondary" :disabled="loading || mediaBusy || !report" :loading="printBusy" @click="printReport"><FileDown :size="15" /> Guardar PDF</BaseButton>
+      <div class="report-public-head__actions">
+        <label class="report-public-head__theme">
+          <span>Apariencia</span>
+          <select data-testid="mip-public-theme" :value="app.theme" @change="setReportTheme">
+            <option value="light">Claro</option>
+            <option value="dark">Oscuro</option>
+            <option value="system">Sistema</option>
+          </select>
+        </label>
+        <BaseButton size="compact" variant="secondary" :disabled="loading || mediaBusy || !report" :loading="printBusy" @click="printReport"><FileDown :size="15" /> Guardar PDF</BaseButton>
+      </div>
     </div>
     <LoadingSkeleton v-if="loading" :rows="8" />
     <StatusPanel v-else-if="error" title="No se pudo preparar el informe" :message="error" tone="danger">
@@ -375,7 +391,6 @@ watch(() => [serviceId.value, publicToken.value], () => { void loadReport() }, {
 
         <section class="report-document__section" aria-labelledby="report-history-title">
           <header class="report-document__heading"><span class="report-document__number">06</span><h2 id="report-history-title">¿Cómo han cambiado los resultados?</h2></header>
-          <p class="report-document__section-intro">Compara las últimas seis visitas, de la más antigua a la más reciente. Desliza el dedo por las gráficas para elegir una fecha y pulsa «Ampliar» para ver los detalles con mayor claridad.</p>
           <ServiceTrendCharts :visits="report.historico" />
           <ServiceSpeciesCharts :visits="report.historico" />
         </section>

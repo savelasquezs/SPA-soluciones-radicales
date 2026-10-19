@@ -21,6 +21,7 @@ const connecting = ref(false)
 const sending = ref(false)
 const error = ref<string | null>(null)
 const connected = ref(false)
+const needsReauthorization = ref(false)
 const connectedEmail = ref<string | null>(null)
 const emailForm = reactive({
   recipient: '',
@@ -57,6 +58,7 @@ async function loadStatus(): Promise<void> {
   try {
     const status = await getGoogleIntegrationStatus()
     connected.value = status.connected
+    needsReauthorization.value = status.needsReauthorization
     connectedEmail.value = status.email
   } catch (loadError) {
     error.value = loadError instanceof Error ? loadError.message : 'No fue posible consultar Google'
@@ -92,11 +94,11 @@ async function sendTest(): Promise<void> {
 </script>
 
 <template>
-  <div class="page">
-      <header class="page-header">
-        <div>
+  <div class="page integrations-page">
+      <header class="page-header admin-page-header">
+        <div class="admin-page-heading">
           <h1>Integraciones</h1>
-          <p>Gmail y Calendar operan exclusivamente con la cuenta empresarial.</p>
+          <p>— Gmail y Calendar de la cuenta empresarial</p>
         </div>
       </header>
 
@@ -109,13 +111,16 @@ async function sendTest(): Promise<void> {
         <section class="card integration-card">
           <div>
             <span class="badge" :class="connected ? 'badge--success' : 'badge--warning'">
-              {{ connected ? 'Conectada' : 'Pendiente' }}
+              {{ connected ? 'Conectada' : needsReauthorization ? 'Autorización vencida' : 'Pendiente' }}
             </span>
             <h2>Cuenta empresarial Google</h2>
             <p>{{ connectedEmail ?? 'solucionesradicales1@gmail.com' }}</p>
+            <p v-if="needsReauthorization" class="integration-warning" role="alert">
+              La autorización de Google venció o fue revocada. Vuelve a autorizar la cuenta para restablecer Gmail y Calendar.
+            </p>
           </div>
           <BaseButton :variant="connected ? 'secondary' : 'primary'" :loading="connecting" @click="connectGoogle">
-            {{ connected ? 'Renovar autorización' : 'Conectar Google' }}
+            {{ needsReauthorization ? 'Volver a autorizar' : connected ? 'Renovar autorización' : 'Conectar Google' }}
           </BaseButton>
         </section>
 
@@ -169,6 +174,8 @@ async function sendTest(): Promise<void> {
 </template>
 
 <style scoped>
+.integration-card .integration-warning { color: var(--danger); max-width: 32rem; }
+.integrations-page { gap: 0.75rem; }
 .integration-card {
   display: flex;
   align-items: center;
@@ -177,7 +184,7 @@ async function sendTest(): Promise<void> {
 }
 
 .integration-card h2 {
-  margin-top: 0.8rem;
+  margin-top: 0.35rem;
 }
 
 .integration-card p {
@@ -186,7 +193,7 @@ async function sendTest(): Promise<void> {
 }
 
 .email-form {
-  margin-top: 1.25rem;
+  margin-top: 0.75rem;
 }
 
 @media (max-width: 620px) {

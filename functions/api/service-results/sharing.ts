@@ -143,6 +143,7 @@ async function reportShareOptions(context: Context<Env>, mode: ShareMode) {
     activeLinks: sharing.activeLinks,
     lastSharedAt: sharing.lastSharedAt,
     gmailConnected: google.connected,
+    gmailNeedsReauthorization: google.needsReauthorization,
   }
   return context.json(response)
 }

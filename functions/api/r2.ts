@@ -66,8 +66,60 @@ export async function deleteMasterObject(storagePath: string): Promise<void> {
 }
 export function assertMasterStoragePath(storagePath: string): void {
   const normalized = storagePath.trim()
-  const allowed = Object.values(PREFIX_BY_KIND).some(prefix => normalized.startsWith(`${prefix}/`))
+  const allowed = Object.values(PREFIX_BY_KIND).some(prefix => normalized.startsWith(`${prefix}/`)) || normalized.startsWith('users/avatars/')
   if (!allowed || normalized.includes('..') || normalized.startsWith('/')) throw new ApiError(422, 'La ruta del archivo privado no es válida')
+}
+
+
+/** Profile uploads are isolated per user, never via the admin-only master endpoint. */
+export type ProfileFileKind = 'AVATAR' | 'CERTIFICATE'
+type ProfileUploadInput = { fileName: string; contentType: string; size: number }
+const AVATAR_MAX_BYTES = 2 * 1024 * 1024
+const AVATAR_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp'])
+
+function profilePrefix(kind: ProfileFileKind, userId: string): string {
+  if (!/^[a-f0-9-]{36}$/.test(userId)) throw new ApiError(422, 'Usuario inválido')
+  return kind === 'AVATAR' ? 'users/avatars/' + userId + '/' : 'users/certificates/self/' + userId + '/'
+}
+
+export function assertOwnedProfileStoragePath(kind: ProfileFileKind, userId: string, storagePath: string): void {
+  const prefix = profilePrefix(kind, userId)
+  const leaf = storagePath.slice(prefix.length)
+  if (!storagePath.startsWith(prefix) || !/^[a-f0-9-]{36}-[A-Za-z0-9._-]{1,120}$/.test(leaf)) {
+    throw new ApiError(422, 'El archivo no pertenece a este perfil')
+  }
+}
+
+export function createProfileUploadUrl(kind: ProfileFileKind, userId: string, input: ProfileUploadInput): UploadAuthorization {
+  const extension = extensionOf(input.fileName)
+  const allowed = kind === 'AVATAR' ? AVATAR_EXTENSIONS : EXTENSIONS_BY_KIND.USER_CERTIFICATE
+  if (!allowed.has(extension)) throw new ApiError(422, kind === 'AVATAR' ? 'Usa JPG, PNG o WebP para la foto' : 'Tipo de certificado no permitido')
+  const maximum = kind === 'AVATAR' ? AVATAR_MAX_BYTES : USER_CERTIFICATE_MAX_BYTES
+  if (!Number.isSafeInteger(input.size) || input.size <= 0 || input.size > maximum) {
+    throw new ApiError(422, kind === 'AVATAR' ? 'La foto debe pesar máximo 2 MB' : 'El certificado debe pesar máximo 10 MB')
+  }
+  const expectedType = MIME_BY_EXTENSION[extension]!
+  const suppliedType = input.contentType.trim().toLowerCase()
+  if (suppliedType && suppliedType !== 'application/octet-stream' && suppliedType !== expectedType) {
+    throw new ApiError(422, 'El archivo no corresponde al tipo indicado')
+  }
+  const storagePath = profilePrefix(kind, userId) + randomUUID() + '-' + safeFileName(input.fileName)
+  return { storagePath, contentType: expectedType, expiresIn: PRESIGNED_TTL_SECONDS, url: presign('PUT', storagePath, expectedType) }
+}
+
+export function createProfileReadUrl(kind: ProfileFileKind, userId: string, storagePath: string): string {
+  assertOwnedProfileStoragePath(kind, userId, storagePath)
+  return presign('GET', storagePath)
+}
+
+export async function profileObjectExists(storagePath: string): Promise<boolean> {
+  assertMasterStoragePath(storagePath)
+  const response = await fetch(presign('HEAD', storagePath), {
+    method: 'HEAD', signal: AbortSignal.timeout(15_000), redirect: 'error',
+  })
+  if (response.status === 404) return false
+  if (!response.ok) throw new ApiError(502, 'No fue posible verificar el archivo cargado')
+  return true
 }
 
 function serviceMediaBucket(): string { return process.env.R2_BUCKET_SERVICE_MEDIA?.trim() || 'sr-service-media' }

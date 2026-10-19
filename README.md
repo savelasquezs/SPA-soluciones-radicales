@@ -129,6 +129,7 @@ npm run db:bootstrap
 - [Decisiones técnicas](docs/architecture/decisions.md)
 - [Base de datos y migraciones](database/README.md)
 - [Configuración de Neon](docs/development/neon-setup.md)
+- [**Runbook de despliegue de la API Neon (CLI o conector)**](docs/development/neon-functions-deploy.md)
 - [Despliegue con Cloudflare Workers](docs/development/cloudflare-workers.md)
 - [Videos del manual de usuario](docs/development/documentation-videos.md)
 - [Reutilización frontend](docs/frontend/reuse.md)

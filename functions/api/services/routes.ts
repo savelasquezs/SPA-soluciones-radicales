@@ -2,7 +2,7 @@ import { Hono, type Context } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import type { PoolClient } from 'pg'
-import type { FollowUpState, ServiceFilter, ServiceMutation, ServicePaymentInput, UpcomingFilter, UpcomingPatch } from '../../../src/types/adminServices'
+import type { FollowUpState, ServiceFilter, ServiceMutation, ServicePaymentInput, ServiceReassignment, UpcomingFilter, UpcomingPatch } from '../../../src/types/adminServices'
 import { addDateDays, isDateOnly, isServiceId, todayBogota, validateSchedule, validateServiceInput } from '../../../src/helpers/adminServices'
 import { ApiError, requireAdmin, type DomainProfile, type Identity } from '../auth'
 import { transaction } from '../db'
@@ -82,6 +82,14 @@ function scheduleInput(value: unknown, prefix = 'programacion') {
   return parsed.value
 }
 
+function reassignmentsInput(value:unknown):ServiceReassignment[] {
+  if(value==null)return []
+  if(!Array.isArray(value) || value.length>20)throw new ApiError(422,'La reasignación de servicios no es válida.','VALIDATION')
+  return value.map(entry=>{
+    const item=object(entry)
+    return {id:id(item.id),version:version(item.version),programacion:scheduleInput(item.programacion)}
+  })
+}
 adminServiceRoutes.get('/workspace',async context => context.json(await read(context,workspace)))
 adminServiceRoutes.get('/pending-count',async context => context.json({ count:await read(context,pendingCount) }))
 adminServiceRoutes.get('/commands/:id',async context => {
@@ -126,16 +134,16 @@ adminServiceRoutes.get('/:id/audit',async context => {
 adminServiceRoutes.post('/',async context => {
   const payload=await body(context.req.raw), input=serviceInput(payload.input,true)
   const proposal=payload.upcoming == null ? null : object(payload.upcoming)
-  return context.json(await write(context,payload,'service:create',(client,admin)=>createService(client,admin.id,input,payload.allowConflicts === true,proposal ? { id:id(proposal.id),version:version(proposal.version),confirmed:proposal.confirmed === true } : undefined)),201)
+  return context.json(await write(context,payload,'service:create',(client,admin)=>createService(client,admin.id,input,reassignmentsInput(payload.reassignments),proposal ? { id:id(proposal.id),version:version(proposal.version),confirmed:proposal.confirmed === true } : undefined)),201)
 })
 adminServiceRoutes.put('/:id',async context => {
   const payload=await body(context.req.raw), recordId=id(context.req.param('id')), input=serviceInput(payload.input)
-  return context.json(await write(context,payload,`service:edit:${recordId}`,(client,admin)=>editService(client,admin.id,recordId,version(payload.version),input,payload.allowConflicts === true,input.refuerzo ? version(payload.reinforcementVersion) : undefined)))
+  return context.json(await write(context,payload,`service:edit:${recordId}`,(client,admin)=>editService(client,admin.id,recordId,version(payload.version),input,reassignmentsInput(payload.reassignments),input.refuerzo ? version(payload.reinforcementVersion) : undefined)))
 })
 adminServiceRoutes.post('/:id/reschedule',async context => {
   const payload=await body(context.req.raw), recordId=id(context.req.param('id')), schedule=scheduleInput(payload.programacion)
   const child=payload.refuerzo == null ? null : object(payload.refuerzo)
-  return context.json(await write(context,payload,`service:reschedule:${recordId}`,(client,admin)=>rescheduleService(client,admin.id,recordId,version(payload.version),schedule,payload.allowConflicts === true,
+  return context.json(await write(context,payload,`service:reschedule:${recordId}`,(client,admin)=>rescheduleService(client,admin.id,recordId,version(payload.version),schedule,reassignmentsInput(payload.reassignments),
     child ? { version:version(child.version),schedule:scheduleInput(child.programacion,'refuerzo') } : undefined)))
 })
 adminServiceRoutes.post('/:id/cancel',async context => {

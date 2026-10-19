@@ -6,7 +6,7 @@ withDefaults(
     modelValue: string
     label: string
     name: string
-    type?: 'text' | 'email' | 'number' | 'search'
+    type?: 'text' | 'email' | 'number' | 'search' | 'tel'
     required?: boolean
     disabled?: boolean
     readonly?: boolean

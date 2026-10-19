@@ -11,11 +11,51 @@ Este documento define la programación administrativa de Servicios Principales y
 - El Administrador puede adaptar fechas y horarios a la disponibilidad real del cliente.
 - Las automatizaciones proponen y precargan; no sustituyen la confirmación del cliente ni la decisión final del Administrador.
 
+## Tabla de Servicios en móvil
+
+La tabla administrativa de Agenda e Historial se presenta como tarjetas compactas en teléfono, manteniendo la tabla de columnas en escritorio. Cada tarjeta prioriza fecha/hora, estado de la visita, Cliente y Sede, solicitud/tipo, Técnico responsable y valor/estado de pago; el contacto con WhatsApp inline y las acciones de detalle se conservan. La información extensa (colaboradores, receptor del pago e histórico) permanece consultable desde el detalle del Servicio.
+
+En teléfono, la barra de filtros deja visibles la búsqueda, la fecha/rango y el número de filtros activos. Estado, Tipo y Técnico se despliegan a petición; la navegación por días desplaza el intervalo sin cambiar su duración y el selector permite rangos rápidos. Se mantienen las reglas existentes de filtros, URL, edición, confirmación de pagos y reprogramación, sin llamadas adicionales a la API al abrir el panel de filtros.
+
+## Semana responsive en móvil
+
+La vista Semana ofrece una lista cronológica de un solo día como presentación predeterminada en teléfonos (680 px o menos). El Administrador elige un día mediante una franja de siete fechas con indicadores de actividad, sin volver a consultar el servidor al cambiar entre días. La fecha explícitamente seleccionada se conserva en el parámetro URL `day`.
+
+Al ingresar en una semana, se selecciona hoy si pertenece a ella; si no, el primer día con servicios y, si tampoco existe, el lunes. La opción Horario (`mobileView=hours`) presenta una cuadrícula de una sola columna para consultar cruces y crear pulsando en una hora libre. Regresar a Lista conserva la misma fecha. Los servicios cortos usan una etiqueta de una línea y sus detalles permanecen accesibles en Lista.
+
+- Los días e indicadores cuentan los servicios por fecha de inicio programado en Bogotá, sin duplicar servicios nocturnos; la lista indica la fecha de finalización si cruza medianoche.
+- Pulsar un servicio Programado abre la reprogramación rápida existente. Pulsar uno Finalizado o Cancelado abre su detalle. No se anuncia arrastrar con el dedo; el drag-and-drop con mouse permanece en escritorio y exige confirmación.
+- Crear desde la fecha elegida precarga el formulario existente y el enlace de regreso conserva el día elegido. Si la fecha no permite programar una visita futura, se usa el formulario normal.
+- Para garantizar indicadores completos, Semana descarga las páginas adicionales cuando el total supera los 100 servicios de la primera página; las lecturas siguen siendo cancelables cuando cambian fecha, filtros o sesión.
+- En 320 px, la franja de días puede desplazarse horizontalmente de forma independiente, nunca la página completa. El calendario de escritorio conserva sus siete columnas originales.
+
+## Agenda semanal interactiva
+
+- La vista **Semana** permite crear un Servicio pulsando el espacio del día/hora o el signo + del encabezado. Se abre el formulario existente con hora de Bogotá precargada; no hay reserva hasta confirmar el formulario. Un borrador local anterior tiene prioridad y se identifica al recuperarse.
+- Cada bloque muestra hora, Cliente y Sede. Pulsarlo abre **Reprogramar**, incluyendo equipo, duración y, para un Principal con Refuerzo Programado, la fecha del Refuerzo. El acceso a detalle permite la edición completa. Los servicios que ya no están Programados son de consulta y no admiten arrastre.
+- En escritorio, los bloques **Programados** se arrastran de una columna/hora a otra de la misma semana, ajustando a intervalos de **15 minutos**. Soltar muestra una confirmación con fecha y hora anterior y propuesta; **Cancelar** no envía ninguna mutación y conserva el registro original.
+- Confirmar reutiliza la reprogramación autoritativa con versión e idempotencia, conserva duración, técnicos, cobro y productos. Arrastrar un Principal no mueve silenciosamente su Refuerzo; se informa y la edición rápida permite modificar ambos en una transacción cuando así se requiera.
+- Cruces de horarios y conflictos de versión siguen las validaciones y confirmaciones existentes. Ante un fallo no se altera la posición guardada; el usuario puede reintentar o revisar la versión actual. Google Calendar se actualiza desde la outbox tras el guardado, nunca desde el navegador.
+- La alternativa accesible por teclado o teléfono son los controles de crear y reprogramar del calendario; el arrastre no es la única manera de modificar una fecha.
+
+## Cruces de técnicos (regla obligatoria)
+
+- No se admite que un mismo técnico sea responsable o colaborador de dos Servicios con intervalos simultáneos. Se consideran los Servicios Programados y En proceso; las visitas Finalizadas y Canceladas no bloquean disponibilidad.
+- El aviso de cruce **no** ofrece guardar de todos modos: muestra el nombre de los Clientes afectados y permite elegir qué Servicio modificar (el actual o uno existente que siga Programado) y cómo resolverlo: **cambiar técnico** o **cambiar fecha y hora**.
+- Los selects son reactivos: excluyen al técnico en conflicto, integrantes ya asignados al mismo equipo, técnicos no activos, certificados vencidos y técnicos ocupados en otros Servicios que coinciden con el intervalo. Al cambiar el tipo de resolución o una selección se recalculan las opciones.
+- Cambiar fecha/hora conserva el equipo y la duración del Servicio seleccionado, exige una fecha futura y comprueba que no permanezca el cruce. Si la nueva hora coincide con otra visita que no estaba en el aviso, el servidor devuelve nuevamente el conflicto sin guardar cambios.
+- Si un técnico coincide con varios Servicios, su sustitución o una reprogramación puede resolver varios cruces automáticamente. Solo se habilita guardar cuando se han resuelto todos.
+- La confirmación aplica las programaciones y reasignaciones de los Servicios afectados dentro de **una única transacción**, comprobando sus versiones y revalidando disponibilidad en el servidor. Se guarda todo o nada; cambios simultáneos vuelven a exigir resolución.
+- Un Servicio En proceso no puede reasignarse desde este diálogo. La reprogramación mediante arrastre de la agenda respeta la misma regla.
+- Al sustituir un técnico, se conserva su rol (responsable o colaborador) y la programación. Al reprogramar, se conservan los técnicos y la duración. El servidor impide modificar simultáneamente equipo y fecha de una visita afectada desde esta resolución, y registra auditoría individual. La outbox de Google Calendar actualiza todos los eventos modificados después de confirmar.
+
 ## Servicio Principal
 
 El Administrador crea el Servicio Principal y el servidor genera su consecutivo.
 
-El valor del Principal se deriva de la Sede al momento de crearlo. Cambios posteriores en el valor configurado de la Sede no modifican Servicios existentes.
+Para clientes **Negocio**, el valor del Servicio Principal se deriva de la tarifa de su Sede al crearlo. Para clientes **Casa**, el formulario de cliente permite configurar una tarifa predeterminada que se guarda en `sedes.valor_servicio` de su Sede residencial interna; no se crea un segundo campo en la base de datos.
+
+La tarifa residencial es opcional para permitir clientes ya existentes sin valor configurado. Al programar una visita se precarga el valor de la Sede cuando exista, pero el Administrador puede modificarlo para esa visita concreta. Si la tarifa está vacía, debe introducir el importe al programar. El valor definitivo se guarda en `servicios.valor_servicio` y **no cambia** si luego se edita la tarifa de la Sede. Los valores se validan como enteros no negativos en COP.
 
 El formulario de programación permite definir fecha, hora, Técnico responsable y colaboradores de acuerdo con las reglas generales de asignación.
 
@@ -224,3 +264,12 @@ El Técnico previsto para recaudar durante la visita y la persona que finalmente
 - **Pago** permite indicar durante el alta si el cliente ya pagó. Si no pagó, se conserva el cobro previsto. Si pagó, se exige método; para efectivo es obligatorio indicar el receptor, que puede ser el administrador que está programando o un técnico activo. Transferencia confirmada no exige receptor de efectivo. La confirmación se registra en la misma transacción que crea el servicio con fecha, actor y receptor. Las correcciones posteriores siguen desde «Registrar pago».
 - No se crean tablas ni migraciones adicionales.
 
+
+
+## Visitas residenciales (Clientes Casa)
+
+- El buscador de Cliente incluye Negocio y Casa activos. Casa conserva su Sede interna `RESIDENCIAL`, creada junto con el Cliente, pero el Administrador no ve ni selecciona esa Sede: ve directamente la dirección registrada.
+- El importe en pesos colombianos se introduce manualmente en cada Servicio Principal residencial, como un entero no negativo. No se guarda en la configuración de la Casa. El valor de visitas anteriores es inmutable; una visita nueva puede tener otro precio.
+- La duración se propone en 90 minutos y puede cambiarse por visita. Responsable, colaboradores, Productos, cobro y Calendar siguen el contrato del Servicio Principal.
+- Casa no crea Refuerzos ni propuestas periódicas. El backend y la base de datos impiden agendar sin precio o con Refuerzo residencial. Para Negocio el servidor sigue calculando el importe desde la Sede e ignora un precio manipulado por el navegador.
+- El Técnico puede ejecutar la visita sin Áreas, firmar y cerrar. Las superficies de certificados e informe MIP completo no se ofrecen para Casa.

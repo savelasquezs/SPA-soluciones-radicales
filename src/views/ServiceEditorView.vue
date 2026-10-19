@@ -16,7 +16,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
 import { createAdminService, fetchServiceCommand, updateAdminService } from '@/services/adminServicesService'
 import { clearAdminServiceDraft, loadAdminServiceDraft, saveAdminServiceDraft, type AdminServiceDraft } from '@/services/draftService'
-import { draftToServiceInput, emptyServiceDraft, isServiceId, scheduleFromDraft, scheduleToDraft, serviceToDraft, suggestReinforcement, toBogotaInput, validateServiceInput } from '@/helpers/adminServices'
+import { draftToServiceInput, emptyServiceDraft, isServiceId, isZonedInstant, scheduleFromDraft, scheduleToDraft, serviceToDraft, suggestReinforcement, toBogotaInput, validateServiceInput } from '@/helpers/adminServices'
 import type { AdminService, ServiceEditorDraft, UpcomingService } from '@/types/adminServices'
 
 const route=useRoute(), router=useRouter(), store=useAdminServicesStore(), auth=useAuthStore(), notifications=useNotificationsStore()
@@ -30,6 +30,7 @@ const serialize=()=>JSON.stringify({ draft:draft.value,confirmed:confirmed.value
 const dirty=computed(()=>!loading.value && !completed.value && Boolean(baseline.value) && serialize()!==baseline.value)
 const { confirmOpen,cancelDiscard,confirmDiscard }=useUnsavedChanges(dirty,saving)
 const title=computed(()=>editing.value ? 'Editar servicio' : upcoming.value ? 'Agendar próxima visita' : 'Programar servicio')
+const conflictClientName=computed(()=>store.options?.sedes.find(site=>site.id===draft.value.sedeId)?.clienteNombre ?? record.value?.clienteNombre ?? upcoming.value?.clienteNombre ?? '')
 let generation=0, saveTimer: ReturnType<typeof setTimeout> | undefined, draftWrites: Promise<void>=Promise.resolve()
 onBeforeUnmount(()=>{ generation++; if(saveTimer) clearTimeout(saveTimer) })
 watch(()=>`${String(route.name)}:${String(route.params.id ?? '')}:${String(route.query.upcomingId ?? '')}`,()=>{ void load() },{ immediate:true })
@@ -96,6 +97,11 @@ async function load(force=false): Promise<void> {
     const siteId=proposal?.sedeId ?? (typeof route.query.sedeId==='string' ? route.query.sedeId : '')
     const site=workspace.sedes.find(item=>item.id===siteId)
     draft.value=service ? serviceToDraft(service) : emptyServiceDraft(site)
+    const slotStart=route.query.start
+    if(!service && !proposal && typeof slotStart==='string' && isZonedInstant(slotStart) && new Date(slotStart).getTime()>Date.now()) {
+      draft.value.programacion.inicioProgramado=toBogotaInput(slotStart)
+      if(site?.manejaRefuerzo) draft.value.refuerzo=scheduleToDraft(suggestReinforcement(scheduleFromDraft(draft.value.programacion)))
+    }
     if(proposal) {
       draft.value.programacion.inicioProgramado=toBogotaInput(proposal.fechaSugerida)
       if(site?.manejaRefuerzo) draft.value.refuerzo=scheduleToDraft(suggestReinforcement(scheduleFromDraft(draft.value.programacion)))
@@ -111,18 +117,26 @@ async function load(force=false): Promise<void> {
   } catch(failure) { if(current===generation) loadError.value=failure instanceof Error ? failure.message : 'No fue posible preparar el formulario.' }
   finally { if(current===generation) loading.value=false }
 }
+const parsedSchedule = scheduleFromDraft
 async function save(): Promise<void> {
   if(completed.value || saving.value || loading.value) return
   const invalidDate=document.querySelector<HTMLElement>('#admin-service-form .date-time-control input[aria-invalid="true"]')
   if(invalidDate) { invalidDate.focus(); notifications.show('Revisa las fechas y horas antes de guardar.','error'); return }
-  const parsed=validateServiceInput(draftToServiceInput(draft.value),!editing.value)
+  const isResidential=store.options?.sedes.some(site=>site.id===draft.value.sedeId && site.tipoSede==='RESIDENCIAL') || record.value?.tipoSede==='RESIDENCIAL'
+  const parsed=validateServiceInput(draftToServiceInput(draft.value),!editing.value,new Date(),isResidential)
   if(upcoming.value && !confirmed.value) parsed.errors.confirmed='Confirma que el cliente aceptó este horario.'
   if(Object.keys(parsed.errors).length) { await invalid(parsed.errors); return }
   if(!editing.value) await persistDraft()
   const actorId=auth.profile?.id, context=draftContext.value
-  await run((requestId,allowConflicts)=>record.value
-    ? updateAdminService(record.value,requestId,parsed.value,allowConflicts)
-    : createAdminService(requestId,parsed.value,allowConflicts,upcoming.value ? { id:upcoming.value.id,version:upcoming.value.version,confirmed:confirmed.value } : undefined),
+  await run((requestId,resolution)=>record.value
+    ? updateAdminService(record.value,requestId,{
+      ...parsed.value,programacion:resolution?.schedules[0] ?? parsed.value.programacion,
+      refuerzo:parsed.value.refuerzo ? resolution?.schedules[1] ?? parsed.value.refuerzo : null,
+    },resolution?.reassignments ?? [])
+    : createAdminService(requestId,{
+      ...parsed.value,programacion:resolution?.schedules[0] ?? parsed.value.programacion,
+      refuerzo:parsed.value.refuerzo ? resolution?.schedules[1] ?? parsed.value.refuerzo : null,
+    },resolution?.reassignments ?? [],upcoming.value ? { id:upcoming.value.id,version:upcoming.value.version,confirmed:confirmed.value } : undefined),
   async result=>{
     store.applyMutation(result,!record.value)
     completed.value=true; baseline.value=serialize()
@@ -137,7 +151,7 @@ async function save(): Promise<void> {
     <LoadingSkeleton v-if="loading" :rows="8" />
     <StatusPanel v-else-if="loadError" title="No fue posible preparar el servicio" :message="loadError" tone="danger"><BaseButton size="compact" variant="secondary" @click="load(true)">Reintentar</BaseButton></StatusPanel>
     <template v-else-if="store.options">
-      <ServiceSaveFeedback :error="errorMessage" :conflict="conflict" :overlaps="overlaps" :overlap-open="overlapOpen" :saving="saving" @reload="reloadOpen=true" @accept="acceptOverlap" @cancel="cancelOverlap" />
+      <ServiceSaveFeedback :error="errorMessage" :conflict="conflict" :overlaps="overlaps" :overlap-open="overlapOpen" :saving="saving" :technicians="store.options.tecnicos" :current-client-name="conflictClientName" :current-service-is-new="!editing" :schedules="[parsedSchedule(draft.programacion),...(draft.refuerzo ? [parsedSchedule(draft.refuerzo)] : [])]" @reload="reloadOpen=true" @accept="acceptOverlap" @cancel="cancelOverlap" />
       <small v-if="draftStatus" class="svc-muted" role="status">{{ draftStatus }}</small>
       <div v-if="upcoming" class="svc-notice"><BaseCheckbox v-model="confirmed" name="service-client-confirmed" label="El cliente confirmó la fecha y la hora de esta visita" required :disabled="saving || completed" :error="errors.confirmed" /></div>
       <ServiceForm :key="renderVersion" v-model="draft" :workspace="store.options" :record="record" :disabled="saving || completed" :errors="errors" @submit="save" @changed="clearValidation" />

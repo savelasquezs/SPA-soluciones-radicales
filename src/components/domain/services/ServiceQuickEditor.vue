@@ -63,10 +63,10 @@ async function save(): Promise<void> {
     if(payment.value.metodoPago==='EFECTIVO' && payment.value.estadoPago==='CONFIRMADO' && !payment.value.recaudadoPorId) fields.recaudadoPorId='Selecciona quién recibió el efectivo.'
   }
   if(Object.keys(fields).length) { await invalid(fields); return }
-  await run((requestId,allowConflicts)=>{
+  await run((requestId,resolution)=>{
     if(props.mode==='cancel') return cancelAdminService(original.value,requestId,reason.value)
     if(props.mode==='payment') return saveServicePayment(original.value,requestId,{ ...payment.value,recaudadoPorId:payment.value.metodoPago==='EFECTIVO' ? payment.value.recaudadoPorId : null })
-    return reprogramAdminService(original.value,requestId,scheduleFromDraft(schedule.value),allowConflicts,child.value ? scheduleFromDraft(child.value) : undefined)
+    return reprogramAdminService(original.value,requestId,resolution?.schedules[0] ?? scheduleFromDraft(schedule.value),resolution?.reassignments ?? [],child.value ? resolution?.schedules[1] ?? scheduleFromDraft(child.value) : undefined)
   },result=>{ store.applyMutation(result); baseline.value=serialize(); emit('saved',result); emit('close') },props.mode==='cancel' ? 'Servicio cancelado; el historial se conserva.' : props.mode==='payment' ? 'Registro de pago actualizado.' : 'Cambios guardados. Calendar se actualizará en segundo plano.')
 }
 async function reload(): Promise<void> {
@@ -82,9 +82,9 @@ async function reload(): Promise<void> {
 }
 </script>
 <template>
-  <BaseDialog :model-value="true" :title="title" :description="`${original.solicitud} · ${original.clienteNombre} · ${original.sedeNombre}`" class="svc-action-dialog" :close-on-escape="!saving" @update:model-value="!$event && close()">
+  <BaseDialog :model-value="true" :title="title" :description="`${original.solicitud} · ${original.clienteNombre}${original.tipoSede==='RESIDENCIAL' ? '' : ' · '+original.sedeNombre}`" class="svc-action-dialog" :close-on-escape="!saving" @update:model-value="!$event && close()">
     <form id="service-quick-form" class="svc-dialog-stack" novalidate @submit.prevent="save">
-      <ServiceSaveFeedback :error="errorMessage" :conflict="conflict" :overlaps="overlaps" :overlap-open="overlapOpen" :saving="saving" @reload="reloadOpen=true" @accept="acceptOverlap" @cancel="cancelOverlap" />
+      <ServiceSaveFeedback :error="errorMessage" :conflict="conflict" :overlaps="overlaps" :overlap-open="overlapOpen" :saving="saving" :technicians="technicians" :current-client-name="original.clienteNombre" :schedules="[scheduleFromDraft(schedule),...(child ? [scheduleFromDraft(child)] : [])]" @reload="reloadOpen=true" @accept="acceptOverlap" @cancel="cancelOverlap" />
       <template v-if="mode==='schedule' || mode==='team'">
         <section class="svc-card"><h3 v-if="child">Principal · {{ original.solicitud }}</h3><ServiceScheduleFields :model-value="schedule" :technicians="technicians" :show-dates="mode==='schedule'" :disabled="saving || loadingRecord" :errors="errors" @update:model-value="schedule=$event; clearValidation()" /></section>
         <section v-if="child" class="svc-card"><h3>Refuerzo · {{ original.refuerzo?.solicitud }}</h3><ServiceScheduleFields :model-value="child" prefix="refuerzo" :technicians="technicians" :disabled="saving || loadingRecord" :errors="errors" @update:model-value="child=$event; clearValidation()" /></section>

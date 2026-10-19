@@ -46,7 +46,7 @@ La sección **¿Cómo han cambiado los resultados?** presenta cuatro gráficos S
 3. **Insectos que vuelan · Lámparas UV.** Barras agrupadas por especie de insectos voladores en cada fecha.
 4. **Plagas rastreras · Trampas y cebaderos.** Barras agrupadas por especie de plaga rastrera en cada fecha.
 
-Todos los textos explican *qué se contó, dónde y qué significa*. No se presenta el identificador de solicitud al cliente en los ejes ni en los tooltips. Las etiquetas temporales muestran **mes y año** cuando las visitas están distribuidas; si hay varias visitas en un mes, muestran día y mes; y si se repiten fechas en un día, muestran hora. Al consultar un dato, el tooltip incluye la fecha completa.
+Los gráficos presentan **solo el título, indicadores, leyendas, ejes y valores**, sin párrafos descriptivos ni explicaciones repetitivas al ampliarlos. Las etiquetas S/M y 0 conservan su aclaración corta para evitar confusiones. No se presenta el identificador de solicitud al cliente en los ejes ni en los tooltips. Las etiquetas temporales muestran **mes y año** cuando las visitas están distribuidas; si hay varias visitas en un mes, muestran día y mes; y si se repiten fechas en un día, muestran hora. Al consultar un dato, el tooltip incluye la fecha completa.
 
 ### Interacción y ubicación
 
@@ -59,11 +59,13 @@ Todos los textos explican *qué se contó, dónde y qué significa*. No se prese
 
 ### Interpretación, límites e impresión
 
-Bajo las dos primeras gráficas se explica en lenguaje cotidiano el cambio de cumplimiento y las diferencias de voladores y rastreros entre las **dos últimas visitas comparables**. Si falta una medición, se indica que no se puede comparar. Las capturas por sí solas no prueban aumento o reducción de infestación; por eso no se generan proyecciones ni recomendaciones automáticas basadas únicamente en cantidades capturadas. Para comparar periodos con distinta cantidad de puestos, conviene revisar también el número de puestos monitoreados.
+Sobre las gráficas de tendencias aparece el cambio numérico de cumplimiento o capturas entre las **dos últimas visitas comparables**; el detalle por fecha permanece accesible con ratón, teclado o toque. Si falta una medición, la comparación no se inventa. Las capturas por sí solas no prueban aumento o reducción de infestación; por eso no se generan proyecciones ni recomendaciones automáticas basadas únicamente en cantidades capturadas. Para comparar periodos con distinta cantidad de puestos, conviene revisar también el número de puestos monitoreados.
 
-En el informe y en el **PDF A4** se mantienen los ejes, fechas, puntos, barras, leyendas y valores visibles sin depender del tooltip. Los botones Ampliar, tooltips y modales no aparecen impresos. El informe público y el administrativo comparten exactamente los mismos componentes.
+La vista web del informe, tanto administrativa como pública, adopta los modos **Claro, Oscuro y Sistema** de la aplicación. El cliente dispone de un selector compacto en el encabezado público, sin necesidad de iniciar sesión; la elección se conserva en el navegador. Los fondos, bordes, textos, cuadrículas, líneas y tooltips usan variables de tema. Los colores por especie mantienen su identidad, con un ajuste de luminosidad en oscuro.
 
-**Ampliación móvil:** el visor utiliza una superficie clara incluso con la SPA en modo oscuro, con títulos, leyenda, selección y filas de tabla en texto contrastado. Los SVG ampliados se ajustan a su proporción real, sin alturas mínimas artificiales; en las barras por especie se reescala el eje horizontal en pantallas de hasta 600 px para preservar la legibilidad sin espacio vacío. El detalle queda debajo del gráfico en una zona con desplazamiento vertical. Esto no altera el contenido imprimible A4.
+En móviles, el diálogo de ampliación de gráficos presenta una superficie de lectura clara y un contenido compacto, independientemente del tema elegido para el informe. Las series y barras se ajustan al ancho disponible sin alturas mínimas, manteniendo la leyenda y el detalle en orden vertical y el desplazamiento dentro del diálogo. El informe de fondo conserva sus tres modos de apariencia.
+
+Al **imprimir o guardar PDF A4**, se utiliza siempre el tema claro, incluso si la pantalla está en oscuro. Se mantienen los ejes, fechas, puntos, barras, leyendas y valores visibles sin depender del tooltip. Los botones Ampliar, tooltips y modales no aparecen impresos. El informe público y el administrativo comparten exactamente los mismos componentes.
 
 No se agregan migraciones SQL, librerías externas de gráficos ni cambios a la operación del Técnico. La nueva información se adjunta a la respuesta histórica existente del backend.
 

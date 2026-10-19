@@ -13,6 +13,7 @@ La documentación versionada es la referencia viva de Soluciones Radicales MIP.
 | Arquitectura y decisiones | `docs/architecture/` |
 | Base de datos y migraciones | `database/README.md` |
 | Proceso de implementación | `docs/development/workflow.md` |
+| **Despliegue de la API Neon** | **`docs/development/neon-functions-deploy.md`** |
 | Producción de videos de usuario | `docs/development/documentation-videos.md` y `docs/development/user-manual-video-standard.md` |
 | Estado de implementación | `tasks.md`, código y pruebas |
 | Comportamiento implementado | Código y pruebas |
@@ -37,6 +38,7 @@ docs/
 │   ├── cloudflare-workers.md
 │   ├── documentation-videos.md
 │   ├── neon-setup.md
+│   ├── neon-functions-deploy.md
 │   ├── user-manual-video-standard.md
 │   └── workflow.md
 ├── frontend/
@@ -72,3 +74,9 @@ Los storyboards ejecutables de cada video viven junto a sus pruebas en `e2e/docu
 
 - [Comportamiento manual y variables](product/certificates.md).
 - [Motor, configuración privada y comprobación de despliegue](architecture/certificates.md).
+
+## Portal de ayuda
+
+La opción «Ayuda y documentación» del sidebar abre el portal publicado de Mintlify:
+https://soluciones-radicales.mintlify.app. El repositorio técnico conserva las guías
+versionadas, pero no se utiliza como punto de entrada de ayuda para usuarios.

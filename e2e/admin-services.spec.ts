@@ -4,7 +4,7 @@ import { addDateDays, addInstantDays, fromBogotaInput, scheduleEnd, suggestReinf
 import { serviceDateShortcutRange } from '../src/helpers/serviceDateRanges'
 
 const uid=(n: number)=>`10000000-0000-4000-8000-${String(n).padStart(12,'0')}`
-const ids={ admin:uid(1),tech:uid(2),other:uid(3),third:uid(4),site:uid(5),client:uid(6),product:uid(7),principal:uid(8),refuerzo:uid(9),upcoming:uid(10) }
+const ids={ admin:uid(1),tech:uid(2),other:uid(3),third:uid(4),site:uid(5),client:uid(6),product:uid(7),principal:uid(8),refuerzo:uid(9),upcoming:uid(10),homeSite:uid(11),homeClient:uid(12) }
 const day=todayBogota()
 const start=fromBogotaInput(`${day}T09:00`)
 const listUrl=`/servicios?from=${day}&to=${addDateDays(day,45)}`
@@ -12,7 +12,8 @@ const technician=(id: string,name: string): ServiceTechnician=>({ id,nombreCompl
 const people=[technician(ids.tech,'Camilo Ruiz'),technician(ids.other,'Ana Torres'),technician(ids.third,'Mateo Díaz')]
 const contact={ nombre:'Laura de prueba',celular:'+573000000001',correos:['cliente@example.invalid'] }
 const workspace: ServiceWorkspace={
-  sedes:[{ id:ids.site,clientId:ids.client,clienteNombre:'Casa Verde',nombre:'Laureles',direccion:'Dirección sintética de prueba',valorServicio:300000,periodicidadMeses:1,duracionServicioMinutos:90,manejaRefuerzo:true,contacto:contact }],
+  sedes:[{ id:ids.site,clientId:ids.client,clienteNombre:'Casa Verde',nombre:'Laureles',direccion:'Dirección sintética de prueba',valorServicio:300000,periodicidadMeses:1,duracionServicioMinutos:90,manejaRefuerzo:true,tipoSede:'NEGOCIO',contacto:contact },
+    { id:ids.homeSite,clientId:ids.homeClient,clienteNombre:'Santiago Velásquez',nombre:'Santiago Velásquez',direccion:'Carrera 12 # 34-56',tipoSede:'RESIDENCIAL',valorServicio:null,periodicidadMeses:null,duracionServicioMinutos:null,manejaRefuerzo:false,contacto:{nombre:'Santiago Velásquez',celular:'+573001234567',correos:[]} }],
   tecnicos:people,productos:[{ id:ids.product,nombre:'Producto de prueba',principioActivo:'Composición de prueba',dosisAplicacion:'5 mL/L',metodos:[{ codigo:'ASPERSION',nombre:'Aspersión' }],activo:true }],
 }
 function record(id=ids.principal,kind: 'PRINCIPAL' | 'REFUERZO'='PRINCIPAL'): AdminService {
@@ -20,7 +21,7 @@ function record(id=ids.principal,kind: 'PRINCIPAL' | 'REFUERZO'='PRINCIPAL'): Ad
   return {
     id,solicitud:isRef ? 'SR-0102' : 'SR-0101',tipoServicio:kind,estado:'PROGRAMADO',version:1,
     inicioProgramado:beginning,finProgramado:new Date(new Date(beginning).getTime()+90*60_000).toISOString(),
-    tecnicoResponsableId:ids.tech,tecnicosColaboradoresIds:[ids.other],clientId:ids.client,clienteNombre:'Casa Verde',sedeId:ids.site,sedeNombre:'Laureles',direccion:'Dirección sintética de prueba',
+    tecnicoResponsableId:ids.tech,tecnicosColaboradoresIds:[ids.other],clientId:ids.client,clienteNombre:'Casa Verde',sedeId:ids.site,sedeNombre:'Laureles',tipoSede:'NEGOCIO',direccion:'Dirección sintética de prueba',
     servicioPrincipalId:isRef ? ids.principal : null,inicioReal:null,finReal:null,responsable:people[0]!,colaboradores:[people[1]!],contacto:contact,
     valorServicio:isRef ? 0 : 300000,observaciones:'',productos:[],refuerzo:null,principal:null,
     pago:{ metodoPago:isRef ? null : 'EFECTIVO',estadoPago:isRef ? 'SIN_REGISTRAR' : 'PENDIENTE',tecnicoRecaudoPrevistoId:isRef ? null : ids.tech,
@@ -44,7 +45,7 @@ interface Body {
 async function setup(page: Page, role: 'ADMINISTRADOR' | 'TECNICO'='ADMINISTRADOR') {
   const records=[record(),record(ids.refuerzo,'REFUERZO')]
   let next=proposal(), counter=20, failList=false, conflictOnce=false, lostResponse=false
-  const calls: { path: string; method: string; body?: Body }[]=[]
+  const calls: { path: string; method: string; body?: Body; query?: string }[]=[]
   const journal=new Map<string,ServiceMutation>()
   function synchronize(): void {
     for(const item of records) {
@@ -70,7 +71,7 @@ async function setup(page: Page, role: 'ADMINISTRADOR' | 'TECNICO'='ADMINISTRADO
     const request=route.request(), url=new URL(request.url()), path=url.pathname, method=request.method()
     if(method==='OPTIONS') { await route.fulfill({ status:204 });return }
     const body=method==='GET' ? undefined : request.postDataJSON() as Body
-    calls.push({ path,method,body })
+    calls.push({ path,method,body,query:url.searchParams.toString() })
     if(path==='/api/session') { await json(route,{ id:ids.admin,nombreCompleto:'Admin de prueba',correoGoogle:'admin@example.test',esAdmin:role==='ADMINISTRADOR',esTecnico:role==='TECNICO',rolActivo:role,requiereSeleccionRol:false });return }
     if(path==='/api/certificates/settings') { await json(route,{ templates:[],converterReady:true });return }
     if(path==='/api/clients') { await json(route,url.searchParams.get('active')==='false' ? [] : [{ id:ids.client,nombre:'Casa Verde',tipoCliente:'NEGOCIO',nit:'CI-1',correos:contact.correos,activo:true,version:1,vigenciaCertificadoMeses:12,sedesCount:1 }]);return }
@@ -94,11 +95,18 @@ async function setup(page: Page, role: 'ADMINISTRADOR' | 'TECNICO'='ADMINISTRADO
         const d=toBogotaInput(item.inicioProgramado).slice(0,10)
         return d >= (url.searchParams.get('from') || '') && d <= (url.searchParams.get('to') || '9999') && (url.searchParams.get('tab')!=='history' || ['FINALIZADO','CANCELADO'].includes(item.estado))
       })
-      await json(route,{ items,total:items.length,page:1,pageSize:25,pendingCount:count() });return
+      const pageNumber=Number(url.searchParams.get('page') || '1')
+      const pageSize=Number(url.searchParams.get('pageSize') || '25')
+      await json(route,{ items:items.slice((pageNumber-1)*pageSize,pageNumber*pageSize),total:items.length,page:pageNumber,pageSize,pendingCount:count() });return
     }
     if(path===base && method==='POST' && body) {
       if(journal.has(body.requestId)) { await json(route,journal.get(body.requestId),201);return }
       const created=record(uid(counter++));created.solicitud=`SR-${counter}`;created.tecnicosColaboradoresIds=[]
+      const site=workspace.sedes.find(item=>item.id===body.input.sedeId)!
+      created.clientId=site.clientId;created.clienteNombre=site.clienteNombre;created.sedeId=site.id
+      created.sedeNombre=site.nombre;created.tipoSede=site.tipoSede;created.direccion=site.direccion
+      created.valorServicio=site.tipoSede==='RESIDENCIAL' ? body.input.valorServicio ?? 0 : site.valorServicio ?? 0
+      created.contacto=site.contacto
       schedule(created,body.input.programacion);created.observaciones=body.input.observaciones
       created.productos=body.input.productos.map(product=>({ ...product,id:uid(counter++),nombre:'Producto de prueba',dosis:'5 mL/L',metodoAplicacionNombre:'Aspersión',activo:true,aplicado:false }))
       created.pago={ ...created.pago,...body.input.cobro,
@@ -106,10 +114,14 @@ async function setup(page: Page, role: 'ADMINISTRADOR' | 'TECNICO'='ADMINISTRADO
         recaudadoPorId:body.input.cobro.pagado ? body.input.cobro.recaudadoPorId ?? null : null,
         recaudadoPorNombre:body.input.cobro.pagado && body.input.cobro.recaudadoPorId===ids.admin ? 'Admin de prueba' : null,
       }
-      const child=record(uid(counter++),'REFUERZO');child.solicitud=`SR-${counter}`;child.servicioPrincipalId=created.id
-      schedule(child,body.input.refuerzo ?? suggestReinforcement(body.input.programacion));records.push(created,child)
+      const createdItems=[created]
+      if(site.manejaRefuerzo) {
+        const child=record(uid(counter++),'REFUERZO');child.solicitud=`SR-${counter}`;child.servicioPrincipalId=created.id
+        schedule(child,body.input.refuerzo ?? suggestReinforcement(body.input.programacion));records.push(child);createdItems.push(child)
+      }
+      records.push(created)
       if(body.upcoming) next={ ...next,estado:'CONFIRMADO',servicioAgendadoId:created.id,version:next.version+1 }
-      const saved=result([created,child],body.upcoming ? next : null);journal.set(body.requestId,saved)
+      const saved=result(createdItems,body.upcoming ? next : null);journal.set(body.requestId,saved)
       if(lostResponse) { lostResponse=false;await route.abort('failed');return }
       await json(route,saved,201);return
     }
@@ -163,6 +175,47 @@ async function selectSiteAndTeam(page: Page): Promise<void> {
   await page.locator('#servicio-sede').selectOption(ids.site)
   await page.locator('#programacion-responsable').selectOption(ids.tech)
 }
+
+test('programa una visita residencial sin mostrar sede y exige el precio de esta visita',async({ page })=>{
+  const api=await setup(page)
+  await page.goto(listUrl)
+  await page.getByRole('button',{name:'Programar servicio',exact:true}).click()
+  await page.locator('#servicio-cliente').fill('Santiago')
+  await page.getByRole('listbox',{name:'Cliente'}).getByRole('option',{name:'Santiago Velásquez'}).click()
+  await expect(page.locator('#servicio-sede')).toHaveCount(0)
+  await expect(page.locator('#servicio-valor')).toBeVisible()
+  await expect(page.getByText('Dirección de la visita: Carrera 12 # 34-56')).toBeVisible()
+  await page.locator('#programacion-responsable').selectOption(ids.tech)
+  await page.getByRole('button',{name:'Agendar servicio',exact:true}).first().click()
+  await expect(page.locator('#servicio-valor')).toHaveAttribute('aria-invalid','true')
+  expect(api.calls.filter(call=>call.path==='/api/admin/services'&&call.method==='POST')).toHaveLength(0)
+  await page.locator('#servicio-valor').fill('85000')
+  await page.getByRole('button',{name:'Agendar servicio',exact:true}).first().click()
+  await expect(page).toHaveURL(url=>url.pathname==='/servicios')
+  const call=api.calls.find(item=>item.path==='/api/admin/services'&&item.method==='POST')!
+  expect(call.body?.input).toMatchObject({sedeId:ids.homeSite,valorServicio:85000,refuerzo:null})
+  const created=api.records.find(item=>item.sedeId===ids.homeSite)
+  expect(created).toMatchObject({clienteNombre:'Santiago Velásquez',valorServicio:85000,tipoSede:'RESIDENCIAL',refuerzo:null})
+})
+
+test('precarga la tarifa residencial de la sede interna y permite sobrescribirla para la visita',async({ page })=>{
+  const api=await setup(page)
+  await page.route('https://api.example.test/api/admin/services/workspace',route=>route.fulfill({ json:{
+    ...workspace,
+    sedes:workspace.sedes.map(site=>site.id===ids.homeSite ? { ...site,valorServicio:105000 } : site),
+  } }))
+  await page.goto(listUrl)
+  await page.getByRole('button',{name:'Programar servicio',exact:true}).click()
+  await page.locator('#servicio-cliente').fill('Santiago')
+  await page.getByRole('listbox',{name:'Cliente'}).getByRole('option',{name:'Santiago Velásquez'}).click()
+  await expect(page.locator('#servicio-valor')).toHaveValue('105000')
+  await page.locator('#servicio-valor').fill('95000')
+  await page.locator('#programacion-responsable').selectOption(ids.tech)
+  await page.getByRole('button',{name:'Agendar servicio',exact:true}).first().click()
+  await expect(page).toHaveURL(url=>url.pathname==='/servicios')
+  const call=api.calls.find(item=>item.path==='/api/admin/services'&&item.method==='POST')!
+  expect(call.body?.input).toMatchObject({ sedeId:ids.homeSite,valorServicio:95000,refuerzo:null })
+})
 
 test('clickable team cell reuses the loaded snapshot and multiselect excludes the responsible',async({ page })=>{
   const api=await setup(page);await page.goto(listUrl)
@@ -393,7 +446,38 @@ test('weekly calendar expands its time grid and reveals operational detail on ho
   await expect(popover).toBeVisible()
   await expect(popover).toContainText('Dirección sintética de prueba')
   await expect(popover).toContainText('Técnico: Camilo Ruiz')
-  await expect(popover).toContainText('Programado')
+  await expect(popover.locator('.svc-week-calendar__popover-state')).toContainText('Pendiente de realizar')
+  await expect(popover.locator('.svc-week-calendar__popover-state svg')).toHaveCount(1)
+})
+
+test('weekly calendar highlights every service state and preserves accent on hover',async({page})=>{
+  const api=await setup(page)
+  const states=['PROGRAMADO','EN_PROCESO','FINALIZADO','CANCELADO'] as const
+  const labels=['Pendiente de realizar','Servicio en proceso','Servicio finalizado','Servicio cancelado']
+  api.records.splice(0,api.records.length,...states.map((state,index)=>{
+    const item=record(uid(80+index))
+    item.estado=state
+    item.inicioProgramado=fromBogotaInput(`${day}T${String(9+index*2).padStart(2,'0')}:00`)
+    item.finProgramado=new Date(new Date(item.inicioProgramado).getTime()+90*60_000).toISOString()
+    return item
+  }))
+  await page.goto(`/servicios?view=week&from=${day}`)
+  const calendar=page.getByRole('region',{name:'Agenda semanal por horas'})
+  const colors:string[]=[]
+  for(const [index,state] of states.entries()) {
+    const event=calendar.locator('.svc-week-calendar__event--'+state)
+    await expect(event).toHaveCount(1)
+    await expect(event).toHaveCSS('border-left-width','4px')
+    const accent=await event.evaluate(element=>getComputedStyle(element).borderLeftColor)
+    colors.push(accent)
+    const indicator=event.locator('.svc-week-calendar__popover-state')
+    await expect(indicator).toContainText(labels[index]!)
+    await expect(indicator.locator('svg')).toHaveCount(1)
+    await event.hover()
+    await expect(event.locator('.svc-week-calendar__popover')).toBeVisible()
+    expect(await event.evaluate(element=>getComputedStyle(element).borderLeftColor)).toBe(accent)
+  }
+  expect(new Set(colors).size).toBe(4)
 })
 
 test('error retry, compact desktop, dark mode and mobile do not overflow the page',async({ page },info)=>{
@@ -436,4 +520,292 @@ test('opens certificates with the finalized service already selected without a h
   await expect(page.locator('#cert-site')).toHaveValue(ids.site)
   expect(api.calls.filter(call=>call.path==='/api/certificates/services')).toHaveLength(0)
   expect(api.calls.filter(call=>call.method==='POST')).toHaveLength(0)
+})
+
+
+test('concurrent weekly events use a short time and wrap the client vertically',async({page})=>{
+  const api=await setup(page)
+  const starts=['09:00','09:07','16:00','16:07']
+  api.records.splice(0,api.records.length,...starts.map((time,index)=>{
+    const item=record(uid(100+index))
+    item.clienteNombre='El señor arroz'
+    item.inicioProgramado=fromBogotaInput(`${day}T${time}`)
+    item.finProgramado=new Date(new Date(item.inicioProgramado).getTime()+(index<2?90:30)*60_000).toISOString()
+    return item
+  }))
+  await page.setViewportSize({width:1440,height:900})
+  await page.goto(`/agenda?view=week&from=${day}`)
+  const calendar=page.getByRole('region',{name:'Agenda semanal por horas'})
+  const narrow=calendar.locator('.svc-week-calendar__event--narrow')
+  await expect(narrow).toHaveCount(4)
+  const tall=narrow.filter({has:page.locator('.svc-week-calendar__event-short-time', {hasText:'9:00'})})
+  await expect(tall.locator('.svc-week-calendar__event-short-time')).toHaveText('9:00')
+  const name=tall.locator('.svc-week-calendar__event-narrow-name')
+  await expect(name).toHaveText('El señor arroz')
+  await expect(name).toHaveCSS('font-size','10px')
+  await expect(name).toHaveCSS('white-space','normal')
+  await expect(name).toHaveCSS('-webkit-line-clamp','2')
+  const detail=tall.locator('.svc-week-calendar__event-detail')
+  await expect(detail).toHaveCSS('opacity','0')
+  await tall.hover()
+  await expect(detail).toHaveCSS('opacity','1')
+  const short=narrow.filter({has:page.locator('.svc-week-calendar__event-short-time', {hasText:'4:00'})})
+  await expect(short.locator('.svc-week-calendar__event-narrow-name')).toHaveCSS('-webkit-line-clamp','1')
+  await expect(short.locator('.svc-week-calendar__event-short-time')).toHaveText('4:00')
+})
+
+test('weekly calendar confirms drag rescheduling, preserves the Refuerzo, and never saves on cancel',async({ page })=>{
+  const api=await setup(page)
+  const weekStart=addDateDays(day,-((new Date(day+'T00:00:00Z').getUTCDay()+6)%7)+7)
+  const old=fromBogotaInput(weekStart+'T09:00')
+  api.records[0]!.inicioProgramado=old
+  api.records[0]!.finProgramado=scheduleEnd({ inicioProgramado:old,duracionMinutos:90 })
+  const childStart=api.records[1]!.inicioProgramado
+  await page.goto('/agenda?view=week&from='+weekStart)
+  const source=page.locator('.svc-week-calendar__event[data-service-id="'+ids.principal+'"]')
+  const destination=page.locator('.svc-week-calendar__day[data-date="'+addDateDays(weekStart,1)+'"]')
+  await source.dragTo(destination,{ sourcePosition:{ x:12,y:12 },targetPosition:{ x:35,y:150 } })
+  const dialog=page.getByRole('dialog',{ name:'Confirmar nueva fecha' })
+  await expect(dialog).toBeVisible()
+  expect(api.calls.filter(call=>call.method==='POST' && call.path.endsWith('/reschedule'))).toHaveLength(0)
+  await dialog.getByRole('button',{ name:'Cancelar' }).click()
+  await expect(dialog).toHaveCount(0)
+  expect(api.records[0]!.inicioProgramado).toBe(old)
+  await source.dragTo(destination,{ sourcePosition:{ x:12,y:12 },targetPosition:{ x:35,y:150 } })
+  await expect(dialog).toContainText('El Refuerzo conservará su fecha')
+  await dialog.getByRole('button',{ name:'Mover servicio' }).click()
+  await expect(dialog).toHaveCount(0)
+  await expect.poll(()=>api.calls.filter(call=>call.method==='POST' && call.path.endsWith('/reschedule')).length).toBe(1)
+  const request=api.calls.find(call=>call.method==='POST' && call.path.endsWith('/reschedule'))!
+  expect(toBogotaInput(request.body!.programacion.inicioProgramado).slice(0,10)).toBe(addDateDays(weekStart,1))
+  expect(request.body!.programacion.duracionMinutos).toBe(90)
+  expect(request.body!.refuerzo).toBeUndefined()
+  expect(api.records[1]!.inicioProgramado).toBe(childStart)
+})
+
+test('weekly calendar opens quick rescheduling and prefills creation from an empty hour',async({ page })=>{
+  const api=await setup(page)
+  const weekStart=addDateDays(day,-((new Date(day+'T00:00:00Z').getUTCDay()+6)%7)+7)
+  const scheduled=fromBogotaInput(weekStart+'T09:00')
+  api.records[0]!.inicioProgramado=scheduled
+  api.records[0]!.finProgramado=scheduleEnd({ inicioProgramado:scheduled,duracionMinutos:90 })
+  await page.goto('/agenda?view=week&from='+weekStart)
+  await page.getByRole('button',{ name:/Reprogramar SR-0101/ }).click()
+  await expect(page.getByRole('dialog',{ name:'Reprogramar servicio' })).toBeVisible()
+  await page.getByRole('dialog',{ name:'Reprogramar servicio' }).getByRole('button',{ name:'Volver' }).click()
+  const target=addDateDays(weekStart,2)
+  await page.locator('.svc-week-calendar__slot-target[data-date="'+target+'"]').click({ position:{ x:25,y:160 } })
+  await expect(page).toHaveURL(/\/servicios\/nuevo/)
+  const requested=new URL(page.url()).searchParams.get('start')
+  expect(requested).toBeTruthy()
+  expect(toBogotaInput(requested!).slice(0,10)).toBe(target)
+  await expect(page.locator('#programacion-inicio')).toHaveValue(new RegExp(toBogotaInput(requested!).slice(11,16)))
+})
+
+
+test('mobile service cards are dense and preserve the actions for a programmed visit',async({page},info)=>{
+  await setup(page)
+  await page.setViewportSize({width:390,height:844})
+  await page.goto(listUrl)
+  const cards=page.locator('.svc-table-region--services [data-service-id]')
+  await expect(cards).toHaveCount(2)
+  const first=cards.filter({has:page.getByRole('link',{name:/Casa Verde/})}).first()
+  await expect(first).toBeVisible()
+  await expect(first.locator('.svc-record-date-mobile')).toBeVisible()
+  await expect(first.locator('.svc-mobile-service-meta')).toContainText('Principal')
+  await expect(first.locator('.svc-record-kind')).toBeHidden()
+  await expect(first.locator('.svc-record-contact')).toContainText('300')
+  await expect(first.locator('.svc-record-payment')).toContainText('300.000')
+  await expect.poll(()=>first.evaluate(node=>Math.round(node.getBoundingClientRect().height))).toBeLessThanOrEqual(235)
+  await first.getByRole('button',{name:'Acciones de SR-0101'}).click()
+  const actions=page.getByRole('dialog',{name:'Acciones · SR-0101'})
+  await expect(actions).toBeVisible()
+  await expect(actions.getByRole('button',{name:'Reprogramar'})).toBeVisible()
+  await expect(actions.getByRole('button',{name:'Cambiar equipo'})).toBeVisible()
+  await expect(actions.getByRole('button',{name:'Editar servicio'})).toBeVisible()
+  await expect(actions.getByRole('button',{name:'Registrar pago'})).toBeVisible()
+  await expect(actions.getByRole('button',{name:'Cancelar servicio'})).toBeVisible()
+  await actions.getByRole('button',{name:'Reprogramar'}).click()
+  await expect(page.getByRole('dialog',{name:'Reprogramar servicio'})).toBeVisible()
+  await page.getByRole('dialog',{name:'Reprogramar servicio'}).getByRole('button',{name:'Volver'}).click()
+  await page.screenshot({path:info.outputPath('services-compact-mobile-dark.png'),fullPage:true})
+})
+
+test('mobile date and advanced filters stay compact, with responsive layout and URL state',async({page},info)=>{
+  await setup(page)
+  await page.setViewportSize({width:390,height:844})
+  await page.goto(listUrl)
+  await expect(page.getByRole('button',{name:/Filtros/})).toBeVisible()
+  await expect(page.getByRole('combobox',{name:'Estado'})).toHaveCount(0)
+  await expect(page.getByRole('button',{name:'Fechas anteriores'})).toBeVisible()
+  await page.getByRole('button',{name:/Filtros/}).click()
+  await expect(page.getByRole('combobox',{name:'Estado'})).toBeVisible()
+  await expect(page.getByRole('combobox',{name:'Tipo'})).toBeVisible()
+  await expect(page.getByRole('combobox',{name:'Técnico'})).toBeVisible()
+  await page.getByRole('combobox',{name:'Estado'}).selectOption('PROGRAMADO')
+  await expect(page.getByRole('button',{name:'Filtros (1)'})).toBeVisible()
+  await expect(page).toHaveURL(/estado=PROGRAMADO/)
+  await page.getByRole('button',{name:'Limpiar filtros'}).click()
+  await expect(page.getByRole('combobox',{name:'Estado'})).toHaveCount(0)
+  await expect(page).not.toHaveURL(/estado=PROGRAMADO/)
+  await page.getByRole('button',{name:'Fechas anteriores'}).click()
+  await expect(page).toHaveURL(new RegExp('from='+addDateDays(day,-1)))
+  await page.getByRole('button',{name:'Fechas siguientes'}).click()
+  await expect(page).toHaveURL(new RegExp('from='+day))
+  await page.locator('.svc-mobile-datebar__range').click()
+  await expect(page.getByRole('group',{name:'Rangos rápidos de fecha'})).toBeVisible()
+  await page.getByRole('button',{name:'Hoy',exact:true}).click()
+  await expect(page.getByRole('group',{name:'Rangos rápidos de fecha'})).toHaveCount(0)
+  for(const width of [320,360,390,768]) {
+    await page.setViewportSize({width,height:844})
+    await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1)).toBe(true)
+  }
+  await page.setViewportSize({width:390,height:844})
+  await page.evaluate(()=>{document.documentElement.dataset.theme='light'})
+  await page.screenshot({path:info.outputPath('services-compact-mobile-light.png'),fullPage:true})
+  await page.evaluate(()=>{document.documentElement.dataset.theme='dark'})
+  await page.screenshot({path:info.outputPath('services-compact-mobile-dark.png'),fullPage:true})
+})
+
+
+test('extra compact mobile spacing preserves service and upcoming access',async({page},info)=>{
+  await setup(page)
+  await page.setViewportSize({width:390,height:844})
+  await page.goto(listUrl)
+  const services=page.locator('.svc-table-region--services [data-service-id]')
+  await expect(services).toHaveCount(2)
+  await expect.poll(()=>services.first().evaluate(node=>Math.round(node.getBoundingClientRect().height))).toBeLessThanOrEqual(220)
+  await expect(services.first().getByRole('button',{name:'Acciones de SR-0101'})).toBeVisible()
+  await page.getByRole('tab',{name:/Próximos por confirmar/}).click()
+  const upcoming=page.locator('.svc-table-region--upcoming [data-upcoming-id]')
+  await expect(upcoming).toBeVisible()
+  await expect(upcoming.locator('[data-label="Cliente y sede"]')).toContainText('Casa Verde')
+  await expect(upcoming.locator('[data-label="Seguimiento"]')).toContainText('Pendiente')
+  await expect(upcoming.getByRole('button',{name:'Agendar'})).toBeVisible()
+  await expect.poll(()=>upcoming.evaluate(node=>Math.round(node.getBoundingClientRect().height))).toBeLessThanOrEqual(285)
+  await page.screenshot({path:info.outputPath('upcoming-compact-spacing-mobile.png'),fullPage:true})
+  await page.setViewportSize({width:320,height:844})
+  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1)).toBe(true)
+  await expect.poll(()=>upcoming.evaluate(node=>Math.round(node.getBoundingClientRect().height))).toBeLessThanOrEqual(335)
+})
+
+
+test('mobile week defaults to the first occupied day and switches dates without refetching',async({page},info)=>{
+  const api=await setup(page)
+  await page.setViewportSize({width:390,height:844})
+  const weekStart=addDateDays(day,-((new Date(day+'T00:00:00Z').getUTCDay()+6)%7)+7)
+  const tuesday=addDateDays(weekStart,1),thursday=addDateDays(weekStart,3)
+  api.records[0]!.inicioProgramado=fromBogotaInput(tuesday+'T09:00')
+  api.records[0]!.finProgramado=fromBogotaInput(tuesday+'T10:30')
+  api.records[1]!.inicioProgramado=fromBogotaInput(thursday+'T11:30')
+  api.records[1]!.finProgramado=fromBogotaInput(thursday+'T12:00')
+  await page.goto('/agenda?view=week&from='+weekStart)
+  const strip=page.getByRole('navigation',{name:'Días de la semana'})
+  await expect(strip).toBeVisible()
+  await expect(strip.locator('[aria-pressed="true"]')).toHaveAttribute('data-date',tuesday)
+  await expect(page.getByRole('region',{name:'Servicios del día'})).toContainText('Casa Verde')
+  await expect(page.getByRole('region',{name:'Servicios del día'})).toContainText('09:00')
+  const before=api.calls.filter(call=>call.method==='GET' && call.path==='/api/admin/services').length
+  await strip.locator('[data-date="'+thursday+'"]').click()
+  await expect(page).toHaveURL(new RegExp('day='+thursday))
+  await expect(strip.locator('[aria-pressed="true"]')).toHaveAttribute('data-date',thursday)
+  await expect(page.getByRole('region',{name:'Servicios del día'})).toContainText('11:30')
+  expect(api.calls.filter(call=>call.method==='GET' && call.path==='/api/admin/services')).toHaveLength(before)
+  await page.getByRole('button',{name:'Horario',exact:true}).click()
+  const timeline=page.getByRole('region',{name:'Horario del día'})
+  await expect(timeline).toBeVisible()
+  await expect(timeline.locator('.svc-week-calendar__day')).toHaveCount(1)
+  await expect(timeline.locator('[data-service-id="'+ids.refuerzo+'"]')).toBeVisible()
+  await page.getByRole('button',{name:'Lista',exact:true}).click()
+  await expect(page.getByRole('region',{name:'Servicios del día'})).toBeVisible()
+  await expect(strip.locator('[aria-pressed="true"]')).toHaveAttribute('data-date',thursday)
+  await page.screenshot({path:info.outputPath('mobile-week-day-list.png'),fullPage:true})
+  await page.evaluate(()=>{document.documentElement.dataset.theme='dark'})
+  await page.screenshot({path:info.outputPath('mobile-week-day-list-dark.png'),fullPage:true})
+  for(const width of [320,360,390]) {
+    await page.setViewportSize({width,height:844})
+    await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1)).toBe(true)
+  }
+})
+
+test('mobile week keeps selected date for creation and return navigation',async({page})=>{
+  await setup(page)
+  await page.setViewportSize({width:390,height:844})
+  const weekStart=addDateDays(day,-((new Date(day+'T00:00:00Z').getUTCDay()+6)%7)+7)
+  const emptyDay=addDateDays(weekStart,4)
+  await page.goto('/agenda?view=week&from='+weekStart)
+  await page.locator('.svc-day-strip__day[data-date="'+emptyDay+'"]').click()
+  await expect(page.getByRole('region',{name:'Servicios del día'})).toContainText('No hay servicios')
+  await page.getByRole('button',{name:'Programar servicio',exact:true}).click()
+  await expect(page).toHaveURL(/\/servicios\/nuevo/)
+  const url=new URL(page.url())
+  const requested=url.searchParams.get('start')
+  expect(requested).toBeTruthy()
+  expect(toBogotaInput(requested!).slice(0,10)).toBe(emptyDay)
+  expect(decodeURIComponent(url.searchParams.get('returnTo') ?? '')).toContain('day='+emptyDay)
+  await page.getByRole('button',{name:'Volver',exact:true}).first().click()
+  await expect(page).toHaveURL(new RegExp('day='+emptyDay))
+  await expect(page.locator('.svc-day-strip__day[aria-pressed="true"]')).toHaveAttribute('data-date',emptyDay)
+})
+
+test('short mobile timeline events remain accessible while desktop uses seven columns',async({page})=>{
+  const api=await setup(page)
+  const weekStart=addDateDays(day,-((new Date(day+'T00:00:00Z').getUTCDay()+6)%7)+7)
+  const target=addDateDays(weekStart,2)
+  for(const [index,minutes] of [15,30].entries()){
+    const item=api.records[index]!
+    item.inicioProgramado=fromBogotaInput(target+'T08:'+String(index*15).padStart(2,'0'))
+    item.finProgramado=new Date(new Date(item.inicioProgramado).getTime()+minutes*60_000).toISOString()
+  }
+  await page.setViewportSize({width:320,height:844})
+  await page.goto('/agenda?view=week&from='+weekStart+'&day='+target+'&mobileView=hours')
+  const timeline=page.getByRole('region',{name:'Horario del día'})
+  await expect(timeline.locator('.svc-week-calendar__day')).toHaveCount(1)
+  await expect(timeline.locator('.svc-week-calendar__event-main--narrow')).toHaveCount(2)
+  await expect(timeline.locator('.svc-week-calendar__event-short-time').first()).toHaveText('8:00')
+  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1)).toBe(true)
+  await timeline.getByRole('button',{name:/Reprogramar SR-0101/}).click()
+  await expect(page.getByRole('dialog',{name:'Reprogramar servicio'})).toBeVisible()
+  await page.getByRole('dialog',{name:'Reprogramar servicio'}).getByRole('button',{name:'Volver'}).click()
+  await page.setViewportSize({width:1440,height:900})
+  const weekly=page.getByRole('region',{name:'Agenda semanal por horas'})
+  await expect(weekly).toBeVisible()
+  await expect(weekly.locator('.svc-week-calendar__day')).toHaveCount(7)
+})
+
+test('weekly view fetches beyond 100 services so no selected day is falsely empty',async({page})=>{
+  const api=await setup(page)
+  const weekStart=addDateDays(day,-((new Date(day+'T00:00:00Z').getUTCDay()+6)%7)+7)
+  const target=addDateDays(weekStart,4)
+  for(let index=0;index<105;index++){
+    const item=record(uid(500+index))
+    item.solicitud='SR-'+String(500+index)
+    item.inicioProgramado=fromBogotaInput(target+'T'+String(9+Math.floor(index/60)).padStart(2,'0')+':'+String(index%60).padStart(2,'0'))
+    item.finProgramado=new Date(new Date(item.inicioProgramado).getTime()+15*60_000).toISOString()
+    api.records.push(item)
+  }
+  await page.setViewportSize({width:390,height:844})
+  await page.goto('/agenda?view=week&from='+weekStart)
+  await expect(page.locator('.svc-day-strip__day[data-date="'+target+'"]')).toHaveAttribute('aria-label',/105 servicios/)
+  await expect(page.locator('.svc-day-list__items [data-service-id]')).toHaveCount(105)
+  expect(api.calls.some(call=>call.path==='/api/admin/services' && call.query?.includes('page=2'))).toBe(true)
+  await page.locator('.svc-day-strip__day[data-date="'+target+'"]').click()
+  await expect(page.locator('.svc-day-list__items [data-service-id]')).toHaveCount(105)
+})
+
+
+test('mobile day selection survives visiting and returning from a completed service',async({page})=>{
+  const api=await setup(page)
+  await page.setViewportSize({width:390,height:844})
+  const weekStart=addDateDays(day,-((new Date(day+'T00:00:00Z').getUTCDay()+6)%7)+7)
+  const target=addDateDays(weekStart,2)
+  api.records[0]!.inicioProgramado=fromBogotaInput(target+'T09:00')
+  api.records[0]!.finProgramado=fromBogotaInput(target+'T10:30')
+  api.records[0]!.estado='FINALIZADO'
+  await page.goto('/agenda?view=week&from='+weekStart+'&day='+target)
+  await page.getByRole('region',{name:'Servicios del día'}).getByRole('button',{name:/Ver SR-0101/}).click()
+  await expect(page).toHaveURL(/\/servicios\/[0-9a-f-]{36}/)
+  await page.getByRole('button',{name:'Agenda',exact:true}).click()
+  await expect(page).toHaveURL(new RegExp('day='+target))
+  await expect(page.locator('.svc-day-strip__day[aria-pressed="true"]')).toHaveAttribute('data-date',target)
 })

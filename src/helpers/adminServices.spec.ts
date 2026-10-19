@@ -31,11 +31,21 @@ describe('administrator service contracts',()=>{
     const value=input();const product={ productoId:collaborator,lote:'',fechaVencimiento:null };value.productos=[product,product]
     expect(validateServiceInput(value).errors.productos).toBeTruthy()
   })
-  it('keeps planned collection separate and strips untrusted price and terminal-state fields',()=>{
+  it('validates manual price but strips untrusted state fields',()=>{
     const value=validateServiceInput({ ...input(),valorServicio:1,estado:'FINALIZADO',cobro:{ metodoPago:'TRANSFERENCIA',tecnicoRecaudoPrevistoId:responsible } })
     expect(value.errors).toHaveProperty('cobro.tecnicoRecaudoPrevistoId')
-    expect(value.value).not.toHaveProperty('valorServicio')
+    expect(value.value.valorServicio).toBe(1)
     expect(value.value).not.toHaveProperty('estado')
+  })
+  it('requires a nonnegative integer price for residential services only',()=>{
+    expect(validateServiceInput(input(),false,new Date(),true).errors).toHaveProperty('valorServicio')
+    expect(validateServiceInput({ ...input(),valorServicio:0 },false,new Date(),true).errors).toEqual({})
+    expect(validateServiceInput({ ...input(),valorServicio:-1 }).errors).toHaveProperty('valorServicio')
+    expect(validateServiceInput({ ...input(),valorServicio:1.5 }).errors).toHaveProperty('valorServicio')
+    expect(validateServiceInput({ ...input(),valorServicio:'30000' }).errors).toHaveProperty('valorServicio')
+    const draft=emptyServiceDraft()
+    draft.valorServicio='45000'
+    expect(draftToServiceInput(draft).valorServicio).toBe(45000)
   })
   it('requires only the batch from the visit and ignores catalogue values sent by clients',()=>{
     const value=input();value.productos=[{ productoId:collaborator,lote:'',fechaVencimiento:null }]

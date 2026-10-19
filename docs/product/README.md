@@ -62,9 +62,17 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 
 - El acceso interno requiere Google, un registro activo en `usuarios` y al menos un rol.
 - Un usuario con dos roles opera con uno activo por sesión.
-- El correo puede corregirse antes del primer acceso; después de vincular `auth_user_id` permanece inmutable para no romper la identidad Google.
+- El correo puede corregirse antes del primer acceso; después de vincular `auth_user_id`, solo puede cambiarse mediante una autenticación Google nueva, verificada y confirmada con transferencia de identidad de un solo uso. La identidad interna del usuario, sus roles y su historial se conservan.
 - El servidor valida autorización en cada operación protegida.
 - Los clientes y contactos no son usuarios del sistema.
+
+### Perfil personal
+
+- Todo usuario interno autorizado puede abrir **Mi perfil** desde la fotografía/nombre, tanto en la cabecera como en el sidebar.
+- El propio usuario puede cambiar nombre, teléfono y fotografía, restaurar su imagen Google y consultar sus roles, que permanecen de solo lectura.
+- El cambio de identidad Google exige autenticación con la nueva cuenta, validación del proveedor, comprobación de unicidad, estado aleatorio de diez minutos y una sola utilización, sin alterar el ID interno.
+- Los archivos de perfil se guardan en R2 por carpeta individual, con URLs firmadas de corta duración y acceso controlado por la sesión. El Técnico puede mantener su certificado, sin permisos de administración sobre otros usuarios.
+- Véase [user-profile.md](user-profile.md) para alcance y criterios de aceptación.
 
 ### Certificado del Técnico
 
@@ -103,6 +111,8 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 - La periodicidad de la Sede genera seguimiento en Próximos por confirmar, no Servicios futuros automáticos en la Agenda.
 - Un próximo por confirmar pasa a Servicio únicamente cuando el cliente confirma y el Administrador completa la acción Agendar.
 - Una Sede residencial no exige evaluación MIP por Áreas ni informe completo.
+- Para un Cliente Casa, el Administrador programa desde su Sede residencial interna sin mostrar un selector de Sede, registra el valor manual por cada visita y selecciona fecha, duración y técnicos. No hay Refuerzo ni periodicidad automática. El precio se congela en el Servicio, no en la Sede.
+- El Técnico puede iniciar un Servicio residencial Principal dentro de la ventana habitual, consultar Productos y finalizar directamente mediante las dos firmas; no se presentan Áreas, certificados ni envío de informe MIP completo.
 - Finalizar exige tiempos reales, completitud técnica, sincronización de archivos obligatorios y las firmas del Técnico y del responsable del cliente en cada Servicio.
 - El flujo completo de programación, Refuerzos y Próximos por confirmar está definido en [service-scheduling.md](service-scheduling.md).
 

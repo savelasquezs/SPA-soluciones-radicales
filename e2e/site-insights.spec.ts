@@ -92,3 +92,24 @@ for (const width of [390,1280]) for (const theme of ['light','dark']) {
     await page.screenshot({ path: `test-results/site-finding-${width}-${theme}.png`, fullPage: true })
   })
 }
+
+test('historial de sede reutiliza la lista de Servicios en móvil y escritorio', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 860 })
+  await setup(page)
+  await page.route(/\/api\/sites\/[^/]+\/services\?page=/, route => route.fulfill({ json: {
+    items: [{ id: ids.service, solicitud: 'SR-00000021', fecha: '2026-10-30T12:00:00Z', tipo: 'REFUERZO', tecnico: 'Técnico de prueba', estado: 'PROGRAMADO', valor: 105000 }],
+    page: 1, pageSize: 20, total: 1,
+  } }))
+  await page.getByRole('button', { name: 'Historial de servicios', exact: true }).click()
+  const region = page.getByRole('region', { name: 'Historial de servicios' })
+  const row = region.locator('.svc-table tbody tr')
+  await expect(row).toHaveCount(1)
+  await expect(row.getByRole('link', { name: 'SR-00000021', exact: true })).toBeVisible()
+  await expect(row.getByText('Técnico de prueba')).toBeVisible()
+  expect(await row.evaluate(element => getComputedStyle(element).display)).toBe('grid')
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+
+  await page.setViewportSize({ width: 1280, height: 860 })
+  expect(await row.evaluate(element => getComputedStyle(element).display)).toBe('table-row')
+  await expect(region.getByRole('columnheader', { name: 'Estado' })).toBeVisible()
+})

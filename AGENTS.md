@@ -68,6 +68,7 @@ No inventar requisitos. Ante una contradicción, detener únicamente la parte af
 - Managed Better Auth provee identidad; el registro de aplicación en `usuarios` sigue decidiendo si una identidad está autorizada y qué roles internos posee.
 - Data API es la vía HTTP desde la SPA y trabaja con JWT + RLS.
 - Functions ejecuta operaciones que requieren secretos o privilegios y las integraciones asíncronas.
+- **Antes de desplegar la Function api**, seguir `docs/development/neon-functions-deploy.md`: comprobar `develop` y rama Neon `desarrollo`, preferir actualización de **solo código**, conservar el environment existente, validar deployment `completed` + `active` y `GET /health`. Si falta Neon CLI autenticado, usar el fallback ZIP Base64 y conector Neon descrito allí. Nunca declarar éxito por `pending`.
 - No usar una conexión PostgreSQL administrativa desde el navegador.
 - Las migraciones activas viven exclusivamente en `database/migrations/`.
 - Formato obligatorio: `YYYYMMDD_NNN_descripcion.sql`.
