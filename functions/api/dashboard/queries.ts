@@ -1,6 +1,6 @@
 import type { PoolClient } from 'pg'
 import type { DashboardSnapshot, DashboardPeriod, DashboardServiceRow, DashboardFindingRow } from '../../../src/types/dashboard'
-import { addDateDays } from '../../../src/helpers/adminServices'
+import { addDateDays, todayBogota } from '../../../src/helpers/adminServices'
 import { DASHBOARD_DAYS, resolveDashboardRange, type DashboardBucket } from '../../../src/helpers/dashboardRanges'
 import { actionableUpcomingSql, serviceMetricSql, unresolvedFindingsSql } from './metricSql'
 export { DASHBOARD_DAYS }
@@ -12,8 +12,6 @@ const scope = '($1::uuid is null or se.negocio_id=$1::uuid) and ($2::uuid is nul
 const serviceFrom = 'from public.servicios s join public.sedes se on se.id=s.sede_id join public.negocios n on n.id=se.negocio_id'
 const bogotaStart = "(($3::date)::timestamp at time zone 'America/Bogota')"
 const bogotaEnd = "(($4::date)::timestamp at time zone 'America/Bogota')"
-const todayStart = "(($5::date)::timestamp at time zone 'America/Bogota')"
-const tomorrowStart = "((($5::date+1)::timestamp) at time zone 'America/Bogota')"
 
 async function rows<T>(client: PoolClient, sql: string, params: unknown[]): Promise<T[]> {
   return (await client.query(sql,params)).rows as T[]
@@ -50,7 +48,7 @@ interface ComplianceChart { date: string; percentage: number; visits: number }
 
 export async function dashboardSnapshot(client: PoolClient, period: DashboardPeriod, clientId: string | null, siteId: string | null, custom: {from:string;to:string}|null = null): Promise<DashboardSnapshot> {
   const range=resolveDashboardRange(period,custom)
-  const {from,bucket,days}=range, to=addDateDays(range.to,1),today=addDateDays(to,-1)
+  const {from,bucket,days}=range, to=addDateDays(range.to,1),today=todayBogota()
   const previousFrom=addDateDays(from,-days)
   const params: Params=[clientId,siteId,from,to,bucket,today]
 
@@ -88,11 +86,11 @@ export async function dashboardSnapshot(client: PoolClient, period: DashboardPer
     "count(*) filter (where h.estado='EN_PROCESO')::int as ongoing "+
     'from public.hallazgos h join public.sedes se on se.id=h.sede_id where '+scope+' and '+unresolvedFindingsSql,params.slice(0,2))
   
+  // Both issued documents and employee credentials are global administrative alerts.
   const certificates=await rows<{total:number}>(client,
     "select ("+
-    "select count(*) from public.usuarios u where u.activo and u.es_tecnico and u.certificado_fecha_vencimiento between $3::date and ($3::date+30)"+
-    ") + (select count(*) from public.certificados c join public.servicios s on s.id=c.servicio_id "+
-    "join public.sedes se on se.id=s.sede_id where "+scope+" and c.fecha_vencimiento between $3::date and ($3::date+30)) as total",[clientId,siteId,today])
+    "select count(*) from public.usuarios u where u.activo and u.es_tecnico and u.certificado_storage_path is not null and u.certificado_fecha_vencimiento between $1::date and ($1::date+30)"+
+    ") + (select count(*) from public.certificados c where c.fecha_vencimiento between $1::date and ($1::date+30)) as total",[today])
 
   const serviceSeries=await rows<ServicesChart>(client,
     "select date_trunc($5::text,s.inicio_programado at time zone 'America/Bogota')::date::text as date,"+
