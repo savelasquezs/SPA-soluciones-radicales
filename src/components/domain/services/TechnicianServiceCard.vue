@@ -15,7 +15,7 @@ defineEmits<{ open: []; retry: [] }>()
       <div>
         <p class="technician-service-card__request">{{ record.solicitud }}</p>
         <h2>{{ record.clienteNombre }}</h2>
-        <p>{{ record.sedeNombre }}</p>
+        <p v-if="record.tipoSede!=='RESIDENCIAL'">{{ record.sedeNombre }}</p>
       </div>
       <StatusBadge :tone="technicianServiceStateTone(record.estado)">{{ technicianServiceStateLabel(record.estado) }}</StatusBadge>
     </header>

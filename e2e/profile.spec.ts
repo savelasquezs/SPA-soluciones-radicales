@@ -105,7 +105,7 @@ test('perfil y dos menús accesibles sin overflow ni botones pequeños en móvil
   await topAccount.click()
   const topMenu = page.locator('.account-control--topbar')
   await expect(topMenu.getByRole('link', { name: 'Mi perfil' })).toBeVisible()
-  const topAppearance = topMenu.getByRole('group', { name: 'Apariencia' })
+  const topAppearance = topMenu.getByRole('group', { name: 'Tema de la aplicación' })
   await expect(topAppearance).toBeVisible()
   await expect(topAppearance.getByRole('button', { name: 'Sistema' })).toHaveAttribute('aria-pressed', 'true')
 
@@ -133,7 +133,7 @@ test('perfil y dos menús accesibles sin overflow ni botones pequeños en móvil
   await expect(page.locator('.account-control--sidebar').getByRole('link', { name: 'Mi perfil' })).toBeVisible()
   await expect(page.locator('.account-control--sidebar').getByRole('button', { name: 'Cambiar cuenta' })).toBeVisible()
   await expect(page.locator('.account-control--sidebar').getByRole('button', { name: 'Cerrar sesión' })).toBeVisible()
-  const sidebarAppearance = page.locator('.account-control--sidebar').getByRole('group', { name: 'Apariencia' })
+  const sidebarAppearance = page.locator('.account-control--sidebar').getByRole('group', { name: 'Tema de la aplicación' })
   await expect(sidebarAppearance).toBeVisible()
   await expect(sidebarAppearance.getByRole('button', { name: 'Sistema' })).toHaveAttribute('aria-pressed', 'true')
   await sidebarAppearance.getByRole('button', { name: 'Oscuro' }).click()

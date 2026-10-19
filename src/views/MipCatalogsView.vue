@@ -190,8 +190,8 @@ onBeforeUnmount(() => { alive = false; cleanupPending() })
 
 <template>
   <section class="mip-page">
-    <header class="mip-page__header">
-      <h1>{{ LABELS[current] }}</h1>
+    <header class="mip-page__header admin-page-header">
+      <div class="admin-page-heading"><h1>{{ LABELS[current] }}</h1><p>— Catálogos MIP</p></div>
       <div class="mip-page__actions"><BaseButton v-if="current === 'products'" variant="secondary" size="compact" @click="methodsOpen = true">Métodos de aplicación</BaseButton><BaseButton size="compact" @click="openEditor(current)"><Plus :size="16" aria-hidden="true" />{{ feminine(current) ? 'Nueva' : 'Nuevo' }} {{ SINGLE[current] }}</BaseButton></div>
     </header>
     <nav class="mip-tabs" aria-label="Catálogos MIP"><button v-for="tab in TABS" :key="tab" type="button" :aria-current="current === tab ? 'page' : undefined" @click="switchTab(tab)">{{ LABELS[tab] }}</button></nav>
@@ -253,19 +253,19 @@ onBeforeUnmount(() => { alive = false; cleanupPending() })
 </template>
 
 <style scoped>
-.mip-page { min-width: 0; display: grid; gap: var(--space-12); }
+.mip-page { min-width: 0; display: grid; gap: var(--space-8); }
 .mip-page__header, .mip-page__actions, .mip-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-12); }
-.mip-page__header h1 { margin: 0; font-size: 1.25rem; font-weight: 500; }
+.mip-page__header h1 { margin: 0; font-size: 1.5rem; font-weight: 600; }
 .mip-page__actions { justify-content: flex-end; gap: var(--space-8); }
 .mip-tabs { display: flex; max-width: 100%; gap: var(--space-8); overflow-x: auto; border-bottom: 1px solid var(--border); }
-.mip-tabs button { min-height: 40px; padding: .55rem .75rem; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--text-secondary); cursor: pointer; white-space: nowrap; }
+.mip-tabs button { min-height: 36px; padding: .35rem .65rem; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--text-secondary); cursor: pointer; white-space: nowrap; }
 .mip-tabs button[aria-current='page'] { color: var(--text); border-bottom-color: var(--accent); }
 .mip-tabs--state { border-bottom: 0; }
-.mip-toolbar { justify-content: flex-start; margin-bottom: var(--space-4); }
-.mip-search { display: flex; align-items: center; gap: var(--space-8); width: min(100%, 26rem); min-width: 0; min-height: 36px; padding: .4rem .65rem; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); color: var(--text-secondary); }
+.mip-toolbar { justify-content: flex-start; margin-bottom: 0; }
+.mip-search { display: flex; align-items: center; gap: var(--space-8); width: min(100%, 26rem); min-width: 0; min-height: 36px; padding: .25rem .55rem; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); color: var(--text-secondary); }
 .mip-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text); }
 .mip-search:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
-.mip-filter select { min-height: 36px; padding: .4rem .6rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); }
+.mip-filter select { min-height: 36px; padding: .25rem .55rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); }
 .mip-empty { display: grid; align-content: center; justify-items: center; gap: var(--space-8); min-height: 15rem; padding: var(--space-24); border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); text-align: center; }
 .mip-empty h2 { margin: 0; font-size: 1rem; }
 .mip-empty p, .mip-count, .mip-muted { color: var(--text-secondary); margin: 0; }

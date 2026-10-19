@@ -74,3 +74,9 @@ Los storyboards ejecutables de cada video viven junto a sus pruebas en `e2e/docu
 
 - [Comportamiento manual y variables](product/certificates.md).
 - [Motor, configuración privada y comprobación de despliegue](architecture/certificates.md).
+
+## Portal de ayuda
+
+La opción «Ayuda y documentación» del sidebar abre el portal publicado de Mintlify:
+https://soluciones-radicales.mintlify.app. El repositorio técnico conserva las guías
+versionadas, pero no se utiliza como punto de entrada de ayuda para usuarios.

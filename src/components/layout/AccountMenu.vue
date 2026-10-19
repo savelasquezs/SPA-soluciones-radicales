@@ -158,7 +158,7 @@ async function performAction(action: 'change' | 'logout'): Promise<void> {
           {{ role === 'ADMINISTRADOR' ? 'Administrador' : 'Técnico' }}
         </button>
       </div>
-      <div class="account-control__appearance" role="group" aria-label="Apariencia">
+      <div class="account-control__appearance" role="group" aria-label="Tema de la aplicación">
         <span class="account-control__section" aria-hidden="true">Apariencia</span>
         <button
           v-for="option in appearanceOptions"
