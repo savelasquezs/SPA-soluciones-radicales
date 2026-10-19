@@ -37,7 +37,7 @@ function go(next:number):void{void router.push({query:{...route.query,page:Strin
 function link(item:DashboardDetailRecord){
   if(item.kind==='technician')return {name:'users'}
   if(item.kind==='certificate'&&item.serviceId)return {name:'service-detail',params:{id:item.serviceId}}
-  return {name:'site-detail',params:{id:item.clientId,siteId:item.siteId},query:{tab:'findings'}}
+  return {name:'site-detail',params:{id:item.clientId,siteId:item.siteId},query:{tab:'findings',findingState:item.state,findingSearch:item.title.slice(0,160)}}
 }
 const format=(value:string)=>new Intl.DateTimeFormat('es-CO',{day:'2-digit',month:'short',year:'numeric',timeZone:'America/Bogota'}).format(new Date(value.length===10?value+'T12:00:00Z':value))
 </script>
