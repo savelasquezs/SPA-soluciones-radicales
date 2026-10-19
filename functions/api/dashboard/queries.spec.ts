@@ -31,9 +31,9 @@ describe('administrative dashboard aggregation rules',()=>{
     expect(resolveDashboardRange('5y',null,'2026-10-19').bucket).toBe('quarter')
   })
   it('rejects inverted, incomplete and excessively large custom ranges',()=>{
-    expect(()=>resolveDashboardRange('custom',{from:'2026-11-01',to:'2026-10-01'})).toThrow()
-    expect(()=>resolveDashboardRange('custom',{from:'',to:'2026-10-01'})).toThrow()
-    expect(()=>resolveDashboardRange('custom',{from:'2012-01-01',to:'2026-10-19'})).toThrow()
+    expect(()=>resolveDashboardRange('custom',{from:'2026-11-01',to:'2026-10-01'})).toThrow(/Selecciona dos fechas válidas|El rango no puede superar diez años/)
+    expect(()=>resolveDashboardRange('custom',{from:'',to:'2026-10-01'})).toThrow(/Selecciona dos fechas válidas|El rango no puede superar diez años/)
+    expect(()=>resolveDashboardRange('custom',{from:'2012-01-01',to:'2026-10-19'})).toThrow(/Selecciona dos fechas válidas|El rango no puede superar diez años/)
   })
 
 })
