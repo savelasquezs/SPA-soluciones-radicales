@@ -1,4 +1,4 @@
-export type DashboardPeriod = '7d' | '30d' | '90d' | '12m'
+export type DashboardPeriod = '7d' | '30d' | '90d' | '12m' | '24m' | '5y' | 'custom'
 
 export interface DashboardSiteOption { id: string; clientId: string; name: string }
 export interface DashboardClientOption { id: string; name: string }
