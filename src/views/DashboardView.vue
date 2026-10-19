@@ -22,6 +22,12 @@ const siteId=ref(query('siteId'))
 const today=todayBogota()
 const customRange=ref({from:query('from')||addDateDays(today,-29),to:query('to')||today})
 const loadedScope=ref({clientId:'',siteId:''})
+const chartGranularity=computed(()=>{
+  if(!snapshot.value)return 'semana'
+  const {from,to}=snapshot.value.period
+  const days=Math.round((Date.parse(to+'T00:00:00Z')-Date.parse(from+'T00:00:00Z'))/86_400_000)+1
+  return days<=14?'día':days<=120?'semana':days<=1460?'mes':'trimestre'
+})
 const rangeError=computed(()=>{
   if(period.value!=='custom')return ''
   try{resolveDashboardRange(period.value,customRange.value);return ''}
@@ -118,7 +124,7 @@ const attention=computed(()=>{
     {title:'Hallazgos sin resolver',detail:'Abiertos o en proceso',count:k.findings.open+k.findings.ongoing,
       icon:CircleAlert,kind:'red',to:detailLink('findings'),action:'Ver hallazgos'},
     {title:'Certificados próximos a vencer',detail:'Técnicos y certificados emitidos · próximos 30 días',count:a.expiringCertificates,
-      icon:FileWarning,kind:'neutral',to:detailLink('certificates'),action:'Ver usuarios'},
+      icon:FileWarning,kind:'neutral',to:detailLink('certificates'),action:'Ver certificados'},
     {title:'Errores de Calendar',detail:'Servicios sin sincronizar',count:a.calendarErrors,
       icon:WifiOff,kind:'yellow',to:serviceLink('calendarError','agenda'),action:'Ver servicios'}
   ].filter(x=>x.count>0)
@@ -144,6 +150,8 @@ onBeforeUnmount(()=>{counter++;request?.abort()})
             <select :value="period" @change="setPeriod">
               <option value="7d">Últimos 7 días</option><option value="30d">Últimos 30 días</option>
               <option value="90d">Últimos 90 días</option><option value="12m">Últimos 12 meses</option>
+              <option value="24m">Últimos 2 años</option><option value="5y">Últimos 5 años</option>
+              <option value="custom">Rango personalizado</option>
             </select>
           </label>
           <label class="dashboard-filter"><span class="sr-only">Cliente</span>
@@ -156,6 +164,9 @@ onBeforeUnmount(()=>{counter++;request?.abort()})
               <option v-for="site in sites" :key="site.id" :value="site.id">{{ site.name }}</option>
             </select>
           </label>
+          <BaseDateRangePicker v-if="period==='custom'" class="dashboard-custom-picker"
+            name="dashboard-custom-range" label="Rango personalizado" :model-value="customRange"
+            :error="rangeError || undefined" @update:model-value="customRange=$event" />
           <button type="button" class="dashboard-reload" :disabled="loading" @click="load" aria-label="Actualizar resumen" title="Actualizar resumen">
             <RefreshCw :size="16" :class="{'dashboard-refreshing':loading}" />
           </button>
@@ -165,7 +176,7 @@ onBeforeUnmount(()=>{counter++;request?.abort()})
       <div v-if="error" class="dashboard-error" role="alert">
         {{ error }} <button type="button" @click="load">Reintentar</button>
       </div>
-      <div v-if="!snapshot" class="dashboard-initial">
+      <div v-if="!snapshot || rangeError" class="dashboard-initial">
         <span v-if="loading">Consultando indicadores…</span><span v-else>Sin datos disponibles.</span>
       </div>
       <template v-else>
@@ -182,7 +193,7 @@ onBeforeUnmount(()=>{counter++;request?.abort()})
         </section>
         <section class="dashboard-charts" aria-label="Estadísticas">
           <article class="dashboard-panel">
-            <header><div><h2>{{ period==='7d'?'Servicios por día':period==='12m'?'Servicios por mes':'Servicios por semana' }}</h2><p>Servicios programados según su estado</p></div><span>{{ chartLabel }}</span></header>
+            <header><div><h2>{{ 'Servicios por '+chartGranularity }}</h2><p>Servicios programados según su estado</p></div><span>{{ chartLabel }}</span></header>
             <DashboardChart kind="services" :data="snapshot.charts" :period="snapshot.period" />
           </article>
           <article class="dashboard-panel">
@@ -212,7 +223,7 @@ onBeforeUnmount(()=>{counter++;request?.abort()})
         <section class="dashboard-records" aria-label="Registros recientes">
           <article class="dashboard-panel dashboard-table-panel">
             <header><div><h2><CalendarDays :size="17" /> Próximos servicios</h2><p>En curso y próximas cinco visitas</p></div>
-              <RouterLink to="/agenda">Ver agenda →</RouterLink></header>
+              <RouterLink :to="serviceLink('next','agenda')">Ver agenda →</RouterLink></header>
             <div class="dashboard-table-scroll">
               <table><thead><tr><th>Fecha</th><th>Cliente / Sede</th><th>Técnico</th><th>Estado</th></tr></thead>
                 <tbody><tr v-for="record in snapshot.tables.upcoming" :key="record.id">
@@ -226,7 +237,7 @@ onBeforeUnmount(()=>{counter++;request?.abort()})
           </article>
           <article class="dashboard-panel dashboard-table-panel">
             <header><div><h2><CheckCircle2 :size="17" /> Últimos servicios realizados</h2><p>Últimas cinco finalizaciones</p></div>
-              <RouterLink :to="historyLink">Ver historial →</RouterLink></header>
+              <RouterLink :to="serviceLink('recent','history')">Ver historial →</RouterLink></header>
             <div class="dashboard-table-scroll">
               <table><thead><tr><th>Fecha</th><th>Cliente / Sede</th><th>Valor</th><th>Pago</th></tr></thead>
                 <tbody><tr v-for="record in snapshot.tables.latest" :key="record.id">
@@ -240,7 +251,7 @@ onBeforeUnmount(()=>{counter++;request?.abort()})
           </article>
           <article id="dashboard-findings" class="dashboard-panel dashboard-table-panel">
             <header><div><h2><MapPin :size="17" /> Últimos hallazgos</h2><p>Últimos cinco hallazgos registrados</p></div>
-              <RouterLink to="/clientes">Ver clientes →</RouterLink></header>
+              <RouterLink :to="detailLink('recentFindings')">Ver hallazgos →</RouterLink></header>
             <div class="dashboard-table-scroll">
               <table><thead><tr><th>Fecha</th><th>Cliente / Sede</th><th>Hallazgo</th><th>Estado</th></tr></thead>
                 <tbody><tr v-for="finding in snapshot.tables.findings" :key="finding.id">
