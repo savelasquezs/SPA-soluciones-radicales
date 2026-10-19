@@ -39,6 +39,7 @@
     "@neondatabase/auth": "^0.5.0-beta",
     "@xmldom/xmldom": "0.9.12",
     "docxtemplater": "3.71.0",
+    "echarts": "6.0.0",
     "hono": "^4.13.13",
     "idb": "^8.0.3",
     "jose": "^6.2.12",
@@ -49,6 +50,7 @@
     "pizzip": "3.3.0",
     "qrcode": "1.5.4",
     "vue": "^3.5.42",
+    "vue-echarts": "8.0.1",
     "vue-router": "^5.3.1"
   },
   "devDependencies": {
