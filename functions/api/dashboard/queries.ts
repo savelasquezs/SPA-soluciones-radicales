@@ -134,7 +134,7 @@ export async function dashboardSnapshot(client: PoolClient, period: DashboardPer
     " and (s.estado='EN_PROCESO' or s.inicio_programado>=now()-interval '12 hours') "+
     "order by case when s.estado='EN_PROCESO' then 0 else 1 end,s.inicio_programado,s.id limit 5",params.slice(0,2))
   const latest=await rows<DashboardServiceRow & {value:string}>(client,
-    'select '+serviceColumns+serviceFrom+' join public.usuarios u on u.id=s.tecnico_responsable_id '+
+    'select '+serviceColumns.replace('s.inicio_programado as date,','s.fin_real as date,')+serviceFrom+' join public.usuarios u on u.id=s.tecnico_responsable_id '+
     'where '+scope+" and s.estado='FINALIZADO' "+
     'order by s.fin_real desc nulls last,s.id desc limit 5',params.slice(0,2))
 
