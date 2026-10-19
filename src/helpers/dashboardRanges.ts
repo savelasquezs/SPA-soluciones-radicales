@@ -1,5 +1,5 @@
 import { addDateDays, isDateOnly, todayBogota } from './adminServices'
-import type { DashboardPeriod } from '@/types/dashboard'
+import type { DashboardPeriod } from '../types/dashboard'
 
 /** The backend and frontend use the same bounded, Bogotá-calendar reporting periods. */
 export const DASHBOARD_DAYS = { '7d':7, '30d':30, '90d':90, '12m':365, '24m':730, '5y':1826 } as const
