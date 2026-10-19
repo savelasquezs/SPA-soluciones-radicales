@@ -48,13 +48,17 @@ function pageNumber(value: string | undefined, fallback: number, max: number): n
 }
 function dates(query: Record<string,string>, fallbackFrom: string): { from: string; to: string } {
   const from = query.from || fallbackFrom, to = query.to || addDateDays(todayBogota(),30)
-  if (!isDateOnly(from) || !isDateOnly(to) || from > to || (new Date(to).getTime()-new Date(from).getTime())/86_400_000 > 366) throw new ApiError(422,'Selecciona un rango válido de hasta un año.','VALIDATION',{ fields:{ range:'La fecha final debe ser posterior a la inicial y el rango no debe superar un año.' } })
+  if (!isDateOnly(from) || !isDateOnly(to) || from > to || (new Date(to).getTime()-new Date(from).getTime())/86_400_000 > 3660) throw new ApiError(422,'Selecciona un rango válido de hasta diez años.','VALIDATION',{ fields:{ range:'La fecha final debe ser posterior a la inicial y el rango no debe superar diez años.' } })
   return { from,to }
 }
 function listFilter(query: Record<string,string>): ServiceFilter {
   return { ...dates(query,todayBogota()),tab:choice(query.tab,['agenda','history'],'agenda'),
     estado:choice(query.estado,['','PROGRAMADO','EN_PROCESO','FINALIZADO','CANCELADO'],''),tipo:choice(query.tipo,['','PRINCIPAL','REFUERZO'],''),
-    tecnicoId:query.tecnicoId ? id(query.tecnicoId) : '',query:text(query.query,160),page:pageNumber(query.page,1,100_000),pageSize:pageNumber(query.pageSize,25,100) }
+    tecnicoId:query.tecnicoId ? id(query.tecnicoId) : '',query:text(query.query,160),
+    clientId:query.clientId ? id(query.clientId) : undefined,
+    siteId:query.siteId ? id(query.siteId) : undefined,
+    metric:choice(query.metric,['','today','delayed','performed','unpaid','calendarError','next','recent'],'') || undefined,
+    page:pageNumber(query.page,1,100_000),pageSize:pageNumber(query.pageSize,25,100) }
 }
 /** Contextual history includes all service states and has no implicit date cutoff. */
 function contextFilter(query: Record<string,string>): ServiceFilter {
@@ -67,8 +71,12 @@ function contextFilter(query: Record<string,string>): ServiceFilter {
     siteId:query.siteId ? id(query.siteId) : undefined }
 }
 function upcomingFilter(query: Record<string,string>): UpcomingFilter {
-  return { ...dates(query,addDateDays(todayBogota(),-30)),estado:choice(query.estado,['','PENDIENTE','CONTACTADO','CONFIRMADO','POSPUESTO','NO_DESEA'],''),
-    query:text(query.query,160),page:pageNumber(query.page,1,100_000),pageSize:pageNumber(query.pageSize,25,100) }
+  return { ...dates(query,addDateDays(todayBogota(),-30)),
+    estado:choice(query.estado,['','PENDIENTE','CONTACTADO','CONFIRMADO','POSPUESTO','NO_DESEA'],''),
+    query:text(query.query,160),clientId:query.clientId ? id(query.clientId) : undefined,
+    siteId:query.siteId ? id(query.siteId) : undefined,
+    metric:choice(query.metric,['','actionable'],'') || undefined,
+    page:pageNumber(query.page,1,100_000),pageSize:pageNumber(query.pageSize,25,100) }
 }
 async function read<T>(context: Context<Environment>, work: (client: PoolClient, admin: DomainProfile) => Promise<T>): Promise<T> {
   return transaction(async client => work(client,await requireAdmin(client,context.get('identity'))))
