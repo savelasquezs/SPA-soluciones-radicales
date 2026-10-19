@@ -109,9 +109,9 @@ test('three delayed services open the exact filtered list without a one-year cut
   await page.locator('.dashboard-kpis .dashboard-kpi').filter({hasText:'Servicios retrasados'}).click()
   await expect(page).toHaveURL(/metric=delayed/)
   await expect(page.getByText('Filtro activo:')).toBeVisible()
-  await expect(page.getByText('SR-010')).toBeVisible()
-  await expect(page.getByText('SR-011')).toBeVisible()
-  await expect(page.getByText('SR-012')).toBeVisible()
+  await expect(page.getByText('SR-010',{exact:true})).toBeVisible()
+  await expect(page.getByText('SR-011',{exact:true})).toBeVisible()
+  await expect(page.getByText('SR-012',{exact:true})).toBeVisible()
   expect(requests.some(x=>x.startsWith('/api/admin/services?')&&x.includes('metric=delayed')&&
     x.includes('clientId='+clientId)&&x.includes('siteId='+siteId))).toBeTruthy()
 })
@@ -122,7 +122,7 @@ test('a custom range longer than a year reaches the completion-date drilldown',a
   expect(requests.some(x=>x.includes('period=custom')&&x.includes('from=2024-01-01')&&x.includes('to=2026-10-19'))).toBeTruthy()
   await page.locator('.dashboard-kpis .dashboard-kpi').filter({hasText:'Valor de servicios realizados'}).click()
   await expect(page).toHaveURL(/metric=performed/)
-  expect(requests.some(x=>x.startsWith('/api/admin/services?')&&x.includes('metric=performed')&&x.includes('from=2024-01-01'))).toBeTruthy()
+  await expect.poll(()=>requests.some(x=>x.startsWith('/api/admin/services?')&&x.includes('metric=performed')&&x.includes('from=2024-01-01'))).toBeTruthy()
 })
 test('pending findings and expiring certificates show their underlying records',async({page})=>{
   await setup(page)
