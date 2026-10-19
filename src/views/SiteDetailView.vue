@@ -38,7 +38,7 @@ const client = computed(() => site.value ? store.clientsById[site.value.clientId
 const areas = computed(() => store.areasForSite(siteId.value))
 const loading = ref(true)
 const loadError = ref<string | null>(null)
-const initialTab = (): Tab => route.query.tab === 'findings' ? 'findings' : 'summary'
+const initialTab = (): Tab => route.query.tab === 'findings' ? 'findings' : route.query.tab === 'history' ? 'history' : 'summary'
 const tab = ref<Tab>(initialTab())
 const visited = ref({ devices: false, findings: initialTab() === 'findings' })
 const siteFormOpen = ref(false)
@@ -78,6 +78,7 @@ async function load(): Promise<void> {
 
 async function changeTab(next: Tab, event?: MouseEvent): Promise<void> {
   tab.value = next
+  void router.replace({ query:{ ...route.query,tab:next === 'history' || next === 'findings' ? next : undefined } })
   ;(event?.currentTarget as HTMLElement | null)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })
   if (next === 'devices' || next === 'findings') visited.value[next] = true
   if (next === 'areas' && !store.areasBySiteId[siteId.value]) await loadAreas()

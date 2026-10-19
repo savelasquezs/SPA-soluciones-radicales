@@ -41,7 +41,7 @@ watch([draft,confirmed,operationId],()=>{
 },{ deep:true })
 function returnTo(): string {
   const value=route.query.returnTo
-  return typeof value==='string' && /^\/(?:servicios(?:\/[0-9a-f-]{36})?|agenda)(?:\?|$)/i.test(value) ? value : '/servicios'
+  return typeof value==='string' && /^\/(?:servicios(?:\/[0-9a-f-]{36})?|agenda|clientes\/[0-9a-f-]{36}(?:\/sedes\/[0-9a-f-]{36})?)(?:\?|$)/i.test(value) ? value : '/servicios'
 }
 function back(): void { void router.push(returnTo()) }
 async function persistDraft(): Promise<void> {

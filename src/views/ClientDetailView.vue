@@ -37,7 +37,7 @@ const client = computed(() => store.clientsById[clientId.value] ?? null)
 const sites = computed(() => store.sitesForClient(clientId.value))
 const loading = ref(true)
 const loadError = ref<string | null>(null)
-const tab = ref<'sites' | 'history'>('sites')
+const tab = ref<'sites' | 'history'>(route.query.tab === 'history' ? 'history' : 'sites')
 const clientFormOpen = ref(false)
 const siteFormOpen = ref(false)
 const siteFormMode = ref<'create' | 'edit'>('create')
@@ -70,7 +70,10 @@ async function load(): Promise<void> {
   }
 }
 
-function changeTab(next: 'sites' | 'history'): void { tab.value = next }
+function changeTab(next: 'sites' | 'history'): void {
+  tab.value = next
+  void router.replace({ query:{ ...route.query,tab:next === 'history' ? 'history' : undefined } })
+}
 
 function openClientEdit(): void {
   if (!client.value) return

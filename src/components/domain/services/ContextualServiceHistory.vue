@@ -186,7 +186,7 @@ async function retryCalendar(record: AdminService): Promise<void> {
     <LoadingSkeleton v-else-if="loading && !records.length" label="Cargando servicios" :lines="4" />
     <template v-else>
       <ServiceRecords
-        v-if="records.length" :records="records" history :busy="busy"
+        v-if="records.length" :records="records" history :busy="busy" :return-to="route.fullPath"
         @schedule="openQuick($event, 'schedule')" @team="openQuick($event, 'team')"
         @payment="openQuick($event, 'payment')" @edit="edit" @cancel="openQuick($event, 'cancel')"
         @retry-calendar="retryCalendar" @results="results=$event"
