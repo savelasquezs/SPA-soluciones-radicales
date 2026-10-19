@@ -6,6 +6,8 @@ Soluciones Radicales MIP gestiona clientes, programación, ejecución técnica, 
 
 El comportamiento funcional aprobado del proyecto anterior se conserva. La reimplementación cambia la plataforma técnica, no las reglas del negocio.
 
+El tablero administrativo se especifica en [Resumen y métricas](dashboard.md).
+
 ## Actores
 
 ### Administrador
