@@ -16,7 +16,7 @@ dashboardRoutes.get('/details',async context=>{
   const kind=context.req.query('kind')
   if(!['findings','recentFindings','certificates'].includes(kind??''))throw new ApiError(422,'La consulta de detalle no existe.','VALIDATION')
   const pageText=context.req.query('page')??'1'
-  if(!/^[1-9]\\d{0,4}$/.test(pageText))throw new ApiError(422,'La página no es válida.','VALIDATION')
+  if(!/^[1-9]\d{0,4}$/.test(pageText))throw new ApiError(422,'La página no es válida.','VALIDATION')
   const clientId=context.req.query('clientId')||null
   const siteId=context.req.query('siteId')||null
   if((clientId&&!isServiceId(clientId))||(siteId&&!isServiceId(siteId)))
