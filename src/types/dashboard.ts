@@ -53,3 +53,24 @@ export interface DashboardSnapshot {
     findings: DashboardFindingRow[]
   }
 }
+
+export type DashboardDetailKind = 'findings' | 'recentFindings' | 'certificates'
+export interface DashboardDetailRecord {
+  id: string
+  kind: 'finding' | 'technician' | 'certificate'
+  title: string
+  description: string
+  date: string
+  state: string
+  clientName: string | null
+  siteName: string | null
+  clientId: string | null
+  siteId: string | null
+  serviceId: string | null
+}
+export interface DashboardDetailPage {
+  items: DashboardDetailRecord[]
+  total: number
+  page: number
+  pageSize: number
+}
