@@ -63,6 +63,8 @@ Sobre las gráficas de tendencias aparece el cambio numérico de cumplimiento o 
 
 La vista web del informe, tanto administrativa como pública, adopta los modos **Claro, Oscuro y Sistema** de la aplicación. El cliente dispone de un selector compacto en el encabezado público, sin necesidad de iniciar sesión; la elección se conserva en el navegador. Los fondos, bordes, textos, cuadrículas, líneas y tooltips usan variables de tema. Los colores por especie mantienen su identidad, con un ajuste de luminosidad en oscuro.
 
+En móviles, el diálogo de ampliación de gráficos presenta una superficie de lectura clara y un contenido compacto, independientemente del tema elegido para el informe. Las series y barras se ajustan al ancho disponible sin alturas mínimas, manteniendo la leyenda y el detalle en orden vertical y el desplazamiento dentro del diálogo. El informe de fondo conserva sus tres modos de apariencia.
+
 Al **imprimir o guardar PDF A4**, se utiliza siempre el tema claro, incluso si la pantalla está en oscuro. Se mantienen los ejes, fechas, puntos, barras, leyendas y valores visibles sin depender del tooltip. Los botones Ampliar, tooltips y modales no aparecen impresos. El informe público y el administrativo comparten exactamente los mismos componentes.
 
 No se agregan migraciones SQL, librerías externas de gráficos ni cambios a la operación del Técnico. La nueva información se adjunta a la respuesta histórica existente del backend.

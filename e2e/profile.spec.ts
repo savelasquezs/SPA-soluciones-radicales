@@ -138,7 +138,7 @@ test('perfil y dos menús accesibles sin overflow ni botones pequeños en móvil
   await expect(sidebarAppearance.getByRole('button', { name: 'Sistema' })).toHaveAttribute('aria-pressed', 'true')
   await sidebarAppearance.getByRole('button', { name: 'Oscuro' }).click()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
-  await expect(topAppearance.getByRole('button', { name: 'Oscuro' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(topMenu.locator('.account-control__appearance button').filter({ hasText: 'Oscuro' })).toHaveAttribute('aria-pressed', 'true')
   await sidebarAppearance.getByRole('button', { name: 'Claro' }).click()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
