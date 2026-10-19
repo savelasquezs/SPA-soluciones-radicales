@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import type { MonitoringPoint, MonitoringReview, SiteFinding } from '../src/types/siteInsights'
+import type { AdminService, ServiceTechnician } from '../src/types/adminServices'
 const uid = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12,'0')}`
 const ids = { site: uid(1), client: uid(2), point: uid(3), review: uid(4), finding: uid(5), service: uid(6), area: uid(7), review2: uid(8) }
 const date = '2026-10-08T13:00:00Z'
@@ -7,6 +8,31 @@ const service = { id: ids.service, number: 'SR-00000014', state: 'FINALIZADO' as
 const point: MonitoringPoint = { id: ids.point, number: 'P-01', areaId: ids.area, areaName: 'Cocina', areaActive: true, location: 'Bajo el mesón', trapCode: 'TRAMPA', trapName: 'Trampa adhesiva', classification: 'RASTREROS', condition: 'ACTIVO', enabled: true, createdAt: date, lastReview: service, inProgress: true }
 const review: MonitoringReview = { id: ids.review, service, number: 'P-01', areaName: 'Cocina', location: 'Bajo el mesón original', trapName: 'Trampa adhesiva', previousCondition: 'ACTIVO', condition: 'ACTIVO', captures: [{ plagaCodigo: 'CUCARACHA', plagaNombreSnapshot: 'Cucaracha', cantidad: 3 }], consumption: null, chemical: null, antidote: null, notes: 'Sin novedades adicionales.', photos: [{ kind: 'REVIEW', recordId: ids.review, index: 0, label: 'Puesto P-01 · SR-00000014', date }], serviceProducts: [] }
 const finding: SiteFinding = { id: ids.finding, areaId: ids.area, areaName: 'Cocina', state: 'ABIERTO', description: 'Grieta bajo el mesón', recommendation: 'Sellar la grieta para evitar ingreso de plagas.', responsibleName: 'Encargado de mantenimiento', responsibleEmail: null, openedAt: date, closedAt: null, closingNotes: null, openingService: service, closingService: null, photos: [{ kind: 'OPENING', recordId: ids.finding, index: 0, label: 'Apertura · SR-00000014', date }] }
+const responsible: ServiceTechnician = {
+  id: uid(21), nombreCompleto: 'Técnico de prueba', correoGoogle: 'tecnico@example.invalid',
+  activo: true, tieneCertificado: false, certificadoFechaVencimiento: null,
+}
+const upcomingHistory: AdminService = {
+  id: ids.service, solicitud: 'SR-00000021', tipoServicio: 'REFUERZO', estado: 'PROGRAMADO', version: 1,
+  inicioProgramado: '2026-10-30T12:00:00Z', finProgramado: '2026-10-30T12:30:00Z',
+  tecnicoResponsableId: responsible.id, tecnicosColaboradoresIds: [],
+  clientId: ids.client, clienteNombre: 'Cliente de prueba', sedeId: ids.site,
+  sedeNombre: 'Sede de prueba', tipoSede: 'NEGOCIO', direccion: 'Dirección sintética',
+  servicioPrincipalId: null, inicioReal: null, finReal: null, responsable,
+  colaboradores: [], contacto: { nombre: 'Contacto de prueba', celular: '+573000000001', correos: [] },
+  valorServicio: 0, observaciones: '', productos: [], refuerzo: null, principal: null,
+  pago: { metodoPago: null, estadoPago: 'SIN_REGISTRAR', tecnicoRecaudoPrevistoId: null,
+    recaudadoPorId: null, recaudadoPorNombre: null, pagoFecha: null,
+    confirmadoAt: null, confirmadoPor: null, comprobanteStoragePath: null },
+  calendar: { estado: 'SINCRONIZADO', ultimaSyncAt: null, error: null },
+  executionLock: null, motivoCancelacion: null, canceladoAt: null,
+}
+const completedHistory: AdminService = {
+  ...upcomingHistory, id: uid(15), solicitud: 'SR-00000024', tipoServicio: 'PRINCIPAL',
+  estado: 'FINALIZADO', inicioProgramado: '2026-10-13T14:30:00Z',
+  finProgramado: '2026-10-13T16:00:00Z', valorServicio: 105000,
+  pago: { ...upcomingHistory.pago, metodoPago: 'TRANSFERENCIA', estadoPago: 'CONFIRMADO' },
+}
 async function setup(page: Page) {
   const calls: string[] = []
   await page.route('**/get-session', route => route.fulfill({ json: {
@@ -23,6 +49,8 @@ async function setup(page: Page) {
     if (path.endsWith('/pending-count')) { await send({ count: 0 }); return }
     if (path === `/api/clients/${ids.client}`) { await send({ id: ids.client, nombre: 'Cliente de prueba', tipoCliente: 'NEGOCIO', nit: 'CI-1', correos: [], activo: true, version: 1, vigenciaCertificadoMeses: 12, sedesCount: 1 }); return }
     if (path === `/api/sites/${ids.site}`) { await send({ id: ids.site, clientId: ids.client, nombre: 'Sede de prueba', direccion: 'Dirección sintética', tipoSede: 'NEGOCIO', activo: true, version: 1, correos: [], contactoPrincipalNombre: 'Contacto de prueba', contactoPrincipalCorreo: null, contactoPrincipalCelular: '+573000000001', valorServicio: 100000, periodicidadMeses: 1, duracionServicioMinutos: 60, areasCount: 1 }); return }
+    if (path === `/api/clients/${ids.client}/sites`) { await send([]); return }
+    if (path === '/api/admin/services/workspace') { await send({ sedes: [], tecnicos: [responsible], productos: [] }); return }
     const base = `/api/admin/sites/${ids.site}`
     const collection = (items: unknown[]) => ({ items, total: items.length, page: 1, pageSize: 20, areas: [{ value: ids.area, label: 'Cocina' }], traps: [{ value: 'TRAMPA', label: 'Trampa adhesiva' }] })
     if (path === `${base}/monitoring-points`) { await send(collection(url.searchParams.get('search')?.includes('inexistente') ? [] : [point])); return }
@@ -93,23 +121,45 @@ for (const width of [390,1280]) for (const theme of ['light','dark']) {
   })
 }
 
-test('historial de sede reutiliza la lista de Servicios en móvil y escritorio', async ({ page }) => {
+test('los historiales de sede y cliente usan Servicios completos, filtros y acciones sin mezclar otros clientes', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 860 })
   await setup(page)
-  await page.route(/\/api\/sites\/[^/]+\/services\?page=/, route => route.fulfill({ json: {
-    items: [{ id: ids.service, solicitud: 'SR-00000021', fecha: '2026-10-30T12:00:00Z', tipo: 'REFUERZO', tecnico: 'Técnico de prueba', estado: 'PROGRAMADO', valor: 105000 }],
-    page: 1, pageSize: 20, total: 1,
-  } }))
+  const requests: URL[] = []
+  await page.route(/\/api\/admin\/services\/context\?/, async route => {
+    const url = new URL(route.request().url())
+    requests.push(url)
+    const items = [upcomingHistory, completedHistory].filter(record =>
+      (!url.searchParams.get('estado') || record.estado === url.searchParams.get('estado'))
+      && (!url.searchParams.get('tipo') || record.tipoServicio === url.searchParams.get('tipo'))
+      && (!url.searchParams.get('tecnicoId') || record.tecnicoResponsableId === url.searchParams.get('tecnicoId')))
+    await route.fulfill({ json: { items, total: items.length, page: 1, pageSize: 20, pendingCount: 0 } })
+  })
   await page.getByRole('button', { name: 'Historial de servicios', exact: true }).click()
-  const region = page.getByRole('region', { name: 'Historial de servicios' })
-  const row = region.locator('.svc-table tbody tr')
-  await expect(row).toHaveCount(1)
-  await expect(row.getByRole('link', { name: 'SR-00000021', exact: true })).toBeVisible()
-  await expect(row.getByText('Técnico de prueba')).toBeVisible()
-  expect(await row.evaluate(element => getComputedStyle(element).display)).toBe('grid')
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
-
+  const rows = page.locator('.svc-contextual-history .svc-table tbody tr')
+  await expect(rows).toHaveCount(2)
+  await expect(rows.first()).toContainText('SR-00000021')
+  await expect(rows.last()).toContainText('SR-00000024')
+  await expect(rows.last()).toContainText('Transferencia')
+  await expect(rows.last().getByRole('link', { name: 'Abrir informe de SR-00000024' })).toBeVisible()
+  await expect(page.locator('.svc-contextual-history .svc-record-contact')).toHaveCount(2)
+  expect(requests.at(-1)?.searchParams.get('siteId')).toBe(ids.site)
+  expect(requests.at(-1)?.searchParams.has('clientId')).toBe(false)
+  expect(requests.at(-1)?.searchParams.has('from')).toBe(false)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await page.locator('#site-services-status').selectOption('FINALIZADO')
+  await expect(rows).toHaveCount(1)
+  await expect(rows.first()).toContainText('Finalizado')
+  expect(requests.at(-1)?.searchParams.get('estado')).toBe('FINALIZADO')
+  await page.locator('#site-services-status').selectOption('')
+  await expect(rows).toHaveCount(2)
   await page.setViewportSize({ width: 1280, height: 860 })
-  expect(await row.evaluate(element => getComputedStyle(element).display)).toBe('table-row')
-  await expect(region.getByRole('columnheader', { name: 'Estado' })).toBeVisible()
+  expect(await rows.first().evaluate(element => getComputedStyle(element).display)).toBe('table-row')
+
+  await page.goto('/clientes/' + ids.client)
+  await page.getByRole('button', { name: 'Historial de servicios', exact: true }).click()
+  const clientRows = page.locator('.svc-contextual-history .svc-table tbody tr')
+  await expect(clientRows).toHaveCount(2)
+  await expect(clientRows.last().getByRole('link', { name: 'Abrir informe de SR-00000024' })).toBeVisible()
+  expect(requests.at(-1)?.searchParams.get('clientId')).toBe(ids.client)
+  expect(requests.at(-1)?.searchParams.has('siteId')).toBe(false)
 })
