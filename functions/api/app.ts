@@ -716,24 +716,6 @@ app.delete('/api/areas/:id', async (context) => {
   return context.body(null, 204)
 })
 
-app.get('/api/clients/:id/services', async (context) => {
-  const page = positiveQueryInteger(context.req.query('page'), 1)
-  const result = await transaction(async (client) => {
-    await requireAdmin(client, context.get('identity'))
-    return serviceHistory(client, 'client', context.req.param('id'), page)
-  })
-  return context.json(result)
-})
-
-app.get('/api/sites/:id/services', async (context) => {
-  const page = positiveQueryInteger(context.req.query('page'), 1)
-  const result = await transaction(async (client) => {
-    await requireAdmin(client, context.get('identity'))
-    return serviceHistory(client, 'site', context.req.param('id'), page)
-  })
-  return context.json(result)
-})
-
 app.get('/api/services', async (context) => {
   const identity = context.get('identity')
   const services = await transaction(async (client) => {
@@ -916,36 +898,6 @@ async function findArea(client: PoolClient, id: string): Promise<unknown> {
   const { rows } = await client.query(`${AREA_SELECT} where a.id = $1`, [id])
   if (!rows[0]) throw new ApiError(404, 'El Área no existe')
   return rows[0]
-}
-
-async function serviceHistory(
-  client: PoolClient,
-  scope: 'client' | 'site',
-  id: string,
-  page: number,
-): Promise<{ items: unknown[]; page: number; pageSize: number; total: number }> {
-  const pageSize = 20
-  const condition = scope === 'client' ? 'se.negocio_id = $1' : 's.sede_id = $1'
-  const count = await client.query<{ total: string }>(
-    `select count(*)::text as total
-     from public.servicios s
-     join public.sedes se on se.id = s.sede_id
-     where ${condition}`,
-    [id],
-  )
-  const { rows } = await client.query(
-    `select s.id, s.solicitud, s.inicio_programado as fecha,
-            s.tipo_servicio as tipo, u.nombre_completo as tecnico,
-            s.estado, s.valor_servicio as valor
-     from public.servicios s
-     join public.sedes se on se.id = s.sede_id
-     join public.usuarios u on u.id = s.tecnico_responsable_id
-     where ${condition}
-     order by s.inicio_programado desc
-     limit $2 offset $3`,
-    [id, pageSize, (page - 1) * pageSize],
-  )
-  return { items: rows, page, pageSize, total: Number(count.rows[0]?.total ?? 0) }
 }
 
 function clientInput(body: Record<string, unknown>, editing = false) {

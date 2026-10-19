@@ -13,14 +13,14 @@ import StatusBadge from '@/components/base/StatusBadge.vue'
 import WhatsAppPhoneLink from '@/components/base/WhatsAppPhoneLink.vue'
 import { useFileSaveProgress } from '@/composables/useFileSaveProgress'
 import ClientForm from '@/components/domain/clients/ClientForm.vue'
-import ServiceRecords from '@/components/domain/services/ServiceRecords.vue'
+import ContextualServiceHistory from '@/components/domain/services/ContextualServiceHistory.vue'
 import SiteForm from '@/components/domain/clients/SiteForm.vue'
 import { ApiClientError } from '@/services/apiService'
-import { getClient, getSite, listClientHistory } from '@/services/clientsService'
+import { getClient, getSite } from '@/services/clientsService'
 import { deleteMasterFile, getMasterFileUrl, uploadMasterFile } from '@/services/filesService'
 import { useClientsStore } from '@/stores/clients'
 import { useNotificationsStore } from '@/stores/notifications'
-import type { ClientInput, ClientRecord, ServiceHistoryItem, SiteInput, SiteRecord } from '@/types/domain'
+import type { ClientInput, ClientRecord, SiteInput, SiteRecord } from '@/types/domain'
 
 const route = useRoute()
 const router = useRouter()
@@ -38,10 +38,6 @@ const sites = computed(() => store.sitesForClient(clientId.value))
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const tab = ref<'sites' | 'history'>('sites')
-const history = ref<ServiceHistoryItem[]>([])
-const historyPage = ref(1)
-const historyTotal = ref(0)
-const historyLoading = ref(false)
 const clientFormOpen = ref(false)
 const siteFormOpen = ref(false)
 const siteFormMode = ref<'create' | 'edit'>('create')
@@ -66,7 +62,6 @@ async function load(): Promise<void> {
       await store.loadSites(loaded.id)
     } else {
       tab.value = 'history'
-      await loadHistory()
     }
   } catch (error) {
     loadError.value = message(error, 'No fue posible cargar el Cliente')
@@ -75,24 +70,7 @@ async function load(): Promise<void> {
   }
 }
 
-async function changeTab(next: 'sites' | 'history'): Promise<void> {
-  tab.value = next
-  if (next === 'history' && !history.value.length) await loadHistory()
-}
-
-async function loadHistory(page = 1): Promise<void> {
-  historyLoading.value = true
-  try {
-    const result = await listClientHistory(clientId.value, page)
-    history.value = result.items
-    historyPage.value = result.page
-    historyTotal.value = result.total
-  } catch (error) {
-    notifications.show(message(error, 'No fue posible cargar el historial'), 'error')
-  } finally {
-    historyLoading.value = false
-  }
-}
+function changeTab(next: 'sites' | 'history'): void { tab.value = next }
 
 function openClientEdit(): void {
   if (!client.value) return
@@ -336,10 +314,7 @@ function formatDate(value: string): string { return new Intl.DateTimeFormat('es-
     </section>
 
     <section v-else class="history-card">
-      <LoadingSkeleton v-if="historyLoading" label="Cargando historial" :lines="5" />
-      <EmptyState v-else-if="history.length === 0" title="Sin historial de servicios" message="Los Servicios aparecerán aquí cuando se programen." />
-      <ServiceRecords v-else :summary-records="history" />
-      <div v-if="historyTotal > 20" class="pagination"><BaseButton size="compact" variant="secondary" :disabled="historyPage === 1" @click="loadHistory(historyPage - 1)">Anterior</BaseButton><span>Página {{ historyPage }}</span><BaseButton size="compact" variant="secondary" :disabled="historyPage * 20 >= historyTotal" @click="loadHistory(historyPage + 1)">Siguiente</BaseButton></div>
+      <ContextualServiceHistory :client-id="clientId" />
     </section>
 
     <BaseDialog :model-value="clientFormOpen" title="Editar cliente" @update:model-value="!saving && (clientFormOpen = $event)"><ClientForm v-model="clientForm" mode="edit" :saving="saving" @submit="saveClient" @invalid="notifications.show('Revisa los campos marcados.', 'error')" /><template #footer><BaseButton variant="secondary" :disabled="saving" @click="clientFormOpen = false">Cancelar</BaseButton><BaseButton type="submit" form="client-form" :loading="saving">{{ savePhaseLabel ?? 'Guardar cambios' }}</BaseButton></template></BaseDialog>

@@ -11,7 +11,7 @@ import ErrorState from '@/components/base/ErrorState.vue'
 import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import StatusBadge from '@/components/base/StatusBadge.vue'
 import ResponsiveTable from '@/components/base/ResponsiveTable.vue'
-import ServiceRecords from '@/components/domain/services/ServiceRecords.vue'
+import ContextualServiceHistory from '@/components/domain/services/ContextualServiceHistory.vue'
 import SiteMonitoringPanel from '@/components/domain/clients/SiteMonitoringPanel.vue'
 import SiteFindingsPanel from '@/components/domain/clients/SiteFindingsPanel.vue'
 import WhatsAppPhoneLink from '@/components/base/WhatsAppPhoneLink.vue'
@@ -19,11 +19,11 @@ import { useFileSaveProgress } from '@/composables/useFileSaveProgress'
 import AreaForm from '@/components/domain/clients/AreaForm.vue'
 import SiteForm from '@/components/domain/clients/SiteForm.vue'
 import { ApiClientError } from '@/services/apiService'
-import { getSite, listSiteHistory } from '@/services/clientsService'
+import { getSite } from '@/services/clientsService'
 import { deleteMasterFile, getMasterFileUrl, uploadMasterFile } from '@/services/filesService'
 import { useClientsStore } from '@/stores/clients'
 import { useNotificationsStore } from '@/stores/notifications'
-import type { AreaInput, AreaRecord, ServiceHistoryItem, SiteInput, SiteRecord } from '@/types/domain'
+import type { AreaInput, AreaRecord, SiteInput, SiteRecord } from '@/types/domain'
 
 type Tab = 'summary' | 'areas' | 'devices' | 'findings' | 'history' | 'settings'
 
@@ -52,10 +52,6 @@ const deleteAreaTarget = ref<AreaRecord | null>(null)
 const dependencyAreaTarget = ref<AreaRecord | null>(null)
 const saving = ref(false)
 const areasLoading = ref(false)
-const history = ref<ServiceHistoryItem[]>([])
-const historyPage = ref(1)
-const historyTotal = ref(0)
-const historyLoading = ref(false)
 const sitePlanFile = ref<File | null>(null)
 let loadRequest = 0
 
@@ -64,9 +60,6 @@ watch(siteId, () => {
   visited.value = { devices: false, findings: initialTab() === 'findings' }
   tab.value = initialTab()
   selectedArea.value = null
-  history.value = []
-  historyPage.value = 1
-  historyTotal.value = 0
   void load()
 })
 async function load(): Promise<void> {
@@ -88,7 +81,6 @@ async function changeTab(next: Tab, event?: MouseEvent): Promise<void> {
   ;(event?.currentTarget as HTMLElement | null)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })
   if (next === 'devices' || next === 'findings') visited.value[next] = true
   if (next === 'areas' && !store.areasBySiteId[siteId.value]) await loadAreas()
-  if (next === 'history' && !history.value.length) await loadHistory()
 }
 
 async function loadAreas(force = false): Promise<void> {
@@ -96,17 +88,6 @@ async function loadAreas(force = false): Promise<void> {
   try { await store.loadAreas(siteId.value, force) }
   catch (error) { notifications.show(message(error, 'No fue posible cargar las Áreas'), 'error') }
   finally { areasLoading.value = false }
-}
-
-async function loadHistory(page = 1): Promise<void> {
-  historyLoading.value = true
-  try {
-    const result = await listSiteHistory(siteId.value, page)
-    history.value = result.items
-    historyPage.value = result.page
-    historyTotal.value = result.total
-  } catch (error) { notifications.show(message(error, 'No fue posible cargar el historial'), 'error') }
-  finally { historyLoading.value = false }
 }
 
 function openSiteEdit(): void {
@@ -297,10 +278,7 @@ function formatMoney(value: number): string { return new Intl.NumberFormat('es-C
     </section>
 
     <section v-else-if="tab === 'history'" class="history-card">
-      <LoadingSkeleton v-if="historyLoading" label="Cargando historial" :lines="5" />
-      <EmptyState v-else-if="history.length === 0" title="Sin historial" message="Los Servicios de esta Sede aparecerán aquí." />
-      <ServiceRecords v-else :summary-records="history" />
-      <div v-if="historyTotal > 20" class="pagination"><BaseButton size="compact" variant="secondary" :disabled="historyPage === 1" @click="loadHistory(historyPage - 1)">Anterior</BaseButton><span>Página {{ historyPage }}</span><BaseButton size="compact" variant="secondary" :disabled="historyPage * 20 >= historyTotal" @click="loadHistory(historyPage + 1)">Siguiente</BaseButton></div>
+      <ContextualServiceHistory :site-id="siteId" />
     </section>
     <section v-else-if="tab === 'settings'" class="settings-card"><h2>Configuración de la Sede</h2><p>Modifica contacto, operación, vehículos y plano desde el formulario compartido.</p><BaseButton size="compact" @click="openSiteEdit">Editar configuración</BaseButton></section>
     <SiteMonitoringPanel v-if="visited.devices" v-show="tab === 'devices'" :site-id="siteId" :active="tab === 'devices'" />
