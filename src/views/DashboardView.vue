@@ -4,8 +4,8 @@ import { CalendarDays, CalendarClock, CheckCircle2, CircleAlert, ClipboardList, 
   FileWarning, MapPin, RefreshCw, TrendingUp, Wallet, WifiOff } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { fetchDashboard } from '@/services/dashboardService'
-import { addDateDays, FOLLOW_UP_LABELS, PAYMENT_LABELS, SERVICE_STATE_LABELS, todayBogota } from '@/helpers/adminServices'
-import type { DashboardPeriod, DashboardServiceRow, DashboardSnapshot } from '@/types/dashboard'
+import { addDateDays, PAYMENT_LABELS, SERVICE_STATE_LABELS, todayBogota } from '@/helpers/adminServices'
+import type { DashboardPeriod, DashboardSnapshot } from '@/types/dashboard'
 import './dashboard.css'
 
 const DashboardChart=defineAsyncComponent(()=>import('@/components/domain/dashboard/DashboardChart.vue'))
@@ -142,7 +142,7 @@ onBeforeUnmount(()=>{counter++;request?.abort()})
         </section>
         <section class="dashboard-charts" aria-label="Estadísticas">
           <article class="dashboard-panel">
-            <header><div><h2>Servicios por semana</h2><p>Servicios programados según su estado</p></div><span>{{ chartLabel }}</span></header>
+            <header><div><h2>{{ period==='7d'?'Servicios por día':period==='12m'?'Servicios por mes':'Servicios por semana' }}</h2><p>Servicios programados según su estado</p></div><span>{{ chartLabel }}</span></header>
             <DashboardChart kind="services" :data="snapshot.charts" :period="snapshot.period" />
           </article>
           <article class="dashboard-panel">
