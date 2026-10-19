@@ -109,7 +109,7 @@ export async function dashboardSnapshot(client: PoolClient, period: DashboardPer
     "select date_trunc($5::text,s.fin_real at time zone 'America/Bogota')::date::text as date,"+
     "coalesce(sum(s.valor_servicio),0)::text as value "+
     serviceFrom+" where "+scope+" and s.estado='FINALIZADO'"+
-    ' and s.fin_real>='+bogotaStart+' and s.fin_real<'+bogotaEnd+' group by 1 order by 1',params)
+    ' and s.fin_real>='+bogotaStart+' and s.fin_real<'+bogotaEnd+' group by 1 order by 1',params.slice(0,5))
 
   // Each visited service contributes one MIP percentage. Missing/NA criteria and
   // inaccessible areas are excluded; missing evaluations never count as zero.
