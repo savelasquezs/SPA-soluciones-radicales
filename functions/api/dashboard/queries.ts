@@ -88,7 +88,7 @@ export async function dashboardSnapshot(client: PoolClient, period: DashboardPer
   const findings=await rows<FindingCounts>(client,
     "select count(*) filter (where h.estado='ABIERTO')::int as open,"+
     "count(*) filter (where h.estado='EN_PROCESO')::int as ongoing "+
-    'from public.hallazgos h join public.sedes se on se.id=h.sede_id where '+scope,params)
+    'from public.hallazgos h join public.sedes se on se.id=h.sede_id where '+scope,params.slice(0,2))
   
   const certificates=await rows<{total:number}>(client,
     "select ("+
@@ -103,7 +103,7 @@ export async function dashboardSnapshot(client: PoolClient, period: DashboardPer
     "count(*) filter (where s.estado='FINALIZADO')::int as completed,"+
     "count(*) filter (where s.estado='CANCELADO')::int as cancelled "+
     serviceFrom+' where '+scope+' and s.inicio_programado>='+bogotaStart+
-    ' and s.inicio_programado<'+bogotaEnd+' group by 1 order by 1',params)
+    ' and s.inicio_programado<'+bogotaEnd+' group by 1 order by 1',params.slice(0,5))
 
   const valueSeries=await rows<ValueChart>(client,
     "select date_trunc($5::text,s.fin_real at time zone 'America/Bogota')::date::text as date,"+
@@ -123,7 +123,7 @@ export async function dashboardSnapshot(client: PoolClient, period: DashboardPer
     'and s.fin_real>='+bogotaStart+' and s.fin_real<'+bogotaEnd+
     " and e.evaluacion in ('C','CP','NC') and not sa.sin_acceso group by s.id) "+
     'select date,round(avg(percentage)::numeric,1)::float8 as percentage,count(*)::int as visits '+
-    'from per_visit group by date order by date',params)
+    'from per_visit group by date order by date',params.slice(0,5))
 
   const serviceColumns = "s.id,s.solicitud as reference,n.nombre as \"clientName\",se.nombre as \"siteName\","+
     "n.id as \"clientId\",se.id as \"siteId\",s.inicio_programado as date,"+
@@ -132,18 +132,18 @@ export async function dashboardSnapshot(client: PoolClient, period: DashboardPer
     'select '+serviceColumns+serviceFrom+' join public.usuarios u on u.id=s.tecnico_responsable_id '+
     'where '+scope+" and s.estado in ('EN_PROCESO','PROGRAMADO')"+
     " and (s.estado='EN_PROCESO' or s.inicio_programado>=now()-interval '12 hours') "+
-    "order by case when s.estado='EN_PROCESO' then 0 else 1 end,s.inicio_programado,s.id limit 5",params)
+    "order by case when s.estado='EN_PROCESO' then 0 else 1 end,s.inicio_programado,s.id limit 5",params.slice(0,2))
   const latest=await rows<DashboardServiceRow & {value:string}>(client,
     'select '+serviceColumns+serviceFrom+' join public.usuarios u on u.id=s.tecnico_responsable_id '+
     'where '+scope+" and s.estado='FINALIZADO' "+
-    'order by s.fin_real desc nulls last,s.id desc limit 5',params)
+    'order by s.fin_real desc nulls last,s.id desc limit 5',params.slice(0,2))
 
   const recentFindings=await rows<DashboardFindingRow>(client,
     'select h.id,n.id as "clientId",se.id as "siteId",n.nombre as "clientName",se.nombre as "siteName",'+
     'a.nombre as area,h.descripcion as description,h.fecha_apertura as "openedAt",h.estado as status '+
     'from public.hallazgos h join public.sedes se on se.id=h.sede_id join public.negocios n on n.id=se.negocio_id '+
     'join public.areas a on a.id=h.area_id where '+scope+
-    ' order by h.fecha_apertura desc,h.id desc limit 5',params)
+    ' order by h.fecha_apertura desc,h.id desc limit 5',params.slice(0,2))
 
   const counts=contacts[0]??{total:0,overdue:0}
   const f=findings[0]??{open:0,ongoing:0}
