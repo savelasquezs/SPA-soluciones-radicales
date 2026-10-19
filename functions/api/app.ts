@@ -1079,11 +1079,6 @@ function integerValue(value: unknown, key: string): number {
   return requiredInteger({ [key]: value }, key)
 }
 
-function positiveQueryInteger(value: string | undefined, fallback: number): number {
-  if (value === undefined) return fallback
-  return requiredPositiveInteger({ value }, 'value')
-}
-
 function optionalBooleanQuery(value: string | undefined, key: string): boolean | null {
   if (value === undefined) return null
   if (value === 'true') return true

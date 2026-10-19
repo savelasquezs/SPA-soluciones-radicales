@@ -22,8 +22,6 @@ vi.mock('@/services/clientsService', () => ({
   createArea: vi.fn<typeof import('@/services/clientsService').createArea>(),
   updateArea: vi.fn<typeof import('@/services/clientsService').updateArea>(),
   deleteArea: vi.fn<typeof import('@/services/clientsService').deleteArea>(),
-  listClientHistory: vi.fn<typeof import('@/services/clientsService').listClientHistory>(),
-  listSiteHistory: vi.fn<typeof import('@/services/clientsService').listSiteHistory>(),
 }))
 
 const loaded: ClientRecord = { id: 'client-1', tipoCliente: 'NEGOCIO', nombre: 'Acme SAS', nit: '900123', correos: ['admin@acme.co'], activo: true, version: 1, vigenciaCertificadoMeses: 12, residenciaDireccion: null, residenciaCelular: null, residenciaValorServicio: null, sedesCount: 2 }
