@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { shallowRef, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { Camera, RefreshCw } from 'lucide-vue-next'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseIconButton from '@/components/base/BaseIconButton.vue'
@@ -19,8 +20,13 @@ import type { SiteFinding } from '@/types/siteInsights'
 import './site-insights.css'
 const props = defineProps<{ siteId: string; active: boolean }>()
 const selected = shallowRef<SiteFinding | null>(null)
+const route=useRoute()
+const fromDashboard=route.query.tab==='findings'
+const initialState=fromDashboard && ['ABIERTO','EN_PROCESO','CERRADO'].includes(String(route.query.findingState))
+  ? String(route.query.findingState) : 'PENDING'
+const initialSearch=fromDashboard && typeof route.query.findingSearch==='string' ? route.query.findingSearch.slice(0,160) : ''
 const { data, items, page, filters, loading, error, load, changeFilters, resetFilters } = useInsightList<SiteFinding>(
-  () => props.siteId, () => props.active, (query, signal) => listSiteFindings(props.siteId,query,signal), { state: 'PENDING' },
+  () => props.siteId, () => props.active, (query, signal) => listSiteFindings(props.siteId,query,signal), { state: initialState,search: initialSearch },
 )
 watch(() => [props.siteId,props.active], () => { selected.value = null })
 </script>
