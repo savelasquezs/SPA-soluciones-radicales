@@ -10,6 +10,8 @@ function query(value: ServiceFilter | UpcomingFilter): string {
 function json(method: string, value: unknown): RequestInit { return { method,body:JSON.stringify(value) } }
 export const fetchServiceWorkspace = () => apiRequest<ServiceWorkspace>(`${base}/workspace`)
 export const fetchAdminServices = (filter: ServiceFilter, signal?: AbortSignal) => apiRequest<PagedResult<AdminService>>(`${base}?${query(filter)}`,{ signal })
+/** A missing deployment rejects this route rather than returning unscoped results. */
+export const fetchContextServices = (filter: ServiceFilter, signal?: AbortSignal) => apiRequest<PagedResult<AdminService>>(`${base}/context?${query(filter)}`,{ signal })
 export const fetchUpcomingServices = (filter: UpcomingFilter, signal?: AbortSignal) => apiRequest<PagedResult<UpcomingService>>(`${base}/upcoming?${query(filter)}`,{ signal })
 export const fetchAdminService = (id: string) => apiRequest<AdminService>(`${base}/${id}`)
 export const fetchUpcomingService = (id: string) => apiRequest<UpcomingService>(`${base}/upcoming/${id}`)

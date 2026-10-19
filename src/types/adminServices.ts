@@ -183,6 +183,8 @@ export interface ServiceFilter {
   query: string
   page: number
   pageSize: number
+  clientId?: string
+  siteId?: string
 }
 export interface UpcomingFilter {
   from: string
