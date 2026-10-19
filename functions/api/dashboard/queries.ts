@@ -64,11 +64,11 @@ export async function dashboardSnapshot(client: PoolClient, period: DashboardPer
     // overdue work and receivables are live operating snapshots regardless of period.
     rows<Summary>(client,
       'select '+
-      'count(*) filter (where s.estado=\\'PROGRAMADO\\' and s.inicio_programado>='+todayStart+' and s.inicio_programado<'+tomorrowStart+')::int as "todayScheduled",'+
-      'count(*) filter (where s.estado=\\'EN_PROCESO\\' and s.inicio_programado>='+todayStart+' and s.inicio_programado<'+tomorrowStart+')::int as "todayOngoing",'+
-      'count(*) filter (where s.estado=\\'FINALIZADO\\' and s.inicio_programado>='+todayStart+' and s.inicio_programado<'+tomorrowStart+')::int as "todayCompleted",'+
-      'count(*) filter (where s.estado=\\'PROGRAMADO\\' and s.inicio_programado<now()-interval \\'15 minutes\\')::int as delayed,'+
-      'coalesce(sum(s.valor_servicio) filter (where s.estado=\\'FINALIZADO\\' and s.fin_real>='+bogotaStart+' and s.fin_real<'+bogotaEnd+'),0)::text as "performedValue",'+
+      'count(*) filter (where s.estado=\'PROGRAMADO\' and s.inicio_programado>='+todayStart+' and s.inicio_programado<'+tomorrowStart+')::int as "todayScheduled",'+
+      'count(*) filter (where s.estado=\'EN_PROCESO\' and s.inicio_programado>='+todayStart+' and s.inicio_programado<'+tomorrowStart+')::int as "todayOngoing",'+
+      'count(*) filter (where s.estado=\'FINALIZADO\' and s.inicio_programado>='+todayStart+' and s.inicio_programado<'+tomorrowStart+')::int as "todayCompleted",'+
+      'count(*) filter (where s.estado=\'PROGRAMADO\' and s.inicio_programado<now()-interval \'15 minutes\')::int as delayed,'+
+      'coalesce(sum(s.valor_servicio) filter (where s.estado=\'FINALIZADO\' and s.fin_real>='+bogotaStart+' and s.fin_real<'+bogotaEnd+'),0)::text as "performedValue",'+
       "coalesce(sum(s.valor_servicio) filter (where s.estado='FINALIZADO' and s.fin_real >= ($7::date::timestamp at time zone 'America/Bogota') and s.fin_real <"+bogotaStart+'),0)::text as "previousValue",'+
       "coalesce(sum(s.valor_servicio) filter (where s.estado='FINALIZADO' and s.valor_servicio>0 and s.estado_pago<>'CONFIRMADO'),0)::text as \"outstandingValue\","+
       "count(*) filter (where s.estado='FINALIZADO' and s.valor_servicio>0 and s.estado_pago<>'CONFIRMADO')::int as \"outstandingPayments\","+
