@@ -94,6 +94,6 @@ test('recarga una sola vez cuando un despliegue retiró un chunk de una ruta', a
   expect(chunkRequests).toBe(1)
   await page.getByRole('navigation', { name: 'Navegación principal' }).getByRole('link', { name: 'Resumen', exact: true }).click()
   await expect(page).toHaveURL(/\/$/)
-  await expect(page.getByRole('heading', { name: 'Hola, Ana' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Resumen', exact: true })).toBeVisible()
   expect(chunkRequests).toBe(2)
 })
