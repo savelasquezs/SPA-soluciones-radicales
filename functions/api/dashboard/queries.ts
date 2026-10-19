@@ -10,8 +10,8 @@ const scope = '($1::uuid is null or se.negocio_id=$1::uuid) and ($2::uuid is nul
 const serviceFrom = 'from public.servicios s join public.sedes se on se.id=s.sede_id join public.negocios n on n.id=se.negocio_id'
 const bogotaStart = "(($3::date)::timestamp at time zone 'America/Bogota')"
 const bogotaEnd = "(($4::date)::timestamp at time zone 'America/Bogota')"
-const todayStart = "(($6::date)::timestamp at time zone 'America/Bogota')"
-const tomorrowStart = "((($6::date+1)::timestamp) at time zone 'America/Bogota')"
+const todayStart = "(($5::date)::timestamp at time zone 'America/Bogota')"
+const tomorrowStart = "((($5::date+1)::timestamp) at time zone 'America/Bogota')"
 
 async function rows<T>(client: PoolClient, sql: string, params: unknown[]): Promise<T[]> {
   return (await client.query(sql,params)).rows as T[]
@@ -69,21 +69,21 @@ export async function dashboardSnapshot(client: PoolClient, period: DashboardPer
       'count(*) filter (where s.estado=\'FINALIZADO\' and s.inicio_programado>='+todayStart+' and s.inicio_programado<'+tomorrowStart+')::int as "todayCompleted",'+
       'count(*) filter (where s.estado=\'PROGRAMADO\' and s.inicio_programado<now()-interval \'15 minutes\')::int as delayed,'+
       'coalesce(sum(s.valor_servicio) filter (where s.estado=\'FINALIZADO\' and s.fin_real>='+bogotaStart+' and s.fin_real<'+bogotaEnd+'),0)::text as "performedValue",'+
-      "coalesce(sum(s.valor_servicio) filter (where s.estado='FINALIZADO' and s.fin_real >= ($7::date::timestamp at time zone 'America/Bogota') and s.fin_real <"+bogotaStart+'),0)::text as "previousValue",'+
+      "coalesce(sum(s.valor_servicio) filter (where s.estado='FINALIZADO' and s.fin_real >= ($6::date::timestamp at time zone 'America/Bogota') and s.fin_real <"+bogotaStart+'),0)::text as "previousValue",'+
       "coalesce(sum(s.valor_servicio) filter (where s.estado='FINALIZADO' and s.valor_servicio>0 and s.estado_pago<>'CONFIRMADO'),0)::text as \"outstandingValue\","+
       "count(*) filter (where s.estado='FINALIZADO' and s.valor_servicio>0 and s.estado_pago<>'CONFIRMADO')::int as \"outstandingPayments\","+
       "count(*) filter (where s.calendar_sync_estado='ERROR')::int as \"calendarErrors\" "+
-      serviceFrom+' where '+scope,[...params,previousFrom]).then(result=>result[0]!)
+      serviceFrom+' where '+scope,[clientId,siteId,from,to,today,previousFrom]).then(result=>result[0]!)
   ])
 
   const contacts=await rows<UpcomingCounts>(client,
     "select count(*)::int as total,"+
-    "count(*) filter (where p.fecha_sugerida<"+todayStart+")::int as overdue "+
+    "count(*) filter (where p.fecha_sugerida<(($3::date)::timestamp at time zone 'America/Bogota')+")::int as overdue "+
     'from public.proximos_servicios p join public.sedes se on se.id=p.sede_id '+
     "where "+scope+
     " and p.servicio_agendado_id is null and p.estado in ('PENDIENTE','CONTACTADO','CONFIRMADO','POSPUESTO')"+
-    " and p.fecha_sugerida < (($6::date+7)::timestamp at time zone 'America/Bogota')"+
-    " and (p.fecha_recontacto is null or p.fecha_recontacto<=$6::date)",params)
+    " and p.fecha_sugerida < (($3::date+7)::timestamp at time zone 'America/Bogota')"+
+    " and (p.fecha_recontacto is null or p.fecha_recontacto<=$3::date)",params)
 
   const findings=await rows<FindingCounts>(client,
     "select count(*) filter (where h.estado='ABIERTO')::int as open,"+
@@ -92,9 +92,9 @@ export async function dashboardSnapshot(client: PoolClient, period: DashboardPer
   
   const certificates=await rows<{total:number}>(client,
     "select ("+
-    "select count(*) from public.usuarios u where u.activo and u.es_tecnico and u.certificado_fecha_vencimiento between $6::date and ($6::date+30)"+
+    "select count(*) from public.usuarios u where u.activo and u.es_tecnico and u.certificado_fecha_vencimiento between $3::date and ($3::date+30)"+
     ") + (select count(*) from public.certificados c join public.servicios s on s.id=c.servicio_id "+
-    "join public.sedes se on se.id=s.sede_id where "+scope+" and c.fecha_vencimiento between $6::date and ($6::date+30)) as total",params)
+    "join public.sedes se on se.id=s.sede_id where "+scope+" and c.fecha_vencimiento between $3::date and ($3::date+30)) as total",[clientId,siteId,today])
 
   const serviceSeries=await rows<ServicesChart>(client,
     "select date_trunc($5::text,s.inicio_programado at time zone 'America/Bogota')::date::text as date,"+
