@@ -11,9 +11,10 @@ import type {
   SiteRecord,
 } from '@/types/domain'
 
-type ClientWire = Omit<ClientRecord, 'version' | 'sedesCount'> & {
+type ClientWire = Omit<ClientRecord, 'version' | 'sedesCount' | 'residenciaValorServicio'> & {
   version: number | string
   sedesCount: number | string
+  residenciaValorServicio: number | string | null
 }
 
 type SiteWire = Omit<SiteRecord, 'valorServicio' | 'version' | 'areasCount'> & {
@@ -125,6 +126,7 @@ function clientPayload(input: ClientInput): ClientInput {
     correos: input.tipoCliente === 'NEGOCIO' ? normalizeEmails(input.correos) : [],
     residenciaCelular: residentialPhone,
     residenciaDireccion: input.tipoCliente === 'RESIDENCIAL' ? input.residenciaDireccion?.trim() || null : null,
+    residenciaValorServicio: input.tipoCliente === 'RESIDENCIAL' ? input.residenciaValorServicio : null,
     vigenciaCertificadoMeses: input.tipoCliente === 'NEGOCIO' ? input.vigenciaCertificadoMeses : null,
   }
 }
@@ -146,7 +148,12 @@ function areaPayload(input: AreaInput): AreaInput {
 }
 
 function normalizeClient(client: ClientWire): ClientRecord {
-  return { ...client, version: Number(client.version), sedesCount: Number(client.sedesCount) }
+  return {
+    ...client,
+    version: Number(client.version),
+    sedesCount: Number(client.sedesCount),
+    residenciaValorServicio: client.residenciaValorServicio == null ? null : Number(client.residenciaValorServicio),
+  }
 }
 
 function normalizeSite(site: SiteWire): SiteRecord {

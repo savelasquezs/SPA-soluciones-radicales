@@ -150,3 +150,13 @@ Estas reglas siguen patrones consolidados de formularios de GitHub Primer y Atla
 ## Regla de implementación
 
 Si una pantalla necesita una variante visual no contemplada, primero se evalúa extender el componente base. Solo se crea un componente aislado cuando el comportamiento o semántica realmente difieren.
+
+## Densidad de la interfaz administrativa
+
+- `AdminLayout` usa un sidebar de 220 px en escritorio: grupos en color `--accent` y separadores con `--border`, sin añadir tonos rígidos.
+- En escritorio los enlaces laterales tienen 38 px de altura. En el drawer móvil recuperan al menos 44 px.
+- Las vistas administrativas principales utilizan `content--compact`: menor margen superior y más espacio horizontal para tablas e historiales. No se aplica a edición ni trabajo de campo.
+- Usar `admin-page-header` y `admin-page-heading` para un título de 24 px con descripción en línea, pequeña y en `--text-secondary` (p. ej., «Clientes — Negocios y casas atendidos»). La descripción puede pasar a otra línea en móvil.
+- Usar `admin-compact-filters` en barras de búsqueda y filtros administrativos: controles de 36 px y labels cercanos en escritorio, sin cambiar `BaseInput`/`BaseSelect` dentro de formularios; conservar 44 px o más en móvil.
+- No repetir el breadcrumb simple si ya existe el título de la vista; conservar breadcrumbs navegables en las vistas de detalle.
+- Documentos y certificados pertenecen a Configuración, no a una entrada vacía del sidebar. El enlace de Ayuda lleva a [Mintlify](https://soluciones-radicales.mintlify.app).

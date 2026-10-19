@@ -1,0 +1,41 @@
+{
+  "services": [
+    "src/**",
+    "functions/api/**",
+    "database/**",
+    "scripts/database/**",
+    "e2e/**",
+    "tests/**",
+    "vitest.services.config.ts",
+    "neon.ts",
+    "package*.json",
+    ".github/workflows/admin-services.yml"
+  ],
+  "certificates": [
+    "src/**",
+    "functions/**",
+    "database/**",
+    "scripts/database/test-certificates.mjs",
+    "e2e/**",
+    "package*.json",
+    "*config*",
+    ".github/workflows/certificates.yml"
+  ],
+  "files": [
+    "src/**",
+    "functions/api/r2*",
+    "e2e/file-optimization.spec.ts",
+    "package*.json",
+    "*config*",
+    ".github/workflows/file-optimization.yml"
+  ],
+  "catalogs": [
+    "src/**",
+    "functions/**",
+    "database/**",
+    "e2e/mip-catalogs.spec.ts",
+    "scripts/database/test-mip-catalogs.mjs",
+    "package*.json",
+    ".github/workflows/mip-catalogs.yml"
+  ]
+}

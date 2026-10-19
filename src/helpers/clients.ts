@@ -9,6 +9,7 @@ export type ClientFormErrors = Partial<Record<
   | 'correos'
   | 'residenciaCelular'
   | 'residenciaDireccion'
+  | 'residenciaValorServicio'
   | 'vigenciaCertificadoMeses',
   string
 >>
@@ -68,6 +69,9 @@ export function validateClientInput(input: ClientInput): ClientFormErrors {
   } else {
     if (!normalizePhone(input.residenciaCelular ?? '')) errors.residenciaCelular = 'Ingresa un celular válido'
     if (!input.residenciaDireccion?.trim()) errors.residenciaDireccion = 'La dirección es obligatoria'
+    if (input.residenciaValorServicio != null && (!Number.isSafeInteger(input.residenciaValorServicio) || input.residenciaValorServicio < 0)) {
+      errors.residenciaValorServicio = 'Ingresa un valor entero en COP, igual o mayor que cero'
+    }
   }
   return errors
 }

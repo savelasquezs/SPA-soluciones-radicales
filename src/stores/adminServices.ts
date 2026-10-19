@@ -51,6 +51,7 @@ export const useAdminServicesStore = defineStore('admin-services',()=>{
     }).finally(()=>{ if(stamp===generation) { optionsLoading.value=false; optionsRequest=null } })
     return optionsRequest
   }
+  function invalidateOptions(): void { optionsAt = 0 }
   async function loadServices(filter: ServiceFilter, force = false, allPages = false): Promise<void> {
     if (!auth.isAdmin) return
     const key=JSON.stringify({ filter,allPages })
@@ -152,5 +153,5 @@ export const useAdminServicesStore = defineStore('admin-services',()=>{
     if (stamp===generation && epoch===mutationEpoch && auth.isAdmin) pendingCount.value=result.count
   }
   return { records,upcomingRecords,rows,upcomingRows,options,total,upcomingTotal,pendingCount,loading,upcomingLoading,optionsLoading,error,upcomingError,optionsError,
-    lastFilter,lastUpcomingFilter,loadOptions,loadServices,loadUpcoming,ensureService,ensureUpcoming,upsert,upsertUpcoming,applyMutation,applyUpcoming,refreshPendingCount,reset }
+    lastFilter,lastUpcomingFilter,loadOptions,invalidateOptions,loadServices,loadUpcoming,ensureService,ensureUpcoming,upsert,upsertUpcoming,applyMutation,applyUpcoming,refreshPendingCount,reset }
 })

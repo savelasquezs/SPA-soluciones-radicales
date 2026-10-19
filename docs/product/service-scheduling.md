@@ -53,7 +53,9 @@ Al ingresar en una semana, se selecciona hoy si pertenece a ella; si no, el prim
 
 El Administrador crea el Servicio Principal y el servidor genera su consecutivo.
 
-El valor del Principal se deriva de la Sede al momento de crearlo. Cambios posteriores en el valor configurado de la Sede no modifican Servicios existentes.
+Para clientes **Negocio**, el valor del Servicio Principal se deriva de la tarifa de su Sede al crearlo. Para clientes **Casa**, el formulario de cliente permite configurar una tarifa predeterminada que se guarda en `sedes.valor_servicio` de su Sede residencial interna; no se crea un segundo campo en la base de datos.
+
+La tarifa residencial es opcional para permitir clientes ya existentes sin valor configurado. Al programar una visita se precarga el valor de la Sede cuando exista, pero el Administrador puede modificarlo para esa visita concreta. Si la tarifa está vacía, debe introducir el importe al programar. El valor definitivo se guarda en `servicios.valor_servicio` y **no cambia** si luego se edita la tarifa de la Sede. Los valores se validan como enteros no negativos en COP.
 
 El formulario de programación permite definir fecha, hora, Técnico responsable y colaboradores de acuerdo con las reglas generales de asignación.
 

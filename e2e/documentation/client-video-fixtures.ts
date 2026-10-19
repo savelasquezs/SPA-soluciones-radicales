@@ -14,6 +14,7 @@ export const client = {
   vigenciaCertificadoMeses: 12,
   residenciaDireccion: null,
   residenciaCelular: null,
+  residenciaValorServicio: null,
   sedesCount: 0,
 }
 

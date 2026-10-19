@@ -25,6 +25,15 @@ En desktop administrativo se prioriza la información operativa por encima de me
 - Cuando una lista operativa se consulta repetidamente por periodos conocidos, ofrecer accesos rápidos inmediatamente asociados al selector de fechas. Los presets cambian el rango; no duplican ni alteran la lógica interna del datepicker.
 - La densidad no elimina estados, labels necesarios ni feedback; elimina espacio y superficies redundantes.
 
+### Compactación administrativa transversal
+
+- El encabezado de listados, ajustes y perfiles coloca título y subtítulo en la misma línea cuando hay espacio; el subtítulo conserva menor tamaño y contraste, sin negrita. En móvil puede envolverse.
+- Reducir alto y padding de los **filtros** en escritorio, no de todos los formularios. La lectura de fechas segmentadas y los objetivos táctiles móviles siguen siendo accesibles.
+- Servicios y Agenda conservan sus flujos; extender el layout compacto a Clientes, Sedes, Usuarios, Catálogos, Certificados, Configuración, Integraciones, Resumen y Perfil sin alterar reglas funcionales ni peticiones.
+- El sidebar separa Operación, Gestión y Administración mediante títulos acentuados y líneas sutiles; usa enlaces de 38 px en escritorio y al menos 44 px en móvil.
+- **Documentos** no se muestra en la navegación principal; un enlace antiguo `/documentos` redirige a `/configuracion/certificados`. La opción de Certificados se conserva en Configuración.
+- **Ayuda y documentación** abre [el portal Mintlify](https://soluciones-radicales.mintlify.app), no el árbol de código en GitHub.
+
 ## Enlaces de entidades y celulares
 
 - Los nombres de entidades navegables usan el color normal de texto. La interacción se comunica mediante cursor, foco visible y subrayado en hover/focus, no mediante color de acento permanente.
