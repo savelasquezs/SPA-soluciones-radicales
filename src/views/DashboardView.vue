@@ -1,5 +1,9 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import BaseDateRangePicker from '@/components/base/BaseDateRangePicker.vue'
+import { resolveDashboardRange } from '@/helpers/dashboardRanges'
+import type { ServiceMetric } from '@/types/adminServices'
 import { CalendarDays, CalendarClock, CheckCircle2, CircleAlert, ClipboardList, Clock3,
   FileWarning, MapPin, RefreshCw, TrendingUp, Wallet, WifiOff } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
@@ -9,36 +13,72 @@ import type { DashboardPeriod, DashboardSnapshot } from '@/types/dashboard'
 import './dashboard.css'
 
 const DashboardChart=defineAsyncComponent(()=>import('@/components/domain/dashboard/DashboardChart.vue'))
-const session=useAuthStore()
-const period=ref<DashboardPeriod>('30d')
-const clientId=ref('')
-const siteId=ref('')
+const session=useAuthStore(),route=useRoute(),router=useRouter()
+const query=(key:string)=>typeof route.query[key]==='string'?route.query[key] as string:''
+const presets:DashboardPeriod[]=['7d','30d','90d','12m','24m','5y','custom']
+const period=ref<DashboardPeriod>(presets.includes(query('period') as DashboardPeriod)?query('period') as DashboardPeriod:'30d')
+const clientId=ref(query('clientId'))
+const siteId=ref(query('siteId'))
+const today=todayBogota()
+const customRange=ref({from:query('from')||addDateDays(today,-29),to:query('to')||today})
+const loadedScope=ref({clientId:'',siteId:''})
+const rangeError=computed(()=>{
+  if(period.value!=='custom')return ''
+  try{resolveDashboardRange(period.value,customRange.value);return ''}
+  catch{return 'Selecciona un rango válido de hasta diez años.'}
+})
 const snapshot=ref<DashboardSnapshot|null>(null)
 const loading=ref(false)
 const error=ref('')
 let request:AbortController|null=null
 let counter=0
-const today=todayBogota()
 const currency=(value:number)=>new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(value)
 const datetime=(value:string)=>new Intl.DateTimeFormat('es-CO',{timeZone:'America/Bogota',day:'2-digit',
   month:'short',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(value))
 const date=(value:string)=>new Intl.DateTimeFormat('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'short'}).format(new Date(value))
 const age=(value:string)=>Math.max(0,Math.floor((Date.now()-new Date(value).getTime())/86_400_000))
 const sites=computed(()=>snapshot.value?.filters.sites.filter(x=>!clientId.value||x.clientId===clientId.value)??[])
-const chartLabel=computed(()=>({ '7d':'Últimos 7 días','30d':'Últimos 30 días','90d':'Últimos 90 días','12m':'Últimos 12 meses' })[period.value])
-const historyLink='/servicios?tab=history'
-const agendaLink='/servicios?tab=agenda&view=table&from='+today+'&to='+today
-const delayedLink='/servicios?tab=agenda&view=table&estado=PROGRAMADO&from='+addDateDays(today,-365)+'&to='+today
-const upcomingLink='/servicios?tab=upcoming'
+const chartLabel=computed(()=>{
+  const selected=snapshot.value?.period
+  if(selected?.id==='custom')return selected.from+' – '+selected.to
+  return ({'7d':'Últimos 7 días','30d':'Últimos 30 días','90d':'Últimos 90 días',
+    '12m':'Últimos 12 meses','24m':'Últimos 2 años','5y':'Últimos 5 años',
+    'custom':'Rango personalizado'})[selected?.id??period.value]
+})
+function scopedQuery(){
+  return {clientId:loadedScope.value.clientId||undefined,siteId:loadedScope.value.siteId||undefined}
+}
+function serviceLink(metric:ServiceMetric,tab:'agenda'|'history'){
+  const range=snapshot.value?.period
+  return {name:'services',query:{
+    tab,view:'table',metric,...scopedQuery(),
+    from:metric==='performed'?range?.from:metric==='today'?today:undefined,
+    to:metric==='performed'?range?.to:metric==='today'?today:undefined,
+  }}
+}
+function preagendaLink(){return {name:'services',query:{tab:'upcoming',metric:'actionable',...scopedQuery()}}}
+function detailLink(kind:'findings'|'recentFindings'|'certificates'){
+  return {name:'dashboard-details',query:{kind,
+    ...(kind==='certificates'?{}:scopedQuery()),returnTo:route.fullPath}}
+}
+function syncUrl():void{
+  void router.replace({name:'dashboard',query:{period:period.value,
+    clientId:clientId.value||undefined,siteId:siteId.value||undefined,
+    from:period.value==='custom'?customRange.value.from:undefined,
+    to:period.value==='custom'?customRange.value.to:undefined}})
+}
 async function load():Promise<void>{
   if(!session.isAdmin)return
   request?.abort()
-  const id=++counter
-  const controller=new AbortController()
-  request=controller;loading.value=true;error.value=''
+  const id=++counter,controller=new AbortController()
+  request=controller;loading.value=false;error.value=''
+  if(rangeError.value){error.value=rangeError.value;return}
+  const options={period:period.value,clientId:clientId.value,siteId:siteId.value,
+    from:customRange.value.from,to:customRange.value.to}
+  loading.value=true
   try{
-    const response=await fetchDashboard(period.value,clientId.value,siteId.value,controller.signal)
-    if(id===counter)snapshot.value=response
+    const response=await fetchDashboard(options,controller.signal)
+    if(id===counter){snapshot.value=response;loadedScope.value={clientId:options.clientId,siteId:options.siteId}}
   }catch(reason){
     if(!controller.signal.aborted&&id===counter)error.value=reason instanceof Error?reason.message:'No fue posible consultar el resumen.'
   }finally{
@@ -54,36 +94,36 @@ const kpis=computed(()=>{
   const total=k.today.scheduled+k.today.ongoing+k.today.completed
   return [
     {title:'Servicios de hoy',value:String(total),extra:k.today.ongoing+' en proceso · '+k.today.completed+' finalizados',
-      icon:CalendarDays,kind:'blue',to:agendaLink},
-    {title:'Servicios retrasados',value:String(k.delayed),extra:'Sin iniciar, más de 15 min',icon:Clock3,kind:'red',to:delayedLink},
+      icon:CalendarDays,kind:'blue',to:serviceLink('today','agenda')},
+    {title:'Servicios retrasados',value:String(k.delayed),extra:'Sin iniciar, más de 15 min',icon:Clock3,kind:'red',to:serviceLink('delayed','agenda')},
     {title:'Próximos por confirmar',value:String(k.upcoming),extra:k.upcomingOverdue+' vencidos · próximos 7 días',
-      icon:CalendarClock,kind:'yellow',to:upcomingLink},
+      icon:CalendarClock,kind:'yellow',to:preagendaLink()},
     {title:'Valor de servicios realizados',value:currency(k.performedValue),
       extra:k.performedDelta===null?'Sin período comparable':(k.performedDelta>0?'+':'')+k.performedDelta+' % vs. período anterior',
-      icon:TrendingUp,kind:'green',to:historyLink},
+      icon:TrendingUp,kind:'green',to:serviceLink('performed','history')},
     {title:'Cobros pendientes',value:currency(k.outstandingValue),extra:k.outstandingPayments+' servicios finalizados',
-      icon:Wallet,kind:'violet',to:historyLink},
+      icon:Wallet,kind:'violet',to:serviceLink('unpaid','history')},
     {title:'Hallazgos pendientes',value:String(k.findings.open+k.findings.ongoing),
       extra:k.findings.open+' abiertos · '+k.findings.ongoing+' en proceso',
-      icon:ClipboardList,kind:'orange',to:'#dashboard-findings'}
+      icon:ClipboardList,kind:'orange',to:detailLink('findings')}
   ]
 })
 const attention=computed(()=>{
   const k=snapshot.value?.kpis,a=snapshot.value?.alerts
   if(!k||!a)return []
   return [
-    {title:'Servicios retrasados',detail:'Programados sin iniciar, más de 15 minutos',count:k.delayed,icon:Clock3,kind:'red',to:delayedLink,action:'Ver agenda'},
-    {title:'Próximos por confirmar',detail:'Visitas vencidas o previstas en los próximos 7 días',count:k.upcoming,icon:CalendarDays,kind:'yellow',to:upcomingLink,action:'Gestionar'},
-    {title:'Cobros pendientes',detail:'Servicios finalizados sin pago confirmado',count:k.outstandingPayments,icon:Wallet,kind:'orange',to:historyLink,action:'Ver servicios'},
+    {title:'Servicios retrasados',detail:'Programados sin iniciar, más de 15 minutos',count:k.delayed,icon:Clock3,kind:'red',to:serviceLink('delayed','agenda'),action:'Ver agenda'},
+    {title:'Próximos por confirmar',detail:'Visitas vencidas o previstas en los próximos 7 días',count:k.upcoming,icon:CalendarDays,kind:'yellow',to:preagendaLink(),action:'Gestionar'},
+    {title:'Cobros pendientes',detail:'Servicios finalizados sin pago confirmado',count:k.outstandingPayments,icon:Wallet,kind:'orange',to:serviceLink('unpaid','history'),action:'Ver servicios'},
     {title:'Hallazgos sin resolver',detail:'Abiertos o en proceso',count:k.findings.open+k.findings.ongoing,
-      icon:CircleAlert,kind:'red',to:'#dashboard-findings',action:'Ver hallazgos'},
+      icon:CircleAlert,kind:'red',to:detailLink('findings'),action:'Ver hallazgos'},
     {title:'Certificados próximos a vencer',detail:'Técnicos y certificados emitidos · próximos 30 días',count:a.expiringCertificates,
-      icon:FileWarning,kind:'neutral',to:'/usuarios',action:'Ver usuarios'},
+      icon:FileWarning,kind:'neutral',to:detailLink('certificates'),action:'Ver usuarios'},
     {title:'Errores de Calendar',detail:'Servicios sin sincronizar',count:a.calendarErrors,
-      icon:WifiOff,kind:'yellow',to:historyLink,action:'Ver servicios'}
+      icon:WifiOff,kind:'yellow',to:serviceLink('calendarError','agenda'),action:'Ver servicios'}
   ].filter(x=>x.count>0)
 })
-watch([period,clientId,siteId],()=>void load())
+watch([period,clientId,siteId,customRange],()=>{syncUrl();void load()})
 onMounted(()=>void load())
 onBeforeUnmount(()=>{counter++;request?.abort()})
 </script>
