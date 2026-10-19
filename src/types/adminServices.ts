@@ -1,5 +1,6 @@
 export type ServiceState = 'PROGRAMADO' | 'EN_PROCESO' | 'FINALIZADO' | 'CANCELADO'
 export type ServiceKind = 'PRINCIPAL' | 'REFUERZO'
+export type ServiceMetric = 'today' | 'delayed' | 'performed' | 'unpaid' | 'calendarError' | 'next' | 'recent'
 export type PaymentMethod = 'EFECTIVO' | 'TRANSFERENCIA'
 export type PaymentState = 'SIN_REGISTRAR' | 'PENDIENTE' | 'CONFIRMADO' | 'RECHAZADO'
 export type FollowUpState = 'PENDIENTE' | 'CONTACTADO' | 'CONFIRMADO' | 'POSPUESTO' | 'NO_DESEA'
@@ -185,6 +186,7 @@ export interface ServiceFilter {
   pageSize: number
   clientId?: string
   siteId?: string
+  metric?: ServiceMetric
 }
 export interface UpcomingFilter {
   from: string
@@ -193,6 +195,9 @@ export interface UpcomingFilter {
   query: string
   page: number
   pageSize: number
+  clientId?: string
+  siteId?: string
+  metric?: 'actionable'
 }
 export interface PagedResult<T> {
   items: T[]
