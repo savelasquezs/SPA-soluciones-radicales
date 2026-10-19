@@ -173,7 +173,7 @@ Nunca mostrar nombres internos de tablas, políticas, columnas, trazas o consult
 
 ## Historial compartido de Servicios
 
-`ServiceRecords` es la única superficie visual para los listados de Servicios. En Servicios recibe registros administrativos completos, con acciones; en Clientes y Sedes acepta el resumen paginado `summaryRecords` devuelto por los endpoints ya existentes. Conserva tabla en escritorio, tarjetas compactas en móvil, estados, fechas, importes y navegación al detalle. No se inventan datos ausentes ni se habilitan acciones que necesitan el registro completo. Los filtros por Cliente/Sede y la paginación siguen en las vistas; no se crea otra tabla independiente para el historial.
+`ServiceRecords` muestra datos completos en Servicios y en los historiales de Clientes y Sedes: fecha y hora, equipo, contacto, pago, estados, informes y las mismas acciones. `ContextualServiceHistory` centraliza filtros, paginación, estados y diálogos sin buscar registros por fila. El backend reutiliza `listServices` mediante `/api/admin/services/context` y filtra **por UUID** de Cliente o Sede antes de paginar; incluye todos los estados y fechas por defecto con orden descendente. Se eliminaron el DTO reducido y las consultas antiguas de historial.
 
 ## Reutilización de dominio
 

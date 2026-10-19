@@ -78,8 +78,16 @@ export async function pendingCount(client: PoolClient): Promise<number> {
   return rows[0]?.count ?? 0
 }
 export async function listServices(client: PoolClient, filter: ServiceFilter): Promise<PagedResult<AdminService>> {
-  const params: unknown[] = [filter.from, filter.to]
-  const conditions = [`s.inicio_programado >= ($1::date::timestamp at time zone 'America/Bogota')`, `s.inicio_programado < (($2::date+1)::timestamp at time zone 'America/Bogota')`]
+  const params: unknown[] = []
+  const conditions: string[] = []
+  if (!filter.clientId && !filter.siteId && (!filter.from || !filter.to)) throw new ApiError(422,'Selecciona un rango válido.','VALIDATION')
+  if (filter.from && filter.to) {
+    params.push(filter.from,filter.to)
+    conditions.push(`s.inicio_programado >= ($1::date::timestamp at time zone 'America/Bogota')`,
+      `s.inicio_programado < (($2::date+1)::timestamp at time zone 'America/Bogota')`)
+  }
+  if (filter.clientId) { params.push(filter.clientId); conditions.push(`se.negocio_id=$${params.length}::uuid`) }
+  if (filter.siteId) { params.push(filter.siteId); conditions.push(`s.sede_id=$${params.length}::uuid`) }
   if (filter.tab === 'history') conditions.push(`s.estado in ('FINALIZADO','CANCELADO')`)
   if (filter.estado) { params.push(filter.estado); conditions.push(`s.estado=$${params.length}`) }
   if (filter.tipo) { params.push(filter.tipo); conditions.push(`s.tipo_servicio=$${params.length}`) }
@@ -89,9 +97,9 @@ export async function listServices(client: PoolClient, filter: ServiceFilter): P
   const total = (await client.query<{ count: number }>(`select count(*)::integer as count ${SERVICE_FROM} ${where}`, params)).rows[0]?.count ?? 0
   params.push(filter.pageSize, (filter.page-1)*filter.pageSize)
   const { rows } = await client.query<{ record: AdminService }>(`${SERVICE_SELECT} ${where}
-    order by s.inicio_programado,case s.estado when 'EN_PROCESO' then 0 when 'PROGRAMADO' then 1 when 'FINALIZADO' then 2 else 3 end,s.id
+    order by s.inicio_programado ${filter.clientId || filter.siteId ? 'desc' : 'asc'},case s.estado when 'EN_PROCESO' then 0 when 'PROGRAMADO' then 1 when 'FINALIZADO' then 2 else 3 end,s.id ${filter.clientId || filter.siteId ? 'desc' : 'asc'}
     limit $${params.length-1} offset $${params.length}`, params)
-  return { items: rows.map(row => row.record), total, page: filter.page, pageSize: filter.pageSize, pendingCount: await pendingCount(client) }
+  return { items: rows.map(row => row.record), total, page: filter.page, pageSize: filter.pageSize, pendingCount:filter.clientId || filter.siteId ? 0 : await pendingCount(client) }
 }
 export async function workspace(client: PoolClient): Promise<ServiceWorkspace> {
   const sedes = (await client.query<{ record: ServiceSite }>(`select jsonb_build_object('id',se.id,'clientId',n.id,'clienteNombre',n.nombre,

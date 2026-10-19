@@ -141,16 +141,6 @@ export type AreaRecord = {
 export type AreaInput = Pick<AreaRecord, 'nombre' | 'esExterna' | 'activo'> & { version?: number }
 
 
-export type ServiceHistoryItem = {
-  id: string
-  solicitud: string
-  fecha: string
-  tipo: string
-  tecnico: string
-  estado: string
-  valor: number
-}
-
 export type PaginatedResult<T> = {
   items: T[]
   page: number

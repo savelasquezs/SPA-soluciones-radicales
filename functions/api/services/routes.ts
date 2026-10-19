@@ -56,6 +56,16 @@ function listFilter(query: Record<string,string>): ServiceFilter {
     estado:choice(query.estado,['','PROGRAMADO','EN_PROCESO','FINALIZADO','CANCELADO'],''),tipo:choice(query.tipo,['','PRINCIPAL','REFUERZO'],''),
     tecnicoId:query.tecnicoId ? id(query.tecnicoId) : '',query:text(query.query,160),page:pageNumber(query.page,1,100_000),pageSize:pageNumber(query.pageSize,25,100) }
 }
+/** Contextual history includes all service states and has no implicit date cutoff. */
+function contextFilter(query: Record<string,string>): ServiceFilter {
+  if (Boolean(query.clientId) === Boolean(query.siteId)) throw new ApiError(422,'Selecciona un Cliente o una Sede.','VALIDATION')
+  const bounded=Boolean(query.from || query.to)
+  if (bounded && (!query.from || !query.to)) throw new ApiError(422,'Completa ambas fechas del filtro.','VALIDATION')
+  const base=listFilter({ ...query,tab:'agenda',from:query.from || todayBogota(),to:query.to || todayBogota() })
+  return { ...base,from:bounded ? base.from : '',to:bounded ? base.to : '',
+    clientId:query.clientId ? id(query.clientId) : undefined,
+    siteId:query.siteId ? id(query.siteId) : undefined }
+}
 function upcomingFilter(query: Record<string,string>): UpcomingFilter {
   return { ...dates(query,addDateDays(todayBogota(),-30)),estado:choice(query.estado,['','PENDIENTE','CONTACTADO','CONFIRMADO','POSPUESTO','NO_DESEA'],''),
     query:text(query.query,160),page:pageNumber(query.page,1,100_000),pageSize:pageNumber(query.pageSize,25,100) }
@@ -118,6 +128,7 @@ adminServiceRoutes.post('/upcoming/:id/email',async context => {
   return context.json(await write(context,payload,`upcoming:email:${recordId}`,(client,admin)=>queueConfirmationEmail(client,admin.id,recordId,version(payload.version),id(payload.requestId),text(payload.recipient,254,true),payload.reviewedUnknown === true,payload.resend === true)),202)
 })
 adminServiceRoutes.get('/',async context => context.json(await read(context,client=>listServices(client,listFilter(context.req.query())))))
+adminServiceRoutes.get('/context',async context => context.json(await read(context,client=>listServices(client,contextFilter(context.req.query())))))
 adminServiceRoutes.get('/:id',async context => context.json(await read(context,client=>getService(client,id(context.req.param('id'))))))
 adminServiceRoutes.get('/:id/audit',async context => {
   const recordId=id(context.req.param('id')), page=pageNumber(context.req.query('page'),1,100_000)

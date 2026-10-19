@@ -8,12 +8,11 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDialog from '@/components/base/BaseDialog.vue'
 import ServiceContactActions from './ServiceContactActions.vue'
 import { formatServiceDate, formatServiceMoney, PAYMENT_LABELS, SERVICE_STATE_LABELS } from '@/helpers/adminServices'
-import type { AdminService, ServiceState } from '@/types/adminServices'
-import type { ServiceHistoryItem } from '@/types/domain'
-defineProps<{ records?: AdminService[]; summaryRecords?: ServiceHistoryItem[]; busy?: boolean; history?: boolean }>()
+import type { AdminService } from '@/types/adminServices'
+const props=defineProps<{ records: AdminService[]; busy?: boolean; history?: boolean; returnTo?: string }>()
+const serviceLink=(id: string)=>({ name:'service-detail',params:{ id },query:props.returnTo ? { returnTo:props.returnTo } : {} })
 const emit=defineEmits<{ schedule: [record: AdminService]; team: [record: AdminService]; payment: [record: AdminService]; edit: [record: AdminService]; cancel: [record: AdminService]; retryCalendar: [record: AdminService]; results: [record: AdminService] }>()
 const actionRecord=ref<AdminService|null>(null)
-function summaryStateLabel(value: string): string { return SERVICE_STATE_LABELS[value as ServiceState] ?? value }
 const shortDay=new Intl.DateTimeFormat('es-CO',{day:'numeric',month:'short',timeZone:'America/Bogota'})
 const shortTime=new Intl.DateTimeFormat('es-CO',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'America/Bogota'})
 const dayKey=new Intl.DateTimeFormat('en-CA',{year:'numeric',month:'2-digit',day:'2-digit',timeZone:'America/Bogota'})
@@ -38,13 +37,13 @@ function selectAction(action:MobileAction):void {
 }
 </script>
 <template>
-  <div class="svc-table-region svc-table-region--services" :class="{ 'svc-table-region--summary': summaryRecords !== undefined }" role="region" :aria-label="summaryRecords === undefined ? 'Servicios' : 'Historial de servicios'" tabindex="0">
+  <div class="svc-table-region svc-table-region--services" role="region" aria-label="Servicios" tabindex="0">
     <table class="svc-table">
-      <thead><tr><th>Fecha y hora</th><th>Servicio</th><th>Tipo</th><th>Equipo</th><th v-if="summaryRecords === undefined">Contacto</th><th>Pago</th><th>Estado</th><th>Acciones</th></tr></thead>
+      <thead><tr><th>Fecha y hora</th><th>Servicio</th><th>Tipo</th><th>Equipo</th><th>Contacto</th><th>Pago</th><th>Estado</th><th>Acciones</th></tr></thead>
       <tbody>
-        <tr v-for="record in records ?? []" :key="record.id" :data-service-id="record.id">
+        <tr v-for="record in records" :key="record.id" :data-service-id="record.id">
           <td class="svc-record-time" data-label="Fecha y hora"><button class="svc-cell-button" :disabled="busy || record.estado!=='PROGRAMADO'" :aria-label="`Reprogramar ${record.solicitud}`" @click="emit('schedule',record)"><span class="svc-record-date-desktop">{{ formatServiceDate(record.inicioProgramado) }}</span><span class="svc-record-date-mobile">{{ shortSchedule(record) }}</span><small class="svc-record-date-desktop">{{ formatServiceDate(record.inicioProgramado,true) }} – {{ formatServiceDate(record.finProgramado,true) }}</small></button></td>
-          <td class="svc-record-name" data-label="Servicio"><RouterLink class="svc-link" :to="{ name:'service-detail',params:{ id:record.id } }">{{ record.clienteNombre }}<template v-if="record.tipoSede!=='RESIDENCIAL'"> · {{ record.sedeNombre }}</template></RouterLink><small class="svc-record-code">{{ record.solicitud }}</small><small class="svc-mobile-service-meta">{{ record.solicitud }} · {{ record.tipoServicio==='REFUERZO' ? 'Refuerzo' : 'Principal' }}<template v-if="record.principal"> · Vinculado</template><template v-else-if="record.refuerzo"> · Con refuerzo</template></small></td>
+          <td class="svc-record-name" data-label="Servicio"><RouterLink class="svc-link" :to="serviceLink(record.id)">{{ record.clienteNombre }}<template v-if="record.tipoSede!=='RESIDENCIAL'"> · {{ record.sedeNombre }}</template></RouterLink><small class="svc-record-code">{{ record.solicitud }}</small><small class="svc-mobile-service-meta">{{ record.solicitud }} · {{ record.tipoServicio==='REFUERZO' ? 'Refuerzo' : 'Principal' }}<template v-if="record.principal"> · Vinculado</template><template v-else-if="record.refuerzo"> · Con refuerzo</template></small></td>
           <td class="svc-record-kind" data-label="Tipo">{{ record.tipoServicio === 'REFUERZO' ? 'Refuerzo' : 'Principal' }}<small v-if="record.principal">{{ record.principal.solicitud }}</small><small v-else-if="record.refuerzo">Con refuerzo</small></td>
           <td class="svc-record-team" data-label="Equipo"><button class="svc-cell-button" :disabled="busy || record.estado!=='PROGRAMADO'" :aria-label="`Cambiar equipo de ${record.solicitud}`" @click="emit('team',record)">{{ record.responsable.nombreCompleto }}<small v-if="record.colaboradores.length">+ {{ record.colaboradores.map(person=>person.nombreCompleto).join(', ') }}</small></button></td>
           <td class="svc-record-contact" data-label="Contacto"><ServiceContactActions :contact="record.contacto" /></td>
@@ -56,23 +55,7 @@ function selectAction(action:MobileAction):void {
             <BaseIconButton v-if="record.estado==='PROGRAMADO'" :label="`Editar ${record.solicitud}`" size="small" :disabled="busy" @click="emit('edit',record)"><Pencil :size="16" /></BaseIconButton>
             <BaseIconButton v-if="record.estado==='PROGRAMADO' || record.estado==='EN_PROCESO'" :label="`Cancelar ${record.solicitud}`" size="small" :disabled="busy" @click="emit('cancel',record)"><X :size="16" /></BaseIconButton>
             <BaseIconButton v-if="record.calendar.estado==='ERROR'" :label="`Reintentar Calendar de ${record.solicitud}`" size="small" :disabled="busy" @click="emit('retryCalendar',record)"><RotateCcw :size="16" /></BaseIconButton>
-          </span><span class="svc-record-actions__mobile"><RouterLink class="svc-mobile-view" :to="{ name:'service-detail',params:{ id:record.id } }" :aria-label="'Ver detalle de '+record.solicitud" title="Ver detalle"><Eye :size="17" aria-hidden="true" /></RouterLink><BaseIconButton :label="'Acciones de '+record.solicitud" size="small" :disabled="busy" @click="actionRecord=record"><MoreHorizontal :size="19" /></BaseIconButton></span></td>
-        </tr>
-        <tr v-for="record in summaryRecords ?? []" :key="record.id" :data-service-id="record.id">
-          <td class="svc-record-time" data-label="Fecha y hora">
-            <time class="svc-record-date-desktop" :datetime="record.fecha">{{ formatServiceDate(record.fecha) }}<small>{{ formatServiceDate(record.fecha, true) }}</small></time>
-            <time class="svc-record-date-mobile" :datetime="record.fecha">{{ formatServiceDate(record.fecha) }} · {{ formatServiceDate(record.fecha, true) }}</time>
-          </td>
-          <td class="svc-record-name" data-label="Servicio">
-            <RouterLink class="svc-link" :to="{ name: 'service-detail', params: { id: record.id } }">{{ record.solicitud }}</RouterLink>
-          </td>
-          <td class="svc-record-kind" data-label="Tipo">{{ record.tipo === 'REFUERZO' ? 'Refuerzo' : 'Principal' }}</td>
-          <td class="svc-record-team" data-label="Equipo"><span class="svc-summary-team">{{ record.tecnico }}</span></td>
-          <td class="svc-record-payment" data-label="Pago"><strong>{{ formatServiceMoney(record.valor) }}</strong></td>
-          <td class="svc-record-state" data-label="Estado"><span class="svc-state" :class="'svc-state--' + record.estado">{{ summaryStateLabel(record.estado) }}</span></td>
-          <td class="svc-record-actions" data-label="Acciones">
-            <RouterLink class="svc-summary-detail" :to="{ name: 'service-detail', params: { id: record.id } }" :aria-label="'Ver detalle de ' + record.solicitud" title="Ver detalle del servicio"><Eye :size="17" aria-hidden="true" /></RouterLink>
-          </td>
+          </span><span class="svc-record-actions__mobile"><RouterLink class="svc-mobile-view" :to="serviceLink(record.id)" :aria-label="'Ver detalle de '+record.solicitud" title="Ver detalle"><Eye :size="17" aria-hidden="true" /></RouterLink><BaseIconButton :label="'Acciones de '+record.solicitud" size="small" :disabled="busy" @click="actionRecord=record"><MoreHorizontal :size="19" /></BaseIconButton></span></td>
         </tr>
       </tbody>
     </table>
@@ -87,7 +70,7 @@ function selectAction(action:MobileAction):void {
       <RouterLink v-if="history && actionRecord.estado==='FINALIZADO' && actionRecord.tipoServicio==='PRINCIPAL' && actionRecord.tipoSede!=='RESIDENCIAL'" class="svc-mobile-menu__link" :to="{ name:'admin-service-report',params:{ id:actionRecord.id } }" @click="actionRecord=null"><FileCheck2 :size="18" aria-hidden="true" /> Ver informe</RouterLink>
       <BaseButton v-if="actionRecord.calendar.estado==='ERROR'" size="compact" variant="ghost" :disabled="busy" @click="selectAction('retry-calendar')"><RotateCcw :size="18" /> Reintentar Calendar</BaseButton>
       <BaseButton v-if="actionRecord.estado==='PROGRAMADO' || actionRecord.estado==='EN_PROCESO'" size="compact" variant="ghost" :disabled="busy" @click="selectAction('cancel')"><X :size="18" /> Cancelar servicio</BaseButton>
-      <RouterLink class="svc-mobile-menu__link" :to="{ name:'service-detail',params:{ id:actionRecord.id } }" @click="actionRecord=null"><Eye :size="18" aria-hidden="true" /> Ver detalle completo</RouterLink>
+      <RouterLink class="svc-mobile-menu__link" :to="serviceLink(actionRecord.id)" @click="actionRecord=null"><Eye :size="18" aria-hidden="true" /> Ver detalle completo</RouterLink>
     </div>
   </BaseDialog>
 </template>
@@ -113,17 +96,4 @@ function selectAction(action:MobileAction):void {
 .svc-report-link:hover{background:var(--hover);border-color:var(--border-strong)}
 .svc-report-link:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 @media(max-width:680px){.svc-report-link{min-height:44px;padding:.4rem .65rem}}
-
-.svc-summary-team { color:var(--text-secondary); font-size:0.82rem; overflow-wrap:anywhere; }
-.svc-summary-detail { display:inline-grid; place-items:center; width:36px; height:36px; color:var(--text-secondary); border-radius:var(--radius-sm); text-decoration:none; }
-.svc-summary-detail:hover, .svc-summary-detail:focus-visible { background:var(--hover); color:var(--text); }
-.svc-summary-detail:focus-visible { outline:2px solid var(--accent); }
-@media (max-width:680px) {
-  .svc-table-region--summary .svc-table tr {
-    grid-template-areas:"time state" "service service" "team payment" "actions actions";
-  }
-  .svc-table-region--summary .svc-record-actions { justify-self:end; }
-  .svc-table-region--summary .svc-record-time { min-width:0; }
-  .svc-table-region--summary .svc-summary-detail { width:44px; height:44px; }
-}
 </style>

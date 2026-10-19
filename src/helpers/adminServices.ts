@@ -148,7 +148,9 @@ export function normalizeServiceSearch(value: string): string {
 }
 export function matchesServiceFilter(service: AdminService, filter: ServiceFilter): boolean {
   const day = toBogotaInput(service.inicioProgramado).slice(0, 10)
-  return day >= filter.from && day <= filter.to
+  return (!filter.from || day >= filter.from) && (!filter.to || day <= filter.to)
+    && (!filter.clientId || service.clientId === filter.clientId)
+    && (!filter.siteId || service.sedeId === filter.siteId)
     && (filter.tab !== 'history' || ['FINALIZADO', 'CANCELADO'].includes(service.estado))
     && (!filter.estado || service.estado === filter.estado) && (!filter.tipo || service.tipoServicio === filter.tipo)
     && (!filter.tecnicoId || service.tecnicoResponsableId === filter.tecnicoId || service.tecnicosColaboradoresIds.includes(filter.tecnicoId))

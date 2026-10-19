@@ -5,8 +5,6 @@ import type {
   AreaRecord,
   ClientInput,
   ClientRecord,
-  PaginatedResult,
-  ServiceHistoryItem,
   SiteInput,
   SiteRecord,
 } from '@/types/domain'
@@ -27,8 +25,6 @@ type AreaWire = Omit<AreaRecord, 'version' | 'dispositivosCount'> & {
   version: number | string
   dispositivosCount: number | string
 }
-
-type HistoryWire = Omit<ServiceHistoryItem, 'valor'> & { valor: number | string }
 
 export async function listClients(active: boolean): Promise<ClientRecord[]> {
   const clients = await apiRequest<ClientWire[]>(`api/clients?active=${active}`)
@@ -107,14 +103,6 @@ export async function deleteArea(id: string, version: number): Promise<void> {
   await apiRequest(`api/areas/${id}?version=${version}`, { method: 'DELETE' })
 }
 
-export function listClientHistory(clientId: string, page = 1): Promise<PaginatedResult<ServiceHistoryItem>> {
-  return historyRequest(`api/clients/${clientId}/services?page=${page}`)
-}
-
-export function listSiteHistory(siteId: string, page = 1): Promise<PaginatedResult<ServiceHistoryItem>> {
-  return historyRequest(`api/sites/${siteId}/services?page=${page}`)
-}
-
 function clientPayload(input: ClientInput): ClientInput {
   const residentialPhone = input.tipoCliente === 'RESIDENCIAL'
     ? normalizePhone(input.residenciaCelular ?? '')
@@ -167,9 +155,4 @@ function normalizeSite(site: SiteWire): SiteRecord {
 
 function normalizeArea(area: AreaWire): AreaRecord {
   return { ...area, version: Number(area.version), dispositivosCount: Number(area.dispositivosCount) }
-}
-
-async function historyRequest(path: string): Promise<PaginatedResult<ServiceHistoryItem>> {
-  const result = await apiRequest<Omit<PaginatedResult<HistoryWire>, 'total'> & { total: number | string }>(path)
-  return { ...result, total: Number(result.total), items: result.items.map((item) => ({ ...item, valor: Number(item.valor) })) }
 }
