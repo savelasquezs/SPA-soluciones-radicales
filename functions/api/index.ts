@@ -4,6 +4,7 @@ import { profileRoutes } from './profile/routes'
 import { googleChangeRoutes } from './profile/google'
 import { mipCatalogRoutes } from './catalogs/routes'
 import { adminServiceRoutes } from './services/routes'
+import { dashboardRoutes } from './dashboard/routes'
 import { drainServiceJobs } from './services/jobs'
 import { technicianServiceRoutes } from './technician-services/routes'
 import { runRetentionBatch, verifyRetentionToken } from './retention/cleanup'
@@ -16,6 +17,7 @@ app.route('/api/profile', profileRoutes)
 app.route('/api/profile/google', googleChangeRoutes)
 app.route('/api/mip', mipCatalogRoutes)
 app.route('/api/admin/services', adminServiceRoutes)
+app.route('/api/admin/dashboard', dashboardRoutes)
 app.route('/api/technician/services', technicianServiceRoutes)
 app.route('/api/admin/sites', siteInsightsRoutes)
 app.route('/api/admin/services', serviceResultRoutes)
