@@ -39,14 +39,6 @@ jobs:
               assert z.testzip() is None
           PY
           sha256sum .neon-bundle/api.zip
-      # Temporary artifact relay for deployment through the connected Neon API.
-      # Removed from the branch immediately after deployment; the bundle contains no runtime secrets.
-      - name: Temporary bundle relay
-        shell: bash
-        run: |
-          printf 'NEON_RELAY_START\\n'
-          base64 -w 0 .neon-bundle/api.zip | fold -w 1024 | sed 's/^/NEON_RELAY_B64:/'
-          printf 'NEON_RELAY_END\\n'
       - uses: actions/upload-artifact@v4
         with:
           name: neon-api-bundle
