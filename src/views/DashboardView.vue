@@ -256,7 +256,7 @@ onBeforeUnmount(()=>{counter++;request?.abort()})
               <table><thead><tr><th>Fecha</th><th>Cliente / Sede</th><th>Hallazgo</th><th>Estado</th></tr></thead>
                 <tbody><tr v-for="finding in snapshot.tables.findings" :key="finding.id">
                   <td data-label="Fecha">{{ date(finding.openedAt) }}</td>
-                  <td data-label="Cliente / Sede"><RouterLink :to="{name:'site-detail',params:{id:finding.clientId,siteId:finding.siteId},query:{tab:'findings'}}">{{ finding.clientName }}</RouterLink><small>{{ finding.siteName }} · {{ finding.area }}</small></td>
+                  <td data-label="Cliente / Sede"><RouterLink :to="{name:'site-detail',params:{id:finding.clientId,siteId:finding.siteId},query:{tab:'findings',findingState:finding.status,findingSearch:finding.description.slice(0,160)}}">{{ finding.clientName }}</RouterLink><small>{{ finding.siteName }} · {{ finding.area }}</small></td>
                   <td data-label="Hallazgo" :title="finding.description" class="dashboard-finding-text">{{ finding.description }}</td>
                   <td data-label="Estado"><span class="dashboard-status" :class="'dashboard-status--finding-'+finding.status">{{ finding.status==='ABIERTO'?'Abierto':finding.status==='CERRADO'?'Cerrado':'En proceso' }}</span>
                     <small v-if="finding.status!=='CERRADO'">{{ age(finding.openedAt) }} días abierto</small></td>
