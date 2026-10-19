@@ -38,8 +38,9 @@ const client = computed(() => site.value ? store.clientsById[site.value.clientId
 const areas = computed(() => store.areasForSite(siteId.value))
 const loading = ref(true)
 const loadError = ref<string | null>(null)
-const tab = ref<Tab>('summary')
-const visited = ref({ devices: false, findings: false })
+const initialTab = (): Tab => route.query.tab === 'findings' ? 'findings' : 'summary'
+const tab = ref<Tab>(initialTab())
+const visited = ref({ devices: false, findings: initialTab() === 'findings' })
 const siteFormOpen = ref(false)
 const siteForm = ref<SiteInput>(blankSite())
 const newArea = ref<AreaInput>(blankArea())
@@ -60,8 +61,8 @@ let loadRequest = 0
 
 onMounted(load)
 watch(siteId, () => {
-  visited.value = { devices: false, findings: false }
-  tab.value = 'summary'
+  visited.value = { devices: false, findings: initialTab() === 'findings' }
+  tab.value = initialTab()
   selectedArea.value = null
   history.value = []
   historyPage.value = 1
