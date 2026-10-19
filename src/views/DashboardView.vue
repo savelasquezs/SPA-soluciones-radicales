@@ -107,12 +107,12 @@ onBeforeUnmount(()=>{counter++;request?.abort()})
             </select>
           </label>
           <label class="dashboard-filter"><span class="sr-only">Cliente</span>
-            <select :value="clientId" @change="setClient"><option value="">Todos los clientes</option>
+            <select aria-label="Cliente" :value="clientId" @change="setClient"><option value="">Todos los clientes</option>
               <option v-for="client in snapshot?.filters.clients ?? []" :key="client.id" :value="client.id">{{ client.name }}</option>
             </select>
           </label>
           <label class="dashboard-filter"><span class="sr-only">Sede</span>
-            <select :value="siteId" @change="setSite"><option value="">Todas las sedes</option>
+            <select aria-label="Sede" :value="siteId" @change="setSite"><option value="">Todas las sedes</option>
               <option v-for="site in sites" :key="site.id" :value="site.id">{{ site.name }}</option>
             </select>
           </label>
