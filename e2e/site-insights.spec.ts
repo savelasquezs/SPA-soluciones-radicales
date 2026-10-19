@@ -104,7 +104,7 @@ test('historial de sede reutiliza la lista de Servicios en móvil y escritorio',
   const region = page.getByRole('region', { name: 'Historial de servicios' })
   const row = region.locator('.svc-table tbody tr')
   await expect(row).toHaveCount(1)
-  await expect(row.getByRole('link', { name: 'SR-00000021' })).toBeVisible()
+  await expect(row.getByRole('link', { name: 'SR-00000021', exact: true })).toBeVisible()
   await expect(row.getByText('Técnico de prueba')).toBeVisible()
   expect(await row.evaluate(element => getComputedStyle(element).display)).toBe('grid')
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
