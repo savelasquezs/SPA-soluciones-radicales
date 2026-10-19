@@ -1,16 +1,18 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ChevronDown, LogOut, UserRound, UsersRound, Wrench } from 'lucide-vue-next'
+import { Check, ChevronDown, LogOut, Monitor, Moon, Sun, UserRound, UsersRound, Wrench } from 'lucide-vue-next'
 
 import ConfirmDialog from '@/components/base/ConfirmDialog.vue'
 import { useAccountTransition } from '@/composables/useAccountTransition'
+import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
 import type { ActiveRole } from '@/types/domain'
 
 const props = defineProps<{ placement: 'topbar' | 'sidebar' }>()
 const auth = useAuthStore()
+const app = useAppStore()
 const notifications = useNotificationsStore()
 const accountTransition = useAccountTransition()
 const pendingAction = ref<'change' | 'logout' | null>(null)
@@ -23,6 +25,11 @@ const imageFailed = ref(false)
 const initials = computed(() => (auth.profile?.nombreCompleto ?? 'Usuario')
   .trim().split(/\s+/).slice(0, 2).map(part => part.charAt(0).toUpperCase()).join(''))
 const roleLabel = computed(() => auth.activeRole === 'ADMINISTRADOR' ? 'Administrador' : 'Técnico')
+const appearanceOptions = [
+  { value: 'light', label: 'Claro', icon: Sun },
+  { value: 'dark', label: 'Oscuro', icon: Moon },
+  { value: 'system', label: 'Sistema', icon: Monitor },
+] as const
 
 watch(() => auth.avatarUrl, () => { imageFailed.value = false })
 watch(() => route.fullPath, close)
@@ -151,6 +158,21 @@ async function performAction(action: 'change' | 'logout'): Promise<void> {
           {{ role === 'ADMINISTRADOR' ? 'Administrador' : 'Técnico' }}
         </button>
       </div>
+      <div class="account-control__appearance" role="group" aria-label="Tema de la aplicación">
+        <span class="account-control__section" aria-hidden="true">Apariencia</span>
+        <button
+          v-for="option in appearanceOptions"
+          :key="option.value"
+          type="button"
+          class="account-control__action"
+          :aria-pressed="app.theme === option.value"
+          @click="app.setTheme(option.value)"
+        >
+          <component :is="option.icon" :size="18" aria-hidden="true" />
+          {{ option.label }}
+          <Check v-if="app.theme === option.value" class="account-control__selected" :size="16" aria-hidden="true" />
+        </button>
+      </div>
       <div class="account-control__divider"></div>
       <button type="button" class="account-control__action" :disabled="changingAccount" @click="requestAccountAction('change')">
         <UsersRound :size="18" aria-hidden="true" /> Cambiar cuenta
@@ -213,12 +235,15 @@ async function performAction(action: 'change' | 'logout'): Promise<void> {
 .account-control__action[aria-pressed='true'] { background: var(--accent-subtle); }
 .account-control__section { display: block; padding: 0.65rem 0.7rem 0.25rem; color: var(--text-secondary); font-size: 0.75rem; }
 .account-control__divider { height: 1px; margin: 0.35rem 0.2rem; background: var(--border); }
+.account-control__appearance { display: none; }
+.account-control__action .account-control__selected { margin-left: auto; color: var(--accent); }
 .account-control--sidebar { width: 100%; }
 .account-control--sidebar .account-control__panel { top: auto; bottom: calc(100% + 0.35rem); left: 0; right: auto; width: 100%; }
 @media (max-height: 590px) {
   .account-control--sidebar .account-control__panel { position: relative; bottom: auto; top: auto; max-height: min(50dvh, 15rem); box-shadow: none; margin-top: 0.25rem; }
 }
 @media (max-width: 1024px) {
+  .account-control__appearance { display: grid; gap: 0.15rem; border-top: 1px solid var(--border); margin: 0.35rem 0.2rem 0; padding-top: 0.35rem; }
   .account-control--topbar .account-control__identity,
   .account-control--topbar .account-control__chevron { display: none; }
   .account-control--topbar summary { width: 48px; height: 48px; justify-content: center; padding: 0; }
