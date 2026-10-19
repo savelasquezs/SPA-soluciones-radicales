@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { dashboardKeys, dashValues, DASHBOARD_DAYS } from './queries'
+import { resolveDashboardRange } from '../../../src/helpers/dashboardRanges'
 
 describe('administrative dashboard aggregation rules',()=>{
   it('groups dates using the same Bogotá day, Monday week and calendar month buckets as PostgreSQL',()=>{
@@ -17,6 +18,22 @@ describe('administrative dashboard aggregation rules',()=>{
     expect(dashValues({ performedValue:'50000',previousValue:'100000' })).toEqual({current:50000,change:-50})
   })
   it('limits the period to supported bounded choices',()=>{
-    expect(DASHBOARD_DAYS).toEqual({'7d':7,'30d':30,'90d':90,'12m':365})
+    expect(DASHBOARD_DAYS).toEqual({'7d':7,'30d':30,'90d':90,'12m':365,'24m':730,'5y':1826})
   })
+  it('accepts multi-year custom ranges and selects a bounded number of chart buckets',()=>{
+    const custom=resolveDashboardRange('custom',{from:'2020-01-01',to:'2026-10-19'},'2026-10-19')
+    expect(custom.bucket).toBe('quarter')
+    const keys=dashboardKeys(custom.from,'2026-10-20',custom.bucket)
+    expect(keys.length).toBeLessThanOrEqual(40)
+    expect(keys[0]).toBe('2020-01-01')
+    expect(keys.at(-1)).toBe('2026-10-01')
+    expect(resolveDashboardRange('24m',null,'2026-10-19').days).toBe(730)
+    expect(resolveDashboardRange('5y',null,'2026-10-19').bucket).toBe('quarter')
+  })
+  it('rejects inverted, incomplete and excessively large custom ranges',()=>{
+    expect(()=>resolveDashboardRange('custom',{from:'2026-11-01',to:'2026-10-01'})).toThrow()
+    expect(()=>resolveDashboardRange('custom',{from:'',to:'2026-10-01'})).toThrow()
+    expect(()=>resolveDashboardRange('custom',{from:'2012-01-01',to:'2026-10-19'})).toThrow()
+  })
+
 })
