@@ -66,6 +66,7 @@ export type ClientRecord = {
   vigenciaCertificadoMeses: number | null
   residenciaDireccion: string | null
   residenciaCelular: string | null
+  residenciaValorServicio: number | null
   sedesCount: number
 }
 
@@ -79,6 +80,7 @@ export type ClientInput = Pick<
   | 'vigenciaCertificadoMeses'
   | 'residenciaDireccion'
   | 'residenciaCelular'
+  | 'residenciaValorServicio'
 > & { version?: number }
 
 export type SiteRecord = {

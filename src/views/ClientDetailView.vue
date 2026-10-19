@@ -13,7 +13,7 @@ import StatusBadge from '@/components/base/StatusBadge.vue'
 import WhatsAppPhoneLink from '@/components/base/WhatsAppPhoneLink.vue'
 import { useFileSaveProgress } from '@/composables/useFileSaveProgress'
 import ClientForm from '@/components/domain/clients/ClientForm.vue'
-import ServiceHistoryList from '@/components/domain/clients/ServiceHistoryList.vue'
+import ServiceRecords from '@/components/domain/services/ServiceRecords.vue'
 import SiteForm from '@/components/domain/clients/SiteForm.vue'
 import { ApiClientError } from '@/services/apiService'
 import { getClient, getSite, listClientHistory } from '@/services/clientsService'
@@ -255,7 +255,7 @@ function openPlan(storagePath: string | null): void {
 }
 
 function blankClient(): ClientInput {
-  return { tipoCliente: 'NEGOCIO', nombre: '', nit: null, correos: [], activo: true, vigenciaCertificadoMeses: 12, residenciaDireccion: null, residenciaCelular: null }
+  return { tipoCliente: 'NEGOCIO', nombre: '', nit: null, correos: [], activo: true, vigenciaCertificadoMeses: 12, residenciaDireccion: null, residenciaCelular: null, residenciaValorServicio: null }
 }
 
 function blankSite(): SiteInput {
@@ -263,7 +263,7 @@ function blankSite(): SiteInput {
 }
 
 function toClientInput(record: ClientRecord): ClientInput {
-  return { tipoCliente: record.tipoCliente, nombre: record.nombre, nit: record.nit, correos: [...record.correos], activo: record.activo, vigenciaCertificadoMeses: record.vigenciaCertificadoMeses, residenciaDireccion: record.residenciaDireccion, residenciaCelular: record.residenciaCelular, version: record.version }
+  return { tipoCliente: record.tipoCliente, nombre: record.nombre, nit: record.nit, correos: [...record.correos], activo: record.activo, vigenciaCertificadoMeses: record.vigenciaCertificadoMeses, residenciaDireccion: record.residenciaDireccion, residenciaCelular: record.residenciaCelular, residenciaValorServicio: record.residenciaValorServicio, version: record.version }
 }
 
 function toSiteInput(site: SiteRecord): SiteInput {
@@ -302,7 +302,7 @@ function formatDate(value: string): string { return new Intl.DateTimeFormat('es-
 
     <section class="summary-card">
       <template v-if="client.tipoCliente === 'NEGOCIO'"><div><span>NIT</span><strong>{{ client.nit }}</strong></div><div><span>Sedes</span><strong>{{ client.sedesCount }}</strong></div><div><span>Vigencia certificado</span><strong>{{ client.vigenciaCertificadoMeses }} meses</strong></div></template>
-      <template v-else><div><span>Celular</span><WhatsAppPhoneLink v-if="client.residenciaCelular" :phone="client.residenciaCelular" /></div><div><span>Dirección</span><strong>{{ client.residenciaDireccion }}</strong></div></template>
+      <template v-else><div><span>Celular</span><WhatsAppPhoneLink v-if="client.residenciaCelular" :phone="client.residenciaCelular" /></div><div><span>Dirección</span><strong>{{ client.residenciaDireccion }}</strong></div><div><span>Valor del servicio</span><strong>{{ client.residenciaValorServicio == null ? 'Sin configurar' : '$' + client.residenciaValorServicio.toLocaleString('es-CO') }}</strong></div></template>
     </section>
 
     <div v-if="client.tipoCliente === 'NEGOCIO'" class="tabs" role="tablist"><button :aria-selected="tab === 'sites'" @click="changeTab('sites')">Sedes</button><button :aria-selected="tab === 'history'" @click="changeTab('history')">Historial de servicios</button></div>
@@ -338,7 +338,7 @@ function formatDate(value: string): string { return new Intl.DateTimeFormat('es-
     <section v-else class="history-card">
       <LoadingSkeleton v-if="historyLoading" label="Cargando historial" :lines="5" />
       <EmptyState v-else-if="history.length === 0" title="Sin historial de servicios" message="Los Servicios aparecerán aquí cuando se programen." />
-      <ServiceHistoryList v-else :items="history" />
+      <ServiceRecords v-else :summary-records="history" />
       <div v-if="historyTotal > 20" class="pagination"><BaseButton size="compact" variant="secondary" :disabled="historyPage === 1" @click="loadHistory(historyPage - 1)">Anterior</BaseButton><span>Página {{ historyPage }}</span><BaseButton size="compact" variant="secondary" :disabled="historyPage * 20 >= historyTotal" @click="loadHistory(historyPage + 1)">Siguiente</BaseButton></div>
     </section>
 
@@ -376,7 +376,8 @@ function formatDate(value: string): string { return new Intl.DateTimeFormat('es-
 .tabs button { min-height:38px; border:0; border-bottom:2px solid transparent; background:transparent; padding:0.4rem 0.75rem; color:var(--text-secondary); cursor:pointer; }
 .tabs button[aria-selected='true'] { border-color:var(--accent); color:var(--accent); }
 .sites-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:start; gap:0.65rem; }
-.site-card, .history-card { min-width:0; border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--surface); padding:0.7rem; }
+.site-card { min-width:0; border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--surface); padding:0.7rem; }
+.history-card { min-width:0; }
 .site-card header { display:flex; align-items:center; justify-content:space-between; gap:0.5rem; }
 .site-card header button { min-width:0; border:0; background:transparent; padding:0; color:var(--text); font-weight:600; text-align:left; cursor:pointer; overflow-wrap:anywhere; }
 .site-card header button:hover, .site-card header button:focus-visible { text-decoration:underline; text-underline-offset:2px; }

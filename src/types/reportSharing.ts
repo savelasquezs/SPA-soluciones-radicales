@@ -10,6 +10,7 @@ export interface ServiceReportShareOptions {
   activeLinks: number
   lastSharedAt: string | null
   gmailConnected: boolean
+  gmailNeedsReauthorization?: boolean
 }
 export interface SendServiceReportInput {
   requestId: string

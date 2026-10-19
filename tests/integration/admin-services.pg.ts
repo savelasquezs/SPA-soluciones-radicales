@@ -38,7 +38,7 @@ function input(f: Fixture,start='2030-10-06T09:00:00-05:00'): ServiceInput {
     productos:[{ productoId:f.product,lote:'CI-1',fechaVencimiento:'2032-01-01' }],cobro:{ metodoPago:'EFECTIVO',tecnicoRecaudoPrevistoId:f.responsible },observaciones:'Solo datos sintéticos' }
 }
 async function create(f: Fixture,value=input(f),requestId=randomUUID()): Promise<ServiceMutation> {
-  return transaction(client=>command(client,f.admin,requestId,'service:create',{ input:value },()=>createService(client,f.admin,value,false)))
+  return transaction(client=>command(client,f.admin,requestId,'service:create',{ input:value },()=>createService(client,f.admin,value,[])))
 }
 const principal=(result: ServiceMutation)=>result.services.find(row=>row.tipoServicio==='PRINCIPAL')!
 const child=(result: ServiceMutation)=>result.services.find(row=>row.tipoServicio==='REFUERZO')!
@@ -65,6 +65,38 @@ beforeEach(async()=>{
 afterAll(async()=>{ await pool.end() })
 
 describe('administrator services · real PostgreSQL',()=>{
+  it('schedules residential visits with individual prices and no reinforcement, preserving business pricing',async()=>{
+    const f=await fixture(false), homeClient=randomUUID(), homeSite=randomUUID()
+    await transaction(async client=>{
+      await client.query(`insert into public.negocios(id,tipo_cliente,nombre,nit,correos_json)
+        values($1,'RESIDENCIAL','Casa de prueba',null,'[]'::jsonb)`,[homeClient])
+      await client.query(`insert into public.sedes(id,negocio_id,nombre,direccion,correos_json,hereda_correos_negocio,
+        contacto_principal_nombre,contacto_principal_celular,valor_servicio,periodicidad_meses,maneja_refuerzo,tipo_sede,
+        maneja_vehiculos,genera_certificado_vehiculo,duracion_servicio_minutos)
+        values($1,$2,'Casa de prueba','Calle 123','[]'::jsonb,false,'Casa de prueba','+573001234567',
+          null,null,false,'RESIDENCIAL',false,false,null)`,[homeSite,homeClient])
+    })
+    const options=await transaction(client=>workspace(client))
+    expect(options.sedes.find(site=>site.id===homeSite)).toMatchObject({tipoSede:'RESIDENCIAL',clientId:homeClient,valorServicio:null})
+    const firstInput={...input(f),sedeId:homeSite,valorServicio:75000,refuerzo:null}
+    const first=principal(await create(f,firstInput))
+    expect(first).toMatchObject({clientId:homeClient,tipoSede:'RESIDENCIAL',valorServicio:75000,refuerzo:null})
+    expect(first.contacto.celular).toBe('+573001234567')
+    const second=principal(await create(f,{...firstInput,valorServicio:90000,programacion:{...firstInput.programacion,inicioProgramado:'2030-10-07T09:00:00-05:00'}}))
+    expect(second.valorServicio).toBe(90000)
+    expect((await transaction(client=>getService(client,first.id))).valorServicio).toBe(75000)
+    await expect(create(f,{...firstInput,valorServicio:null})).rejects.toMatchObject({code:'VALIDATION'})
+    await expect(create(f,{...firstInput,refuerzo:{...firstInput.programacion,inicioProgramado:'2030-10-27T09:00:00-05:00'}})).rejects.toMatchObject({code:'VALIDATION'})
+    const businessInput=input(f)
+    businessInput.valorServicio=1
+    businessInput.programacion.inicioProgramado='2030-10-08T09:00:00-05:00'
+    const business=principal(await create(f,businessInput))
+    expect(business.valorServicio).toBe(300000)
+    const reprogrammed=principal(await transaction(client=>editService(client,f.admin,first.id,first.version,
+      {...firstInput,programacion:{...firstInput.programacion,inicioProgramado:'2030-10-09T09:00:00-05:00'}},[])))
+    expect(reprogrammed.valorServicio).toBe(75000)
+  })
+
 
   it('confirma efectivo recibido por administrador durante el alta, de forma atómica',async()=>{
     const f=await fixture()
@@ -117,27 +149,58 @@ describe('administrator services · real PostgreSQL',()=>{
     value.refuerzo={ ...value.programacion,inicioProgramado:'2030-11-04T14:00:00-05:00',tecnicosColaboradoresIds:[] }
     const result=await create(f,value), p=principal(result), r=child(result)
     expect(toBogotaInput(r.inicioProgramado)).toBe('2030-11-04T14:00')
-    await transaction(client=>rescheduleService(client,f.admin,r.id,r.version,{ ...scheduleFromRecord(r),inicioProgramado:'2030-11-08T11:00:00-05:00' },false))
+    await transaction(client=>rescheduleService(client,f.admin,r.id,r.version,{ ...scheduleFromRecord(r),inicioProgramado:'2030-11-08T11:00:00-05:00' },[]))
     expect((await readService(p.id)).inicioProgramado).toBe(p.inicioProgramado)
     expect(toBogotaInput((await readService(r.id)).inicioProgramado)).toBe('2030-11-08T11:00')
   })
   it('rolls back joint changes when the Refuerzo version is stale or a product is invalid',async()=>{
     const f=await fixture(), result=await create(f), p=principal(result), r=child(result)
-    await expect(transaction(client=>rescheduleService(client,f.admin,p.id,p.version,{ ...scheduleFromRecord(p),inicioProgramado:addInstantDays(p.inicioProgramado,2) },false,
+    await expect(transaction(client=>rescheduleService(client,f.admin,p.id,p.version,{ ...scheduleFromRecord(p),inicioProgramado:addInstantDays(p.inicioProgramado,2) },[],
       { version:r.version+1,schedule:{ ...scheduleFromRecord(r),inicioProgramado:addInstantDays(r.inicioProgramado,4) } }))).rejects.toMatchObject({ code:'VERSION_CONFLICT' })
     expect((await readService(p.id)).inicioProgramado).toBe(p.inicioProgramado)
     const edit=draftToServiceInput(serviceToDraft(p));edit.programacion.inicioProgramado=addInstantDays(p.inicioProgramado,2)
     edit.productos=[{ productoId:randomUUID(),lote:'x',fechaVencimiento:null }]
-    await expect(transaction(client=>editService(client,f.admin,p.id,p.version,edit,true,r.version))).rejects.toMatchObject({ code:'VALIDATION' })
+    await expect(transaction(client=>editService(client,f.admin,p.id,p.version,edit,[],r.version))).rejects.toMatchObject({ code:'VALIDATION' })
     expect((await readService(p.id)).version).toBe(p.version)
     expect((await readService(r.id)).version).toBe(r.version)
   })
-  it('warns about a sibling appointment without silently dropping the assigned team',async()=>{
+  it('blocks overlaps and allows a simultaneous visit only after assigning a different team',async()=>{
     const f=await fixture(), result=await create(f), p=principal(result), r=child(result)
     const change={ ...scheduleFromRecord(r),inicioProgramado:p.inicioProgramado }
-    await expect(transaction(client=>rescheduleService(client,f.admin,r.id,r.version,change,false))).rejects.toMatchObject({ code:'SCHEDULE_CONFLICT' })
-    const accepted=await transaction(client=>rescheduleService(client,f.admin,r.id,r.version,change,true))
-    expect(accepted.services.find(row=>row.id===r.id)?.tecnicosColaboradoresIds).toEqual([f.collaborator])
+    await expect(transaction(client=>rescheduleService(client,f.admin,r.id,r.version,change,[]))).rejects.toMatchObject({ code:'SCHEDULE_CONFLICT' })
+    const other=await fixture(false)
+    const accepted=await transaction(client=>rescheduleService(client,f.admin,r.id,r.version,{
+      ...change,tecnicoResponsableId:other.responsible,tecnicosColaboradoresIds:[other.collaborator],
+    },[]))
+    expect(accepted.services.find(row=>row.id===r.id)?.tecnicoResponsableId).toBe(other.responsible)
+    expect((await readService(p.id)).tecnicoResponsableId).toBe(f.responsible)
+  })
+  it('atomically reassigns the other visit, retains both times and audits the replacement',async()=>{
+    const f=await fixture(false),other=await fixture(false),p=principal(await create(f))
+    const candidate=input(f)
+    await expect(create(f,candidate)).rejects.toMatchObject({code:'SCHEDULE_CONFLICT'})
+    const changed=await transaction(client=>createService(client,f.admin,candidate,[{
+      id:p.id,version:p.version,programacion:{
+        ...scheduleFromRecord(p),tecnicoResponsableId:other.responsible,tecnicosColaboradoresIds:[other.collaborator],
+      },
+    }]))
+    const now=await readService(p.id),newVisit=changed.services.find(row=>row.id!==p.id && row.tipoServicio==='PRINCIPAL')!
+    expect(now.tecnicoResponsableId).toBe(other.responsible)
+    expect(newVisit.tecnicoResponsableId).toBe(f.responsible)
+    expect(now.inicioProgramado).toBe(newVisit.inicioProgramado)
+    expect(Number((await pool.query("select count(*) from public.auditoria where registro_id=$1 and accion='SERVICIO_EQUIPO_REASIGNADO'",[p.id])).rows[0].count)).toBe(1)
+    expect(Number((await pool.query("select count(*) from public.auditoria where registro_id=$1 and accion='SERVICIO_CREADO'",[p.id])).rows[0].count)).toBe(1)
+    expect(Number((await pool.query("select count(*) from public.auditoria where registro_id=$1 and accion='SERVICIO_CREADO'",[newVisit.id])).rows[0].count)).toBe(1)
+  })
+  it('serializes concurrent reservations of the same technician and commits only one',async()=>{
+    const f=await fixture(false), candidate=input(f)
+    const attempts=await Promise.allSettled([create(f,candidate),create(f,candidate)])
+    expect(attempts.filter(item=>item.status==='fulfilled')).toHaveLength(1)
+    expect(attempts.filter(item=>item.status==='rejected')).toHaveLength(1)
+    const failure=attempts.find(item=>item.status==='rejected')
+    expect(failure && failure.status==='rejected' ? failure.reason : null).toMatchObject({code:'SCHEDULE_CONFLICT'})
+    const count=await pool.query<{total:number}>('select count(*)::integer as total from public.servicios where sede_id=$1',[f.site])
+    expect(count.rows[0]?.total).toBe(1)
   })
   it('cancels a programmed Refuerzo with its Principal and preserves finalized siblings',async()=>{
     const f=await fixture(), result=await create(f), p=principal(result)
@@ -175,9 +238,9 @@ describe('administrator services · real PostgreSQL',()=>{
   it('agendas a proposal atomically only with explicit client confirmation and keeps its history',async()=>{
     const f=await fixture(false), previous=principal(await create(f)), nextId=await finish(f,previous.id)
     const next=await transaction(client=>getUpcoming(client,nextId)), value=input(f,'2030-02-28T09:00:00-05:00')
-    await expect(transaction(client=>createService(client,f.admin,value,false,{ id:next.id,version:next.version,confirmed:false }))).rejects.toMatchObject({ code:'FOLLOW_UP_NOT_READY' })
+    await expect(transaction(client=>createService(client,f.admin,value,[],{ id:next.id,version:next.version,confirmed:false }))).rejects.toMatchObject({ code:'FOLLOW_UP_NOT_READY' })
     expect((await transaction(client=>getUpcoming(client,next.id))).servicioAgendadoId).toBeNull()
-    const result=await transaction(client=>createService(client,f.admin,value,false,{ id:next.id,version:next.version,confirmed:true }))
+    const result=await transaction(client=>createService(client,f.admin,value,[],{ id:next.id,version:next.version,confirmed:true }))
     expect(result.upcoming?.servicioAgendadoId).toBe(principal(result).id)
     expect(result.upcoming?.principalAnteriorId).toBe(previous.id)
     const listed=await transaction(client=>listUpcoming(client,{ from:'2030-01-01',to:'2030-12-31',estado:'',query:`Services CI ${f.business}`,page:1,pageSize:25 }))
@@ -205,7 +268,7 @@ describe('administrator services · real PostgreSQL',()=>{
   it('does not mark a newer schedule as synchronized when an earlier Calendar call finishes',async()=>{
     const f=await fixture(false), p=principal(await create(f))
     external.calendar.mockImplementationOnce(async()=>{
-      await transaction(client=>rescheduleService(client,f.admin,p.id,p.version,{ ...scheduleFromRecord(p),inicioProgramado:addInstantDays(p.inicioProgramado,1) },false))
+      await transaction(client=>rescheduleService(client,f.admin,p.id,p.version,{ ...scheduleFromRecord(p),inicioProgramado:addInstantDays(p.inicioProgramado,1) },[]))
       return `sr${p.id.replaceAll('-','')}`
     })
     await drainServiceJobs(1)
@@ -217,7 +280,7 @@ describe('administrator services · real PostgreSQL',()=>{
   it('serializes simultaneous Calendar deliveries without blocking administrator reprogramming',async()=>{
     const f=await fixture(false), p=principal(await create(f))
     external.calendar.mockImplementationOnce(async()=>{
-      await transaction(client=>rescheduleService(client,f.admin,p.id,p.version,{ ...scheduleFromRecord(p),inicioProgramado:addInstantDays(p.inicioProgramado,1) },false))
+      await transaction(client=>rescheduleService(client,f.admin,p.id,p.version,{ ...scheduleFromRecord(p),inicioProgramado:addInstantDays(p.inicioProgramado,1) },[]))
       await drainServiceJobs(1)
       expect(external.calendar).toHaveBeenCalledTimes(1)
       return `sr${p.id.replaceAll('-','')}`

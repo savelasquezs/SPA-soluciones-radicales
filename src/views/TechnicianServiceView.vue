@@ -96,7 +96,7 @@ function openReview(): void {
 </script>
 
 <template>
-  <ServicePage :title="packageValue?.service.solicitud ?? 'Servicio'" :caption="packageValue ? `${packageValue.service.clienteNombre} · ${packageValue.service.sedeNombre}` : undefined">
+  <ServicePage :title="packageValue?.service.solicitud ?? 'Servicio'" :caption="packageValue ? (packageValue.service.tipoSede==='RESIDENCIAL' ? packageValue.service.clienteNombre : `${packageValue.service.clienteNombre} · ${packageValue.service.sedeNombre}`) : undefined">
     <template #actions><BaseButton variant="secondary" :loading="packageLoading" :disabled="!online || Boolean(action)" @click="load"><RefreshCw :size="17" aria-hidden="true" />Actualizar</BaseButton></template>
     <LoadingSkeleton v-if="packageLoading && !packageValue" label="Preparando servicio" :rows="6" />
     <StatusPanel v-else-if="viewError && !packageValue" title="No fue posible abrir el servicio" :message="viewError" tone="danger"><BaseButton :disabled="!online" @click="load">Reintentar</BaseButton></StatusPanel>
@@ -104,7 +104,7 @@ function openReview(): void {
       <div class="technician-network" :class="{ 'technician-network--offline': !online }" role="status" aria-live="polite"><Wifi v-if="online" :size="18" aria-hidden="true" /><CloudOff v-else :size="18" aria-hidden="true" /><span>{{ online ? 'En línea' : 'Sin conexión · copia local' }}</span></div>
       <StatusPanel v-if="packageError || (viewError && packageValue)" title="Revisa el estado del servicio" :message="viewError || packageError" tone="warning" />
       <section class="technician-service-hero">
-        <header><div><span class="technician-service-hero__request">{{ packageValue.service.solicitud }}</span><h2>{{ packageValue.service.clienteNombre }}</h2><p>{{ packageValue.service.sedeNombre }}</p></div><StatusBadge :tone="technicianServiceStateTone(packageValue.service.estado)">{{ technicianServiceStateLabel(packageValue.service.estado) }}</StatusBadge></header>
+        <header><div><span class="technician-service-hero__request">{{ packageValue.service.solicitud }}</span><h2>{{ packageValue.service.clienteNombre }}</h2><p v-if="packageValue.service.tipoSede!=='RESIDENCIAL'">{{ packageValue.service.sedeNombre }}</p></div><StatusBadge :tone="technicianServiceStateTone(packageValue.service.estado)">{{ technicianServiceStateLabel(packageValue.service.estado) }}</StatusBadge></header>
         <dl>
           <div><dt><Clock3 :size="17" aria-hidden="true" />Programación</dt><dd>{{ formatTechnicianDateTime(packageValue.service.inicioProgramado) }}</dd></div>
           <div><dt><MapPin :size="17" aria-hidden="true" />Dirección</dt><dd>{{ packageValue.service.direccion }}</dd></div>
@@ -117,7 +117,7 @@ function openReview(): void {
         <div v-else-if="packageValue.service.estado === 'EN_PROCESO'" class="technician-start">
           <p>{{ localLock ? 'Este celular conserva el acceso de edición del servicio.' : 'Activa este celular para continuar la ejecución.' }}</p>
           <BaseButton v-if="!localLock" :loading="action === 'CLAIM'" :disabled="!online" @click="claim">Activar en este celular</BaseButton>
-          <div v-else class="technician-work-actions"><BaseButton @click="openAreas"><Map :size="18" aria-hidden="true" />Ir a las Áreas</BaseButton><BaseButton variant="secondary" @click="openReview"><ClipboardCheck :size="18" aria-hidden="true" />Revisar cierre</BaseButton></div>
+          <div v-else class="technician-work-actions"><BaseButton v-if="orderedAreas.length" @click="openAreas"><Map :size="18" aria-hidden="true" />Ir a las Áreas</BaseButton><BaseButton variant="secondary" @click="openReview"><ClipboardCheck :size="18" aria-hidden="true" />Revisar cierre</BaseButton></div>
         </div>
       </section>
       <details class="technician-summary"><summary>Productos previstos ({{ packageValue.products.length }})</summary><TechnicianProductsList :products="packageValue.products" :service-id="serviceId" /></details>

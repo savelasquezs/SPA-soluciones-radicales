@@ -38,11 +38,23 @@ Al ingresar en una semana, se selecciona hoy si pertenece a ella; si no, el prim
 - Cruces de horarios y conflictos de versión siguen las validaciones y confirmaciones existentes. Ante un fallo no se altera la posición guardada; el usuario puede reintentar o revisar la versión actual. Google Calendar se actualiza desde la outbox tras el guardado, nunca desde el navegador.
 - La alternativa accesible por teclado o teléfono son los controles de crear y reprogramar del calendario; el arrastre no es la única manera de modificar una fecha.
 
+## Cruces de técnicos (regla obligatoria)
+
+- No se admite que un mismo técnico sea responsable o colaborador de dos Servicios con intervalos simultáneos. Se consideran los Servicios Programados y En proceso; las visitas Finalizadas y Canceladas no bloquean disponibilidad.
+- El aviso de cruce **no** ofrece guardar de todos modos: abre una resolución que informa las visitas afectadas, los técnicos coincidentes y permite cambiar el equipo del Servicio que se está guardando o el de un Servicio afectado todavía Programado.
+- Los selects son reactivos: excluyen al técnico en conflicto, integrantes ya asignados al mismo equipo, técnicos no activos, certificados vencidos y técnicos ocupados en otros Servicios que coinciden con el intervalo. Al cambiar el tipo de resolución o una selección se recalculan las opciones.
+- Si un técnico coincide con varios Servicios, su reemplazo en el Servicio nuevo puede resolver varios cruces automáticamente. Solo se habilita guardar cuando se han resuelto todos.
+- La confirmación aplica las programaciones y reasignaciones de los Servicios afectados dentro de **una única transacción**, comprobando sus versiones y revalidando disponibilidad en el servidor. Se guarda todo o nada; cambios simultáneos vuelven a exigir resolución.
+- Un Servicio En proceso no puede reasignarse desde este diálogo. La reprogramación mediante arrastre de la agenda respeta la misma regla.
+- Se conserva el rol del técnico reemplazado (responsable o colaborador), las fechas y duración de las visitas existentes y se registra auditoría individual. La outbox de Google Calendar actualiza todos los eventos cambiados después de confirmar.
+
 ## Servicio Principal
 
 El Administrador crea el Servicio Principal y el servidor genera su consecutivo.
 
-El valor del Principal se deriva de la Sede al momento de crearlo. Cambios posteriores en el valor configurado de la Sede no modifican Servicios existentes.
+Para clientes **Negocio**, el valor del Servicio Principal se deriva de la tarifa de su Sede al crearlo. Para clientes **Casa**, el formulario de cliente permite configurar una tarifa predeterminada que se guarda en `sedes.valor_servicio` de su Sede residencial interna; no se crea un segundo campo en la base de datos.
+
+La tarifa residencial es opcional para permitir clientes ya existentes sin valor configurado. Al programar una visita se precarga el valor de la Sede cuando exista, pero el Administrador puede modificarlo para esa visita concreta. Si la tarifa está vacía, debe introducir el importe al programar. El valor definitivo se guarda en `servicios.valor_servicio` y **no cambia** si luego se edita la tarifa de la Sede. Los valores se validan como enteros no negativos en COP.
 
 El formulario de programación permite definir fecha, hora, Técnico responsable y colaboradores de acuerdo con las reglas generales de asignación.
 
@@ -251,3 +263,12 @@ El Técnico previsto para recaudar durante la visita y la persona que finalmente
 - **Pago** permite indicar durante el alta si el cliente ya pagó. Si no pagó, se conserva el cobro previsto. Si pagó, se exige método; para efectivo es obligatorio indicar el receptor, que puede ser el administrador que está programando o un técnico activo. Transferencia confirmada no exige receptor de efectivo. La confirmación se registra en la misma transacción que crea el servicio con fecha, actor y receptor. Las correcciones posteriores siguen desde «Registrar pago».
 - No se crean tablas ni migraciones adicionales.
 
+
+
+## Visitas residenciales (Clientes Casa)
+
+- El buscador de Cliente incluye Negocio y Casa activos. Casa conserva su Sede interna `RESIDENCIAL`, creada junto con el Cliente, pero el Administrador no ve ni selecciona esa Sede: ve directamente la dirección registrada.
+- El importe en pesos colombianos se introduce manualmente en cada Servicio Principal residencial, como un entero no negativo. No se guarda en la configuración de la Casa. El valor de visitas anteriores es inmutable; una visita nueva puede tener otro precio.
+- La duración se propone en 90 minutos y puede cambiarse por visita. Responsable, colaboradores, Productos, cobro y Calendar siguen el contrato del Servicio Principal.
+- Casa no crea Refuerzos ni propuestas periódicas. El backend y la base de datos impiden agendar sin precio o con Refuerzo residencial. Para Negocio el servidor sigue calculando el importe desde la Sede e ignora un precio manipulado por el navegador.
+- El Técnico puede ejecutar la visita sin Áreas, firmar y cerrar. Las superficies de certificados e informe MIP completo no se ofrecen para Casa.

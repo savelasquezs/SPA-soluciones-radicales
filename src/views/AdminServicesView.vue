@@ -199,10 +199,15 @@ async function confirmMove(): Promise<void> {
   const move=pendingMove.value
   if(!move || moving.value) return
   moveReviewOpen.value=false
+  try { await store.loadOptions() }
+  catch(failure) {
+    notifications.show(failure instanceof Error ? failure.message : 'No fue posible consultar técnicos disponibles.','error')
+    return
+  }
   await runMove(
-    (requestId,allowConflicts)=>reprogramAdminService(move.record,requestId,{
-      ...scheduleFromRecord(move.record),inicioProgramado:move.start,
-    },allowConflicts),
+    (requestId,resolution)=>reprogramAdminService(move.record,requestId,
+      resolution?.schedules[0] ?? {...scheduleFromRecord(move.record),inicioProgramado:move.start},
+      resolution?.reassignments ?? []),
     result=>{ store.applyMutation(result);pendingMove.value=null },
     'Servicio reprogramado. Calendar se actualizará en segundo plano.',
   )
@@ -245,7 +250,8 @@ async function retryCalendar(record: AdminService): Promise<void> {
       <button role="tab" class="svc-tab" :aria-selected="tab==='upcoming'" @click="changeTab('upcoming')">Próximos por confirmar <span v-if="store.pendingCount" class="svc-count" :aria-label="`${store.pendingCount} pendientes de confirmación en los próximos siete días`" title="Pendientes de confirmación · próximos 7 días">{{ store.pendingCount }}</span></button>
       <button role="tab" class="svc-tab" :aria-selected="tab==='history'" @click="changeTab('history')">Historial</button>
     </div>
-    <div v-if="tab==='agenda'" class="svc-agenda-bar">
+    <div class="svc-controls" :class="{ 'svc-controls--week': tab==='agenda' && view==='week' }">
+      <div v-if="tab==='agenda'" class="svc-agenda-bar">
       <div class="svc-segment" role="group" aria-label="Presentación de agenda">
         <button type="button" :aria-pressed="view==='table'" @click="changeView('table')">Tabla</button>
         <button type="button" :aria-pressed="view==='week'" @click="changeView('week')">Semana</button>
@@ -300,6 +306,7 @@ async function retryCalendar(record: AdminService): Promise<void> {
       <BaseSelect v-if="tab!=='upcoming' && (!compact || mobileFiltersOpen)" class="svc-filter-extra svc-filter-extra--team" :model-value="serviceFilter.tecnicoId" name="service-team-filter" label="Técnico" @update:model-value="setQuery({ tecnicoId:$event || undefined,page:'1' })"><option value="">Todo el equipo</option><option v-for="person in store.options?.tecnicos ?? []" :key="person.id" :value="person.id">{{ person.nombreCompleto }}</option></BaseSelect>
       <BaseButton v-if="compact && mobileFiltersOpen" size="compact" variant="ghost" class="svc-filter-clear" @click="clearAdvancedFilters">Limpiar filtros</BaseButton>
     </div>
+    </div>
     <div v-if="tab!=='agenda'" class="svc-toolbar"><span class="svc-muted svc-small">{{ tab==='upcoming' ? 'Las fechas son sugeridas. Agendar crea la visita confirmada.' : 'Servicios finalizados y cancelados' }}</span></div>
     <StatusPanel v-if="rangeError" title="Revisa el rango de fechas" :message="rangeError" tone="warning" />
     <LoadingSkeleton v-else-if="loading" :rows="6" />
@@ -317,7 +324,7 @@ async function retryCalendar(record: AdminService): Promise<void> {
       <StatusPanel v-else title="Sin servicios en este rango" message="Cambia las fechas o los filtros para consultar otra parte de la operación." />
     </template>
     <ServicePagination v-if="!rangeError && !loadError && view!=='week' && total>pageSize" :page="page" :page-size="pageSize" :total="total" :disabled="loading" @page="setQuery({ page:String($event) })" />
-    <ServiceSaveFeedback :error="moveError" :conflict="moveConflict" :overlaps="moveOverlaps" :overlap-open="moveOverlapOpen" :saving="moving" @reload="reloadMove" @accept="acceptMoveOverlap" @cancel="stopMoveOverlap" />
+    <ServiceSaveFeedback :error="moveError" :conflict="moveConflict" :overlaps="moveOverlaps" :overlap-open="moveOverlapOpen" :saving="moving" :technicians="store.options?.tecnicos ?? []" :current-client-name="pendingMove?.record.clienteNombre ?? ''" :schedules="pendingMove ? [{...scheduleFromRecord(pendingMove.record),inicioProgramado:pendingMove.start}] : []" @reload="reloadMove" @accept="acceptMoveOverlap" @cancel="stopMoveOverlap" />
     <div v-if="pendingMove && moveError && !moveConflict && !moveOverlapOpen" class="svc-dialog-actions"><BaseButton size="compact" variant="secondary" @click="cancelMove">Descartar cambio</BaseButton><BaseButton size="compact" @click="moveReviewOpen=true">Reintentar</BaseButton></div>
     <ConfirmDialog :open="moveReviewOpen" title="Confirmar nueva fecha" :message="moveMessage" confirm-label="Mover servicio" :loading="moving" @confirm="confirmMove" @cancel="cancelMove" />
     <ServiceResultsDialog v-if="results" :key="results.id" :service-id="results.id" :solicitud="results.solicitud" @close="results=null" />

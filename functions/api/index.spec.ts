@@ -162,7 +162,7 @@ describe('Clients, Sites and Areas API', () => {
       if (sql.includes('insert into public.negocios')) return { rows: [{ id: 'client-id' }], rowCount: 1 }
       if (sql.includes('insert into public.sedes')) return { rows: [], rowCount: 1 }
       if (sql.includes('from public.negocios n')) {
-        return { rows: [{ id: 'client-id', tipoCliente: 'RESIDENCIAL', nombre: 'María Gómez', nit: null, correos: [], activo: true, version: 1, residenciaDireccion: 'Calle 1', residenciaCelular: '+573001234567', sedesCount: 0 }], rowCount: 1 }
+        return { rows: [{ id: 'client-id', tipoCliente: 'RESIDENCIAL', nombre: 'María Gómez', nit: null, correos: [], activo: true, version: 1, residenciaDireccion: 'Calle 1', residenciaCelular: '+573001234567', residenciaValorServicio: null, sedesCount: 0 }], rowCount: 1 }
       }
       return { rows: [], rowCount: 1 }
     })
@@ -174,7 +174,41 @@ describe('Clients, Sites and Areas API', () => {
     })
 
     expect(response.status).toBe(201)
-    expect(clientQuery).toHaveBeenCalledWith(expect.stringContaining('insert into public.sedes'), ['client-id', 'María Gómez', 'Calle 1', '+573001234567', true])
+    expect(clientQuery).toHaveBeenCalledWith(expect.stringContaining('insert into public.sedes'), ['client-id', 'María Gómez', 'Calle 1', '+573001234567', null, true])
+  })
+
+  it('stores the optional residential default price on the internal site', async () => {
+    clientQuery.mockImplementation(async (sql) => {
+      if (sql.includes('insert into public.negocios')) return { rows: [{ id: 'home-id' }], rowCount: 1 }
+      if (sql.includes('from public.negocios n')) return { rows: [{ id: 'home-id', tipoCliente: 'RESIDENCIAL', residenciaValorServicio: '105000' }], rowCount: 1 }
+      return { rows: [], rowCount: 1 }
+    })
+    const response = await app.request('/api/clients', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tipoCliente: 'RESIDENCIAL', nombre: 'María Gómez', correos: [], activo: true,
+        residenciaDireccion: 'Calle 1', residenciaCelular: '3001234567', residenciaValorServicio: 105000,
+      }),
+    })
+    expect(response.status).toBe(201)
+    expect(clientQuery).toHaveBeenCalledWith(
+      expect.stringContaining('insert into public.sedes'),
+      ['home-id', 'María Gómez', 'Calle 1', '+573001234567', 105000, true],
+    )
+  })
+
+  it('rejects negative residential pricing before writing', async () => {
+    const response = await app.request('/api/clients', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tipoCliente: 'RESIDENCIAL', nombre: 'María Gómez', correos: [], activo: true,
+        residenciaDireccion: 'Calle 1', residenciaCelular: '3001234567', residenciaValorServicio: -1,
+      }),
+    })
+    expect(response.status).toBe(422)
+    expect(transaction).not.toHaveBeenCalled()
   })
 
   it('keeps the Services catalog separate and filters residential locations', async () => {

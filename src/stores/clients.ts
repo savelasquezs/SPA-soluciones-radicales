@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 
 import * as clientsService from '@/services/clientsService'
+import { useAdminServicesStore } from '@/stores/adminServices'
 import type { AreaInput, AreaRecord, ClientInput, ClientRecord, SiteInput, SiteRecord } from '@/types/domain'
 
 type ClientsState = {
@@ -61,11 +62,13 @@ export const useClientsStore = defineStore('clients', {
     async createClient(input: ClientInput): Promise<ClientRecord> {
       const client = await clientsService.createClient(input)
       this.upsertClient(client)
+      if (client.tipoCliente === 'RESIDENCIAL') useAdminServicesStore().invalidateOptions()
       return client
     },
     async updateClient(id: string, input: ClientInput): Promise<ClientRecord> {
       const client = await clientsService.updateClient(id, input)
       this.upsertClient(client)
+      if (client.tipoCliente === 'RESIDENCIAL') useAdminServicesStore().invalidateOptions()
       return client
     },
     async removeClient(id: string, version: number): Promise<void> {

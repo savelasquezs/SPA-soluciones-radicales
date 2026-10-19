@@ -11,7 +11,7 @@ import ErrorState from '@/components/base/ErrorState.vue'
 import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import StatusBadge from '@/components/base/StatusBadge.vue'
 import ResponsiveTable from '@/components/base/ResponsiveTable.vue'
-import ServiceHistoryList from '@/components/domain/clients/ServiceHistoryList.vue'
+import ServiceRecords from '@/components/domain/services/ServiceRecords.vue'
 import SiteMonitoringPanel from '@/components/domain/clients/SiteMonitoringPanel.vue'
 import SiteFindingsPanel from '@/components/domain/clients/SiteFindingsPanel.vue'
 import WhatsAppPhoneLink from '@/components/base/WhatsAppPhoneLink.vue'
@@ -298,7 +298,7 @@ function formatMoney(value: number): string { return new Intl.NumberFormat('es-C
     <section v-else-if="tab === 'history'" class="history-card">
       <LoadingSkeleton v-if="historyLoading" label="Cargando historial" :lines="5" />
       <EmptyState v-else-if="history.length === 0" title="Sin historial" message="Los Servicios de esta Sede aparecerán aquí." />
-      <ServiceHistoryList v-else :items="history" />
+      <ServiceRecords v-else :summary-records="history" />
       <div v-if="historyTotal > 20" class="pagination"><BaseButton size="compact" variant="secondary" :disabled="historyPage === 1" @click="loadHistory(historyPage - 1)">Anterior</BaseButton><span>Página {{ historyPage }}</span><BaseButton size="compact" variant="secondary" :disabled="historyPage * 20 >= historyTotal" @click="loadHistory(historyPage + 1)">Siguiente</BaseButton></div>
     </section>
     <section v-else-if="tab === 'settings'" class="settings-card"><h2>Configuración de la Sede</h2><p>Modifica contacto, operación, vehículos y plano desde el formulario compartido.</p><BaseButton size="compact" @click="openSiteEdit">Editar configuración</BaseButton></section>
@@ -342,7 +342,8 @@ function formatMoney(value: number): string { return new Intl.NumberFormat('es-C
 .areas-toolbar { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem; }
 .areas-toolbar > div { display:flex; align-items:center; flex-wrap:wrap; gap:0.65rem; }
 .areas-toolbar > div > span { color:var(--text-secondary); font-size:0.82rem; }
-.areas-panel, .history-card, .settings-card { min-width:0; border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--surface); padding:0.7rem; }
+.areas-panel, .settings-card { min-width:0; border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--surface); padding:0.7rem; }
+.history-card { min-width:0; }
 .areas-panel { padding:0; overflow:hidden; }
 .areas-table-scroll { max-width:100%; max-height:min(68vh, 42rem); overflow:auto; overscroll-behavior-x:contain; -webkit-overflow-scrolling:touch; }
 .areas-table-scroll table { width:100%; border-collapse:collapse; }

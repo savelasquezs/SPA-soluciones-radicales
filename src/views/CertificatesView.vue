@@ -59,7 +59,7 @@ onMounted(async () => {
 </script>
 <template>
   <section class="certificates-page">
-    <header class="page-heading"><div><RouterLink to="/configuracion" class="back-link">Configuración</RouterLink><h1>Certificados</h1></div></header>
+    <header class="page-heading admin-page-header"><div class="admin-page-heading"><h1>Certificados</h1><p>— Plantillas, generación y envío</p></div></header>
     <nav class="section-tabs" aria-label="Secciones de certificados">
       <BaseButton :variant="tab === 'templates' ? 'secondary' : 'ghost'" size="compact" :aria-current="tab === 'templates' ? 'page' : undefined" :disabled="busy" @click="chooseTab('templates')">Plantillas</BaseButton>
       <BaseButton :variant="tab === 'generate' ? 'secondary' : 'ghost'" size="compact" :aria-current="tab === 'generate' ? 'page' : undefined" :disabled="busy" @click="chooseTab('generate')">Generar y enviar</BaseButton>
@@ -83,7 +83,7 @@ onMounted(async () => {
       <ErrorState v-if="generation.loadError" title="No se pudieron cargar los datos" :message="generation.loadError"><BaseButton variant="secondary" :disabled="generation.loading" @click="generation.retry">Reintentar</BaseButton></ErrorState>
       <template v-if="generation.initialized">
         <section class="panel">
-          <div class="context-filters">
+          <div class="context-filters admin-compact-filters">
             <BaseSelect :model-value="generation.clientId" name="cert-business" label="Negocio" :disabled="busy || generation.loading" @update:model-value="changeContext(() => generation.selectClient($event))"><option value="">Selecciona un negocio</option><option v-for="client in generation.businesses" :key="client.id" :value="client.id">{{ client.nombre }}{{ client.activo ? '' : ' (inactivo)' }}</option></BaseSelect>
             <BaseSelect :model-value="generation.siteId" name="cert-site" label="Sede" :disabled="busy || !generation.clientId || generation.loading" @update:model-value="changeContext(() => generation.selectSite($event))"><option value="">Selecciona una sede</option><option v-for="site in generation.sites" :key="site.id" :value="site.id">{{ site.nombre }}</option></BaseSelect>
             <BaseSelect :model-value="generation.serviceId" name="cert-service" label="Servicio finalizado" :disabled="busy || !generation.siteId || generation.loading" @update:model-value="changeContext(() => generation.selectService($event))"><option value="">Selecciona un servicio</option><option v-for="item in generation.services" :key="item.id" :value="item.id">{{ item.solicitud }} · {{ formatDate(item.fecha) }}</option></BaseSelect>
@@ -141,19 +141,17 @@ onMounted(async () => {
   </section>
 </template>
 <style scoped>
-.certificates-page, .section-stack { display: grid; gap: 1rem; min-width: 0; }
-.page-heading h1 { margin: .25rem 0 0; font-size: 1.5rem; font-weight: 600; }
-.back-link { color: var(--text-secondary); font-size: .8rem; text-decoration: none; }
-.back-link:hover { text-decoration: underline; }
-.section-tabs { display: flex; gap: .5rem; border-bottom: 1px solid var(--border); padding-bottom: .75rem; }
-.template-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.certificates-page, .section-stack { display: grid; gap: 0.75rem; min-width: 0; }
+
+.section-tabs { display: flex; gap: .375rem; border-bottom: 1px solid var(--border); padding-bottom: .25rem; }
+.template-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
 .configuration-actions, .context-status, .generation-actions, .mail-actions { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .75rem; }
 .configuration-actions, .context-status, small, .selected-recipients { color: var(--text-secondary); font-size: .8rem; }
 .notice { padding: .85rem 1rem; margin: 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text-secondary); font-size: .875rem; line-height: 1.5; }
 .notice p { margin: 0 0 .5rem; }
 .notice--error { border-color: var(--danger); color: var(--danger); }
-.panel { padding: 1.25rem; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); min-width: 0; }
-.context-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.panel { padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); min-width: 0; }
+.context-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.625rem; }
 .context-status { margin-top: .65rem; min-height: 1.5rem; }
 .generation-form { display: grid; grid-template-columns: minmax(12rem, 1fr) minmax(12rem, 2fr); gap: 1rem; border-top: 1px solid var(--border); padding-top: 1rem; margin-top: 1rem; }
 .generation-actions, .generation-explanation { grid-column: 1 / -1; }

@@ -171,6 +171,10 @@ Usar una forma común de error con:
 
 Nunca mostrar nombres internos de tablas, políticas, columnas, trazas o consultas al usuario.
 
+## Historial compartido de Servicios
+
+`ServiceRecords` es la única superficie visual para los listados de Servicios. En Servicios recibe registros administrativos completos, con acciones; en Clientes y Sedes acepta el resumen paginado `summaryRecords` devuelto por los endpoints ya existentes. Conserva tabla en escritorio, tarjetas compactas en móvil, estados, fechas, importes y navegación al detalle. No se inventan datos ausentes ni se habilitan acciones que necesitan el registro completo. Los filtros por Cliente/Sede y la paginación siguen en las vistas; no se crea otra tabla independiente para el historial.
+
 ## Reutilización de dominio
 
 Un componente de dominio se justifica cuando representa una unidad reconocible y repetida, por ejemplo:

@@ -113,3 +113,18 @@ Crear los mínimos, identificarlos claramente y eliminarlos incluso tras fallos.
 ## Entrega
 
 Informar rama/PR, commit, pruebas, validación remota/visual, estado de producción/merge y bloqueos.
+
+## Verificación de pull requests
+
+`SPA verification` reemplaza los cuatro workflows de certificados, servicios, catálogos y optimización de archivos. Conserva la unión de sus filtros de rutas; `scripts/ci/verification-paths.json` mantiene la selección de cada suite. Los cambios al workflow unificado o a sus scripts ejecutan todas las suites. La selección usa el diff desde el ancestro común del PR, con historial completo; un error al resolverlo falla el job en vez de omitir pruebas.
+
+- Un job frontend instala dependencias y ejecuta lint, unitarias, build y comprobación de migraciones una sola vez. Instala Chromium una sola vez y reutiliza el build para las suites seleccionadas.
+- La prueba E2E de optimización de archivos corre una sola vez cuando la selecciona su filtro o el de certificados.
+- Servicios y certificados comparten una ejecución de las comprobaciones SQL en PostgreSQL descartable. Catálogos conserva otra base independiente: vuelve a aplicar las migraciones antes de su bootstrap y sus pruebas. No se comparte una base ya mutada entre ambas suites.
+- Las pruebas de navegador continúan aunque falle otra suite; sus resultados tienen directorios separados. Se conservan los artefactos `services-review`, `certificate-test-results` y `mip-catalogs-qa`, con siete días de retención.
+- El lanzamiento manual permite elegir una suite o `all`; por defecto ejecuta servicios, igual que el workflow manual anterior.
+- Para validar la selección sin instalar dependencias: `node --test scripts/ci/test-select-verification.mjs` (Node 24).
+
+Cuando todas las suites aplican, lint/unitarias/build pasan de cuatro ejecuciones a una, Chromium de cuatro instalaciones a una, y las comprobaciones SQL de certificados de tres ejecuciones a dos. Se mantienen todos los casos de prueba. Los workflows Neon API bundle, retention y documentation-video son independientes y no cambian.
+
+Los servicios PostgreSQL usan `docker.io/library/postgres:17`, la imagen oficial, tras observar límites de datos del espejo ECR en CI. Se conserva el major 17 y el comportamiento anterior de etiqueta móvil; no se afirma igualdad de digest entre registros ni se introduce una fijación a una versión patch. Las dos bases siguen aisladas y no requieren credenciales del registro.

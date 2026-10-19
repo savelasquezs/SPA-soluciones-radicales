@@ -39,12 +39,15 @@ Estos límites no son un límite total de una transacción ni de llamadas extern
 - `src/__tests__/requestRecovery.spec.ts`: suspensión simulada, 401, permisos, red, límite del cuerpo, cancelación durante Auth/reintento, escrituras sin replay, JSON, PDF y Data API.
 - `src/__tests__/authRecovery.spec.ts`: avance de reloj 5/10/20 min, renovación, token que no se renueva, SDK bloqueado y conservación del verificador OAuth.
 - `src/__tests__/unsavedNavigation.spec.ts`: guardado ocupado, clics repetidos, cancelar y desmontaje.
+- `src/helpers/staleChunkRecovery.spec.ts`: detección de errores de assets dinámicos, recarga única por ruta y protección contra bucles.
 - `functions/api/db.spec.ts`: configuración, adquisición, liberación, rollback, pérdida de COMMIT y errores ociosos.
-- `e2e/idle-recovery.spec.ts`: navegación desktop/móvil tras 5/10/20 min con reloj simulado, renovación real del cliente SDK contra respuestas interceptadas y formulario conservado ante red cortada. Incluido en el workflow existente de Services.
+- `e2e/idle-recovery.spec.ts`: navegación desktop/móvil tras 5/10/20 min, renovación real del cliente SDK contra respuestas interceptadas, formulario conservado ante red cortada y recuperación de un chunk retirado después de un despliegue. Incluido en el workflow existente de Services.
 
 - `e2e/technician-services.spec.ts`: recuperación automática tras un fallo temporal de lectura y reintento manual después de agotar los dos intentos; ninguna preparación inicia el servicio.
 
-Estas pruebas no equivalen a reproducir el incidente con la sesión Google del usuario ni a medir un arranque frío real de Neon. Tras integrar y desplegar, verificar la sesión real en Usuarios, Servicios y Catálogos después de 5, 10 y 20 minutos, incluyendo una pestaña en segundo plano. Registrar ruta, duración y estado HTTP sin tokens. Si solo fallan rutas cargadas por primera vez después de un despliegue, investigar aparte los chunks de Vite obsoletos.
+Estas pruebas no equivalen a reproducir el incidente con la sesión Google del usuario ni a medir un arranque frío real de Neon. Tras integrar y desplegar, verificar la sesión real en Usuarios, Servicios y Catálogos después de 5, 10 y 20 minutos, incluyendo una pestaña en segundo plano. Registrar ruta, duración y estado HTTP sin tokens.
+
+Los chunks de Vite obsoletos se recuperan mediante `vite:preloadError` y `router.onError`. La SPA recarga como máximo una vez por ruta durante 60 segundos; si el mismo error persiste, queda visible en lugar de entrar en un bucle. La recarga conserva la URL y obtiene el HTML y los assets del deployment activo.
 
 ## Referencias
 

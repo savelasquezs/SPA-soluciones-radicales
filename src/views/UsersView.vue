@@ -313,9 +313,9 @@ function certificateIcon(status: CertificateStatus): 'check' | 'warning' | 'erro
 
 <template>
   <div class="users-page">
-    <header class="users-header">
-      <div><h1>Usuarios</h1><p>Acceso, roles y credenciales del equipo.</p></div>
-      <BaseButton @click="openCreate">Agregar usuario</BaseButton>
+    <header class="users-header admin-page-header">
+      <div class="admin-page-heading"><h1>Usuarios</h1><p>— Acceso, roles y credenciales del equipo</p></div>
+      <BaseButton size="compact" @click="openCreate">Agregar usuario</BaseButton>
     </header>
 
     <LoadingSkeleton v-if="loading" label="Cargando usuarios" :lines="5" />
@@ -476,13 +476,11 @@ function certificateIcon(status: CertificateStatus): 'check' | 'warning' | 'erro
 </template>
 
 <style scoped>
-.users-page { display: grid; gap: 1.5rem; }
-.users-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; }
-.users-header h1 { margin: 0; font-size: 1.75rem; font-weight: 500; line-height: 2.125rem; letter-spacing: -0.02em; }
-.users-header p { margin: 0.25rem 0 0; color: var(--text-secondary); }
+.users-page { display: grid; gap: 0.75rem; }
+.users-header { align-items: center; }
 .users-table { overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); border-spacing: 0; border-collapse: separate; }
-.users-table th { height: 44px; border: 0; background: var(--sidebar); padding: 0.75rem; color: var(--text-secondary); font-size: 0.75rem; font-weight: 500; text-transform: none; letter-spacing: 0; }
-.users-table td { height: 64px; border: 0; border-top: 1px solid var(--border); padding: 0.75rem; vertical-align: middle; color: var(--text-secondary); }
+.users-table th { height: 40px; border: 0; background: var(--sidebar); padding: 0.6rem 0.675rem; color: var(--text-secondary); font-size: 0.75rem; font-weight: 500; text-transform: none; letter-spacing: 0; }
+.users-table td { height: 56px; border: 0; border-top: 1px solid var(--border); padding: 0.6rem 0.675rem; vertical-align: middle; color: var(--text-secondary); }
 .users-table tbody tr:hover { background: var(--hover); }
 .users-table td:first-child strong { display: block; color: var(--text); }
 .actions-heading, .actions-cell { width: 5.5rem; text-align: center; }

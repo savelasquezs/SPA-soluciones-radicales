@@ -17,6 +17,7 @@ export interface TechnicianServiceSummary {
   inicioReal: string | null
   clienteNombre: string
   sedeNombre: string
+  tipoSede?: 'NEGOCIO' | 'RESIDENCIAL'
   // Datos para el borrador local; el backend decide el contacto al persistir.
   contactoPrincipalNombre?: string
   contactoPrincipalCorreo?: string | null
