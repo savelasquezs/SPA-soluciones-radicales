@@ -64,11 +64,11 @@ export async function dashboardSnapshot(client: PoolClient, period: DashboardPer
     count(serviceMetricSql.today+" and s.estado='FINALIZADO'")+' as "todayCompleted",'+
     count(serviceMetricSql.delayed)+' as delayed,'+
     money(serviceMetricSql.performed+' and s.fin_real>='+bogotaStart+' and s.fin_real<'+bogotaEnd)+' as "performedValue",'+
-    money(serviceMetricSql.performed+" and s.fin_real>=($6::date::timestamp at time zone 'America/Bogota') and s.fin_real<"+bogotaStart)+' as "previousValue",'+
+    money(serviceMetricSql.performed+" and s.fin_real>=($5::date::timestamp at time zone 'America/Bogota') and s.fin_real<"+bogotaStart)+' as "previousValue",'+
     money(serviceMetricSql.unpaid)+' as "outstandingValue",'+
     count(serviceMetricSql.unpaid)+' as "outstandingPayments",'+
     count(serviceMetricSql.calendarError)+' as "calendarErrors"'
-    ,[...params,previousFrom])
+    ,[clientId,siteId,from,to,previousFrom])
   const summary=summaryRows[0]!
   const clients=await rows<{id:string;name:string}>(client,
     "select id,nombre as name from public.negocios where activo order by nombre,id",[])
