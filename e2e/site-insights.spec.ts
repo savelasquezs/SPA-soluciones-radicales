@@ -18,7 +18,7 @@ const upcomingHistory: AdminService = {
   tecnicoResponsableId: responsible.id, tecnicosColaboradoresIds: [],
   clientId: ids.client, clienteNombre: 'Cliente de prueba', sedeId: ids.site,
   sedeNombre: 'Sede de prueba', tipoSede: 'NEGOCIO', direccion: 'Dirección sintética',
-  servicioPrincipalId: null, inicioReal: null, finReal: null, responsable,
+  servicioPrincipalId: null, inicioReal: null, finReal: null, responsable: responsible,
   colaboradores: [], contacto: { nombre: 'Contacto de prueba', celular: '+573000000001', correos: [] },
   valorServicio: 0, observaciones: '', productos: [], refuerzo: null, principal: null,
   pago: { metodoPago: null, estadoPago: 'SIN_REGISTRAR', tecnicoRecaudoPrevistoId: null,
