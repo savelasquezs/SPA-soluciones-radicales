@@ -78,12 +78,12 @@ export async function dashboardSnapshot(client: PoolClient, period: DashboardPer
 
   const contacts=await rows<UpcomingCounts>(client,
     "select count(*)::int as total,"+
-    "count(*) filter (where p.fecha_sugerida<(($3::date)::timestamp at time zone 'America/Bogota')+")::int as overdue "+
+    "count(*) filter (where p.fecha_sugerida<(($3::date)::timestamp at time zone 'America/Bogota'))::int as overdue "+
     'from public.proximos_servicios p join public.sedes se on se.id=p.sede_id '+
     "where "+scope+
     " and p.servicio_agendado_id is null and p.estado in ('PENDIENTE','CONTACTADO','CONFIRMADO','POSPUESTO')"+
     " and p.fecha_sugerida < (($3::date+7)::timestamp at time zone 'America/Bogota')"+
-    " and (p.fecha_recontacto is null or p.fecha_recontacto<=$3::date)",params)
+    " and (p.fecha_recontacto is null or p.fecha_recontacto<=$3::date)",[clientId,siteId,today])
 
   const findings=await rows<FindingCounts>(client,
     "select count(*) filter (where h.estado='ABIERTO')::int as open,"+
