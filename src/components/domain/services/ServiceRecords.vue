@@ -55,7 +55,7 @@ function selectAction(action:MobileAction):void {
             <BaseIconButton v-if="record.estado==='PROGRAMADO'" :label="`Editar ${record.solicitud}`" size="small" :disabled="busy" @click="emit('edit',record)"><Pencil :size="16" /></BaseIconButton>
             <BaseIconButton v-if="record.estado==='PROGRAMADO' || record.estado==='EN_PROCESO'" :label="`Cancelar ${record.solicitud}`" size="small" :disabled="busy" @click="emit('cancel',record)"><X :size="16" /></BaseIconButton>
             <BaseIconButton v-if="record.calendar.estado==='ERROR'" :label="`Reintentar Calendar de ${record.solicitud}`" size="small" :disabled="busy" @click="emit('retryCalendar',record)"><RotateCcw :size="16" /></BaseIconButton>
-          </span><span class="svc-record-actions__mobile"><RouterLink class="svc-mobile-view" :to="{ name:'service-detail',params:{ id:record.id } }" :aria-label="'Ver detalle de '+record.solicitud" title="Ver detalle"><Eye :size="17" aria-hidden="true" /></RouterLink><BaseIconButton :label="'Acciones de '+record.solicitud" size="small" :disabled="busy" @click="actionRecord=record"><MoreHorizontal :size="19" /></BaseIconButton></span></td>
+          </span><span class="svc-record-actions__mobile"><RouterLink class="svc-mobile-view" :to="serviceLink(record.id)" :aria-label="'Ver detalle de '+record.solicitud" title="Ver detalle"><Eye :size="17" aria-hidden="true" /></RouterLink><BaseIconButton :label="'Acciones de '+record.solicitud" size="small" :disabled="busy" @click="actionRecord=record"><MoreHorizontal :size="19" /></BaseIconButton></span></td>
         </tr>
       </tbody>
     </table>
@@ -70,7 +70,7 @@ function selectAction(action:MobileAction):void {
       <RouterLink v-if="history && actionRecord.estado==='FINALIZADO' && actionRecord.tipoServicio==='PRINCIPAL' && actionRecord.tipoSede!=='RESIDENCIAL'" class="svc-mobile-menu__link" :to="{ name:'admin-service-report',params:{ id:actionRecord.id } }" @click="actionRecord=null"><FileCheck2 :size="18" aria-hidden="true" /> Ver informe</RouterLink>
       <BaseButton v-if="actionRecord.calendar.estado==='ERROR'" size="compact" variant="ghost" :disabled="busy" @click="selectAction('retry-calendar')"><RotateCcw :size="18" /> Reintentar Calendar</BaseButton>
       <BaseButton v-if="actionRecord.estado==='PROGRAMADO' || actionRecord.estado==='EN_PROCESO'" size="compact" variant="ghost" :disabled="busy" @click="selectAction('cancel')"><X :size="18" /> Cancelar servicio</BaseButton>
-      <RouterLink class="svc-mobile-menu__link" :to="{ name:'service-detail',params:{ id:actionRecord.id } }" @click="actionRecord=null"><Eye :size="18" aria-hidden="true" /> Ver detalle completo</RouterLink>
+      <RouterLink class="svc-mobile-menu__link" :to="serviceLink(actionRecord.id)" @click="actionRecord=null"><Eye :size="18" aria-hidden="true" /> Ver detalle completo</RouterLink>
     </div>
   </BaseDialog>
 </template>
