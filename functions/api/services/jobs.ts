@@ -1,7 +1,7 @@
 import { waitUntil } from '@neon/functions'
 import type { PoolClient } from 'pg'
 import type { ConfirmationEmail } from '../../../src/types/adminServices'
-import { isServiceId } from '../../../src/helpers/adminServices'
+import { isCancelledServiceFamily, isServiceId } from '../../../src/helpers/adminServices'
 import { ApiError } from '../auth'
 import { transaction } from '../db'
 import { sendGmailMessage, upsertCalendarEvent } from '../google'
@@ -75,7 +75,7 @@ async function processCalendar(job: ServiceJob): Promise<void> {
         description:calendarServiceDescription(service, calendarOrigin),
         location:service.direccion, start:service.inicioProgramado, end:service.finProgramado,
         attendees:[service.responsable.correoGoogle, ...service.colaboradores.map(person=>person.correoGoogle)],
-        cancelled:service.estado === 'CANCELADO',
+        cancelled:isCancelledServiceFamily(service),
       })
       // No row lock is held during the bounded provider call. A concurrent
       // schedule edit remains pending and is delivered by its own revision.
@@ -83,7 +83,7 @@ async function processCalendar(job: ServiceJob): Promise<void> {
         where id=$1 and calendar_revision=$3 returning id`, [serviceId, eventId, revision])
       await complete(client, job, saved.rowCount ? 'SYNCHRONIZED' : 'SUPERSEDED')
       await audit(client, job.payload.actorId, 'SERVICIO_CALENDAR_INTENTO', serviceId, {
-        jobId:job.id, revision, resultado:saved.rowCount ? 'SINCRONIZADO' : 'VERSION_SUPERADA', cancelado:service.estado==='CANCELADO',
+        jobId:job.id, revision, resultado:saved.rowCount ? 'SINCRONIZADO' : 'VERSION_SUPERADA', cancelado:isCancelledServiceFamily(service),
       })
     })
   } catch (error) {
