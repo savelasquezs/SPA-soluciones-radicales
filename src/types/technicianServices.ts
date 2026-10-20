@@ -15,6 +15,7 @@ export interface TechnicianServiceSummary {
   inicioProgramado: string
   finProgramado: string
   inicioReal: string | null
+  finReal?: string | null
   clienteNombre: string
   sedeNombre: string
   tipoSede?: 'NEGOCIO' | 'RESIDENCIAL'
@@ -25,6 +26,13 @@ export interface TechnicianServiceSummary {
   contactEmails?: string[]
   direccion: string
   autoPrepareEligible: boolean
+}
+
+export interface TechnicianHistoryPage {
+  items: TechnicianServiceSummary[]
+  total: number
+  page: number
+  pageSize: number
 }
 
 export interface TechnicianProduct {
