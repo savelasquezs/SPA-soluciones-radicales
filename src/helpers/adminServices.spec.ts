@@ -1,11 +1,25 @@
 import { describe,expect,it } from 'vitest'
-import { addDateDays,draftToServiceInput,emptyServiceDraft,fromBogotaInput,isDateOnly,isZonedInstant,scheduleEnd,suggestReinforcement,toBogotaInput,todayBogota,validateServiceInput,validateSchedule } from './adminServices'
-import type { ServiceInput,ServiceSchedule } from '../types/adminServices'
+import { addDateDays,draftToServiceInput,emptyServiceDraft,fromBogotaInput,isCancelledServiceFamily,matchesServiceFilter,isDateOnly,isZonedInstant,scheduleEnd,suggestReinforcement,toBogotaInput,todayBogota,validateServiceInput,validateSchedule } from './adminServices'
+import type { AdminService,ServiceFilter,ServiceInput,ServiceSchedule } from '../types/adminServices'
 const responsible='10000000-0000-4000-8000-000000000001'
 const collaborator='10000000-0000-4000-8000-000000000002'
 const schedule: ServiceSchedule={ inicioProgramado:'2026-10-06T09:00:00-05:00',duracionMinutos:90,tecnicoResponsableId:responsible,tecnicosColaboradoresIds:[collaborator] }
 const input=(): ServiceInput=>({ sedeId:responsible,programacion:structuredClone(schedule),refuerzo:null,productos:[],cobro:{ metodoPago:null,tecnicoRecaudoPrevistoId:null },observaciones:'' })
 describe('administrator service contracts',()=>{
+  it('excludes a cancelled service and its reinforcement from agenda, but retains them in history',()=>{
+    const filter:ServiceFilter={from:'2026-10-06',to:'2026-10-06',tab:'agenda',estado:'',tipo:'',tecnicoId:'',query:'',page:1,pageSize:25}
+    const programmed={estado:'PROGRAMADO',principal:null,inicioProgramado:'2026-10-06T14:00:00Z'} as AdminService
+    const cancelled={...programmed,estado:'CANCELADO'} as AdminService
+    const child={...programmed,tipoServicio:'REFUERZO',principal:{estado:'CANCELADO'}} as AdminService
+    expect(isCancelledServiceFamily(programmed)).toBe(false)
+    expect(isCancelledServiceFamily(cancelled)).toBe(true)
+    expect(isCancelledServiceFamily(child)).toBe(true)
+    expect(matchesServiceFilter(programmed,filter)).toBe(true)
+    expect(matchesServiceFilter(cancelled,filter)).toBe(false)
+    expect(matchesServiceFilter(child,filter)).toBe(false)
+    expect(matchesServiceFilter(cancelled,{...filter,tab:'history'})).toBe(true)
+    expect(matchesServiceFilter(child,{...filter,tab:'history'})).toBe(true)
+  })
   it('suggests exactly three weeks without mutating the original team',()=>{
     const result=suggestReinforcement(schedule)
     expect(toBogotaInput(result.inicioProgramado)).toBe('2026-10-27T09:00')
