@@ -63,7 +63,7 @@ const compactLayout = computed(() => compactRoutes.has(String(route.name)))
 const navigationOpen = ref(false)
 const groups: NavigationGroup[] = [
   { label: 'OPERACIÓN', items: [
-    { to: '/', label: 'Resumen', icon: Gauge }, { to: '/agenda', label: 'Agenda', icon: CalendarDays, admin: true }, { to: '/servicios', label: 'Servicios', icon: FileText },
+    { to: '/', label: 'Resumen', icon: Gauge }, { to: '/agenda', label: 'Agenda', icon: CalendarDays }, { to: '/servicios', label: 'Servicios', icon: FileText },
   ] },
   { label: 'GESTIÓN', items: [
     { to: '/clientes', label: 'Clientes', icon: Building2, admin: true },
@@ -104,7 +104,7 @@ function setTheme(event: Event): void { app.setTheme((event.target as HTMLSelect
     <div class="shell-body">
       <button v-if="navigationOpen" type="button" class="drawer-backdrop" aria-label="Cerrar navegación" @click="navigationOpen = false"></button>
       <aside id="admin-navigation" class="sidebar" :class="{ 'sidebar--open': navigationOpen }">
-        <nav aria-label="Navegación principal"><section v-for="group in visibleGroups" :key="group.label"><h2>{{ group.label }}</h2><RouterLink v-for="item in group.items" :key="item.to" :to="item.to" :class="{ 'nav-active': isActive(item.to) }" @click="navigationOpen = false"><component :is="item.icon" :size="17" aria-hidden="true" />{{ item.label }}</RouterLink></section></nav>
+        <nav aria-label="Navegación principal"><section v-for="group in visibleGroups" :key="group.label"><h2>{{ group.label }}</h2><RouterLink v-for="item in group.items" :key="item.to" :to="item.to" :class="{ 'nav-active': isActive(item.to) }" @click="navigationOpen = false"><component :is="item.icon" :size="17" aria-hidden="true" />{{ !auth.isAdmin && item.to==='/servicios' ? 'Mis servicios' : item.label }}</RouterLink></section></nav>
         <div class="sidebar__footer">
           <a href="https://soluciones-radicales.mintlify.app" target="_blank" rel="noreferrer">
             <CircleHelp :size="17" aria-hidden="true" /> Ayuda y documentación

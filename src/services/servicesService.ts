@@ -1,10 +1,22 @@
 import { apiRequest } from '@/services/apiService'
-import type { MipEvaluation, TechnicianAreaAccessResult, TechnicianAreaOrderResult, TechnicianAreaOrderVersion, TechnicianCriterionEvaluationResult, TechnicianDeviceCreationInput, TechnicianDeviceCreationResult, TechnicianDeviceReviewInput, TechnicianDeviceReviewResult, TechnicianExecutionSession, TechnicianFindingCreateInput, TechnicianFindingResult, TechnicianFindingStatusInput, TechnicianServicePackage, TechnicianServiceSummary } from '@/types/technicianServices'
+import type { MipEvaluation, TechnicianAreaAccessResult, TechnicianAreaOrderResult, TechnicianAreaOrderVersion, TechnicianCriterionEvaluationResult, TechnicianDeviceCreationInput, TechnicianDeviceCreationResult, TechnicianDeviceReviewInput, TechnicianDeviceReviewResult, TechnicianExecutionSession, TechnicianFindingCreateInput, TechnicianFindingResult, TechnicianFindingStatusInput, TechnicianServicePackage, TechnicianServiceSummary, TechnicianHistoryPage } from '@/types/technicianServices'
 
 const base = 'api/technician/services'
 const json = (value: unknown): RequestInit => ({ method: 'POST', body: JSON.stringify(value) })
 
 export const fetchTechnicianServices = (signal?: AbortSignal) => apiRequest<TechnicianServiceSummary[]>(base, { signal })
+export function fetchTechnicianHistory(
+  filter: {page:number;q?:string;from?:string;to?:string},signal?:AbortSignal,
+):Promise<TechnicianHistoryPage> {
+  const params=new URLSearchParams({page:String(filter.page)})
+  if(filter.q)params.set('q',filter.q)
+  if(filter.from&&filter.to){params.set('from',filter.from);params.set('to',filter.to)}
+  return apiRequest<TechnicianHistoryPage>(base+'/history?'+params.toString(),{signal})
+}
+export function fetchTechnicianAgenda(from:string,to:string,signal?:AbortSignal):Promise<TechnicianServiceSummary[]> {
+  const params=new URLSearchParams({from,to})
+  return apiRequest<TechnicianServiceSummary[]>(base+'/agenda?'+params.toString(),{signal})
+}
 export const fetchTechnicianPackage = (serviceId: string) => apiRequest<TechnicianServicePackage>(`${base}/${serviceId}/package`)
 export const startTechnicianService = (serviceId: string, requestId: string, deviceId: string, version: number) =>
   apiRequest<TechnicianExecutionSession>(`${base}/${serviceId}/start`, json({ requestId, deviceId, version }))

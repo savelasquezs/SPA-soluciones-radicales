@@ -2,7 +2,7 @@ import { Hono, type Context } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import type { PoolClient } from 'pg'
-import { isServiceId } from '../../../src/helpers/adminServices'
+import { addDateDays, isDateOnly, isServiceId } from '../../../src/helpers/adminServices'
 import { ApiError, requireTechnician, type DomainProfile, type Identity } from '../auth'
 import { transaction } from '../db'
 import { findSiteEvidence } from '../site-insights/queries'
@@ -10,7 +10,7 @@ import type { EvidenceAccess, EvidenceKind } from '../../../src/types/siteInsigh
 import { kickServiceJobs } from '../services/jobs'
 import { assertAreaNoAccessStoragePath, assertCriterionEvidenceStoragePath, assertDeviceReviewStoragePath, assertFindingEvidenceStoragePath, assertServiceSignatureStoragePath, createAreaNoAccessUploadUrl, createCriterionEvidenceUploadUrl, createDeviceReviewUploadUrl, createFindingEvidenceUploadUrl, createServiceMediaReadUrl, createServiceSignatureUploadUrl, criterionEvidenceObjectExists, deleteAreaNoAccessObject, deleteCriterionEvidenceObject, deleteDeviceReviewObject, deleteFindingEvidenceObject, deviceReviewMediaObjectExists, findingEvidenceObjectExists, serviceMediaObjectExists, serviceSignatureObjectExists, type FindingEvidencePhase, type ServiceSignatureRole } from '../r2'
 import { authorizeTechnicianAreaChange, authorizeTechnicianDeviceChange, authorizeTechnicianFindingChange, authorizeTechnicianServiceChange, claimTechnicianService, createTechnicianDevice, createTechnicianFinding, finalizeTechnicianService, saveTechnicianAreaAccess, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, saveTechnicianFindingStatus, startTechnicianService, technicianCommand } from './commands'
-import { getTechnicianPackage, listTechnicianServices, assignedServiceState } from './queries'
+import { getTechnicianPackage, listTechnicianServices, assignedServiceState, listTechnicianHistory, listTechnicianAgenda } from './queries'
 import { technicianProductSheetUrl } from '../service-results/productSheets'
 
 type Environment = { Variables: { identity: Identity } }
@@ -69,6 +69,30 @@ async function body(request: Request): Promise<Record<string, unknown>> {
 async function read<T>(context: Context<Environment>, work: (client: PoolClient, technician: DomainProfile) => Promise<T>): Promise<T> {
   return transaction(async client => work(client, await requireTechnician(client, context.get('identity'))))
 }
+
+
+technicianServiceRoutes.get('/history', async context => {
+  const pageText=context.req.query('page')??'1'
+  if(!/^[1-9]\d{0,3}$/.test(pageText))throw new ApiError(422,'Página no válida.','VALIDATION')
+  const q=(context.req.query('q')??'').trim()
+  if(q.length>100)throw new ApiError(422,'Búsqueda demasiado larga.','VALIDATION')
+  const from=context.req.query('from')??'',to=context.req.query('to')??''
+  if(Boolean(from)!==Boolean(to) || (from && (!isDateOnly(from)||!isDateOnly(to)||from>to
+    || (Date.parse(to)-Date.parse(from))/86_400_000>=3660)))
+    throw new ApiError(422,'Rango de fechas inválido (máximo diez años).','VALIDATION')
+  context.header('Cache-Control','private, no-store')
+  return context.json(await read(context,(client,technician)=>
+    listTechnicianHistory(client,technician.id,Number(pageText),q,from||null,to?addDateDays(to,1):null)))
+})
+
+technicianServiceRoutes.get('/agenda', async context => {
+  const from=context.req.query('from')??'',to=context.req.query('to')??''
+  if(!isDateOnly(from)||!isDateOnly(to)||(Date.parse(to)-Date.parse(from))/86_400_000!==6)
+    throw new ApiError(422,'Selecciona una semana de siete días.','VALIDATION')
+  context.header('Cache-Control','private, no-store')
+  return context.json(await read(context,(client,technician)=>
+    listTechnicianAgenda(client,technician.id,from,addDateDays(to,1))))
+})
 
 technicianServiceRoutes.get('/', async context => context.json(await read(context, (client, technician) => listTechnicianServices(client, technician.id))))
 technicianServiceRoutes.get('/:id/package', async context => context.json(await read(context, (client, technician) => getTechnicianPackage(client, technician.id, id(context.req.param('id'))))))
