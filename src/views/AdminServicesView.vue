@@ -80,6 +80,7 @@ const mobileWeekTitle=computed(()=>{
     .format(new Date(selectedWeekDay.value+'T12:00:00Z'))
   return label.charAt(0).toUpperCase()+label.slice(1)
 })
+const visibleServiceStateLabels=computed(()=>tab.value==='history' ? SERVICE_STATE_LABELS : Object.fromEntries(Object.entries(SERVICE_STATE_LABELS).filter(([state])=>state!=='CANCELADO')))
 const activeFilterCount=computed(()=>tab.value==='upcoming'
   ? Number(Boolean(upcomingFilter.value.estado))
   : [serviceFilter.value.estado,serviceFilter.value.tipo,serviceFilter.value.tecnicoId].filter(Boolean).length)
@@ -319,7 +320,7 @@ async function retryCalendar(record: AdminService): Promise<void> {
         <SlidersHorizontal :size="17" aria-hidden="true" /> Filtros{{ activeFilterCount ? ' ('+activeFilterCount+')' : '' }}
       </BaseButton>
       <BaseSelect v-if="(!compact || mobileFiltersOpen) && tab==='upcoming'" class="svc-filter-extra" :model-value="upcomingFilter.estado" name="upcoming-status-filter" label="Seguimiento" @update:model-value="setQuery({ estado:$event || undefined,page:'1' })"><option value="">Todos los pendientes</option><option v-for="(label,value) in FOLLOW_UP_LABELS" :key="value" :value="value">{{ label }}</option></BaseSelect>
-      <BaseSelect v-else-if="!compact || mobileFiltersOpen" class="svc-filter-extra" :model-value="serviceFilter.estado" name="service-status-filter" label="Estado" @update:model-value="setQuery({ estado:$event || undefined,page:'1' })"><option value="">Todos</option><option v-for="(label,value) in SERVICE_STATE_LABELS" v-if="tab==='history' || value!=='CANCELADO'" :key="value" :value="value">{{ label }}</option></BaseSelect>
+      <BaseSelect v-else-if="!compact || mobileFiltersOpen" class="svc-filter-extra" :model-value="serviceFilter.estado" name="service-status-filter" label="Estado" @update:model-value="setQuery({ estado:$event || undefined,page:'1' })"><option value="">Todos</option><option v-for="(label,value) in visibleServiceStateLabels" :key="value" :value="value">{{ label }}</option></BaseSelect>
       <BaseSelect v-if="tab!=='upcoming' && (!compact || mobileFiltersOpen)" class="svc-filter-extra" :model-value="serviceFilter.tipo" name="service-type-filter" label="Tipo" @update:model-value="setQuery({ tipo:$event || undefined,page:'1' })"><option value="">Todos</option><option value="PRINCIPAL">Principal</option><option value="REFUERZO">Refuerzo</option></BaseSelect>
       <BaseSelect v-if="tab!=='upcoming' && (!compact || mobileFiltersOpen)" class="svc-filter-extra svc-filter-extra--team" :model-value="serviceFilter.tecnicoId" name="service-team-filter" label="Técnico" @update:model-value="setQuery({ tecnicoId:$event || undefined,page:'1' })"><option value="">Todo el equipo</option><option v-for="person in store.options?.tecnicos ?? []" :key="person.id" :value="person.id">{{ person.nombreCompleto }}</option></BaseSelect>
       <BaseButton v-if="compact && mobileFiltersOpen" size="compact" variant="ghost" class="svc-filter-clear" @click="clearAdvancedFilters">Limpiar filtros</BaseButton>
