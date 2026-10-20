@@ -16,6 +16,7 @@ const summary = (state: TechnicianServiceSummary['estado'] = 'PROGRAMADO'): Tech
   sedeNombre: 'Laureles',
   contactoPrincipalNombre: 'Contacto Laureles',
   contactoPrincipalCorreo: 'contacto@example.invalid',
+  contactoPrincipalCelular: '+573001112233',
   contactEmails: ['contacto@example.invalid','gerencia@example.invalid'],
   direccion: 'Calle 10 # 20-30, Medellín',
   autoPrepareEligible: true,
@@ -198,6 +199,10 @@ test('technician prepares and starts the service from a mobile-first read-only s
   await expect(page.getByRole('heading', { name: 'Casa Verde' })).toBeVisible()
   await expect(page.locator('[aria-label="Preparado en este celular"]')).toBeVisible()
   await page.getByRole('button', { name: 'Ver servicio' }).click()
+  await expect(page.getByText('Contacto Laureles')).toBeVisible()
+  await expect(page.getByRole('link',{name:/Hablar por WhatsApp con/})).toHaveAttribute('href','https://wa.me/573001112233')
+  await expect(page.getByRole('link',{name:'Llamar'})).toHaveAttribute('href','tel:+573001112233')
+  await expect(page.getByRole('link',{name:'contacto@example.invalid'})).toHaveAttribute('href','mailto:contacto%40example.invalid')
   await expect(page.getByRole('button', { name: 'Abrir Área Cocina' })).toHaveCount(0)
   await page.getByText('Productos previstos (1)').click()
   await expect(page.getByRole('heading', { name: 'Productos a aplicar' })).toBeVisible()
@@ -484,6 +489,19 @@ test('prepared package survives reload and remains available without connection'
   await expect(page.getByRole('button', { name: 'Iniciar servicio' })).toBeDisabled()
   expect(api.packageReads).toBe(readsBeforeReload)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})
+
+test('assigned service contact remains available from its offline prepared package', async ({page}) => {
+  await page.setViewportSize({width:390,height:844})
+  await setup(page)
+  await page.goto('/servicios')
+  await expect(page.locator('[aria-label="Preparado en este celular"]')).toBeVisible()
+  await page.getByRole('button',{name:'Ver servicio'}).click()
+  await expect(page.getByRole('link',{name:'Llamar'})).toHaveAttribute('href','tel:+573001112233')
+  await page.addInitScript(() => Object.defineProperty(navigator,'onLine',{configurable:true,get:()=>false}))
+  await page.reload()
+  await expect(page.getByRole('link',{name:'Llamar'})).toHaveAttribute('href','tel:+573001112233')
+  await expect(page.getByRole('link',{name:/Hablar por WhatsApp con/})).toHaveAttribute('href','https://wa.me/573001112233')
 })
 
 test('both full-screen signatures and the closure intention survive offline reload', async ({ page }) => {

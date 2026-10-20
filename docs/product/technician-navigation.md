@@ -19,3 +19,12 @@ La sección del técnico mantiene Resumen, **Mis servicios** y **Agenda**. La ru
 
 ## Implementación y validación
 Se reutilizan ServicePage, TechnicianServiceCard, BaseDateRangePicker, BaseInput, ServiceDayStrip, BaseIconButton, StatusBadge, el store técnico y el guard actual. Sin nuevas tablas ni migraciones. Las consultas están parametrizadas y su alcance es la asignación del técnico. Pruebas de consultas, integración y E2E verifican aislamiento, filtros, navegación por fecha, responsividad y la exclusión de históricos en Pendientes.
+
+## Contactos visibles en campo (principal y refuerzo)
+
+- Los técnicos ven **nombre del contacto principal, celular, enlace de WhatsApp junto al número, acción de llamada y correos electrónicos registrados** directamente en el detalle de ejecución de un Servicio Principal.
+- La Agenda permite abrir un Refuerzo mediante «Ver cliente». Este abre /servicios/:id/cliente, pantalla **de solo consulta** con cliente, sede, dirección, programación, nombre de contacto, teléfono y correos, sin controles de inicio, edición o reprogramación.
+- GET /api/technician/services/:id/contact restringe el detalle al usuario autenticado como Técnico y a las asignaciones de responsable o colaborador. No se reutiliza el endpoint de ejecución para un refuerzo.
+- La resolución de correo es consistente con el administrador: usa correos de negocio **únicamente cuando hereda_correos_negocio=true**, o correos de la sede en caso contrario; siempre suma el correo principal y elimina duplicados.
+- La información se integra al paquete de servicio que ya guarda el Técnico para trabajo offline. Los paquetes antiguos pueden carecer del celular hasta la siguiente actualización; en tal caso se muestra «No disponible» y nunca se inventa un teléfono.
+- No se agregan tablas ni migraciones. Se reutiliza WhatsAppPhoneLink y las validaciones de asignación existentes. Las pruebas E2E cubren contacto principal, refuerzos de solo consulta y servicio preparado sin conexión.

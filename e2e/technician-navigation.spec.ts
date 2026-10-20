@@ -16,6 +16,9 @@ function service(n:number,estado:TechnicianServiceSummary['estado'],day=today,
     inicioReal:estado==='PROGRAMADO'?null:day+'T14:00:00.000Z',
     finReal:estado==='FINALIZADO'?day+'T15:00:00.000Z':null,
     clienteNombre:'Cliente '+n,sedeNombre:'Sede '+n,direccion:'Dirección de prueba',
+    contactoPrincipalNombre:'Contacto '+n,contactoPrincipalCelular:'+573001112233',
+    contactoPrincipalCorreo:'contacto@example.test',
+    contactEmails:['contacto@example.test','gerencia@example.test'],
     autoPrepareEligible:false,
   }
 }
@@ -58,6 +61,9 @@ async function setup(page:Page){
           [x.solicitud,x.clienteNombre,x.sedeNombre].join(' ').toLowerCase().includes(q))
         await route.fulfill({json:{items:matches.slice((pg-1)*20,pg*20),total:matches.length,page:pg,pageSize:20}});return
       }
+      if(path==='/api/technician/services/'+uid(11)+'/contact'){
+        await route.fulfill({json:agenda[1]});return
+      }
       if(path==='/api/technician/services/agenda'){
         const start=url.searchParams.get('from')||'',end=url.searchParams.get('to')||''
         await route.fulfill({json:agenda.filter(x=>x.inicioProgramado.slice(0,10)>=start&&x.inicioProgramado.slice(0,10)<=end)});return
@@ -97,7 +103,17 @@ test('technician agenda shows weekly assignments including read-only reinforceme
   await expect(page.getByRole('navigation',{name:'Días de la semana'})).toBeVisible()
   await expect(page.getByRole('heading',{name:'Cliente 1',exact:true}).first()).toBeVisible()
   await expect(page.getByText('Refuerzo (solo consulta)').first()).toBeVisible()
-  await expect(page.getByRole('button',{name:'Solo consulta'}).first()).toBeDisabled()
+  await expect(page.getByRole('button',{name:'Ver cliente'}).first()).toBeVisible()
+  await page.getByRole('button',{name:'Ver cliente'}).first().click()
+  await expect(page).toHaveURL(new RegExp('/servicios/'+uid(11)+'/cliente'))
+  await expect(page.getByRole('heading',{name:'Datos del cliente'})).toBeVisible()
+  await expect(page.getByText('Refuerzo · información de solo consulta.',{exact:false})).toBeVisible()
+  await expect(page.getByText('Contacto 11')).toBeVisible()
+  await expect(page.getByRole('link',{name:/Hablar por WhatsApp con/})).toHaveAttribute('href','https://wa.me/573001112233')
+  await expect(page.getByRole('link',{name:'Llamar'})).toHaveAttribute('href','tel:+573001112233')
+  await expect(page.getByRole('link',{name:'contacto@example.test'})).toHaveAttribute('href','mailto:contacto%40example.test')
+  await expect(page.getByRole('button',{name:'Iniciar servicio'})).toHaveCount(0)
+  await page.goto('/agenda')
   await expect(page.getByRole('button',{name:'Continuar'}).first()).toBeVisible()
   const week=monday(today)
   expect(requests.some(x=>x.includes('/agenda?from='+week))).toBe(true)
