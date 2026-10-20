@@ -84,7 +84,12 @@ const discardMessage = computed(() => formMode.value === 'create'
   ? 'Los datos ingresados todavía no se han guardado.'
   : 'Los cambios realizados todavía no se han guardado.')
 
-onMounted(loadUsers)
+onMounted(async () => {
+  await loadUsers()
+  const userId = new URLSearchParams(window.location.search).get('userId') ?? ''
+  const selected = users.value.find(user => user.id === userId)
+  if (selected) openEdit(selected)
+})
 
 watch(() => userForm.esTecnico, (isTechnician) => {
   if (!isTechnician && !formFile.value && !userForm.certificadoStoragePath) {

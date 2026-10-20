@@ -22,6 +22,7 @@ const router = createRouter({
       children: [
         { path: 'prohibido', name: 'forbidden', component: () => import('@/views/ForbiddenView.vue') },
         { path: '', name: 'dashboard', component: () => import('@/views/DashboardView.vue'), meta: { breadcrumb: 'Resumen' } },
+        { path: 'resumen/detalles', name:'dashboard-details', component:()=>import('@/views/DashboardDetailView.vue'), meta:{roles:adminOnly,breadcrumb:[{label:'Resumen',to:'/'},{label:'Detalles'}]} },
         { path: 'agenda', name: 'agenda', component: () => import('@/views/AdminServicesView.vue'), meta: { roles: adminOnly, breadcrumb: 'Agenda' } },
         { path: 'servicios', name: 'services', component: () => import('@/views/ServicesView.vue'), meta: { breadcrumb: 'Servicios' } },
         { path: 'servicios/nuevo', name: 'admin-service-new', component: () => import('@/views/ServiceEditorView.vue'), meta: { roles: adminOnly, breadcrumb: [{ label: 'Servicios', to: '/servicios' }, { label: 'Programar' }] } },

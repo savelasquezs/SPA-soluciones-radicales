@@ -137,3 +137,9 @@
   .dashboard-attention__action{grid-column:2/4;grid-row:auto;width:fit-content;margin-top:.15rem}
 }
 @media(prefers-reduced-motion:reduce){.dashboard-kpi{transition:none}.dashboard-refreshing{animation:none}}
+
+.dashboard-filters .dashboard-custom-picker{flex:0 1 250px;min-width:210px}
+.dashboard-filters .dashboard-custom-picker .base-field{margin:0}
+@media(max-width:680px){
+  .dashboard-filters .dashboard-custom-picker{grid-column:1/4;min-width:0;width:100%}
+}

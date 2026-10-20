@@ -1,17 +1,17 @@
 import type { PoolClient } from 'pg'
 import type { DashboardSnapshot, DashboardPeriod, DashboardServiceRow, DashboardFindingRow } from '../../../src/types/dashboard'
 import { addDateDays, todayBogota } from '../../../src/helpers/adminServices'
+import { DASHBOARD_DAYS, resolveDashboardRange, type DashboardBucket } from '../../../src/helpers/dashboardRanges'
+import { actionableUpcomingSql, serviceMetricSql, unresolvedFindingsSql } from './metricSql'
+export { DASHBOARD_DAYS }
 
-export const DASHBOARD_DAYS: Record<DashboardPeriod, number> = { '7d': 7, '30d': 30, '90d': 90, '12m': 365 }
-type Bucket = 'day' | 'week' | 'month'
+type Bucket = DashboardBucket
 type Params = [string | null, string | null, string, string, Bucket, string]
 
 const scope = '($1::uuid is null or se.negocio_id=$1::uuid) and ($2::uuid is null or se.id=$2::uuid)'
 const serviceFrom = 'from public.servicios s join public.sedes se on se.id=s.sede_id join public.negocios n on n.id=se.negocio_id'
 const bogotaStart = "(($3::date)::timestamp at time zone 'America/Bogota')"
 const bogotaEnd = "(($4::date)::timestamp at time zone 'America/Bogota')"
-const todayStart = "(($5::date)::timestamp at time zone 'America/Bogota')"
-const tomorrowStart = "((($5::date+1)::timestamp) at time zone 'America/Bogota')"
 
 async function rows<T>(client: PoolClient, sql: string, params: unknown[]): Promise<T[]> {
   return (await client.query(sql,params)).rows as T[]
@@ -20,16 +20,16 @@ function number(value: unknown): number { return Number(value ?? 0) }
 function bucketFor(date: string, kind: Bucket): string {
   const instant = new Date(date+'T00:00:00Z')
   if (kind==='week') instant.setUTCDate(instant.getUTCDate()-((instant.getUTCDay()+6)%7))
-  if (kind==='month') instant.setUTCDate(1)
+  if (kind==='month' || kind==='quarter') { instant.setUTCDate(1); if(kind==='quarter')instant.setUTCMonth(Math.floor(instant.getUTCMonth()/3)*3) }
   return instant.toISOString().slice(0,10)
 }
 export function dashboardKeys(from: string, toExclusive: string, kind: Bucket): string[] {
   const dates: string[]=[]
   let current=bucketFor(from,kind)
-  while (current<toExclusive && dates.length<54) {
+  while (current<toExclusive && dates.length<60) {
     dates.push(current)
     const next=new Date(current+'T00:00:00Z')
-    if(kind==='month')next.setUTCMonth(next.getUTCMonth()+1)
+    if(kind==='month'||kind==='quarter')next.setUTCMonth(next.getUTCMonth()+(kind==='quarter'?3:1))
     else next.setUTCDate(next.getUTCDate()+(kind==='week'?7:1))
     current=next.toISOString().slice(0,10)
   }
@@ -46,55 +46,51 @@ interface ServicesChart { date: string; scheduled: number; ongoing: number; comp
 interface ValueChart { date: string; value: string }
 interface ComplianceChart { date: string; percentage: number; visits: number }
 
-export async function dashboardSnapshot(client: PoolClient, period: DashboardPeriod, clientId: string | null, siteId: string | null): Promise<DashboardSnapshot> {
-  const days=DASHBOARD_DAYS[period],today=todayBogota(),from=addDateDays(today,1-days),to=addDateDays(today,1)
+export async function dashboardSnapshot(client: PoolClient, period: DashboardPeriod, clientId: string | null, siteId: string | null, custom: {from:string;to:string}|null = null): Promise<DashboardSnapshot> {
+  const range=resolveDashboardRange(period,custom)
+  const {from,bucket,days}=range, to=addDateDays(range.to,1),today=todayBogota()
   const previousFrom=addDateDays(from,-days)
-  const bucket: Bucket=days<=7?'day':days<=90?'week':'month'
   const params: Params=[clientId,siteId,from,to,bucket,today]
 
-  const [{ clients, sites }, summary] = await Promise.all([
-    (async () => {
-      const clients=await rows<{id:string;name:string}>(client,
-        "select id,nombre as name from public.negocios where activo order by nombre,id",[])
-      const sites=await rows<{id:string;clientId:string;name:string}>(client,
-        'select id,negocio_id as "clientId",nombre as name from public.sedes where activo order by nombre,id',[])
-      return {clients,sites}
-    })(),
-    // This SELECT intentionally uses period boundaries only for the realized value. Today,
-    // overdue work and receivables are live operating snapshots regardless of period.
-    rows<Summary>(client,
-      'select '+
-      'count(*) filter (where s.estado=\'PROGRAMADO\' and s.inicio_programado>='+todayStart+' and s.inicio_programado<'+tomorrowStart+')::int as "todayScheduled",'+
-      'count(*) filter (where s.estado=\'EN_PROCESO\' and s.inicio_programado>='+todayStart+' and s.inicio_programado<'+tomorrowStart+')::int as "todayOngoing",'+
-      'count(*) filter (where s.estado=\'FINALIZADO\' and s.inicio_programado>='+todayStart+' and s.inicio_programado<'+tomorrowStart+')::int as "todayCompleted",'+
-      'count(*) filter (where s.estado=\'PROGRAMADO\' and s.inicio_programado<now()-interval \'15 minutes\')::int as delayed,'+
-      'coalesce(sum(s.valor_servicio) filter (where s.estado=\'FINALIZADO\' and s.fin_real>='+bogotaStart+' and s.fin_real<'+bogotaEnd+'),0)::text as "performedValue",'+
-      "coalesce(sum(s.valor_servicio) filter (where s.estado='FINALIZADO' and s.fin_real >= ($6::date::timestamp at time zone 'America/Bogota') and s.fin_real <"+bogotaStart+'),0)::text as "previousValue",'+
-      "coalesce(sum(s.valor_servicio) filter (where s.estado='FINALIZADO' and s.valor_servicio>0 and s.estado_pago<>'CONFIRMADO'),0)::text as \"outstandingValue\","+
-      "count(*) filter (where s.estado='FINALIZADO' and s.valor_servicio>0 and s.estado_pago<>'CONFIRMADO')::int as \"outstandingPayments\","+
-      "count(*) filter (where s.calendar_sync_estado='ERROR')::int as \"calendarErrors\" "+
-      serviceFrom+' where '+scope,[clientId,siteId,from,to,today,previousFrom]).then(result=>result[0]!)
-  ])
+  // Separate scalar subqueries let PostgreSQL use the state/start and completion
+  // indexes. The original multi-FILTER aggregate scanned every historical service.
+  const base = serviceFrom+' where '+scope+' and '
+  const sub = (expression:string, condition:string) => '(select '+expression+' '+base+condition+')'
+  const count = (condition:string) => sub('count(*)::integer',condition)
+  const money = (condition:string) => sub('coalesce(sum(s.valor_servicio),0)::text',condition)
+  const summaryRows=await rows<Summary>(client, 'select '+
+    count(serviceMetricSql.today+" and s.estado='PROGRAMADO'")+' as "todayScheduled",'+
+    count(serviceMetricSql.today+" and s.estado='EN_PROCESO'")+' as "todayOngoing",'+
+    count(serviceMetricSql.today+" and s.estado='FINALIZADO'")+' as "todayCompleted",'+
+    count(serviceMetricSql.delayed)+' as delayed,'+
+    money(serviceMetricSql.performed+' and s.fin_real>='+bogotaStart+' and s.fin_real<'+bogotaEnd)+' as "performedValue",'+
+    money(serviceMetricSql.performed+" and s.fin_real>=($5::date::timestamp at time zone 'America/Bogota') and s.fin_real<"+bogotaStart)+' as "previousValue",'+
+    money(serviceMetricSql.unpaid)+' as "outstandingValue",'+
+    count(serviceMetricSql.unpaid)+' as "outstandingPayments",'+
+    count(serviceMetricSql.calendarError)+' as "calendarErrors"'
+    ,[clientId,siteId,from,to,previousFrom])
+  const summary=summaryRows[0]!
+  const clients=await rows<{id:string;name:string}>(client,
+    "select id,nombre as name from public.negocios where activo order by nombre,id",[])
+  const sites=await rows<{id:string;clientId:string;name:string}>(client,
+    'select id,negocio_id as "clientId",nombre as name from public.sedes where activo order by nombre,id',[])
 
   const contacts=await rows<UpcomingCounts>(client,
     "select count(*)::int as total,"+
-    "count(*) filter (where p.fecha_sugerida<(($3::date)::timestamp at time zone 'America/Bogota'))::int as overdue "+
-    'from public.proximos_servicios p join public.sedes se on se.id=p.sede_id '+
-    "where "+scope+
-    " and p.servicio_agendado_id is null and p.estado in ('PENDIENTE','CONTACTADO','CONFIRMADO','POSPUESTO')"+
-    " and p.fecha_sugerida < (($3::date+7)::timestamp at time zone 'America/Bogota')"+
-    " and (p.fecha_recontacto is null or p.fecha_recontacto<=$3::date)",[clientId,siteId,today])
+    "count(*) filter (where p.fecha_sugerida<((now() at time zone 'America/Bogota')::date::timestamp at time zone 'America/Bogota'))::int as overdue "+
+    'from public.proximos_servicios p join public.sedes se on se.id=p.sede_id join public.negocios n on n.id=se.negocio_id '+
+    'where '+scope+' and '+actionableUpcomingSql,[clientId,siteId])
 
   const findings=await rows<FindingCounts>(client,
-    "select count(*) filter (where h.estado='ABIERTO')::int as open,"+
+    "select count(*) filter (where h.estado=\'ABIERTO\')::int as open,"+
     "count(*) filter (where h.estado='EN_PROCESO')::int as ongoing "+
-    'from public.hallazgos h join public.sedes se on se.id=h.sede_id where '+scope,params.slice(0,2))
+    'from public.hallazgos h join public.sedes se on se.id=h.sede_id where '+scope+' and '+unresolvedFindingsSql,params.slice(0,2))
   
+  // Both issued documents and employee credentials are global administrative alerts.
   const certificates=await rows<{total:number}>(client,
     "select ("+
-    "select count(*) from public.usuarios u where u.activo and u.es_tecnico and u.certificado_fecha_vencimiento between $3::date and ($3::date+30)"+
-    ") + (select count(*) from public.certificados c join public.servicios s on s.id=c.servicio_id "+
-    "join public.sedes se on se.id=s.sede_id where "+scope+" and c.fecha_vencimiento between $3::date and ($3::date+30)) as total",[clientId,siteId,today])
+    "select count(*) from public.usuarios u where u.activo and u.es_tecnico and u.certificado_storage_path is not null and u.certificado_fecha_vencimiento between $1::date and ($1::date+30)"+
+    ") + (select count(*) from public.certificados c where c.fecha_vencimiento between $1::date and ($1::date+30)) as total",[today])
 
   const serviceSeries=await rows<ServicesChart>(client,
     "select date_trunc($5::text,s.inicio_programado at time zone 'America/Bogota')::date::text as date,"+
@@ -130,12 +126,11 @@ export async function dashboardSnapshot(client: PoolClient, period: DashboardPer
     "u.nombre_completo as technician,s.estado as status,s.valor_servicio::bigint::text as value,s.estado_pago as payment "
   const upcoming=await rows<DashboardServiceRow & {value:string}>(client,
     'select '+serviceColumns+serviceFrom+' join public.usuarios u on u.id=s.tecnico_responsable_id '+
-    'where '+scope+" and s.estado in ('EN_PROCESO','PROGRAMADO')"+
-    " and (s.estado='EN_PROCESO' or s.inicio_programado>=now()-interval '12 hours') "+
+    'where '+scope+' and '+serviceMetricSql.next+' '+
     "order by case when s.estado='EN_PROCESO' then 0 else 1 end,s.inicio_programado,s.id limit 5",params.slice(0,2))
   const latest=await rows<DashboardServiceRow & {value:string}>(client,
     'select '+serviceColumns.replace('s.inicio_programado as date,','s.fin_real as date,')+serviceFrom+' join public.usuarios u on u.id=s.tecnico_responsable_id '+
-    'where '+scope+" and s.estado='FINALIZADO' "+
+    'where '+scope+' and '+serviceMetricSql.recent+' '+
     'order by s.fin_real desc nulls last,s.id desc limit 5',params.slice(0,2))
 
   const recentFindings=await rows<DashboardFindingRow>(client,
@@ -154,7 +149,7 @@ export async function dashboardSnapshot(client: PoolClient, period: DashboardPer
   const complianceByDate=new Map(complianceSeries.map(x=>[x.date,x]))
   return {
     generatedAt:new Date().toISOString(),
-    period:{id:period,from,to:addDateDays(to,-1)},
+    period:{id:period,from,to:range.to},
     filters:{clients,sites},
     kpis:{
       today:{scheduled:number(summary.todayScheduled),ongoing:number(summary.todayOngoing),completed:number(summary.todayCompleted)},

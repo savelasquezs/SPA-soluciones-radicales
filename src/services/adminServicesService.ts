@@ -4,7 +4,7 @@ import type { AdminService, ConfirmationEmail, PagedResult, ServiceFilter, Servi
 const base = 'api/admin/services'
 function query(value: ServiceFilter | UpcomingFilter): string {
   const params = new URLSearchParams()
-  for (const [key,item] of Object.entries(value)) if (item !== '') params.set(key,String(item))
+  for (const [key,item] of Object.entries(value)) if (item != null && item !== '') params.set(key,String(item))
   return params.toString()
 }
 function json(method: string, value: unknown): RequestInit { return { method,body:JSON.stringify(value) } }

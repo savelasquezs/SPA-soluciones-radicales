@@ -19,8 +19,10 @@ const short=(amount:number)=>Math.abs(amount)>=1_000_000?'$'+(amount/1_000_000).
 
 function dateLabel(value:string):string {
   const date=new Date(value+'T12:00:00Z')
-  return new Intl.DateTimeFormat('es-CO',{month:'short',day:props.period.id==='12m'?undefined:'numeric',
-    timeZone:'UTC'}).format(date)
+  const days=Math.round((Date.parse(props.period.to+'T00:00:00Z')-Date.parse(props.period.from+'T00:00:00Z'))/86_400_000)+1
+  return new Intl.DateTimeFormat('es-CO',{
+    month:'short',day:days<=120?'numeric':undefined,year:days>365?'2-digit':undefined,timeZone:'UTC'
+  }).format(date)
 }
 const palette=computed(()=>{
   // resolvedTheme changes when Windows / Android changes appearance in System mode.

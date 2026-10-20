@@ -1,4 +1,4 @@
-export type DashboardPeriod = '7d' | '30d' | '90d' | '12m'
+export type DashboardPeriod = '7d' | '30d' | '90d' | '12m' | '24m' | '5y' | 'custom'
 
 export interface DashboardSiteOption { id: string; clientId: string; name: string }
 export interface DashboardClientOption { id: string; name: string }
@@ -52,4 +52,25 @@ export interface DashboardSnapshot {
     latest: DashboardServiceRow[]
     findings: DashboardFindingRow[]
   }
+}
+
+export type DashboardDetailKind = 'findings' | 'recentFindings' | 'certificates'
+export interface DashboardDetailRecord {
+  id: string
+  kind: 'finding' | 'technician' | 'certificate'
+  title: string
+  description: string
+  date: string
+  state: string
+  clientName: string | null
+  siteName: string | null
+  clientId: string | null
+  siteId: string | null
+  serviceId: string | null
+}
+export interface DashboardDetailPage {
+  items: DashboardDetailRecord[]
+  total: number
+  page: number
+  pageSize: number
 }

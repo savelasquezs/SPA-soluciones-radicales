@@ -29,10 +29,17 @@ import { addDateDays, FOLLOW_UP_LABELS, formatServiceDate, isDateOnly, scheduleF
 import { preferredServiceWeekDay, serviceWeekDayCounts, serviceWeekDayRecords, serviceWeekInstantAt } from '@/helpers/serviceWeek'
 import { SERVICE_DATE_SHORTCUTS, serviceDateShortcutRange, type ServiceDateShortcutId } from '@/helpers/serviceDateRanges'
 import { formatDateOnly } from '@/helpers/dateTime'
-import type { AdminService, FollowUpState, ServiceFilter, ServiceKind, ServiceState, UpcomingFilter, UpcomingService } from '@/types/adminServices'
+import type { AdminService, FollowUpState, ServiceFilter, ServiceKind, ServiceState, ServiceMetric, UpcomingFilter, UpcomingService } from '@/types/adminServices'
 
 const route=useRoute(), router=useRouter(), store=useAdminServicesStore(), notifications=useNotificationsStore()
 const q=(key: string)=>typeof route.query[key]==='string' ? route.query[key] as string : ''
+const metricLabels: Record<ServiceMetric|'actionable',string> = {
+  today:'Servicios de hoy',delayed:'Servicios retrasados',performed:'Valor de servicios realizados',
+  unpaid:'Cobros pendientes',calendarError:'Sincronización de Calendar pendiente',
+  next:'Próximos servicios',recent:'Últimos servicios realizados',actionable:'Próximos por confirmar',
+}
+const metric=computed<ServiceMetric|'actionable'|''>(()=>Object.hasOwn(metricLabels,q('metric')) ? q('metric') as ServiceMetric|'actionable' : '')
+const unboundedMetric=computed(()=>['delayed','unpaid','calendarError','next','recent','actionable'].includes(metric.value))
 const tab=computed<'agenda' | 'upcoming' | 'history'>(()=>q('tab')==='upcoming' ? 'upcoming' : q('tab')==='history' ? 'history' : 'agenda')
 const view=computed(()=>tab.value==='agenda' && (q('view')==='week' || (!q('view') && route.name==='agenda')) ? 'week' : 'table')
 function monday(date: string): string { const weekday=new Date(`${date}T00:00:00Z`).getUTCDay(); return addDateDays(date,-((weekday+6)%7)) }
@@ -43,13 +50,16 @@ const activeDateShortcut=computed(()=>SERVICE_DATE_SHORTCUTS.find(shortcut=>{
   const candidate=serviceDateShortcutRange(shortcut.id,todayBogota())
   return candidate.from===from.value && candidate.to===to.value
 })?.id ?? null)
-const rangeError=computed(()=>!isDateOnly(from.value) || !isDateOnly(to.value) || from.value>to.value || (new Date(to.value).getTime()-new Date(from.value).getTime())/86_400_000>366 ? 'Selecciona un rango válido de hasta un año.' : '')
+const rangeError=computed(()=>!isDateOnly(from.value) || !isDateOnly(to.value) || from.value>to.value || (new Date(to.value).getTime()-new Date(from.value).getTime())/86_400_000>3660 ? 'Selecciona un rango válido de hasta diez años.' : '')
 const page=computed(()=>/^\d+$/.test(q('page')) ? Math.max(1,Math.min(100_000,Number(q('page')))) : 1)
 const pageSize=computed(()=>view.value==='week' ? 100 : 25)
 const serviceFilter=computed<ServiceFilter>(()=>({ from:from.value,to:to.value,tab:tab.value==='history' ? 'history' : 'agenda',
   estado:['PROGRAMADO','EN_PROCESO','FINALIZADO','CANCELADO'].includes(q('estado')) ? q('estado') as ServiceState : '',
-  tipo:['PRINCIPAL','REFUERZO'].includes(q('tipo')) ? q('tipo') as ServiceKind : '',tecnicoId:q('tecnicoId'),query:q('query'),page:view.value==='week' ? 1 : page.value,pageSize:pageSize.value }))
-const upcomingFilter=computed<UpcomingFilter>(()=>({ from:from.value,to:to.value,estado:Object.keys(FOLLOW_UP_LABELS).includes(q('estado')) ? q('estado') as FollowUpState : '',query:q('query'),page:page.value,pageSize:25 }))
+  tipo:['PRINCIPAL','REFUERZO'].includes(q('tipo')) ? q('tipo') as ServiceKind : '',tecnicoId:q('tecnicoId'),query:q('query'),page:view.value==='week' ? 1 : page.value,pageSize:pageSize.value,
+  clientId:q('clientId') || undefined,siteId:q('siteId') || undefined,
+  metric:metric.value && metric.value!=='actionable' ? metric.value : undefined }))
+const upcomingFilter=computed<UpcomingFilter>(()=>({ from:from.value,to:to.value,estado:Object.keys(FOLLOW_UP_LABELS).includes(q('estado')) ? q('estado') as FollowUpState : '',query:q('query'),page:page.value,pageSize:25,clientId:q('clientId') || undefined,siteId:q('siteId') || undefined,
+  metric:metric.value==='actionable' ? 'actionable' : undefined }))
 const loading=computed(()=>tab.value==='upcoming' ? store.upcomingLoading : store.loading)
 const loadError=computed(()=>tab.value==='upcoming' ? store.upcomingError : store.error)
 const total=computed(()=>tab.value==='upcoming' ? store.upcomingTotal : store.total)
@@ -87,7 +97,7 @@ function moveRange(days:number):void {
   setQuery({from:addDateDays(from.value,days),to:addDateDays(to.value,days),page:'1'})
 }
 function changeDateRange(next:{from:string;to:string}):void {
-  setQuery({...next,page:'1'})
+  setQuery({...next,metric:undefined,page:'1'})
   if(next.from && next.to) mobileDatesOpen.value=false
 }
 function clearAdvancedFilters():void {
@@ -139,11 +149,11 @@ async function load(force=false): Promise<void> {
 function changeTab(next: 'agenda' | 'upcoming' | 'history'): void {
   mobileDatesOpen.value=false
   mobileFiltersOpen.value=false
-  setQuery({ tab:next,estado:undefined,tipo:undefined,tecnicoId:undefined,from:undefined,to:undefined,day:undefined,mobileView:undefined,page:'1' })
+  setQuery({ tab:next,metric:undefined,estado:undefined,tipo:undefined,tecnicoId:undefined,from:undefined,to:undefined,day:undefined,mobileView:undefined,page:'1' })
 }
 function changeView(next: 'table' | 'week'): void {
   mobileDatesOpen.value=false
-  setQuery({view:next,from:next==='week' ? monday(from.value) : from.value,
+  setQuery({view:next,metric:undefined,from:next==='week' ? monday(from.value) : from.value,
     to:next==='week' ? undefined : addDateDays(from.value,6),day:undefined,page:'1'})
 }
 function selectWeekDay(day:string): void { setQuery({day,page:'1'}) }
@@ -151,7 +161,7 @@ function changeMobileWeekDisplay(next:'list'|'hours'):void { setQuery({mobileVie
 function moveWeek(days: number): void { setQuery({ from:addDateDays(from.value,days),to:undefined,day:undefined,page:'1' }) }
 function applyDateShortcut(id: ServiceDateShortcutId): void {
   const next=serviceDateShortcutRange(id,todayBogota())
-  setQuery({ from:next.from,to:next.to,page:'1' })
+  setQuery({ from:next.from,to:next.to,metric:undefined,page:'1' })
   mobileDatesOpen.value=false
 }
 function create(): void {
@@ -250,6 +260,14 @@ async function retryCalendar(record: AdminService): Promise<void> {
       <button role="tab" class="svc-tab" :aria-selected="tab==='upcoming'" @click="changeTab('upcoming')">Próximos por confirmar <span v-if="store.pendingCount" class="svc-count" :aria-label="`${store.pendingCount} pendientes de confirmación en los próximos siete días`" title="Pendientes de confirmación · próximos 7 días">{{ store.pendingCount }}</span></button>
       <button role="tab" class="svc-tab" :aria-selected="tab==='history'" @click="changeTab('history')">Historial</button>
     </div>
+    <div v-if="metric || q('clientId') || q('siteId')" class="svc-dashboard-link-filter">
+      <span><strong>Filtro activo:</strong> {{ metric ? metricLabels[metric] : 'Cliente / Sede' }}
+        <template v-if="q('clientId')"> · Cliente seleccionado</template>
+        <template v-if="q('siteId')"> · Sede seleccionada</template>
+        <template v-if="unboundedMetric"> · Todos los períodos</template>
+      </span>
+      <BaseButton size="compact" variant="ghost" @click="setQuery({metric:undefined,clientId:undefined,siteId:undefined,estado:undefined,page:'1'})">Quitar filtro</BaseButton>
+    </div>
     <div class="svc-controls" :class="{ 'svc-controls--week': tab==='agenda' && view==='week' }">
       <div v-if="tab==='agenda'" class="svc-agenda-bar">
       <div class="svc-segment" role="group" aria-label="Presentación de agenda">
@@ -274,7 +292,7 @@ async function retryCalendar(record: AdminService): Promise<void> {
         <span v-if="mobileWeekDisplay==='hours'" class="svc-mobile-week__tip">Toca para consultar o programar</span>
       </div>
     </div>
-    <div v-if="compact && view==='table'" class="svc-mobile-datebar" role="group" aria-label="Navegar fechas de servicios">
+    <div v-if="compact && view==='table' && !unboundedMetric" class="svc-mobile-datebar" role="group" aria-label="Navegar fechas de servicios">
       <BaseIconButton label="Fechas anteriores" size="small" @click="moveRange(-1)"><ChevronLeft :size="19" /></BaseIconButton>
       <BaseButton size="compact" class="svc-mobile-datebar__range" variant="secondary" :aria-expanded="mobileDatesOpen" @click="mobileDatesOpen=!mobileDatesOpen">
         <CalendarDays :size="17" aria-hidden="true" />
@@ -283,15 +301,15 @@ async function retryCalendar(record: AdminService): Promise<void> {
       </BaseButton>
       <BaseIconButton label="Fechas siguientes" size="small" @click="moveRange(1)"><ChevronRight :size="19" /></BaseIconButton>
     </div>
-    <div v-if="compact && view==='table' && mobileDatesOpen" class="svc-mobile-date-panel">
+    <div v-if="compact && view==='table' && mobileDatesOpen && !unboundedMetric" class="svc-mobile-date-panel">
       <BaseDateRangePicker name="services-range-mobile" label="Seleccionar fechas" :model-value="range" :error="rangeError || undefined" @update:model-value="changeDateRange" />
       <div class="svc-date-shortcuts" role="group" aria-label="Rangos rápidos de fecha">
         <button v-for="shortcut in SERVICE_DATE_SHORTCUTS" :key="shortcut.id" type="button" class="svc-date-shortcut" :aria-pressed="activeDateShortcut===shortcut.id" @click="applyDateShortcut(shortcut.id)">{{ shortcut.label }}</button>
       </div>
     </div>
     <div class="svc-filters" :class="{ 'svc-filters--upcoming':tab==='upcoming', 'svc-filters--week':view==='week', 'svc-filters--compact':compact }">
-      <div v-if="view==='table' && !compact" class="svc-date-filter">
-        <BaseDateRangePicker name="services-range" label="Fechas" :model-value="range" :error="rangeError || undefined" @update:model-value="setQuery({ ...$event,page:'1' })" />
+      <div v-if="view==='table' && !compact && !unboundedMetric" class="svc-date-filter">
+        <BaseDateRangePicker name="services-range" label="Fechas" :model-value="range" :error="rangeError || undefined" @update:model-value="setQuery({ ...$event,metric:undefined,page:'1' })" />
         <div class="svc-date-shortcuts" role="group" aria-label="Rangos rápidos de fecha">
           <button v-for="shortcut in SERVICE_DATE_SHORTCUTS" :key="shortcut.id" type="button" class="svc-date-shortcut" :aria-pressed="activeDateShortcut===shortcut.id" @click="applyDateShortcut(shortcut.id)">{{ shortcut.label }}</button>
         </div>
@@ -332,3 +350,8 @@ async function retryCalendar(record: AdminService): Promise<void> {
     <UpcomingEditor v-if="upcomingEditor" :key="`${upcomingEditor.record.id}:${upcomingEditor.mode}`" :record="upcomingEditor.record" :mode="upcomingEditor.mode" @close="upcomingEditor=null" />
   </ServicePage>
 </template>
+
+<style scoped>
+.svc-dashboard-link-filter{display:flex;align-items:center;justify-content:space-between;gap:.5rem;flex-wrap:wrap;padding:.25rem .5rem;border:1px solid var(--border);border-radius:var(--radius);font-size:.78rem;color:var(--text-secondary)}
+.svc-dashboard-link-filter strong{color:var(--text);font-weight:600}
+</style>

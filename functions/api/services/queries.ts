@@ -2,6 +2,7 @@ import type { PoolClient } from 'pg'
 import type { AdminService, PagedResult, ServiceFilter, ServiceProductOption, ServiceSite, ServiceTechnician, ServiceWorkspace, UpcomingFilter, UpcomingService } from '../../../src/types/adminServices'
 import { normalizeServiceSearch } from '../../../src/helpers/adminServices'
 import { ApiError } from '../auth'
+import { actionableUpcomingSql, serviceMetricSql, serviceMetricsWithoutDates } from '../dashboard/metricSql'
 
 const technicianJson = (alias: string) => `jsonb_build_object('id',${alias}.id,'nombreCompleto',${alias}.nombre_completo,
   'correoGoogle',${alias}.correo_google,'activo',${alias}.activo,'tieneCertificado',${alias}.certificado_storage_path is not null,
@@ -78,28 +79,40 @@ export async function pendingCount(client: PoolClient): Promise<number> {
   return rows[0]?.count ?? 0
 }
 export async function listServices(client: PoolClient, filter: ServiceFilter): Promise<PagedResult<AdminService>> {
-  const params: unknown[] = []
-  const conditions: string[] = []
-  if (!filter.clientId && !filter.siteId && (!filter.from || !filter.to)) throw new ApiError(422,'Selecciona un rango válido.','VALIDATION')
-  if (filter.from && filter.to) {
+  const params: unknown[]=[]
+  const conditions: string[]=[]
+  const withoutDates=Boolean(filter.metric && serviceMetricsWithoutDates.some(metric=>metric===filter.metric))
+  if(!filter.clientId && !filter.siteId && (!filter.from || !filter.to) && !filter.metric)
+    throw new ApiError(422,'Selecciona un rango válido.','VALIDATION')
+  // Realized revenue is dated by fin_real; live metrics are intentionally unbounded.
+  if(filter.from && filter.to && !withoutDates && filter.metric!=='today'){
     params.push(filter.from,filter.to)
-    conditions.push(`s.inicio_programado >= ($1::date::timestamp at time zone 'America/Bogota')`,
-      `s.inicio_programado < (($2::date+1)::timestamp at time zone 'America/Bogota')`)
+    const column=filter.metric==='performed'?'s.fin_real':'s.inicio_programado'
+    conditions.push(column+" >= ($1::date::timestamp at time zone 'America/Bogota')",
+      column+" < (($2::date+1)::timestamp at time zone 'America/Bogota')")
   }
-  if (filter.clientId) { params.push(filter.clientId); conditions.push(`se.negocio_id=$${params.length}::uuid`) }
-  if (filter.siteId) { params.push(filter.siteId); conditions.push(`s.sede_id=$${params.length}::uuid`) }
-  if (filter.tab === 'history') conditions.push(`s.estado in ('FINALIZADO','CANCELADO')`)
-  if (filter.estado) { params.push(filter.estado); conditions.push(`s.estado=$${params.length}`) }
-  if (filter.tipo) { params.push(filter.tipo); conditions.push(`s.tipo_servicio=$${params.length}`) }
-  if (filter.tecnicoId) { params.push(filter.tecnicoId); conditions.push(`(s.tecnico_responsable_id=$${params.length}::uuid or coalesce(s.tecnicos_colaboradores_ids_json,'[]'::jsonb) ? $${params.length}::text)`) }
-  if (filter.query) { params.push(normalizeServiceSearch(filter.query)); conditions.push(`strpos(translate(lower(concat_ws(' ',n.nombre,se.nombre,s.solicitud,se.direccion)),'áéíóúüñ','aeiouun'),$${params.length}) > 0`) }
-  const where = `where ${conditions.join(' and ')}`
-  const total = (await client.query<{ count: number }>(`select count(*)::integer as count ${SERVICE_FROM} ${where}`, params)).rows[0]?.count ?? 0
-  params.push(filter.pageSize, (filter.page-1)*filter.pageSize)
-  const { rows } = await client.query<{ record: AdminService }>(`${SERVICE_SELECT} ${where}
-    order by s.inicio_programado ${filter.clientId || filter.siteId ? 'desc' : 'asc'},case s.estado when 'EN_PROCESO' then 0 when 'PROGRAMADO' then 1 when 'FINALIZADO' then 2 else 3 end,s.id ${filter.clientId || filter.siteId ? 'desc' : 'asc'}
-    limit $${params.length-1} offset $${params.length}`, params)
-  return { items: rows.map(row => row.record), total, page: filter.page, pageSize: filter.pageSize, pendingCount:filter.clientId || filter.siteId ? 0 : await pendingCount(client) }
+  if(filter.clientId){params.push(filter.clientId);conditions.push('se.negocio_id=$'+params.length+'::uuid')}
+  if(filter.siteId){params.push(filter.siteId);conditions.push('s.sede_id=$'+params.length+'::uuid')}
+  if(filter.metric)conditions.push(serviceMetricSql[filter.metric])
+  if(filter.tab==='history')conditions.push("s.estado in ('FINALIZADO','CANCELADO')")
+  if(filter.estado){params.push(filter.estado);conditions.push('s.estado=$'+params.length)}
+  if(filter.tipo){params.push(filter.tipo);conditions.push('s.tipo_servicio=$'+params.length)}
+  if(filter.tecnicoId){params.push(filter.tecnicoId);conditions.push(
+    "(s.tecnico_responsable_id=$"+params.length+"::uuid or coalesce(s.tecnicos_colaboradores_ids_json,'[]'::jsonb) ? $"+params.length+"::text)")}
+  if(filter.query){params.push(normalizeServiceSearch(filter.query));conditions.push(
+    "strpos(translate(lower(concat_ws(' ',n.nombre,se.nombre,s.solicitud,se.direccion)),'áéíóúüñ','aeiouun'),$"+params.length+") > 0")}
+  const where=conditions.length?'where '+conditions.join(' and '):''
+  const total=(await client.query<{count:number}>('select count(*)::integer as count '+SERVICE_FROM+' '+where,params)).rows[0]?.count ?? 0
+  params.push(filter.pageSize,(filter.page-1)*filter.pageSize)
+  const order=filter.metric==='performed'||filter.metric==='unpaid'||filter.metric==='recent'
+    ? 's.fin_real desc nulls last,s.id desc'
+    : filter.metric==='delayed' ? 's.inicio_programado asc,s.id'
+    : filter.metric==='next' ? "case when s.estado='EN_PROCESO' then 0 else 1 end,s.inicio_programado,s.id"
+    : 's.inicio_programado '+(filter.clientId||filter.siteId||filter.metric==='calendarError'?'desc':'asc')+',s.id'
+  const result=await client.query<{record:AdminService}>(SERVICE_SELECT+' '+where+
+    ' order by '+order+' limit $'+(params.length-1)+' offset $'+params.length,params)
+  return {items:result.rows.map(row=>row.record),total,page:filter.page,pageSize:filter.pageSize,
+    pendingCount:filter.clientId||filter.siteId?0:await pendingCount(client)}
 }
 export async function workspace(client: PoolClient): Promise<ServiceWorkspace> {
   const sedes = (await client.query<{ record: ServiceSite }>(`select jsonb_build_object('id',se.id,'clientId',n.id,'clienteNombre',n.nombre,
@@ -130,14 +143,26 @@ export async function getUpcoming(client: PoolClient, id: string): Promise<Upcom
   return rows[0].record
 }
 export async function listUpcoming(client: PoolClient, filter: UpcomingFilter): Promise<PagedResult<UpcomingService>> {
-  const params: unknown[] = [filter.from, filter.to]
-  const conditions = [`se.activo`, `n.activo`, `p.servicio_agendado_id is null`, `p.fecha_sugerida >= ($1::date::timestamp at time zone 'America/Bogota')`, `p.fecha_sugerida < (($2::date+1)::timestamp at time zone 'America/Bogota')`]
-  if (filter.estado) { params.push(filter.estado); conditions.push(`p.estado=$${params.length}`) }
-  else conditions.push(`p.estado <> 'NO_DESEA'`)
-  if (filter.query) { params.push(normalizeServiceSearch(filter.query)); conditions.push(`strpos(translate(lower(concat_ws(' ',n.nombre,se.nombre,se.direccion)),'áéíóúüñ','aeiouun'),$${params.length})>0`) }
-  const where = `where ${conditions.join(' and ')}`
-  const total = (await client.query<{ count: number }>(`select count(*)::integer as count ${UPCOMING_FROM} ${where}`, params)).rows[0]?.count ?? 0
-  params.push(filter.pageSize, (filter.page-1)*filter.pageSize)
-  const { rows } = await client.query<{ record: UpcomingService }>(`${UPCOMING_SELECT} ${where} order by p.fecha_sugerida,p.id limit $${params.length-1} offset $${params.length}`, params)
-  return { items: rows.map(row => row.record), total, page: filter.page, pageSize: filter.pageSize, pendingCount: await pendingCount(client) }
+  const params: unknown[]=[]
+  const conditions: string[]=[]
+  if(filter.metric==='actionable')conditions.push(actionableUpcomingSql)
+  else{
+    params.push(filter.from,filter.to)
+    conditions.push('se.activo','n.activo','p.servicio_agendado_id is null',
+      "p.fecha_sugerida >= ($1::date::timestamp at time zone 'America/Bogota')",
+      "p.fecha_sugerida < (($2::date+1)::timestamp at time zone 'America/Bogota')")
+  }
+  if(filter.clientId){params.push(filter.clientId);conditions.push('se.negocio_id=$'+params.length+'::uuid')}
+  if(filter.siteId){params.push(filter.siteId);conditions.push('se.id=$'+params.length+'::uuid')}
+  if(filter.estado){params.push(filter.estado);conditions.push('p.estado=$'+params.length)}
+  else if(filter.metric!=='actionable')conditions.push("p.estado <> 'NO_DESEA'")
+  if(filter.query){params.push(normalizeServiceSearch(filter.query));conditions.push(
+    "strpos(translate(lower(concat_ws(' ',n.nombre,se.nombre,se.direccion)),'áéíóúüñ','aeiouun'),$"+params.length+")>0")}
+  const where='where '+conditions.join(' and ')
+  const total=(await client.query<{count:number}>('select count(*)::integer as count '+UPCOMING_FROM+' '+where,params)).rows[0]?.count ?? 0
+  params.push(filter.pageSize,(filter.page-1)*filter.pageSize)
+  const result=await client.query<{record:UpcomingService}>(UPCOMING_SELECT+' '+where+
+    ' order by p.fecha_sugerida,p.id limit $'+(params.length-1)+' offset $'+params.length,params)
+  return {items:result.rows.map(row=>row.record),total,page:filter.page,pageSize:filter.pageSize,
+    pendingCount:filter.clientId||filter.siteId?0:await pendingCount(client)}
 }
