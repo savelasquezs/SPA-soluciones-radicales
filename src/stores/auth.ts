@@ -43,8 +43,10 @@ export const useAuthStore = defineStore('auth', () => {
   async function restore(forceSession = false): Promise<void> {
     status.value = 'loading'
     error.value = null
+    let currentSession: AuthSession = null
     try {
-      session.value = await getAuthSession({ forceRefresh: forceSession })
+      currentSession = await getAuthSession({ forceRefresh: forceSession })
+      session.value = currentSession
       if (!session.value?.user) {
         status.value = 'unauthenticated'
         user.value = null
@@ -55,11 +57,14 @@ export const useAuthStore = defineStore('auth', () => {
       privateAvatarUrl.value = user.value.avatarUrl ?? null
       status.value = 'authenticated'
     } catch (restoreError) {
-      session.value = null
+      const denied = restoreError instanceof ApiClientError && restoreError.status === 403
+      // Conservar solo la identidad Google validada en esta lectura para explicar el 403.
+      // El perfil y los permisos internos nunca permanecen disponibles.
+      session.value = denied ? currentSession : null
       user.value = null
       privateAvatarUrl.value = null
       error.value = restoreError instanceof Error ? restoreError.message : 'No fue posible validar la sesión'
-      status.value = restoreError instanceof ApiClientError && restoreError.status === 403 ? 'denied' : 'error'
+      status.value = denied ? 'denied' : 'error'
     }
   }
 

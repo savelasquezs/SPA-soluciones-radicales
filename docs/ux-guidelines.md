@@ -229,3 +229,10 @@ La configuración de plantillas, la prueba sintética, la generación oficial y 
 - Al confirmar la finalización online, abrir el diálogo opcional de envío sin enviar correo automáticamente.
 - El visor de evidencias nuevas permite dibujo y recorte táctil antes de guardar la fotografía. La edición no reescribe fotografías históricas.
 - El aviso de evidencia opcional del hallazgo usa el tono de warning discreto (`--warning-subtle`), en una línea compacta.
+
+## Acceso sin autorización
+
+- Si Google autentica una cuenta que no posee un usuario activo en la SPA, se muestra **Acceso restringido**: explicación breve, correo autenticado cuando esté disponible y las acciones **Cambiar de cuenta** y **Cerrar sesión**. No se repite el mensaje técnico del `403`.
+- La identidad Google se conserva temporalmente **solo para identificar la cuenta denegada en pantalla**. Un `403` elimina el perfil de aplicación y sus roles; errores de sesión distintos de `403` limpian también la identidad visible.
+- Cambiar de cuenta invalida la sesión anterior antes de abrir el selector de Google. Cerrar sesión regresa a `/acceso`; ambas acciones tienen feedback ante fallo y se bloquean mientras se procesan.
+- El texto y la navegación del frontend no constituyen autorización: Neon Functions y PostgreSQL/RLS deben continuar rechazando cuentas sin permiso. No exponer URL firmadas de R2 a identidades denegadas.
