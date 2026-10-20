@@ -11,6 +11,7 @@ type AuthSession = Awaited<ReturnType<typeof getAuthSession>>
 export const useAuthStore = defineStore('auth', () => {
   const status = ref<AuthStatus>('idle')
   const session = ref<AuthSession>(null)
+  const deniedEmail = ref<string | null>(null)
   const user = ref<SessionProfile | null>(null)
   const privateAvatarUrl = ref<string | null>(null)
   const error = ref<string | null>(null)
@@ -20,7 +21,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   const profile = computed(() => user.value)
   const avatarUrl = computed(() => privateAvatarUrl.value ?? session.value?.user?.image ?? null)
-  const authEmail = computed(() => session.value?.user?.email ?? null)
+  const authEmail = computed(() => session.value?.user?.email ?? deniedEmail.value)
   const isAuthenticated = computed(() => status.value === 'authenticated')
   const activeRole = computed(() => user.value?.rolActivo ?? null)
   const rolesAvailable = computed<ActiveRole[]>(() => [
@@ -43,8 +44,11 @@ export const useAuthStore = defineStore('auth', () => {
   async function restore(forceSession = false): Promise<void> {
     status.value = 'loading'
     error.value = null
+    deniedEmail.value = null
+    let currentSession: AuthSession = null
     try {
-      session.value = await getAuthSession({ forceRefresh: forceSession })
+      currentSession = await getAuthSession({ forceRefresh: forceSession })
+      session.value = currentSession
       if (!session.value?.user) {
         status.value = 'unauthenticated'
         user.value = null
@@ -55,11 +59,14 @@ export const useAuthStore = defineStore('auth', () => {
       privateAvatarUrl.value = user.value.avatarUrl ?? null
       status.value = 'authenticated'
     } catch (restoreError) {
+      const denied = restoreError instanceof ApiClientError && restoreError.status === 403
+      // Conservar únicamente el correo de la identidad Google actual, nunca su token.
+      deniedEmail.value = denied ? currentSession?.user?.email ?? null : null
       session.value = null
       user.value = null
       privateAvatarUrl.value = null
       error.value = restoreError instanceof Error ? restoreError.message : 'No fue posible validar la sesión'
-      status.value = restoreError instanceof ApiClientError && restoreError.status === 403 ? 'denied' : 'error'
+      status.value = denied ? 'denied' : 'error'
     }
   }
 
@@ -106,6 +113,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function logout(): Promise<void> {
     await endAuthSession()
+    deniedEmail.value = null
     session.value = null
     user.value = null
     privateAvatarUrl.value = null

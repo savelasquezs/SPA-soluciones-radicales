@@ -29,6 +29,7 @@ vi.mock('@/services/apiService', () => ({
   apiRequest,
 }))
 
+import { ApiClientError } from '@/services/apiService'
 import { useAuthStore } from '@/stores/auth'
 
 describe('auth store', () => {
@@ -61,6 +62,35 @@ describe('auth store', () => {
     expect(session.status).toBe('authenticated')
     expect(getAuthSession).toHaveBeenCalledOnce()
     expect(apiRequest).toHaveBeenCalledOnce()
+  })
+
+  it('conserva el correo Google tras un 403 sin autenticar al usuario dentro de la SPA', async () => {
+    apiRequest.mockRejectedValueOnce(new ApiClientError('La cuenta no está autorizada', 403))
+    const auth = useAuthStore()
+
+    await auth.initialize()
+
+    expect(auth.status).toBe('denied')
+    expect(auth.authEmail).toBe('solucionesradicales1@gmail.com')
+    expect(auth.profile).toBeNull()
+    expect(auth.isAuthenticated).toBe(false)
+    expect(auth.activeRole).toBeNull()
+    expect(auth.rolesAvailable).toEqual([])
+    expect(auth.avatarUrl).toBeNull()
+
+    await auth.logout()
+    expect(auth.authEmail).toBeNull()
+  })
+
+  it('descarta la identidad cuando la validación falla por un error distinto de 403', async () => {
+    apiRequest.mockRejectedValueOnce(new ApiClientError('No fue posible validar la sesión', 503))
+    const auth = useAuthStore()
+
+    await auth.initialize()
+
+    expect(auth.status).toBe('error')
+    expect(auth.authEmail).toBeNull()
+    expect(auth.profile).toBeNull()
   })
 
   it('cierra la sesión anterior antes del primer OAuth de cambio de cuenta', async () => {

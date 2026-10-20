@@ -250,12 +250,12 @@ test('si Neon devuelve al inicio, la cuenta nueva sin acceso reanuda la transfer
   const state = await setupNewGoogleAccount(page)
   await page.setViewportSize({ width: 360, height: 740 })
   // Regression: the previous OAuth flow returned new Google users to "/",
-  // which triggered /api/session 403 and the "Cuenta sin acceso" page.
+  // which triggered /api/session 403 and the "Acceso restringido" page.
   await page.goto('/')
 
   await expect(page).toHaveURL(/\/perfil\?googleActualizado=1/)
   await expect(page.getByRole('heading', { name: 'Mi perfil' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Cuenta sin acceso' })).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Acceso restringido' })).toHaveCount(0)
   expect(state.deniedBeforeTransfer()).toBeGreaterThanOrEqual(1)
   expect(state.attempts()).toBe(1)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
@@ -263,12 +263,16 @@ test('si Neon devuelve al inicio, la cuenta nueva sin acceso reanuda la transfer
 
 test('una nueva cuenta sin transferencia válida conserva el bloqueo de acceso', async ({ page }) => {
   const state = await setupNewGoogleAccount(page, false)
+  await page.setViewportSize({ width: 360, height: 740 })
   await page.goto('/')
 
   await expect(page).toHaveURL(/\/sin-acceso/)
-  await expect(page.getByRole('heading', { name: 'Cuenta sin acceso' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Acceso restringido' })).toBeVisible()
+  await expect(page.getByText('Cuenta: otra-cuenta@gmail.com')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Cambiar de cuenta' })).toBeVisible()
   expect(state.transferred()).toBe(false)
   expect(state.attempts()).toBe(0)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 })
 
 

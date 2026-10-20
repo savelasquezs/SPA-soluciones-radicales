@@ -337,3 +337,55 @@ describe('technician service authorization', () => {
     expect(transaction).toHaveBeenCalled()
   })
 })
+
+describe('access boundary for accounts without an active application profile', () => {
+  beforeEach(() => {
+    vi.resetAllMocks()
+    verifyAuthorization.mockResolvedValue({ authUserId: 'unknown-google-user', session: { sub: 'unknown-google-user' } })
+    transaction.mockImplementation(async callback => callback({ query: clientQuery }))
+  })
+
+  it('requires valid authentication before touching private data', async () => {
+    const { ApiError } = await import('./auth')
+    verifyAuthorization.mockRejectedValue(new ApiError(401, 'Debes iniciar sesión'))
+
+    const response = await app.request('/api/session')
+
+    expect(response.status).toBe(401)
+    expect(transaction).not.toHaveBeenCalled()
+    expect(clientQuery).not.toHaveBeenCalled()
+  })
+
+  it('denies session bootstrap and catalogs to an unregistered Google identity', async () => {
+    const { ApiError } = await import('./auth')
+    bootstrapProfile.mockRejectedValue(new ApiError(403, 'La cuenta no está autorizada'))
+    const headers = { Authorization: 'Bearer unregistered-google-token' }
+
+    for (const path of ['/api/session', '/api/catalogs/technicians']) {
+      const response = await app.request(path, { headers })
+      expect(response.status).toBe(403)
+    }
+    expect(clientQuery).not.toHaveBeenCalled()
+  })
+
+  it('never signs private R2 master URLs for a denied account', async () => {
+    const { ApiError } = await import('./auth')
+    requireAdmin.mockRejectedValue(new ApiError(403, 'La cuenta no está autorizada'))
+    const headers = { Authorization: 'Bearer unregistered-google-token', 'Content-Type': 'application/json' }
+
+    const upload = await app.request('/api/files/master/upload-url', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ kind: 'USER_CERTIFICATE', fileName: 'test.pdf', contentType: 'application/pdf', size: 1024 }),
+    })
+    const download = await app.request('/api/files/master/read-url', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ storagePath: 'users/certificates/test.pdf' }),
+    })
+
+    expect(upload.status).toBe(403)
+    expect(download.status).toBe(403)
+    expect(clientQuery).not.toHaveBeenCalled()
+  })
+})
