@@ -35,7 +35,7 @@ watch([kind,page,clientId,siteId],()=>void load(),{immediate:true})
 onBeforeUnmount(()=>{request++;controller?.abort()})
 function go(next:number):void{void router.push({query:{...route.query,page:String(next)}})}
 function link(item:DashboardDetailRecord){
-  if(item.kind==='technician')return {name:'users'}
+  if(item.kind==='technician')return {name:'users',query:{userId:item.id}}
   if(item.kind==='certificate'&&item.serviceId)return {name:'service-detail',params:{id:item.serviceId}}
   return {name:'site-detail',params:{id:item.clientId,siteId:item.siteId},query:{tab:'findings',findingState:item.state,findingSearch:item.title.slice(0,160)}}
 }
