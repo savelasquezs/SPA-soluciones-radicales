@@ -12,22 +12,22 @@ const props=withDefaults(defineProps<{
   preparing?: boolean
   prepareError?: boolean
   online: boolean
-  readonly?: boolean
-}>(),{readonly:false})
+  contactOnly?: boolean
+}>(),{contactOnly:false})
 const emit=defineEmits<{ open: []; retry: [] }>()
 const when=computed(()=>props.record.estado==='FINALIZADO'
   ? props.record.finReal ?? props.record.inicioProgramado : props.record.inicioProgramado)
 const formatted=computed(()=>new Intl.DateTimeFormat('es-CO',{
   day:'2-digit',month:'short',hour:'numeric',minute:'2-digit',hour12:true,timeZone:'America/Bogota',
 }).format(new Date(when.value)))
-const actionLabel=computed(()=>props.readonly ? 'Solo consulta'
+const actionLabel=computed(()=>props.contactOnly ? 'Ver cliente'
   : props.record.estado==='EN_PROCESO' ? 'Continuar'
     : props.record.estado==='PROGRAMADO' ? 'Ver servicio' : 'Ver')
 </script>
 
 <template>
   <article class="technician-service-card">
-    <button type="button" class="technician-service-card__open" :disabled="readonly"
+    <button type="button" class="technician-service-card__open" 
       :aria-label="actionLabel" :title="record.clienteNombre+' · '+record.sedeNombre"
       @click="emit('open')">
       <div class="technician-service-card__meta">
@@ -43,7 +43,7 @@ const actionLabel=computed(()=>props.readonly ? 'Solo consulta'
         <span class="technician-service-card__right">
           <Check v-if="cache" :size="18" stroke-width="3" aria-label="Preparado en este celular" role="img" class="technician-service-card__prepared" />
           <span v-else-if="preparing" class="technician-service-card__sync">Descargando…</span>
-          <ChevronRight v-if="!readonly" :size="19" aria-hidden="true" />
+          <ChevronRight :size="19" aria-hidden="true" />
         </span>
       </div>
     </button>
@@ -62,8 +62,6 @@ const actionLabel=computed(()=>props.readonly ? 'Solo consulta'
   background:transparent;border:0;color:var(--text);font:inherit;text-align:left;cursor:pointer}
 .technician-service-card__open:hover{background:var(--hover)}
 .technician-service-card__open:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
-.technician-service-card__open:disabled{cursor:default}
-.technician-service-card__open:disabled:hover{background:transparent}
 .technician-service-card__meta{display:flex;align-items:center;gap:.45rem;min-width:0}
 .technician-service-card__request{font-size:.69rem;color:var(--text-secondary);font-weight:650;
   letter-spacing:.012em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:1}

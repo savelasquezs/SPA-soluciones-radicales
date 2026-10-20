@@ -1,6 +1,6 @@
 import { describe,expect,it } from 'vitest'
 import type { PoolClient } from 'pg'
-import { listTechnicianHistory,listTechnicianAgenda } from './queries'
+import { listTechnicianHistory,listTechnicianAgenda,getTechnicianServiceContact } from './queries'
 
 const actor='40000000-0000-4000-8000-000000000099'
 function fake(){
@@ -25,6 +25,23 @@ describe('technician read-only lists',()=>{
     expect(calls.every(c=>c.sql.includes('s.tecnico_responsable_id=$1::uuid'))).toBe(true)
     expect(calls.every(c=>c.sql.includes("s.estado='FINALIZADO'"))).toBe(true)
     expect(calls[1]?.sql).toContain('order by s.fin_real desc')
+  })
+  it('allows read-only contacts for assigned reinforcements, scoped to the authenticated technician',async()=>{
+    const {client,calls}=fake()
+    const result=await getTechnicianServiceContact(client,actor,'40000000-0000-4000-8000-000000000011')
+    expect(result.id).toBe('assigned')
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.params).toEqual([actor,'40000000-0000-4000-8000-000000000011'])
+    expect(calls[0]?.sql).toContain('s.id=$2::uuid')
+    expect(calls[0]?.sql).toContain('s.tecnico_responsable_id=$1::uuid')
+    expect(calls[0]?.sql).toContain("s.tipo_servicio in ('PRINCIPAL','REFUERZO')")
+    expect(calls[0]?.sql).toContain('contactoPrincipalCelular')
+    expect(calls[0]?.sql).toContain('se.hereda_correos_negocio')
+  })
+  it('rejects unassigned service contact lookups rather than exposing private contact data',async()=>{
+    const client={query:async()=>({rows:[]})} as unknown as PoolClient
+    await expect(getTechnicianServiceContact(client,actor,'40000000-0000-4000-8000-000000000012'))
+      .rejects.toMatchObject({status:404,code:'SERVICE_NOT_FOUND'})
   })
   it('reads all assigned visits in a bounded week, including reinforcement but no cancellation',async()=>{
     const {client,calls}=fake()

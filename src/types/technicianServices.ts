@@ -22,6 +22,7 @@ export interface TechnicianServiceSummary {
   // Datos para el borrador local; el backend decide el contacto al persistir.
   contactoPrincipalNombre?: string
   contactoPrincipalCorreo?: string | null
+  contactoPrincipalCelular?: string | null
   /** Registered client/site emails cached for offline report delivery choices. */
   contactEmails?: string[]
   direccion: string
