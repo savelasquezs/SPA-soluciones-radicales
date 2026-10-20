@@ -27,6 +27,11 @@ export function sortTechnicianServices(records: TechnicianServiceSummary[]): Tec
   })
 }
 
+export function sortTechnicianHistory(records: TechnicianServiceSummary[]): TechnicianServiceSummary[] {
+  return [...records].sort((a,b)=>new Date(b.finReal??b.inicioProgramado).getTime()
+    -new Date(a.finReal??a.inicioProgramado).getTime()||a.id.localeCompare(b.id))
+}
+
 export function technicianServicesToAutoPrepare(
   records: TechnicianServiceSummary[],
   caches: Record<string, TechnicianPackageCache>,

@@ -16,7 +16,7 @@ import { useNotificationsStore } from '@/stores/notifications'
 import { useTechnicianServicesStore } from '@/stores/technicianServices'
 import { fetchTechnicianHistory } from '@/services/servicesService'
 import { isDateOnly, toBogotaInput } from '@/helpers/adminServices'
-import { sortTechnicianServices, technicianServicesToAutoPrepare } from '@/helpers/technicianServices'
+import { sortTechnicianHistory, technicianServicesToAutoPrepare } from '@/helpers/technicianServices'
 import type { TechnicianHistoryPage, TechnicianServiceSummary } from '@/types/technicianServices'
 
 const router=useRouter(),route=useRoute()
@@ -51,6 +51,7 @@ function open(record:TechnicianServiceSummary):void{
   void router.push({name:'technician-service-work',params:{id:record.id}})
 }
 function changeTab(value:'pending'|'history'):void{
+  if(searchTimer!==null){clearTimeout(searchTimer);searchTimer=null}
   void router.push({name:'services',query:value==='history'?{tab:'history'}:{}})
 }
 function changePage(value:number):void{
@@ -96,7 +97,7 @@ const localHistory=computed(()=>{
     const record=cache.package.service
     if(record.estado==='FINALIZADO')byId.set(record.id,record)
   }
-  return sortTechnicianServices([...byId.values()])
+  return sortTechnicianHistory([...byId.values()])
 })
 const offlineHistory=computed(()=>{
   const q=search.value.toLocaleLowerCase('es-CO').trim()
