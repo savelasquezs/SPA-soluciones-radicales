@@ -1,6 +1,8 @@
-# Resumen administrativo (dashboard V1)
+# Resúmenes por rol
 
-Acceso: `/` para el rol **ADMINISTRADOR**. El rol Técnico mantiene un acceso simple a sus servicios.
+## Resumen administrativo (V1)
+
+Acceso: `/` con rol activo **ADMINISTRADOR**.
 
 ## Contenido
 
@@ -52,3 +54,28 @@ La vista de Servicios presenta una indicación de filtro activo y permite limpia
 - La migración `20261019_001_dashboard_read_indexes.sql` añade índices selectivos para hallazgos globales ordenados por fecha y servicios finalizados con cobro sin confirmar; no crea tablas.
 - Los listados detallados usan paginación de 20 o 25 registros en backend. Las gráficas limitan los puntos mediante agregación temporal adaptativa: diaria, semanal, mensual o trimestral (hasta diez años).
 - Validar planes con `EXPLAIN` y volúmenes representativos antes de introducir cachés o nuevas tablas agregadas. La rama de desarrollo actual tiene pocas filas, de modo que sus tiempos absolutos no predicen la carga de producción.
+
+
+## Resumen personal del Técnico
+
+Acceso: `/` con rol activo **TECNICO**. Reemplaza la tarjeta única de «Ver mis servicios» sin exponer cifras administrativas. Consulta `GET /api/technician/dashboard`, que exige `requireTechnician` y deriva el UUID del usuario autenticado; no recibe IDs de otros técnicos. La respuesta es privada y sin caché HTTP.
+
+### Contenido y atribución
+
+- Cuatro KPI: principales finalizados en el rango, programados pendientes totales (más cantidad en proceso), sedes y clientes atendidos y puntualidad de inicio.
+- Gráfica **de línea** para el histórico de servicios **PRINCIPALES FINALIZADOS** por fecha de cierre real (`fin_real`), no programada. Intervalos sin servicios valen cero. Reutiliza `DashboardChart`, ECharts y adaptación de tema.
+- Actividad: hallazgos abiertos en servicios donde estuvo asignado, seguimientos **atribuidos** mediante `hallazgo_seguimientos.tecnico_id`, cierres de esos seguimientos, revisiones y creación de puestos y productos marcados aplicados en visitas principales finalizadas.
+- Dos listados de cinco: pendientes (en curso primero y programados aunque estén retrasados) y últimas visitas finalizadas en el rango; enlazan al trabajo del servicio.
+- Análisis complementario: cumplimiento MIP promedio **observado en sedes** (C=1, CP=.5, NC=0, excluye NA y áreas sin acceso, media por visita y luego período) y duración transcurrida promedio (`fin_real - inicio_real`). Ninguno califica el desempeño personal.
+
+La asignación incluye `tecnico_responsable_id` y `tecnicos_colaboradores_ids_json`, reutilizando exactamente el predicado del servicio técnico. Una visita compartida aparece una vez por participante; sus registros técnicos se describen como **«en mis visitas»** porque no existe autor por operación. Los seguimientos sí tienen autor explícito. Se excluyen los Refuerzos (aún no ejecutables por el Técnico) de las métricas de visitas.
+
+Puntualidad: inicios reales en el rango en servicios en proceso o finalizados, máximo 15 minutos después de la hora programada. Sin inicios registrados muestra «—». La duración representa tiempo transcurrido, no tiempo efectivo de trabajo.
+
+### Filtros, seguridad y pruebas
+
+`resolveDashboardRange` da 7/30/90/365/730/1826 días o rango personalizado de máximo diez años. Calendario `America/Bogota`; la gráfica se agrupa por día (hasta 14), semana (hasta 120), mes (hasta 1460) o trimestre. El período afecta visitas finalizadas, sedes, clientes, puntualidad y actividad, pero **no** los pendientes de agenda, que incluyen toda la asignación. Filtros en la URL; solicitudes anteriores abortadas en cambios.
+
+El backend agrega en PostgreSQL y devuelve a lo sumo cinco registros por tabla. Un administrador que tenga ambos roles debe activar Técnico para usar este endpoint, y no se exponen montos, cobros ni certificados empresariales. Sin tablas ni permisos nuevos.
+
+Pruebas: unitarias para fechas faltantes/ceros, confidencialidad de parametrización, E2E de roles, línea, filtros, tema y móvil. Las consultas se ejecutaron de solo lectura en `desarrollo`.
