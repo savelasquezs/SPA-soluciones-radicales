@@ -20,7 +20,7 @@ type ServiceStateRow = {
   eligible: boolean
 }
 
-const assignment = `(s.tecnico_responsable_id=$1::uuid or coalesce(s.tecnicos_colaboradores_ids_json,'[]'::jsonb) ? $1::text)`
+export const technicianServiceAssignmentSql = `(s.tecnico_responsable_id=$1::uuid or coalesce(s.tecnicos_colaboradores_ids_json,'[]'::jsonb) ? $1::text)`
 const summaryJson = `jsonb_build_object('id',s.id,'solicitud',s.solicitud,'tipoServicio',s.tipo_servicio,'estado',s.estado,
   'version',s.version,'inicioProgramado',s.inicio_programado,'finProgramado',s.fin_programado,'inicioReal',s.inicio_real,
   'clienteNombre',n.nombre,'sedeNombre',se.nombre,'tipoSede',se.tipo_sede,'direccion',se.direccion,
@@ -32,7 +32,7 @@ const summaryJson = `jsonb_build_object('id',s.id,'solicitud',s.solicitud,'tipoS
 export async function listTechnicianServices(client: PoolClient, userId: string): Promise<TechnicianServiceSummary[]> {
   const { rows } = await client.query<{ record: TechnicianServiceSummary }>(`select ${summaryJson} as record
     from public.servicios s join public.sedes se on se.id=s.sede_id join public.negocios n on n.id=se.negocio_id
-    where ${assignment} and s.tipo_servicio='PRINCIPAL' and s.estado<>'CANCELADO'
+    where ${technicianServiceAssignmentSql} and s.tipo_servicio='PRINCIPAL' and s.estado<>'CANCELADO'
     order by case s.estado when 'EN_PROCESO' then 0 when 'PROGRAMADO' then 1 else 2 end,
       case when s.estado='FINALIZADO' then s.inicio_programado end desc,
       case when s.estado<>'FINALIZADO' then s.inicio_programado end,s.id limit 200`, [userId])
@@ -43,7 +43,7 @@ export async function assignedServiceState(client: PoolClient, userId: string, s
   const { rows } = await client.query<ServiceStateRow>(`select s.id,s.estado,s.tipo_servicio,s.version,s.inicio_programado,
     (s.tipo_servicio='PRINCIPAL' and now() >= s.inicio_programado-interval '1 hour') as eligible
     from public.servicios s join public.sedes se on se.id=s.sede_id
-    where s.id=$2::uuid and ${assignment}${lock ? ' for update of s' : ''}`, [userId, serviceId])
+    where s.id=$2::uuid and ${technicianServiceAssignmentSql}${lock ? ' for update of s' : ''}`, [userId, serviceId])
   if (!rows[0]) throw new ApiError(404, 'El servicio no está disponible.', 'SERVICE_NOT_FOUND')
   return rows[0]
 }
@@ -59,7 +59,7 @@ async function serviceHeader(client: PoolClient, userId: string, serviceId: stri
     (s.estado='PROGRAMADO' and s.tipo_servicio='PRINCIPAL' and now() >= s.inicio_programado-interval '1 hour') as "canStart",
     to_jsonb(s.inicio_programado-interval '1 hour') #>> '{}' as "startAvailableAt"
     from public.servicios s join public.sedes se on se.id=s.sede_id join public.negocios n on n.id=se.negocio_id
-    where s.id=$2::uuid and ${assignment}`, [userId, serviceId])
+    where s.id=$2::uuid and ${technicianServiceAssignmentSql}`, [userId, serviceId])
   if (!rows[0]) throw new ApiError(404, 'El servicio no está disponible.', 'SERVICE_NOT_FOUND')
   return rows[0]
 }
