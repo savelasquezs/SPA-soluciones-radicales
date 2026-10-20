@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { Pencil } from 'lucide-vue-next'
 
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -31,6 +32,7 @@ type ErrorKey = keyof UserFormErrors
 type FormMode = 'create' | 'edit'
 
 const notifications = useNotificationsStore()
+const route = useRoute()
 const users = ref<UserRecord[]>([])
 const loading = ref(true)
 const loadError = ref<string | null>(null)
@@ -84,7 +86,12 @@ const discardMessage = computed(() => formMode.value === 'create'
   ? 'Los datos ingresados todavía no se han guardado.'
   : 'Los cambios realizados todavía no se han guardado.')
 
-onMounted(loadUsers)
+onMounted(async () => {
+  await loadUsers()
+  const userId = typeof route.query.userId === 'string' ? route.query.userId : ''
+  const selected = users.value.find(user => user.id === userId)
+  if (selected) openEdit(selected)
+})
 
 watch(() => userForm.esTecnico, (isTechnician) => {
   if (!isTechnician && !formFile.value && !userForm.certificadoStoragePath) {
