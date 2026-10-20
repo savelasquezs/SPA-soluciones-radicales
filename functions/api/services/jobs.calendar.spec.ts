@@ -59,6 +59,25 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs())
 
 describe('Calendar scheduled delivery with a direct service link',()=>{
+  it('sends deletion to Calendar when the service is cancelled',async()=>{
+    state.snapshot.mockResolvedValueOnce({
+      record:{...initialService,estado:'CANCELADO'},calendar_revision:'2',calendar_event_id:'old-appointment',
+    })
+    await drainServiceJobs(1)
+    expect(state.calendar).toHaveBeenCalledWith(expect.objectContaining({
+      eventId:'old-appointment',cancelled:true,attendees:['tecnico@example.test'],
+    }))
+  })
+  it('also deletes a reinforcement when its Principal is cancelled while it is in progress',async()=>{
+    state.snapshot.mockResolvedValueOnce({
+      record:{...initialService,tipoServicio:'REFUERZO',estado:'EN_PROCESO',principal:{estado:'CANCELADO'}},
+      calendar_revision:'2',calendar_event_id:'old-reinforcement',
+    })
+    await drainServiceJobs(1)
+    expect(state.calendar).toHaveBeenCalledWith(expect.objectContaining({
+      eventId:'old-reinforcement',cancelled:true,
+    }))
+  })
   it('puts a direct technician route in the event description without changing other fields', async () => {
     expect(await drainServiceJobs(1)).toEqual({processed:1})
     expect(state.calendar).toHaveBeenCalledOnce()
