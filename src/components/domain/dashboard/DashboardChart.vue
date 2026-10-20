@@ -8,10 +8,13 @@ import VChart from 'vue-echarts'
 import type { EChartsOption } from 'echarts'
 import { useAppStore } from '@/stores/app'
 import type { DashboardSnapshot } from '@/types/dashboard'
+import type { TechnicianDashboardSnapshot } from '@/types/technicianDashboard'
 
 use([BarChart, LineChart, GridComponent, TooltipComponent, LegendComponent, SVGRenderer])
-type Kind = 'services' | 'value' | 'compliance'
-const props=defineProps<{ kind:Kind; data:DashboardSnapshot['charts']; period:DashboardSnapshot['period'] }>()
+const props=defineProps<
+  | { kind:'services' | 'value' | 'compliance'; data:DashboardSnapshot['charts']; period:DashboardSnapshot['period'] }
+  | { kind:'completed'; data:TechnicianDashboardSnapshot['charts']; period:DashboardSnapshot['period'] }
+>()
 const app=useAppStore()
 const money=(amount:number)=>new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(amount)
 const short=(amount:number)=>Math.abs(amount)>=1_000_000?'$'+(amount/1_000_000).toLocaleString('es-CO',{maximumFractionDigits:1})+' M':
@@ -34,8 +37,9 @@ const palette=computed(()=>{
     cancelled:token('--danger'),money:resolved==='dark'?'#579DFF':'#0969DA',
     compliance:resolved==='dark'?'#A49AFF':'#6756C8'}
 })
-const items=computed(()=>props.data[props.kind])
+const items=computed(()=>props.kind==='completed'?props.data.completed:props.data[props.kind])
 const hasValues=computed(()=>{
+  if(props.kind==='completed')return props.data.completed.some(p=>p.count>0)
   if(props.kind==='services')return props.data.services.some(p=>p.scheduled+p.ongoing+p.completed+p.cancelled>0)
   if(props.kind==='value')return props.data.value.some(p=>p.value>0)
   return props.data.compliance.some(p=>p.percentage!==null)
@@ -67,6 +71,15 @@ const option=computed<EChartsOption>(()=>{
       {name:'Programados',type:'bar',stack:'total',barMaxWidth:42,data:props.data.services.map(x=>x.scheduled),itemStyle:{color:p.scheduled}},
       {name:'Cancelados',type:'bar',stack:'total',barMaxWidth:42,data:props.data.services.map(x=>x.cancelled),itemStyle:{color:p.cancelled}}
     ]
+  } as EChartsOption
+  if(props.kind==='completed')return {
+    ...common,color:[p.completed],
+    tooltip:{...common.tooltip,valueFormatter:(value:unknown)=>Number(value).toLocaleString('es-CO')+' servicios'},
+    xAxis:{...common.xAxis,boundaryGap:false},
+    yAxis:{...common.yAxis,minInterval:1},
+    series:[{name:'Servicios finalizados',type:'line',smooth:.2,symbol:'circle',symbolSize:7,
+      lineStyle:{width:3,color:p.completed},itemStyle:{color:p.completed},
+      areaStyle:{opacity:.12,color:p.completed},data:props.data.completed.map(x=>x.count)}]
   } as EChartsOption
   if(props.kind==='value')return {
     ...common,color:[p.money],

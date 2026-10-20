@@ -13,6 +13,7 @@ import type { DashboardPeriod, DashboardSnapshot } from '@/types/dashboard'
 import './dashboard.css'
 
 const DashboardChart=defineAsyncComponent(()=>import('@/components/domain/dashboard/DashboardChart.vue'))
+const TechnicianDashboardView=defineAsyncComponent(()=>import('./TechnicianDashboardView.vue'))
 const session=useAuthStore(),route=useRoute(),router=useRouter()
 const query=(key:string)=>typeof route.query[key]==='string'?route.query[key] as string:''
 const presets:DashboardPeriod[]=['7d','30d','90d','12m','24m','5y','custom']
@@ -136,12 +137,7 @@ onBeforeUnmount(()=>{counter++;request?.abort()})
 
 <template>
   <div class="page dashboard-page">
-    <template v-if="!session.isAdmin">
-      <header class="page-header admin-page-header">
-        <div class="admin-page-heading"><h1>Hola, {{ session.profile?.nombreCompleto.split(' ')[0] }}</h1><p>— Trabajo de campo</p></div>
-      </header>
-      <RouterLink to="/servicios" class="card dashboard-technician-link"><ClipboardList :size="20" /> Ver mis servicios</RouterLink>
-    </template>
+    <TechnicianDashboardView v-if="!session.isAdmin" />
     <template v-else>
       <header class="dashboard-heading">
         <div><h1>Resumen</h1><p>Vista general de la operación de Soluciones Radicales MIP</p></div>
