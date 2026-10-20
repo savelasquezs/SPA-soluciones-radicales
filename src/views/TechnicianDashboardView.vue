@@ -218,7 +218,7 @@ onBeforeUnmount(()=>{sequence++;controller?.abort()})
         <article class="dashboard-panel dashboard-table-panel">
           <header><div><h2><CheckCircle2 :size="17" aria-hidden="true" /> Últimos servicios finalizados</h2>
             <p>Los cinco más recientes del período</p></div>
-            <RouterLink to="/servicios">Ver historial →</RouterLink></header>
+            <RouterLink to="/servicios?tab=history">Ver historial →</RouterLink></header>
           <div class="dashboard-table-scroll">
             <table><thead><tr><th>Finalizado</th><th>Cliente / Sede</th><th>Participación</th></tr></thead>
               <tbody>
