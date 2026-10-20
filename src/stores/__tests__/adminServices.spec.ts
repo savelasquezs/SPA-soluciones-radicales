@@ -46,6 +46,13 @@ describe('service snapshots',()=>{
     store.applyMutation({ services:[record({ version:3 })],upcoming:null,pendingCount:0 })
     expect(store.rows).toHaveLength(1);expect(store.total).toBe(1)
   })
+  it('removes cancelled appointments immediately while keeping the audit snapshot',async()=>{
+    vi.mocked(api.fetchAdminServices).mockResolvedValue(listing([record()]))
+    const store=useAdminServicesStore();await store.loadServices(filter)
+    store.applyMutation({ services:[record({ version:2,estado:'CANCELADO' })],upcoming:null,pendingCount:0 })
+    expect(store.rows).toHaveLength(0);expect(store.total).toBe(0)
+    expect(store.records[id]?.estado).toBe('CANCELADO')
+  })
   it('ignores a slow listing that predates a committed mutation',async()=>{
     vi.mocked(api.fetchAdminServices).mockResolvedValueOnce(listing([record()]))
     const store=useAdminServicesStore();await store.loadServices(filter)
@@ -54,7 +61,7 @@ describe('service snapshots',()=>{
     const pending=store.loadServices(filter,true)
     store.applyMutation({ services:[record({ version:2,estado:'CANCELADO' })],upcoming:null,pendingCount:0 })
     resolve(listing([record()]));await pending
-    expect(store.rows[0]?.estado).toBe('CANCELADO');expect(store.pendingCount).toBe(0);expect(store.loading).toBe(false)
+    expect(store.rows).toHaveLength(0);expect(store.records[id]?.estado).toBe('CANCELADO');expect(store.pendingCount).toBe(0);expect(store.loading).toBe(false)
   })
   it('never overwrites a newer snapshot with an older mutation replay',async()=>{
     vi.mocked(api.fetchAdminServices).mockResolvedValue(listing([record({ version:3 })]))
