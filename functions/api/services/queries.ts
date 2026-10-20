@@ -94,7 +94,11 @@ export async function listServices(client: PoolClient, filter: ServiceFilter): P
   if(filter.clientId){params.push(filter.clientId);conditions.push('se.negocio_id=$'+params.length+'::uuid')}
   if(filter.siteId){params.push(filter.siteId);conditions.push('s.sede_id=$'+params.length+'::uuid')}
   if(filter.metric)conditions.push(serviceMetricSql[filter.metric])
-  if(filter.tab==='history')conditions.push("s.estado in ('FINALIZADO','CANCELADO')")
+  // A cancelled Principal also removes its Refuerzo from every operational agenda,
+  // without rewriting a reinforcement already in progress or finalized.
+  const cancelledFamily = "(s.estado='CANCELADO' or exists (select 1 from public.servicios principal where principal.id=s.servicio_principal_id and principal.estado='CANCELADO'))"
+  if(filter.tab==='history')conditions.push("(s.estado='FINALIZADO' or "+cancelledFamily+")")
+  else conditions.push("not "+cancelledFamily)
   if(filter.estado){params.push(filter.estado);conditions.push('s.estado=$'+params.length)}
   if(filter.tipo){params.push(filter.tipo);conditions.push('s.tipo_servicio=$'+params.length)}
   if(filter.tecnicoId){params.push(filter.tecnicoId);conditions.push(
