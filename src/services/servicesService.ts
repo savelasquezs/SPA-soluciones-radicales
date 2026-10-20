@@ -17,6 +17,9 @@ export function fetchTechnicianAgenda(from:string,to:string,signal?:AbortSignal)
   const params=new URLSearchParams({from,to})
   return apiRequest<TechnicianServiceSummary[]>(base+'/agenda?'+params.toString(),{signal})
 }
+/** Assigned main and reinforcement visits, without granting editing rights. */
+export const fetchTechnicianServiceContact = (serviceId: string) =>
+  apiRequest<TechnicianServiceSummary>(`${base}/${encodeURIComponent(serviceId)}/contact`)
 export const fetchTechnicianPackage = (serviceId: string) => apiRequest<TechnicianServicePackage>(`${base}/${serviceId}/package`)
 export const startTechnicianService = (serviceId: string, requestId: string, deviceId: string, version: number) =>
   apiRequest<TechnicianExecutionSession>(`${base}/${serviceId}/start`, json({ requestId, deviceId, version }))

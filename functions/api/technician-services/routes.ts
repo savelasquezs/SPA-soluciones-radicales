@@ -10,7 +10,7 @@ import type { EvidenceAccess, EvidenceKind } from '../../../src/types/siteInsigh
 import { kickServiceJobs } from '../services/jobs'
 import { assertAreaNoAccessStoragePath, assertCriterionEvidenceStoragePath, assertDeviceReviewStoragePath, assertFindingEvidenceStoragePath, assertServiceSignatureStoragePath, createAreaNoAccessUploadUrl, createCriterionEvidenceUploadUrl, createDeviceReviewUploadUrl, createFindingEvidenceUploadUrl, createServiceMediaReadUrl, createServiceSignatureUploadUrl, criterionEvidenceObjectExists, deleteAreaNoAccessObject, deleteCriterionEvidenceObject, deleteDeviceReviewObject, deleteFindingEvidenceObject, deviceReviewMediaObjectExists, findingEvidenceObjectExists, serviceMediaObjectExists, serviceSignatureObjectExists, type FindingEvidencePhase, type ServiceSignatureRole } from '../r2'
 import { authorizeTechnicianAreaChange, authorizeTechnicianDeviceChange, authorizeTechnicianFindingChange, authorizeTechnicianServiceChange, claimTechnicianService, createTechnicianDevice, createTechnicianFinding, finalizeTechnicianService, saveTechnicianAreaAccess, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, saveTechnicianFindingStatus, startTechnicianService, technicianCommand } from './commands'
-import { getTechnicianPackage, listTechnicianServices, assignedServiceState, listTechnicianHistory, listTechnicianAgenda } from './queries'
+import { getTechnicianPackage, listTechnicianServices, assignedServiceState, listTechnicianHistory, listTechnicianAgenda, getTechnicianServiceContact } from './queries'
 import { technicianProductSheetUrl } from '../service-results/productSheets'
 
 type Environment = { Variables: { identity: Identity } }
@@ -95,6 +95,12 @@ technicianServiceRoutes.get('/agenda', async context => {
 })
 
 technicianServiceRoutes.get('/', async context => context.json(await read(context, (client, technician) => listTechnicianServices(client, technician.id))))
+technicianServiceRoutes.get('/:id/contact', async context => {
+  context.header('Cache-Control','private, no-store')
+  return context.json(await read(context,(client,technician)=>
+    getTechnicianServiceContact(client,technician.id,id(context.req.param('id')))))
+})
+
 technicianServiceRoutes.get('/:id/package', async context => context.json(await read(context, (client, technician) => getTechnicianPackage(client, technician.id, id(context.req.param('id'))))))
 technicianServiceRoutes.get('/:id/products/:productId/technical-sheet',async context=>{
   const serviceId=id(context.req.param('id'))

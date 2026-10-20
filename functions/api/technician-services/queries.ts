@@ -25,8 +25,13 @@ const summaryJson = `jsonb_build_object('id',s.id,'solicitud',s.solicitud,'tipoS
   'version',s.version,'inicioProgramado',s.inicio_programado,'finProgramado',s.fin_programado,'inicioReal',s.inicio_real,'finReal',s.fin_real,
   'clienteNombre',n.nombre,'sedeNombre',se.nombre,'tipoSede',se.tipo_sede,'direccion',se.direccion,
   'contactoPrincipalNombre',se.contacto_principal_nombre,'contactoPrincipalCorreo',se.contacto_principal_correo,
-  'contactEmails',coalesce(n.correos_json,'[]'::jsonb) || coalesce(se.correos_json,'[]'::jsonb)
-    || case when se.contacto_principal_correo is not null then jsonb_build_array(se.contacto_principal_correo) else '[]'::jsonb end,
+  'contactoPrincipalCelular',se.contacto_principal_celular,
+  'contactEmails',(select coalesce(jsonb_agg(email order by email),'[]'::jsonb) from (
+    select distinct lower(btrim(value)) as email from jsonb_array_elements_text(
+      coalesce(case when se.hereda_correos_negocio then n.correos_json else se.correos_json end,'[]'::jsonb))
+    union select lower(btrim(se.contacto_principal_correo))
+      where nullif(btrim(se.contacto_principal_correo),'') is not null
+  ) emails where nullif(email,'') is not null),
   'autoPrepareEligible',(s.estado='EN_PROCESO' or (s.estado='PROGRAMADO' and s.tipo_servicio='PRINCIPAL' and now() >= s.inicio_programado-interval '1 hour')))`
 
 export async function listTechnicianServices(client: PoolClient, userId: string): Promise<TechnicianServiceSummary[]> {
@@ -232,4 +237,20 @@ export async function listTechnicianAgenda(
       and s.inicio_programado<($3::date::timestamp at time zone 'America/Bogota')
     order by s.inicio_programado,s.id`,[userId,from,toExclusive])
   return rows.map(row=>row.record)
+}
+
+/** Read-only contact details for an assigned principal OR reinforcement.
+ * Executing a reinforcement remains prohibited by the existing command guards. */
+export async function getTechnicianServiceContact(
+  client: PoolClient, userId: string, serviceId: string,
+): Promise<TechnicianServiceSummary> {
+  const { rows } = await client.query<{record:TechnicianServiceSummary}>(`select ${summaryJson} as record
+    from public.servicios s
+    join public.sedes se on se.id=s.sede_id
+    join public.negocios n on n.id=se.negocio_id
+    where s.id=$2::uuid and ${technicianServiceAssignmentSql}
+      and s.tipo_servicio in ('PRINCIPAL','REFUERZO')
+      and s.estado<>'CANCELADO'`,[userId,serviceId])
+  if(!rows[0])throw new ApiError(404,'El servicio no está disponible.','SERVICE_NOT_FOUND')
+  return rows[0].record
 }
