@@ -54,7 +54,7 @@ const rangeError=computed(()=>!isDateOnly(from.value) || !isDateOnly(to.value) |
 const page=computed(()=>/^\d+$/.test(q('page')) ? Math.max(1,Math.min(100_000,Number(q('page')))) : 1)
 const pageSize=computed(()=>view.value==='week' ? 100 : 25)
 const serviceFilter=computed<ServiceFilter>(()=>({ from:from.value,to:to.value,tab:tab.value==='history' ? 'history' : 'agenda',
-  estado:['PROGRAMADO','EN_PROCESO','FINALIZADO','CANCELADO'].includes(q('estado')) ? q('estado') as ServiceState : '',
+  estado:['PROGRAMADO','EN_PROCESO','FINALIZADO','CANCELADO'].includes(q('estado')) && (tab.value==='history' || q('estado')!=='CANCELADO') ? q('estado') as ServiceState : '',
   tipo:['PRINCIPAL','REFUERZO'].includes(q('tipo')) ? q('tipo') as ServiceKind : '',tecnicoId:q('tecnicoId'),query:q('query'),page:view.value==='week' ? 1 : page.value,pageSize:pageSize.value,
   clientId:q('clientId') || undefined,siteId:q('siteId') || undefined,
   metric:metric.value && metric.value!=='actionable' ? metric.value : undefined }))
@@ -319,7 +319,7 @@ async function retryCalendar(record: AdminService): Promise<void> {
         <SlidersHorizontal :size="17" aria-hidden="true" /> Filtros{{ activeFilterCount ? ' ('+activeFilterCount+')' : '' }}
       </BaseButton>
       <BaseSelect v-if="(!compact || mobileFiltersOpen) && tab==='upcoming'" class="svc-filter-extra" :model-value="upcomingFilter.estado" name="upcoming-status-filter" label="Seguimiento" @update:model-value="setQuery({ estado:$event || undefined,page:'1' })"><option value="">Todos los pendientes</option><option v-for="(label,value) in FOLLOW_UP_LABELS" :key="value" :value="value">{{ label }}</option></BaseSelect>
-      <BaseSelect v-else-if="!compact || mobileFiltersOpen" class="svc-filter-extra" :model-value="serviceFilter.estado" name="service-status-filter" label="Estado" @update:model-value="setQuery({ estado:$event || undefined,page:'1' })"><option value="">Todos</option><option v-for="(label,value) in SERVICE_STATE_LABELS" :key="value" :value="value">{{ label }}</option></BaseSelect>
+      <BaseSelect v-else-if="!compact || mobileFiltersOpen" class="svc-filter-extra" :model-value="serviceFilter.estado" name="service-status-filter" label="Estado" @update:model-value="setQuery({ estado:$event || undefined,page:'1' })"><option value="">Todos</option><option v-for="(label,value) in SERVICE_STATE_LABELS" v-if="tab==='history' || value!=='CANCELADO'" :key="value" :value="value">{{ label }}</option></BaseSelect>
       <BaseSelect v-if="tab!=='upcoming' && (!compact || mobileFiltersOpen)" class="svc-filter-extra" :model-value="serviceFilter.tipo" name="service-type-filter" label="Tipo" @update:model-value="setQuery({ tipo:$event || undefined,page:'1' })"><option value="">Todos</option><option value="PRINCIPAL">Principal</option><option value="REFUERZO">Refuerzo</option></BaseSelect>
       <BaseSelect v-if="tab!=='upcoming' && (!compact || mobileFiltersOpen)" class="svc-filter-extra svc-filter-extra--team" :model-value="serviceFilter.tecnicoId" name="service-team-filter" label="Técnico" @update:model-value="setQuery({ tecnicoId:$event || undefined,page:'1' })"><option value="">Todo el equipo</option><option v-for="person in store.options?.tecnicos ?? []" :key="person.id" :value="person.id">{{ person.nombreCompleto }}</option></BaseSelect>
       <BaseButton v-if="compact && mobileFiltersOpen" size="compact" variant="ghost" class="svc-filter-clear" @click="clearAdvancedFilters">Limpiar filtros</BaseButton>
