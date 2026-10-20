@@ -76,6 +76,10 @@ describe('auth store', () => {
     expect(auth.isAuthenticated).toBe(false)
     expect(auth.activeRole).toBeNull()
     expect(auth.rolesAvailable).toEqual([])
+    expect(auth.avatarUrl).toBeNull()
+
+    await auth.logout()
+    expect(auth.authEmail).toBeNull()
   })
 
   it('descarta la identidad cuando la validación falla por un error distinto de 403', async () => {
