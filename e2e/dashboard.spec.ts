@@ -119,7 +119,7 @@ test('a custom range longer than a year reaches the completion-date drilldown',a
   const requests=await setup(page)
   await page.goto('/?period=custom&from=2024-01-01&to=2026-10-19')
   await expect(page.getByRole('heading',{name:'Resumen',exact:true})).toBeVisible()
-  expect(requests.some(x=>x.includes('period=custom')&&x.includes('from=2024-01-01')&&x.includes('to=2026-10-19'))).toBeTruthy()
+  await expect.poll(()=>requests.some(x=>x.includes('period=custom')&&x.includes('from=2024-01-01')&&x.includes('to=2026-10-19'))).toBeTruthy()
   await page.locator('.dashboard-kpis .dashboard-kpi').filter({hasText:'Valor de servicios realizados'}).click()
   await expect(page).toHaveURL(/metric=performed/)
   await expect.poll(()=>requests.some(x=>x.startsWith('/api/admin/services?')&&x.includes('metric=performed')&&x.includes('from=2024-01-01'))).toBeTruthy()
