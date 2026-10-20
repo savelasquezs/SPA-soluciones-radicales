@@ -2,10 +2,10 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { apiRequest, getAuthSession, signInWithGoogle, signOut } = vi.hoisted(() => ({
-  apiRequest: vi.fn<() => Promise<unknown>>(),
+  apiRequest: vi.fn<(path: string, init?: { method?: string; body?: string }) => Promise<unknown>>(),
   getAuthSession: vi.fn<() => Promise<{
-    session: { token: string }
-    user: { email: string }
+    session: { id: string; token: string }
+    user: { id: string; email: string }
   }>>(),
   signInWithGoogle: vi.fn<(selectAccount?: boolean, callbackURL?: string) => Promise<void>>(),
   signOut: vi.fn<() => Promise<void>>(),
@@ -32,15 +32,35 @@ vi.mock('@/services/apiService', () => ({
 import { ApiClientError } from '@/services/apiService'
 import { useAuthStore } from '@/stores/auth'
 
+const dualRoleProfile = (role: 'ADMINISTRADOR' | 'TECNICO' | null) => ({
+  id: 'user-id',
+  nombreCompleto: 'Usuario con dos roles',
+  correoGoogle: 'solucionesradicales1@gmail.com',
+  esAdmin: true,
+  esTecnico: true,
+  rolActivo: role,
+  requiereSeleccionRol: role === null,
+})
+
+async function selectTechnician() {
+  apiRequest.mockImplementation(async path => path === 'api/session/role'
+    ? dualRoleProfile('TECNICO') : dualRoleProfile(null))
+  const auth = useAuthStore()
+  await auth.initialize()
+  await auth.selectRole('TECNICO')
+  return auth
+}
+
 describe('auth store', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    sessionStorage.clear()
     signOut.mockResolvedValue(undefined)
     signInWithGoogle.mockResolvedValue(undefined)
     setActivePinia(createPinia())
     getAuthSession.mockResolvedValue({
-      session: { token: 'header.payload.signature' },
-      user: { email: 'solucionesradicales1@gmail.com' },
+      session: { id: 'better-auth-session-1', token: 'header.payload.signature' },
+      user: { id: 'google-user-1', email: 'solucionesradicales1@gmail.com' },
     })
     apiRequest.mockResolvedValue({
       id: 'user-id',
@@ -91,6 +111,82 @@ describe('auth store', () => {
     expect(auth.status).toBe('error')
     expect(auth.authEmail).toBeNull()
     expect(auth.profile).toBeNull()
+  })
+
+  it('restaura el rol elegido tras recargar y renovar el JWT, sin mostrar el selector', async () => {
+    await selectTechnician()
+    expect(JSON.parse(sessionStorage.getItem('sr-active-role-session') ?? 'null')).toEqual({
+      authUserId: 'google-user-1', sessionId: 'better-auth-session-1', role: 'TECNICO',
+    })
+
+    // Same authenticated Better Auth session, but a different access JWT.
+    getAuthSession.mockResolvedValue({
+      session: { id: 'better-auth-session-1', token: 'new.jwt.signature' },
+      user: { id: 'google-user-1', email: 'solucionesradicales1@gmail.com' },
+    })
+    setActivePinia(createPinia()) // A new store instance simulates a page reload.
+    apiRequest.mockClear()
+    const restored = useAuthStore()
+    await restored.initialize()
+
+    expect(restored.profile?.rolActivo).toBe('TECNICO')
+    expect(restored.profile?.requiereSeleccionRol).toBe(false)
+    expect(apiRequest).toHaveBeenCalledWith('api/session/role', {
+      method: 'POST', body: JSON.stringify({ role: 'TECNICO' }),
+    })
+  })
+
+  it('no reutiliza el rol en otra sesión ni en otra cuenta de Google', async () => {
+    await selectTechnician()
+    getAuthSession.mockResolvedValue({
+      session: { id: 'new-session-2', token: 'new.jwt.signature' },
+      user: { id: 'google-user-2', email: 'otra@gmail.com' },
+    })
+    setActivePinia(createPinia())
+    apiRequest.mockClear()
+    const restored = useAuthStore()
+    await restored.initialize()
+
+    expect(restored.profile?.requiereSeleccionRol).toBe(true)
+    expect(apiRequest).toHaveBeenCalledOnce()
+    expect(sessionStorage.getItem('sr-active-role-session')).toBeNull()
+  })
+
+  it('rechaza el rol recordado si ya no está asignado al usuario', async () => {
+    await selectTechnician()
+    apiRequest.mockClear()
+    setActivePinia(createPinia())
+    apiRequest.mockImplementation(async path => path === 'api/session'
+      ? { ...dualRoleProfile(null), esTecnico: false }
+      : dualRoleProfile('TECNICO'))
+    const restored = useAuthStore()
+    await restored.initialize()
+
+    expect(restored.profile?.requiereSeleccionRol).toBe(true)
+    expect(apiRequest).not.toHaveBeenCalledWith('api/session/role', expect.anything())
+    expect(sessionStorage.getItem('sr-active-role-session')).toBeNull()
+  })
+
+  it('descarta el rol recordado si el servidor rechaza su restauración', async () => {
+    await selectTechnician()
+    setActivePinia(createPinia())
+    apiRequest.mockImplementation(async path => {
+      if (path === 'api/session/role') throw new Error('Rol no autorizado')
+      return dualRoleProfile(null)
+    })
+    const restored = useAuthStore()
+    await restored.initialize()
+
+    expect(restored.status).toBe('authenticated')
+    expect(restored.profile?.requiereSeleccionRol).toBe(true)
+    expect(sessionStorage.getItem('sr-active-role-session')).toBeNull()
+  })
+
+  it('borra el rol recordado al cerrar la sesión', async () => {
+    const auth = await selectTechnician()
+    await auth.logout()
+    expect(sessionStorage.getItem('sr-active-role-session')).toBeNull()
+    expect(auth.status).toBe('unauthenticated')
   })
 
   it('cierra la sesión anterior antes del primer OAuth de cambio de cuenta', async () => {

@@ -7,6 +7,7 @@ import type { ActiveRole, PersonalProfile, SessionProfile } from '@/types/domain
 
 type AuthStatus = 'idle' | 'loading' | 'unauthenticated' | 'authenticated' | 'denied' | 'error'
 type AuthSession = Awaited<ReturnType<typeof getAuthSession>>
+const ROLE_STORAGE_KEY = 'sr-active-role-session'
 
 export const useAuthStore = defineStore('auth', () => {
   const status = ref<AuthStatus>('idle')
@@ -30,6 +31,34 @@ export const useAuthStore = defineStore('auth', () => {
   ].filter((role): role is ActiveRole => Boolean(role)))
   const isAdmin = computed(() => activeRole.value === 'ADMINISTRADOR')
 
+  function clearRememberedRole(): void {
+    try { sessionStorage.removeItem(ROLE_STORAGE_KEY) } catch { /* Storage can be disabled. */ }
+  }
+
+  function rememberRole(role: ActiveRole): void {
+    const authUserId = session.value?.user?.id
+    const sessionId = session.value?.session?.id
+    if (!authUserId || !sessionId) return
+    try {
+      sessionStorage.setItem(ROLE_STORAGE_KEY, JSON.stringify({ authUserId, sessionId, role }))
+    } catch { /* Role selection still works without browser storage. */ }
+  }
+
+  function rememberedRole(): ActiveRole | null {
+    const authUserId = session.value?.user?.id
+    const sessionId = session.value?.session?.id
+    try {
+      const raw = sessionStorage.getItem(ROLE_STORAGE_KEY)
+      if (!raw) return null
+      const saved = JSON.parse(raw) as { authUserId?: unknown; sessionId?: unknown; role?: unknown } | null
+      if (authUserId && sessionId && saved?.authUserId === authUserId && saved.sessionId === sessionId
+        && (saved.role === 'ADMINISTRADOR' || saved.role === 'TECNICO')) return saved.role
+    } catch { /* Ignore invalid or unavailable browser storage. */ }
+    clearRememberedRole()
+    return null
+  }
+
+
   async function initialize(force = false): Promise<void> {
     if (initialization && !force) return initialization
     if (!force && status.value !== 'idle') return
@@ -50,6 +79,7 @@ export const useAuthStore = defineStore('auth', () => {
       currentSession = await getAuthSession({ forceRefresh: forceSession })
       session.value = currentSession
       if (!session.value?.user) {
+        clearRememberedRole()
         status.value = 'unauthenticated'
         user.value = null
         privateAvatarUrl.value = null
@@ -57,6 +87,15 @@ export const useAuthStore = defineStore('auth', () => {
       }
       user.value = await apiRequest<SessionProfile>('api/session')
       privateAvatarUrl.value = user.value.avatarUrl ?? null
+      if (user.value.requiereSeleccionRol) {
+        const savedRole = rememberedRole()
+        if (savedRole && rolesAvailable.value.includes(savedRole)) {
+          try { await selectRole(savedRole) }
+          catch { clearRememberedRole() } // Let the user choose again if the server rejects it.
+        } else if (savedRole) clearRememberedRole()
+      } else if (user.value.rolActivo && rolesAvailable.value.includes(user.value.rolActivo)) {
+        rememberRole(user.value.rolActivo)
+      }
       status.value = 'authenticated'
     } catch (restoreError) {
       const denied = restoreError instanceof ApiClientError && restoreError.status === 403
@@ -66,6 +105,7 @@ export const useAuthStore = defineStore('auth', () => {
       user.value = null
       privateAvatarUrl.value = null
       error.value = restoreError instanceof Error ? restoreError.message : 'No fue posible validar la sesión'
+      if (denied) clearRememberedRole()
       status.value = denied ? 'denied' : 'error'
     }
   }
@@ -105,14 +145,20 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function selectRole(role: ActiveRole): Promise<void> {
     if (!rolesAvailable.value.includes(role)) throw new Error('El rol seleccionado no está disponible')
-    user.value = await apiRequest<SessionProfile>('api/session/role', {
+    const selected = await apiRequest<SessionProfile>('api/session/role', {
       method: 'POST',
       body: JSON.stringify({ role }),
     })
+    if (selected.rolActivo !== role || selected.requiereSeleccionRol) {
+      throw new Error('El servidor no pudo activar el rol seleccionado')
+    }
+    user.value = selected
+    rememberRole(role)
   }
 
   async function logout(): Promise<void> {
     await endAuthSession()
+    clearRememberedRole()
     deniedEmail.value = null
     session.value = null
     user.value = null
