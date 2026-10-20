@@ -9,6 +9,7 @@ import StatusBadge from '@/components/base/StatusBadge.vue'
 import StatusPanel from '@/components/base/StatusPanel.vue'
 import ServicePage from '@/components/domain/services/ServicePage.vue'
 import TechnicianProductsList from '@/components/domain/services/TechnicianProductsList.vue'
+import TechnicianClientContact from '@/components/domain/services/TechnicianClientContact.vue'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { formatTechnicianDateTime, orderedTechnicianAreas, technicianAreaResolved, technicianServiceStateLabel, technicianServiceStateTone } from '@/helpers/technicianServices'
 import { useNotificationsStore } from '@/stores/notifications'
@@ -109,6 +110,7 @@ function openReview(): void {
           <div><dt><Clock3 :size="17" aria-hidden="true" />Programación</dt><dd>{{ formatTechnicianDateTime(packageValue.service.inicioProgramado) }}</dd></div>
           <div><dt><MapPin :size="17" aria-hidden="true" />Dirección</dt><dd>{{ packageValue.service.direccion }}</dd></div>
         </dl>
+        <TechnicianClientContact :service="packageValue.service" />
         <p class="technician-service-hero__saved"><PackageCheck :size="18" aria-hidden="true" />{{ currentFromCache ? 'Copia guardada disponible sin conexión' : `Guardado en este celular · ${formatTechnicianDateTime(currentCache?.savedAt ?? packageValue.serverNow)}` }}</p>
         <div v-if="packageValue.service.estado === 'PROGRAMADO'" class="technician-start">
           <p>{{ startMessage }}</p>
