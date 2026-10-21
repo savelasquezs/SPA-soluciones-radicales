@@ -191,14 +191,14 @@ const y=(value:number)=>geometry.bottom-value/props.chart.max*(geometry.bottom-g
 .report-species-figure__hit{cursor:crosshair;outline:none}
 .report-species-figure__hit:focus-visible{stroke:var(--report-accent);stroke-width:1.5;stroke-dasharray:3 4}
 .report-species-figure__tooltip{position:absolute;right:4px;top:3px;display:grid;gap:.22rem;max-width:min(75%,260px);padding:.55rem .65rem;border:1px solid var(--report-border);border-radius:7px;background:var(--report-tooltip);color:var(--report-ink);box-shadow:0 6px 16px rgba(22,48,70,.12);font-size:.73rem;line-height:1.45;z-index:2;pointer-events:none}
-.report-species-figure__tooltip strong{color:#203645}
-.report-species-figure__tooltip small{font-size:.7rem;color:#536b7b}
-.report-species-figure__place{font-size:.71rem;line-height:1.4;color:#536b7b}
+.report-species-figure__tooltip strong{color:var(--report-ink)}
+.report-species-figure__tooltip small{font-size:.7rem;color:var(--report-muted)}
+.report-species-figure__place{font-size:.71rem;line-height:1.4;color:var(--report-muted)}
 .report-species-figure__legend{display:flex;flex-wrap:wrap;gap:.3rem .8rem;font-size:.72rem;margin:.25rem 0;color:var(--report-ink,#203645)}
 .report-species-figure__legend span{display:inline-flex;align-items:center;gap:.32rem}
 .report-species-figure__legend i{height:10px;width:10px;border-radius:3px;flex-shrink:0}
 .report-species-figure__note{font-size:.67rem;color:var(--report-muted);line-height:1.45;margin:.4rem 0 0!important}
-.report-species-figure--expanded{border:0;padding:0;display:flex;flex-direction:column;gap:.55rem;color:#203645}
+.report-species-figure--expanded{border:0;padding:0;display:flex;flex-direction:column;gap:.55rem;color:var(--report-ink)}
 .report-species-figure--expanded .report-species-figure__visual{display:contents}
 .report-species-figure--expanded .report-species-figure__svg{
   order:1;
@@ -215,7 +215,7 @@ const y=(value:number)=>geometry.bottom-value/props.chart.max*(geometry.bottom-g
   gap:.4rem .8rem;
   margin:0;
   font-size:.75rem;
-  color:#203645;
+  color:var(--report-ink);
 }
 .report-species-figure--expanded .report-species-figure__tooltip{
   order:3;
@@ -226,35 +226,35 @@ const y=(value:number)=>geometry.bottom-value/props.chart.max*(geometry.bottom-g
   padding:.6rem .7rem;
   box-shadow:none;
   font-size:.78rem;
-  background:#f4f8fa;
-  color:#203645;
+  background:var(--report-light);
+  color:var(--report-ink);
 }
 .report-species-figure--expanded .report-species-figure__detail{
   order:4;
   margin:0;
   padding-top:.65rem;
-  border-top:1px solid #dbe5eb;
-  color:#203645;
+  border-top:1px solid var(--report-border);
+  color:var(--report-ink);
 }
 .report-species-figure--expanded .report-species-figure__note{
   order:5;
-  color:#536b7b;
+  color:var(--report-muted);
   font-size:.71rem;
   line-height:1.45;
   margin:0!important;
 }
-.report-species-figure__detail h4{font-size:.83rem;font-weight:650;margin:0 0 .45rem;color:#203645}
+.report-species-figure__detail h4{font-size:.83rem;font-weight:650;margin:0 0 .45rem;color:var(--report-ink)}
 .report-species-figure__detail table{
   width:100%;
   border-collapse:collapse;
   table-layout:fixed;
   font-size:.75rem;
   line-height:1.45;
-  color:#203645;
+  color:var(--report-ink);
 }
 .report-species-figure__detail th,.report-species-figure__detail td{
   padding:.5rem .35rem;
-  border-bottom:1px solid #dbe5eb;
+  border-bottom:1px solid var(--report-border);
   vertical-align:top;
   text-align:left;
   overflow-wrap:anywhere;
@@ -262,20 +262,20 @@ const y=(value:number)=>geometry.bottom-value/props.chart.max*(geometry.bottom-g
 .report-species-figure__detail th{
   font-size:.68rem;
   font-weight:650;
-  color:#536b7b;
-  background:#f4f8fa;
+  color:var(--report-muted);
+  background:var(--report-light);
 }
 .report-species-figure__detail th:first-child{width:47%}
 .report-species-figure__detail th:nth-child(2){width:31%}
 .report-species-figure__detail th:last-child{width:22%}
-.report-species-figure__detail td strong{color:#203645}
-.report-species-figure__detail td small{display:block;color:#536b7b;font-size:.7rem;line-height:1.35}
+.report-species-figure__detail td strong{color:var(--report-ink)}
+.report-species-figure__detail td small{display:block;color:var(--report-muted);font-size:.7rem;line-height:1.35}
 .report-species-figure__numeric{text-align:right!important;font-weight:650;font-variant-numeric:tabular-nums}
 @media(max-width:600px){
   .report-species-figure--expanded .report-species-figure__svg{max-width:100%;max-height:none;min-height:0}
   .report-species-figure--expanded .report-species-figure__axis,
-  .report-species-figure--expanded .report-species-figure__date{fill:#536b7b}
-  .report-species-figure--expanded .report-species-figure__value{fill:#203645}
+  .report-species-figure--expanded .report-species-figure__date{fill:var(--report-muted)}
+  .report-species-figure--expanded .report-species-figure__value{fill:var(--report-ink)}
   .report-species-figure--expanded .report-species-figure__detail td{font-size:.76rem}
 }
 @media print{
