@@ -87,8 +87,11 @@ const servicePackage = (state: TechnicianServiceSummary['estado'] = 'PROGRAMADO'
   signatures: { technicianStoragePath: null, technicianUserId: null, clientStoragePath: null, clientName: null, clientSignedAt: null },
 })
 
-async function setup(page: Page, withPriorFinding = false, failFirstPackage: boolean | number = false, initialState: TechnicianServiceSummary['estado'] = 'PROGRAMADO') {
-  let current = servicePackage(initialState, withPriorFinding)
+async function setup(page: Page, withPriorFinding = false, failFirstPackage: boolean | number = false, initialState: TechnicianServiceSummary['estado'] = 'PROGRAMADO', kind: 'PRINCIPAL' | 'REFUERZO' = 'PRINCIPAL') {
+  const asVisit = (value: TechnicianServicePackage): TechnicianServicePackage => kind === 'REFUERZO'
+    ? { ...value, service: { ...value.service, tipoServicio: 'REFUERZO' }, areas: [], deviceTypes: [] }
+    : value
+  let current = asVisit(servicePackage(initialState, withPriorFinding))
   let packageReads = 0
   const starts: Array<Record<string, unknown>> = []
   const orders: Array<Record<string, unknown>> = []
@@ -137,7 +140,7 @@ async function setup(page: Page, withPriorFinding = false, failFirstPackage: boo
     }
     if (path === `/api/technician/services/${ids.service}/start`) {
       starts.push(request.postDataJSON() as Record<string, unknown>)
-      current = servicePackage('EN_PROCESO', withPriorFinding)
+      current = asVisit(servicePackage('EN_PROCESO', withPriorFinding))
       const body = request.postDataJSON() as { deviceId: string }
       const session: TechnicianExecutionSession = { package: current, lock: { token: ids.lock, deviceId: body.deviceId, acquiredAt: current.serverNow } }
       await json(route, session)
@@ -190,6 +193,21 @@ async function setup(page: Page, withPriorFinding = false, failFirstPackage: boo
   })
   return { starts, orders, evaluations, deviceCreations, reportSends, get packageReads() { return packageReads } }
 }
+
+test('technician can open and start a reinforcement without a full MIP route or report', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const api = await setup(page, false, false, 'PROGRAMADO', 'REFUERZO')
+  await page.goto('/servicios')
+  await expect(page.getByText('Refuerzo')).toBeVisible()
+  await page.getByRole('button', { name: 'Ver servicio' }).click()
+  await expect(page.getByText('SR-0201 · Refuerzo')).toBeVisible()
+  await page.getByRole('button', { name: 'Iniciar servicio' }).click()
+  await expect(page.getByRole('heading', { name: 'Revisión y cierre' })).toBeVisible()
+  await expect(page.getByText('Servicio de refuerzo')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Estado por Área' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Enviar informe' })).toHaveCount(0)
+  expect(api.starts).toHaveLength(1)
+})
 
 test('technician prepares and starts the service from a mobile-first read-only surface', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
