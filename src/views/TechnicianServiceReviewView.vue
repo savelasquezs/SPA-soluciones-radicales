@@ -14,6 +14,7 @@ import TechnicianSignaturePad from '@/components/domain/services/TechnicianSigna
 import { orderedTechnicianAreas, technicianAreaResolved, technicianAreaIssues } from '@/helpers/technicianServices'
 import { useTechnicianServicesStore } from '@/stores/technicianServices'
 import { useTechnicianReportEmailStore } from '@/stores/technicianReportEmails'
+import type { TechnicianMutation } from '@/types/technicianServices'
 
 const route = useRoute()
 const router = useRouter()
@@ -45,6 +46,34 @@ const canFinalize = computed(() => !pending.value.length && technicianSigned.val
 const canOfferReport = computed(() => finalized.value
   || (finalization.value && finalization.value.status !== 'CONFLICT'))
 const pendingEmailItems = computed(() => emails.forService(serviceId.value))
+const operationLabels: Record<TechnicianMutation['kind'], string> = {
+  AREA_ORDER: 'Orden de Áreas',
+  CRITERION_EVALUATION: 'Evaluación MIP',
+  AREA_ACCESS: 'Acceso al Área',
+  DEVICE_CREATE: 'Nuevo puesto',
+  DEVICE_REVIEW: 'Revisión de puesto',
+  FINDING_CREATE: 'Nuevo Hallazgo',
+  FINDING_STATUS: 'Seguimiento de Hallazgo',
+  SERVICE_FINALIZE: 'Cierre del servicio',
+}
+const syncProblem = computed(() => services.currentMutations.find(item =>
+  item.kind !== 'SERVICE_FINALIZE' && item.status === 'CONFLICT')
+  ?? services.currentMutations.find(item => item.kind !== 'SERVICE_FINALIZE' && Boolean(item.error)))
+const syncProblemArea = computed(() => {
+  const problem = syncProblem.value
+  return problem && 'areaId' in problem ? areas.value.find(area => area.id === problem.areaId) ?? null : null
+})
+const needsVersionResolution = computed(() => {
+  const problem = syncProblem.value
+  return Boolean(problem && 'conflict' in problem && problem.conflict)
+})
+const syncProblemMessage = computed(() => {
+  const problem = syncProblem.value
+  if (!problem) return ''
+  const location = syncProblemArea.value ? ` · ${syncProblemArea.value.nombre}` : ''
+  const reason = problem.error || 'Este cambio requiere revisión antes del cierre.'
+  return `${operationLabels[problem.kind]}${location}: ${reason}`
+})
 const cachedContactEmails = computed(() => {
   const service = packageValue.value?.service
   const available = [...(service?.contactEmails ?? []),service?.contactoPrincipalCorreo]
@@ -76,6 +105,24 @@ onMounted(async () => {
   finally { loading.value = false }
 })
 
+function reviewSyncProblem(): void {
+  const problem = syncProblem.value
+  if (!problem) return
+  if (!('areaId' in problem)) {
+    void router.push({ name: problem.kind === 'AREA_ORDER' ? 'technician-service-area-order' : 'technician-service-work',
+      params: { id: serviceId.value } })
+    return
+  }
+  const tab = problem.kind === 'CRITERION_EVALUATION' ? 'criteria'
+    : problem.kind === 'DEVICE_CREATE' || problem.kind === 'DEVICE_REVIEW' ? 'points'
+      : problem.kind === 'FINDING_CREATE' || problem.kind === 'FINDING_STATUS' ? 'findings' : ''
+  const focus = problem.kind === 'CRITERION_EVALUATION' ? problem.criterionId
+    : problem.kind === 'DEVICE_REVIEW' ? problem.serviceDeviceId
+      : problem.kind === 'FINDING_CREATE' || problem.kind === 'FINDING_STATUS' ? problem.findingId : ''
+  void router.push({ name: 'technician-service-area', params: { id: serviceId.value, areaId: problem.areaId },
+    query: { ...(tab ? { tab } : {}), ...(focus ? { focus } : {}) } })
+}
+
 function openArea(areaId: string): void {
   const area = areas.value.find(item => item.id === areaId)
   const issue = area ? technicianAreaIssues(area, serviceId.value)[0] : null
@@ -106,7 +153,7 @@ async function finish(): Promise<void> {
       ? await services.retryFinalize(serviceId.value)
       : await services.finalizeService(serviceId.value, clientName.value)
     actionMessage.value = result === 'synced' ? 'Servicio finalizado.' : result === 'conflict'
-      ? 'Revisa el error del cierre antes de volver a intentarlo.'
+      ? 'Hay un cambio pendiente que impide finalizar. Revisa el detalle antes de continuar.'
       : finalization.value?.error ? 'El cierre sigue guardado. Revisa el error y vuelve a intentar la sincronización.'
         : online.value ? 'El cierre está pendiente de sincronización.'
           : 'Cierre guardado. Se finalizará al recuperar conexión.'
@@ -142,9 +189,13 @@ async function finish(): Promise<void> {
         <article><div><strong>Técnico</strong><span>{{ technicianSigned ? 'Firma guardada' : 'Pendiente' }}</span></div><BaseButton variant="secondary" :disabled="saving || Boolean(finalization)" @click="signatureRole = 'TECHNICIAN'">{{ technicianSigned ? 'Firmar de nuevo' : 'Firmar' }}</BaseButton></article>
         <article><div><strong>Responsable del cliente</strong><span>{{ clientSigned ? 'Firma guardada' : 'Pendiente' }}</span></div><BaseButton variant="secondary" :disabled="saving || Boolean(finalization)" @click="signatureRole = 'CLIENT'">{{ clientSigned ? 'Firmar de nuevo' : 'Firmar' }}</BaseButton></article>
         <BaseInput v-model="clientName" name="client-signer-name" label="Nombre de quien firma por el cliente" maxlength="200" required :disabled="saving || Boolean(finalization)" />
-        <StatusPanel v-if="actionError || finalization?.error" compact title="No fue posible sincronizar el cierre" :message="actionError || finalization?.error || ''" tone="danger" />
+        <StatusPanel v-if="syncProblem || actionError || finalization?.error" compact title="Sincronización detenida"
+          :message="syncProblem ? syncProblemMessage : actionError || finalization?.error || ''" tone="danger" />
         <StatusPanel v-else-if="actionMessage" compact title="Estado del cierre" :message="actionMessage" :tone="actionMessage === 'Servicio finalizado.' ? 'success' : 'warning'" />
-        <BaseButton :loading="saving" :disabled="!canFinalize || (Boolean(finalization) && (!online || services.syncing))" @click="finish">{{ finalization?.status === 'CONFLICT' ? 'Reintentar cierre' : finalization ? (online ? 'Reintentar sincronización' : 'Cierre pendiente') : 'Finalizar servicio' }}</BaseButton>
+        <BaseButton v-if="syncProblem" variant="secondary" size="compact" :disabled="saving" @click="reviewSyncProblem">
+          {{ syncProblemArea ? 'Revisar Área' : 'Revisar recorrido' }}
+        </BaseButton>
+        <BaseButton :loading="saving" :disabled="!canFinalize || needsVersionResolution || (Boolean(finalization) && (!online || services.syncing))" @click="finish">{{ finalization?.status === 'CONFLICT' ? 'Reintentar cierre' : finalization ? (online ? 'Reintentar sincronización' : 'Cierre pendiente') : 'Finalizar servicio' }}</BaseButton>
       </section>
       <section v-if="canOfferReport && !simplified" class="review-email" aria-labelledby="review-email-title">
         <div><h2 id="review-email-title">Enviar informe al cliente</h2>
@@ -155,7 +206,7 @@ async function finish(): Promise<void> {
           message="No se pudo confirmar o completar el envío. Revisa Gmail y solicita apoyo al administrador antes de generar otro intento." />
         <StatusPanel v-else-if="pendingEmailItems.length" compact
           title="Envío pendiente" tone="warning"
-          :message="pendingEmailItems[0]?.error || (finalization?.error ? 'El cierre requiere atención antes de enviar el informe.' : 'Guardado en este dispositivo. Se enviará después de confirmar el cierre y recuperar internet.')" />
+          :message="pendingEmailItems[0]?.error || (syncProblem || finalization?.error ? 'El informe está guardado, pero hay cambios del servicio sin sincronizar. Primero debe confirmarse el cierre.' : 'Guardado en este dispositivo. Se enviará después de confirmar el cierre y recuperar internet.')" />
         <p v-if="emailInfo" class="review-email__notice" role="status">{{ emailInfo }}</p>
         <BaseButton variant="secondary" size="compact" :disabled="Boolean(pendingEmailItems.length)" @click="reportModalOpen=true">
           <Mail :size="16" aria-hidden="true" /> Enviar informe
