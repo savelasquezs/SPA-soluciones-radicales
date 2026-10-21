@@ -389,3 +389,65 @@ describe('access boundary for accounts without an active application profile', (
     expect(clientQuery).not.toHaveBeenCalled()
   })
 })
+
+describe('Site vehicles API', () => {
+  const siteId = '11111111-1111-4111-8111-111111111111'
+  const vehicleId = '22222222-2222-4222-8222-222222222222'
+  const headers = { Authorization: 'Bearer token', 'Content-Type': 'application/json' }
+  beforeEach(() => {
+    vi.clearAllMocks()
+    verifyAuthorization.mockResolvedValue({ authUserId:'auth-user', session:{ sub:'auth-user' } })
+    requireAdmin.mockResolvedValue({ id:'admin-id' })
+    transaction.mockImplementation(async callback => callback({ query: clientQuery }))
+  })
+
+  it('normalizes lower-case plates before saving', async () => {
+    clientQuery.mockImplementation(async sql => {
+      if (sql.includes('insert into public.vehiculos')) return { rows:[{ id:vehicleId }], rowCount:1 }
+      if (sql.includes('from public.vehiculos v')) {
+        return { rows:[{ id:vehicleId, siteId, placa:'ABC123', activo:true, version:1 }], rowCount:1 }
+      }
+      return { rows:[], rowCount:1 }
+    })
+    const response = await app.request('/api/sites/' + siteId + '/vehicles', {
+      method:'POST', headers, body:JSON.stringify({ placa:' abc123 ' }),
+    })
+    expect(response.status).toBe(201)
+    expect(await response.json()).toMatchObject({ placa:'ABC123' })
+    expect(clientQuery).toHaveBeenCalledWith(expect.stringContaining('insert into public.vehiculos'), [siteId,'ABC123'])
+  })
+
+  it('denies the list without admin permission', async () => {
+    requireAdmin.mockRejectedValue(new Error('Se requiere Administrador'))
+    const response = await app.request('/api/sites/' + siteId + '/vehicles', { headers })
+    expect(response.status).not.toBe(200)
+    expect(clientQuery).not.toHaveBeenCalled()
+  })
+
+  it('prevents a historical vehicle plate change', async () => {
+    clientQuery.mockImplementation(async sql => {
+      if (sql.includes('for update of v')) return { rows:[{ placa:'ABC123', activo:true, siteId, enabled:true }], rowCount:1 }
+      if (sql.includes('as used')) return { rows:[{ used:true }], rowCount:1 }
+      return { rows:[], rowCount:1 }
+    })
+    const response = await app.request('/api/vehicles/' + vehicleId, {
+      method:'PATCH', headers, body:JSON.stringify({ placa:'def456', activo:true, version:1 }),
+    })
+    expect(response.status).toBe(409)
+    expect(clientQuery.mock.calls.some(([sql]) => sql.includes('update public.vehiculos'))).toBe(false)
+  })
+
+  it('loads the certificates belonging to a vehicle and site', async () => {
+    clientQuery.mockImplementation(async sql => {
+      if (sql.includes('select id from public.vehiculos')) return { rows:[{ id:vehicleId }], rowCount:1 }
+      if (sql.includes('from public.certificados c')) {
+        return { rows:[{ id:'cert-1', serviceId:'service-1', solicitud:'022', issuedOn:'2026-10-21',
+          expiresOn:'2027-10-21', status:'GENERADO', pdfAvailable:true }], rowCount:1 }
+      }
+      return { rows:[], rowCount:1 }
+    })
+    const response = await app.request('/api/sites/' + siteId + '/vehicles/' + vehicleId + '/certificates?page=1', { headers })
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ page:1, hasMore:false, items:[{ solicitud:'022' }] })
+  })
+})

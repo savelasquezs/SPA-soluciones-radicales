@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import AreaForm from '@/components/domain/clients/AreaForm.vue'
 import ClientForm from '@/components/domain/clients/ClientForm.vue'
 import SiteForm from '@/components/domain/clients/SiteForm.vue'
+import VehicleForm from '@/components/domain/clients/VehicleForm.vue'
 import type { AreaInput, ClientInput, SiteInput } from '@/types/domain'
 
 const client = (type: ClientInput['tipoCliente']): ClientInput => ({ tipoCliente: type, nombre: type === 'NEGOCIO' ? 'Acme SAS' : 'María Gómez', nit: type === 'NEGOCIO' ? '900123' : null, correos: [], activo: true, vigenciaCertificadoMeses: type === 'NEGOCIO' ? 12 : null, residenciaDireccion: type === 'RESIDENCIAL' ? 'Calle 1' : null, residenciaCelular: type === 'RESIDENCIAL' ? '+573001234567' : null, residenciaValorServicio: type === 'RESIDENCIAL' ? 105000 : null })
@@ -53,5 +54,22 @@ describe('formularios compartidos de Clientes', () => {
     const edit = mount(AreaForm, { props: { modelValue: { ...input, version: 2 }, mode: 'edit' } })
     expect(create.html().replace('Cocina', '')).toContain('area-name')
     expect(edit.get<HTMLInputElement>('#area-name').element.value).toBe('Cocina')
+  })
+})
+
+describe('VehicleForm reusable create/edit', () => {
+  it('converts plate input to uppercase and reuses the same form', async () => {
+    const wrapper = mount(VehicleForm, { props:{ modelValue:{ placa:'', activo:true }, mode:'create' } })
+    await wrapper.get('input').setValue('abc123')
+    expect(wrapper.emitted('update:modelValue')?.[0]?.[0]).toMatchObject({ placa:'ABC123' })
+    await wrapper.setProps({ modelValue:{ placa:'ABC123', activo:true }, mode:'edit' })
+    await wrapper.get('form').trigger('submit')
+    expect(wrapper.emitted('submit')).toHaveLength(1)
+  })
+  it('prevents submitting an invalid plate', async () => {
+    const wrapper = mount(VehicleForm, { props:{ modelValue:{ placa:'X', activo:true }, mode:'create' } })
+    await wrapper.get('form').trigger('submit')
+    expect(wrapper.emitted('invalid')).toHaveLength(1)
+    expect(wrapper.emitted('submit')).toBeUndefined()
   })
 })

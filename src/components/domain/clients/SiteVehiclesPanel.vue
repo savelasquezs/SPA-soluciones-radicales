@@ -137,9 +137,10 @@ async function loadHistory(page: number): Promise<void> {
 async function view(document: VehicleCertificate): Promise<void> {
   if (previewLoading.value || !document.pdfAvailable) return
   previewLoading.value = true
+  const vehicleId = historyVehicle.value?.id
   try {
     const url = await getCertificateUrl(document.id, true)
-    if (!historyVehicle.value) return
+    if (!vehicleId || historyVehicle.value?.id !== vehicleId) return
     previewUrl.value = url
     previewDocument.value = document
   } catch (cause) {
@@ -178,7 +179,7 @@ function formatDate(date: string): string { return date.slice(0,10).split('-').r
               <td><div class="actions">
                 <button :aria-label="'Certificados de ' + vehicle.placa" title="Ver certificados" @click="openHistory(vehicle)"><FileText :size="17" /></button>
                 <button v-if="enabled" :aria-label="'Editar ' + vehicle.placa" title="Editar" @click="edit(vehicle)"><Pencil :size="17" /></button>
-                <button v-if="vehicle.activo" :aria-label="'Eliminar ' + vehicle.placa" title="Eliminar o desactivar" :disabled="saving" @click="deleteTarget = vehicle"><Trash2 :size="17" /></button>
+                <button v-if="enabled && vehicle.activo" :aria-label="'Eliminar ' + vehicle.placa" title="Eliminar o desactivar" :disabled="saving" @click="deleteTarget = vehicle"><Trash2 :size="17" /></button>
                 <button v-else-if="enabled" :aria-label="'Reactivar ' + vehicle.placa" title="Reactivar" :disabled="saving" @click="setActive(vehicle, true)"><RotateCcw :size="17" /></button>
               </div></td>
             </tr>
@@ -192,7 +193,7 @@ function formatDate(date: string): string { return date.slice(0,10).split('-').r
             <div class="actions">
               <button :aria-label="'Certificados de ' + vehicle.placa" title="Ver certificados" @click="openHistory(vehicle)"><FileText :size="17" /></button>
               <button v-if="enabled" :aria-label="'Editar ' + vehicle.placa" title="Editar" @click="edit(vehicle)"><Pencil :size="17" /></button>
-              <button v-if="vehicle.activo" :aria-label="'Eliminar ' + vehicle.placa" title="Eliminar o desactivar" :disabled="saving" @click="deleteTarget = vehicle"><Trash2 :size="17" /></button>
+              <button v-if="enabled && vehicle.activo" :aria-label="'Eliminar ' + vehicle.placa" title="Eliminar o desactivar" :disabled="saving" @click="deleteTarget = vehicle"><Trash2 :size="17" /></button>
               <button v-else-if="enabled" :aria-label="'Reactivar ' + vehicle.placa" title="Reactivar" :disabled="saving" @click="setActive(vehicle, true)"><RotateCcw :size="17" /></button>
             </div>
           </article>

@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../db', () => ({ pool: { query: mocks.query }, transaction: (callback: (client: unknown) => unknown) => callback({ query: mocks.query }) }))
 vi.mock('../auth', async (original) => ({ ...await original<typeof import('../auth')>(), requireAdmin: mocks.admin }))
 vi.mock('../google', () => ({ sendGmailMessage: mocks.send }))
-vi.mock('../r2', async (original) => ({ ...await original<typeof import('../r2')>(), readMasterObject: mocks.read, putCertificateObject: mocks.write, readCertificateObject: mocks.readPdf }))
+vi.mock('../r2', async (original) => ({ ...await original<typeof import('../r2')>(), readMasterObject: mocks.read, putCertificateObject: mocks.write, readCertificateObject: mocks.readPdf, createCertificateReadUrl: (_path: string, name?: string) => name ? 'https://test.example/download' : 'https://test.example/inline' }))
 vi.mock('./generator', async (original) => ({ ...await original<typeof import('./generator')>(), generateCertificatePdf: mocks.pdf }))
 vi.mock('./repository', async (original) => ({ ...await original<typeof import('./repository')>(), loadCertificateContext: mocks.load, loadSettings: mocks.settings }))
 vi.mock('./jobs', () => ({ claimCertificateJob: mocks.claim, lockCertificateJob: mocks.lock, completeCertificateJob: mocks.complete, failCertificateJob: mocks.fail, markEmailDispatching: mocks.dispatch }))
@@ -162,5 +162,20 @@ describe('certificate API authorization and mutations', () => {
     expect((await response.json()).code).toBe('EMAIL_DELIVERY_UNKNOWN')
     expect(mocks.fail).toHaveBeenCalledWith(expect.anything(), expect.anything(), true)
     expect(mocks.send).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('inline PDF preview', () => {
+  it('preserves download mode while supporting inline viewing', async () => {
+    mocks.query.mockImplementation(async (sql) => ({
+      rows: sql.includes('select c.pdf_storage_path as path')
+        ? [{ path: 'certificates/' + id + '/' + id + '/doc.pdf', available:true }] : [],
+      rowCount:1,
+    }))
+    const inline = await request('/documents/' + id + '/read-url', { inline:true })
+    expect(inline.status).toBe(200)
+    expect(await inline.json()).toEqual({ url:'https://test.example/inline' })
+    const download = await request('/documents/' + id + '/read-url', {})
+    expect(await download.json()).toEqual({ url:'https://test.example/download' })
   })
 })
