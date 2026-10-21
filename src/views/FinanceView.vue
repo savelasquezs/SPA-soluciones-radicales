@@ -215,7 +215,7 @@ async function proof(payment:Pago):Promise<void>{
         <section class="finance-card">
           <h2>Caja de técnicos</h2><p class="finance-muted">Saldo acumulado, incluso si proviene de días anteriores.</p>
           <ResponsiveTable><template #table><table><thead><tr><th>Técnico</th><th class="numeric">Efectivo recibido</th><th class="numeric">Entregado</th><th class="numeric">Por entregar</th><th>Acción</th></tr></thead>
-            <tbody><tr v-for="t in technicians" :key="t.id"><td><button class="finance-link" @click="technicianId=t.id">{{ t.nombre }}</button></td><td class="numeric">{{ fmt(t.recaudado) }}</td>
+            <tbody><tr v-for="t in technicians" :key="t.id"><td><button class="finance-link" @click="technicianId=t.id">{{ t.nombre }}</button></td><td class="numeric">{{ fmt(t.recaudado) }}<small>Hoy {{ fmt(t.recaudadoHoy) }}</small></td>
               <td class="numeric">{{ fmt(t.entregado) }}</td><td class="numeric"><strong>{{ fmt(t.saldo) }}</strong></td><td><BaseButton size="compact" variant="secondary" :disabled="t.saldo<=0" @click="openCash(t)">Recibir dinero</BaseButton></td>
             </tr></tbody></table></template>
             <template #cards><article v-for="t in technicians" :key="t.id" class="finance-mobile-record"><button class="finance-link" @click="technicianId=t.id">{{ t.nombre }}</button>
