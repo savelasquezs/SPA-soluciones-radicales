@@ -45,7 +45,7 @@ const allocations=computed(()=>Object.entries(values.value).map(([servicioId,tex
   .filter(a=>Number.isSafeInteger(a.monto)&&a.monto>0))
 const totalPayment=computed(()=>allocations.value.reduce((t,a)=>t+a.monto,0))
 const validPayment=computed(()=>Boolean(account.value && totalPayment.value>0
-  && allocations.value.every(a=>a.monto<=(account.value?.servicios.find(s=>s.id===a.servicioId)?.saldo??0))
+  && allocations.value.every(a=>a.monto<=(account.value?.servicios.find(s=>s.id===a.servicioId)?.disponible??0))
   && Object.values(values.value).every(v=>!v||(/^\d+$/.test(v)&&Number(v)>=0))
   && (paymentMethod.value!=='EFECTIVO'||receiver.value)))
 const pendingInCash=computed(()=>snapshot.value?.pagosRevision.filter(p=>p.metodo==='EFECTIVO').length??0)
@@ -85,8 +85,8 @@ function openPayment():void{
   values.value={}
   const selected=route.query.servicio
   if(typeof selected==='string'){
-    const service=account.value.servicios.find(s=>s.id===selected && s.saldo>0)
-    if(service)values.value[service.id]=String(service.saldo)
+    const service=account.value.servicios.find(s=>s.id===selected && s.disponible>0)
+    if(service)values.value[service.id]=String(service.disponible)
   }
   paymentOpen.value=true
 }
@@ -166,6 +166,7 @@ async function proof(payment:Pago):Promise<void>{
       <section class="finance-kpis" aria-label="Resumen financiero">
         <article><span>Cartera por cobrar</span><strong>{{ fmt(totalCartera) }}</strong></article>
         <article><span>Efectivo por entregar</span><strong>{{ fmt(totalCaja) }}</strong></article>
+        <article><span>Recibido en caja central</span><strong>{{ fmt(snapshot.cajaCentral) }}</strong></article>
         <article><span>Cobros por revisar</span><strong>{{ snapshot.pagosRevision.length }}</strong><small>{{ pendingInCash }} en efectivo</small></article>
       </section>
       <nav class="finance-tabs" aria-label="Módulos financieros">
@@ -257,9 +258,9 @@ async function proof(payment:Pago):Promise<void>{
             <option value="">Seleccionar</option><option :value="auth.profile?.id??''">Caja central (administración)</option>
             <option v-for="t in technicians.filter(t=>t.id!==auth.profile?.id)" :key="t.id" :value="t.id">{{ t.nombre }}</option>
           </BaseSelect></div>
-        <div class="finance-allocations"><h3>Aplicar a servicios</h3><div v-for="s in account.servicios.filter(s=>s.saldo>0)" :key="s.id" class="finance-amount-row">
-          <div><strong>{{ s.solicitud }}</strong><small>{{ s.sedeNombre }} · Pendiente {{ fmt(s.saldo) }}</small></div>
-          <BaseInput :model-value="values[s.id] ?? ''" @update:model-value="values[s.id]=$event" :name="'pay-'+s.id" label="Abono (COP)" type="number" min="0" :max="String(s.saldo)" step="1"/>
+        <div class="finance-allocations"><h3>Aplicar a servicios</h3><div v-for="s in account.servicios.filter(s=>s.disponible>0)" :key="s.id" class="finance-amount-row">
+          <div><strong>{{ s.solicitud }}</strong><small>{{ s.sedeNombre }} · Disponible {{ fmt(s.disponible) }}<template v-if="s.porConfirmar"> · Por confirmar {{ fmt(s.porConfirmar) }}</template></small></div>
+          <BaseInput :model-value="values[s.id] ?? ''" @update:model-value="values[s.id]=$event" :name="'pay-'+s.id" label="Abono (COP)" type="number" min="0" :max="String(s.disponible)" step="1"/>
         </div></div>
         <BaseTextarea v-model="paymentNote" name="payment-note" label="Observación (opcional)" :rows="2" maxlength="1000"/>
         <p class="finance-total">Total a registrar <strong>{{ fmt(totalPayment) }}</strong></p>
@@ -299,7 +300,7 @@ async function proof(payment:Pago):Promise<void>{
 .finance-head,.finance-section-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.65rem}
 h1{font-size:1.35rem;line-height:1.7rem;font-weight:650;margin:0}h2{font-size:1rem;margin:0}h3{font-size:.88rem;margin:0}
 .finance-head p,.finance-section-head p,.finance-muted,.finance-toolbar p{color:var(--text-secondary);font-size:.78rem;margin:.2rem 0 0}
-.finance-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.6rem}
+.finance-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.6rem}
 .finance-kpis article,.finance-card{min-width:0;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--surface);padding:.85rem}
 .finance-kpis article{display:grid;gap:.4rem}
 .finance-kpis span,.finance-kpis small{color:var(--text-secondary);font-size:.75rem}
@@ -325,5 +326,5 @@ tr:last-child td{border-bottom:0}tr.selected{background:var(--hover)}
 .finance-amount-row strong{font-size:.85rem}.finance-total{display:flex;justify-content:space-between;gap:1rem;padding:.75rem 0;border-top:1px solid var(--border);font-size:.9rem}
 .finance-mobile-record{display:grid;gap:.3rem;text-align:left;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text);padding:.75rem;font-size:.85rem}
 .finance-mobile-record small{color:var(--text-secondary);font-size:.75rem}.finance-mobile-record span{font-weight:600}
-@media(max-width:720px){.finance-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.finance-kpis article:last-child{grid-column:span 2}.finance-form-row,.finance-amount-row{grid-template-columns:1fr}.finance-entry{align-items:flex-start;flex-direction:column}.finance-actions{justify-content:flex-start}.finance-toolbar>*:first-child{width:100%}}
+@media(max-width:720px){.finance-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.finance-form-row,.finance-amount-row{grid-template-columns:1fr}.finance-entry{align-items:flex-start;flex-direction:column}.finance-actions{justify-content:flex-start}.finance-toolbar>*:first-child{width:100%}}
 </style>
