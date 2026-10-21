@@ -127,8 +127,13 @@ test('video: gestión y reutilización de Áreas por Sede',async({page})=>{
   })
   await narrate('deactivate',async clock=>{
     const confirm=page.getByRole('dialog',{name:'Desactivar Área'})
-    await clock.until(.40)
-    await demoClick(confirm.getByRole('button',{name:'Desactivar',exact:true}))
+    const action=confirm.getByRole('button',{name:'Desactivar',exact:true})
+    await clock.until(.34)
+    await pointAt(action,260)
+    // El diálogo precedente puede seguir interceptando el puntero durante su transición.
+    // La acción visible y habilitada se activa directamente para no introducir silencios.
+    await expect(action).toBeVisible()
+    await action.click({force:true})
     await expect(confirm).toBeHidden()
   })
   await narrate('inactive',async clock=>{
