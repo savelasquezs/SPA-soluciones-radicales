@@ -160,19 +160,23 @@ function normalizeArea(area: AreaWire): AreaRecord {
   return { ...area, version: Number(area.version), dispositivosCount: Number(area.dispositivosCount) }
 }
 
+type VehicleWire = Omit<VehicleRecord, 'version'> & { version: number | string }
+function normalizeVehicle(vehicle: VehicleWire): VehicleRecord {
+  return { ...vehicle, version: Number(vehicle.version) }
+}
 export async function listVehicles(siteId: string): Promise<VehicleRecord[]> {
-  const rows = await apiRequest<(Omit<VehicleRecord,'version'> & { version: number | string })[]>(`api/sites/${encodeURIComponent(siteId)}/vehicles`)
-  return rows.map((vehicle) => ({ ...vehicle, version: Number(vehicle.version) }))
+  const rows = await apiRequest<VehicleWire[]>(`api/sites/${encodeURIComponent(siteId)}/vehicles`)
+  return rows.map(normalizeVehicle)
 }
 export async function createVehicle(siteId: string, input: VehicleInput): Promise<VehicleRecord> {
-  return apiRequest<VehicleRecord>(`api/sites/${encodeURIComponent(siteId)}/vehicles`, {
+  return normalizeVehicle(await apiRequest<VehicleWire>(`api/sites/${encodeURIComponent(siteId)}/vehicles`, {
     method: 'POST', body: JSON.stringify({ placa: input.placa.trim().toUpperCase() }),
-  })
+  }))
 }
 export async function updateVehicle(id: string, input: VehicleInput): Promise<VehicleRecord> {
-  return apiRequest<VehicleRecord>(`api/vehicles/${encodeURIComponent(id)}`, {
+  return normalizeVehicle(await apiRequest<VehicleWire>(`api/vehicles/${encodeURIComponent(id)}`, {
     method: 'PATCH', body: JSON.stringify({ ...input, placa: input.placa.trim().toUpperCase() }),
-  })
+  }))
 }
 export async function deleteVehicle(id: string, version: number): Promise<void> {
   await apiRequest(`api/vehicles/${encodeURIComponent(id)}?version=${version}`, { method: 'DELETE' })
