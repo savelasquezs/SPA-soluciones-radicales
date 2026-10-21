@@ -52,5 +52,14 @@
     "output": "clientes-gestion-sedes-v1.mp4",
     "artifact": "documentation-video-clientes-gestion-sedes-v1",
     "metadataTitle": "Gestión de sedes · Manual de usuario"
+  },
+  "clientes-vehiculos-v1": {
+    "id": "clientes-vehiculos-v1",
+    "narration": "e2e/documentation/vehicles.narration.json",
+    "spec": "e2e/documentation/vehicles.docs.spec.ts",
+    "storyboard": "e2e/documentation/vehicles.storyboard.md",
+    "output": "clientes-gestion-vehiculos-v1.mp4",
+    "artifact": "documentation-video-clientes-vehiculos-v1",
+    "metadataTitle": "Gestión de vehículos · Manual de usuario"
   }
 }
