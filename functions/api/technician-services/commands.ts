@@ -556,23 +556,28 @@ export async function saveTechnicianDeviceReview(
     input.estadoObservado, JSON.stringify(captures), consumo || null, productoQuimico || null, antidoto || null,
     observaciones || null, photoStoragePath,
   ]
+  // The UPDATE requires its own contiguous parameter list. Reusing the INSERT's 15
+  // values leaves $1 and $3-$7 untyped and PostgreSQL rejects it with SQLSTATE 42P18.
+  const updateValues = [
+    serviceDeviceId, input.estadoObservado, JSON.stringify(captures), consumo || null,
+    productoQuimico || null, antidoto || null, observaciones || null, photoStoragePath, context.revision?.id,
+  ]
+  const returning = `returning id,estado_observado as "estadoObservado",capturas_json as capturas,
+    case when consumo is null then '' when jsonb_typeof(consumo)='string' then consumo #>> '{}' else consumo::text end as consumo,
+    coalesce(producto_quimico,'') as "productoQuimico",coalesce(antidoto,'') as antidoto,
+    coalesce(observaciones,'') as observaciones,foto_storage_path as "fotoStoragePath",version::integer`
   const query = context.revision
-    ? `update public.revisiones_dispositivos set estado_observado=$8,capturas_json=$9::jsonb,
-        consumo=case when $10::text is null then null else to_jsonb($10::text) end,producto_quimico=$11,antidoto=$12,
-        observaciones=$13,foto_storage_path=$14 where id=$15 and servicio_dispositivo_id=$2
-      returning id,estado_observado as "estadoObservado",capturas_json as capturas,
-        case when consumo is null then '' when jsonb_typeof(consumo)='string' then consumo #>> '{}' else consumo::text end as consumo,
-        coalesce(producto_quimico,'') as "productoQuimico",coalesce(antidoto,'') as antidoto,
-        coalesce(observaciones,'') as observaciones,foto_storage_path as "fotoStoragePath",version::integer`
+    ? `update public.revisiones_dispositivos set estado_observado=$2,capturas_json=$3::jsonb,
+        consumo=case when $4::text is null then null else to_jsonb($4::text) end,producto_quimico=$5,antidoto=$6,
+        observaciones=$7,foto_storage_path=$8 where id=$9 and servicio_dispositivo_id=$1
+      ${returning}`
     : `insert into public.revisiones_dispositivos(id,servicio_id,servicio_dispositivo_id,dispositivo_id,area_id,
         numero_snapshot,ubicacion_snapshot,tipo_dispositivo_codigo,estado_observado,capturas_json,consumo,
         producto_quimico,antidoto,observaciones,foto_storage_path)
       values($15,$1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,case when $10::text is null then null else to_jsonb($10::text) end,$11,$12,$13,$14)
-      returning id,estado_observado as "estadoObservado",capturas_json as capturas,
-        case when consumo is null then '' when jsonb_typeof(consumo)='string' then consumo #>> '{}' else consumo::text end as consumo,
-        coalesce(producto_quimico,'') as "productoQuimico",coalesce(antidoto,'') as antidoto,
-        coalesce(observaciones,'') as observaciones,foto_storage_path as "fotoStoragePath",version::integer`
-  const review = (await client.query<TechnicianDeviceReview>(query, [...values, context.revision?.id ?? reviewId])).rows[0]!
+      ${returning}`
+  const review = (await client.query<TechnicianDeviceReview>(query,
+    context.revision ? updateValues : [...values, reviewId])).rows[0]!
   await client.query('update public.dispositivos set estado_actual=$2 where id=$1 and estado_actual<>$2', [context.dispositivoId, input.estadoObservado])
   await audit(client, userId, 'SERVICIO_DISPOSITIVO_REVISADO', serviceId, {
     serviceDeviceId,
