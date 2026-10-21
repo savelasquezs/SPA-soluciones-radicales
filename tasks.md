@@ -1,5 +1,12 @@
 # Tareas aprobadas
 
+## Pagos, cartera y caja
+
+- [x] Implementar libro de pagos/aplicaciones, cartera por Cliente y caja acumulada por Técnico; consulta administrativa compacta y reporte técnico sujeto a confirmación.
+- [x] Conectar acceso desde Clientes/Servicios y permitir entregas parciales, anulaciones auditadas y comprobantes R2 privados.
+- [ ] Validar las migraciones y flujos con CI, pruebas reales de desarrollo y confirmación del modelo comercial del cliente antes de producción.
+- [ ] Acordar si existen mensualidades contractuales fijas y, de existir, definir sus cargos sin facturar dos veces cada visita.
+
 ## Publicación y verificación Google OAuth
 
 - [x] Cambiar la aplicación OAuth empresarial de Google Cloud de modo Prueba a **En producción** (2026-10-13) para eliminar el vencimiento automático de refresh tokens a los 7 días asociado al modo Prueba.
