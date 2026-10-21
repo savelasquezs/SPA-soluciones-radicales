@@ -1,3 +1,4 @@
+import { registerPayment } from '../finance/ledger'
 import { createHash, randomUUID } from 'node:crypto'
 import type { PoolClient } from 'pg'
 import type { AdminService, ConfirmationEmail, ScheduleConflict, ServiceInput, ServiceMutation, ServicePaymentInput, ServiceSchedule, ServiceReassignment, UpcomingPatch, UpcomingService } from '../../../src/types/adminServices'
@@ -362,22 +363,39 @@ export async function cancelService(client: PoolClient, actorId: string, id: str
   await audit(client,actorId,'SERVICIO_CANCELADO',id,{ motivo:reason, before, afectados:result.services.filter(row=>row.estado==='CANCELADO').map(row=>row.id), dispositivosDesactivados:deactivatedDevices })
   return result
 }
-export async function savePayment(client: PoolClient, actorId: string, id: string, expected: number, input: ServicePaymentInput): Promise<ServiceMutation> {
+export async function savePayment(client: PoolClient, actorId: string, id: string, expected: number, input: ServicePaymentInput, requestId: string): Promise<ServiceMutation> {
+  // Compatibilidad con el editor existente: un primer pago completo usa el mismo libro
+  // de cartera. Los abonos y correcciones posteriores se realizan en Pagos y caja.
+  if (input.estadoPago==='CONFIRMADO' && input.metodoPago==='EFECTIVO' && input.recaudadoPorId)
+    await client.query('select id from public.usuarios where id=$1 for update',[input.recaudadoPorId])
   const ids=await lockFamily(client,id), before=await getService(client,id)
   assertVersion(before.version,expected)
   if (before.tipoServicio==='REFUERZO') throw new ApiError(422,'El Refuerzo es gratuito y no registra pagos.','VALIDATION')
   if (before.estado==='CANCELADO' && input.estadoPago!=='RECHAZADO') throw new ApiError(409,'No se registra un nuevo pago en un servicio cancelado.','SERVICE_TERMINAL')
-  if ((before.pago.estadoPago==='CONFIRMADO' || input.estadoPago==='RECHAZADO') && !input.motivo.trim()) throw new ApiError(422,'Indica el motivo de la corrección o rechazo.','VALIDATION',{ fields:{ motivo:'El motivo es obligatorio.' } })
-  if (input.metodoPago==='EFECTIVO' && input.estadoPago==='CONFIRMADO' && !input.recaudadoPorId) throw new ApiError(422,'Identifica quién recibió el efectivo.','VALIDATION',{ fields:{ recaudadoPorId:'Selecciona quién recibió el efectivo.' } })
-  await validatePaymentReceiver(client,input.recaudadoPorId,actorId,before.pago.recaudadoPorId)
-  const confirmed=input.estadoPago==='CONFIRMADO'
-  await client.query(`update public.servicios set metodo_pago=$2,estado_pago=$3,recaudado_por_id=$4,tecnico_que_recauda_id=$4,
-    pago_fecha=coalesce(pago_fecha,now()),pago_registrado_por_id=coalesce(pago_registrado_por_id,$5),
-    pago_confirmado_por_id=case when $6 then $5::uuid else null end,pago_confirmado_at=case when $6 then now() else null end,
-    tecnico_recaudo_previsto_id=case when $2='EFECTIVO' then tecnico_recaudo_previsto_id else null end where id=$1`,
-  [id,input.metodoPago,input.estadoPago,confirmed && input.metodoPago==='EFECTIVO' ? input.recaudadoPorId : null,actorId,confirmed])
+  if ((before.pago.estadoPago==='CONFIRMADO' || input.estadoPago==='RECHAZADO') && !input.motivo.trim())
+    throw new ApiError(422,'Indica el motivo de la corrección o rechazo.','VALIDATION',{fields:{motivo:'El motivo es obligatorio.'}})
+  const confirmed=(await client.query<{monto:string}>(`select coalesce(sum(a.monto),0)::text as monto
+    from public.pago_aplicaciones a join public.pagos p on p.id=a.pago_id and p.estado='CONFIRMADO'
+    where a.servicio_id=$1`,[id])).rows[0]
+  if (Number(confirmed?.monto??0)>0) throw new ApiError(409,'Los pagos existentes se revisan desde Pagos y caja.','FINANCE_CONFLICT')
+  if(input.estadoPago==='CONFIRMADO' && before.valorServicio>0) {
+    await validatePaymentReceiver(client,input.recaudadoPorId,actorId,before.pago.recaudadoPorId)
+    await registerPayment(client,actorId,{
+      requestId,clienteId:before.clientId,metodo:input.metodoPago,
+      recaudadoPorId:input.metodoPago==='EFECTIVO'?input.recaudadoPorId:null,
+      observacion:input.motivo,aplicaciones:[{servicioId:id,monto:before.valorServicio}],confirmed:true,
+    })
+  } else {
+    await client.query(`update public.servicios set metodo_pago=$2,estado_pago=$3,
+      recaudado_por_id=null,tecnico_que_recauda_id=null,
+      pago_confirmado_por_id=case when $3='CONFIRMADO' then $4::uuid else null end,
+      pago_confirmado_at=case when $3='CONFIRMADO' then now() else null end
+      where id=$1`,[id,input.metodoPago,input.estadoPago,actorId])
+  }
   const result=await mutation(client,ids)
-  await audit(client,actorId,'SERVICIO_PAGO_ACTUALIZADO',id,{ before:before.pago, after:result.services.find(row=>row.id===id)?.pago, valorServicio:before.valorServicio, motivo:input.motivo })
+  await audit(client,actorId,'SERVICIO_PAGO_ACTUALIZADO',id,{
+    before:before.pago,after:result.services.find(row=>row.id===id)?.pago,motivo:input.motivo,
+  })
   return result
 }
 export async function updateUpcoming(client: PoolClient, actorId: string, id: string, expected: number, input: UpcomingPatch): Promise<{ upcoming: UpcomingService; pendingCount: number }> {
