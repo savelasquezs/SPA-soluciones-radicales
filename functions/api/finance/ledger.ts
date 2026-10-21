@@ -86,12 +86,17 @@ export async function deliveries(client: PoolClient, technicianId?: string): Pro
   return rows.rows.map(row=>({...row,monto:n(row.monto)}))
 }
 export async function overview(client: PoolClient): Promise<ResumenFinanzas> {
-  const [clientes,tecnicos,pagosRevision,movimientos,entregas]=await Promise.all([
+  const [clientes,tecnicos,pagosRevision,movimientos,entregas,central]=await Promise.all([
     clientsBalance(client),cashBalance(client),
     payments(client,"where p.estado='PENDIENTE' order by p.creado_at desc limit 80"),
     payments(client,'order by p.creado_at desc limit 50'),deliveries(client),
+    client.query<{total:string}>(`select (
+      coalesce((select sum(monto) from public.pagos
+        where metodo='EFECTIVO' and estado='CONFIRMADO' and destino_efectivo='CAJA'),0)
+      +coalesce((select sum(monto) from public.movimientos_efectivo
+        where anulado_at is null),0))::text as total`),
   ])
-  return {clientes,tecnicos,pagosRevision,movimientos,entregas}
+  return {clientes,tecnicos,pagosRevision,movimientos,entregas,cajaCentral:n(central.rows[0]?.total)}
 }
 export async function account(client: PoolClient, clientId: string): Promise<DetalleCartera> {
   const cliente=(await clientsBalance(client)).find(item=>item.id===clientId)
@@ -100,8 +105,12 @@ export async function account(client: PoolClient, clientId: string): Promise<Det
     coalesce(s.fin_real,s.inicio_programado) as fecha,s.estado,s.valor_servicio as valor,
     coalesce((select sum(a.monto) from public.pago_aplicaciones a join public.pagos p on p.id=a.pago_id
       where a.servicio_id=s.id and p.estado='CONFIRMADO'),0) as abonado,
+    coalesce((select sum(a.monto) from public.pago_aplicaciones a join public.pagos p on p.id=a.pago_id
+      where a.servicio_id=s.id and p.estado='PENDIENTE'),0) as "porConfirmar",
     greatest(0,s.valor_servicio-coalesce((select sum(a.monto) from public.pago_aplicaciones a
       join public.pagos p on p.id=a.pago_id where a.servicio_id=s.id and p.estado='CONFIRMADO'),0)) as saldo,
+    greatest(0,s.valor_servicio-coalesce((select sum(a.monto) from public.pago_aplicaciones a
+      join public.pagos p on p.id=a.pago_id where a.servicio_id=s.id and p.estado in ('CONFIRMADO','PENDIENTE')),0)) as disponible,
     case when s.estado='FINALIZADO'
       then (s.fin_real at time zone 'America/Bogota')::date+n.plazo_pago_dias
       else null end as vencimiento
@@ -109,7 +118,7 @@ export async function account(client: PoolClient, clientId: string): Promise<Det
     join public.negocios n on n.id=se.negocio_id
     where n.id=$1::uuid and s.tipo_servicio='PRINCIPAL' and s.estado<>'CANCELADO'
     order by (s.estado='FINALIZADO') desc,s.inicio_programado desc limit 250`,[clientId])
-  return {cliente,servicios:rows.rows.map(row=>({...row,valor:n(row.valor),abonado:n(row.abonado),saldo:n(row.saldo)})),
+  return {cliente,servicios:rows.rows.map(row=>({...row,valor:n(row.valor),abonado:n(row.abonado),porConfirmar:n(row.porConfirmar),saldo:n(row.saldo),disponible:n(row.disponible)})),
     pagos:await payments(client,'where p.cliente_id=$1::uuid order by p.creado_at desc limit 100',[clientId])}
 }
 
