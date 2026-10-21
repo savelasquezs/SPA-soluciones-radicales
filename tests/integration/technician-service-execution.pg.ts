@@ -370,7 +370,8 @@ describe('technician service execution · real PostgreSQL', () => {
     })
     const persisted = (await pool.query(
       'select version,observaciones from public.revisiones_dispositivos where id=$1', [reviewId])).rows[0]
-    expect(persisted).toMatchObject({ version: 2, observaciones: 'Revisión corregida' })
+    expect(Number(persisted.version)).toBe(2)
+    expect(persisted.observaciones).toBe('Revisión corregida')
   })
 
   it('does not require a new photo when the frozen device was already damaged', async () => {
