@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowDownToLine, Banknote, CreditCard, RefreshCw } from 'lucide-vue-next'
+import { CreditCard, RefreshCw } from 'lucide-vue-next'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDialog from '@/components/base/BaseDialog.vue'
 import BaseInput from '@/components/base/BaseInput.vue'
@@ -15,7 +15,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
 import { getFinanceAccount,getFinanceOverview,registerFinancePayment,registerCashDelivery,
   decideFinancePayment,annulCashDelivery,getPaymentProofUrl,saveClientTerms } from '@/services/financeService'
-import type { ClienteCartera,DetalleCartera,EntregaEfectivo,MetodoPago,ModalidadCobro,Pago,ResumenFinanzas,TecnicoCaja } from '@/types/finance'
+import type { ClienteCartera,DetalleCartera,MetodoPago,ModalidadCobro,Pago,ResumenFinanzas,TecnicoCaja } from '@/types/finance'
 
 type Tab = 'cartera'|'caja'|'movimientos'
 type Decision = 'CONFIRMADO'|'RECHAZADO'|'ANULADO'
@@ -34,9 +34,9 @@ const paymentMethod=ref<MetodoPago>('TRANSFERENCIA')
 const receiver=ref(''),paymentNote=ref(''),values=ref<Record<string,string>>({})
 const deliveryAmount=ref(''),deliveryNote=ref('')
 const termsMode=ref<ModalidadCobro>('POR_SERVICIO'),termsDays=ref('0')
+const tabs=[{id:'cartera',name:'Cartera'},{id:'caja',name:'Caja por técnico'},{id:'movimientos',name:'Movimientos'}] as const
 const clients=computed(()=>snapshot.value?.clientes??[])
 const technicians=computed(()=>snapshot.value?.tecnicos??[])
-const selectedClient=computed(()=>clients.value.find(c=>c.id===clientId.value)??null)
 const selectedTech=computed(()=>technicians.value.find(t=>t.id===technicianId.value)??null)
 const filteredClients=computed(()=>clients.value.filter(c=>c.nombre.toLowerCase().includes(search.value.toLowerCase().trim())))
 const totalCartera=computed(()=>clients.value.reduce((t,c)=>t+c.saldo,0))
@@ -169,7 +169,7 @@ async function proof(payment:Pago):Promise<void>{
         <article><span>Cobros por revisar</span><strong>{{ snapshot.pagosRevision.length }}</strong><small>{{ pendingInCash }} en efectivo</small></article>
       </section>
       <nav class="finance-tabs" aria-label="Módulos financieros">
-        <button v-for="item in ([{id:'cartera',name:'Cartera'},{id:'caja',name:'Caja por técnico'},{id:'movimientos',name:'Movimientos'}] as const)"
+        <button v-for="item in tabs"
           :key="item.id" type="button" :aria-current="active===item.id?'page':undefined"
           @click="active=item.id">{{ item.name }}</button>
       </nav>
@@ -259,7 +259,7 @@ async function proof(payment:Pago):Promise<void>{
           </BaseSelect></div>
         <div class="finance-allocations"><h3>Aplicar a servicios</h3><div v-for="s in account.servicios.filter(s=>s.saldo>0)" :key="s.id" class="finance-amount-row">
           <div><strong>{{ s.solicitud }}</strong><small>{{ s.sedeNombre }} · Pendiente {{ fmt(s.saldo) }}</small></div>
-          <BaseInput v-model="values[s.id]" :name="'pay-'+s.id" label="Abono (COP)" type="number" min="0" :max="String(s.saldo)" step="1"/>
+          <BaseInput :model-value="values[s.id] ?? ''" @update:model-value="values[s.id]=$event" :name="'pay-'+s.id" label="Abono (COP)" type="number" min="0" :max="String(s.saldo)" step="1"/>
         </div></div>
         <BaseTextarea v-model="paymentNote" name="payment-note" label="Observación (opcional)" :rows="2" maxlength="1000"/>
         <p class="finance-total">Total a registrar <strong>{{ fmt(totalPayment) }}</strong></p>
