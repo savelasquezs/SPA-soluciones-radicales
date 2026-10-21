@@ -18,6 +18,7 @@ import WhatsAppPhoneLink from '@/components/base/WhatsAppPhoneLink.vue'
 import { useFileSaveProgress } from '@/composables/useFileSaveProgress'
 import AreaForm from '@/components/domain/clients/AreaForm.vue'
 import SiteForm from '@/components/domain/clients/SiteForm.vue'
+import SiteVehiclesPanel from '@/components/domain/clients/SiteVehiclesPanel.vue'
 import { ApiClientError } from '@/services/apiService'
 import { getSite } from '@/services/clientsService'
 import { deleteMasterFile, getMasterFileUrl, uploadMasterFile } from '@/services/filesService'
@@ -25,7 +26,7 @@ import { useClientsStore } from '@/stores/clients'
 import { useNotificationsStore } from '@/stores/notifications'
 import type { AreaInput, AreaRecord, SiteInput, SiteRecord } from '@/types/domain'
 
-type Tab = 'summary' | 'areas' | 'devices' | 'findings' | 'history' | 'settings'
+type Tab = 'summary' | 'areas' | 'vehicles' | 'devices' | 'findings' | 'history' | 'settings'
 
 const route = useRoute()
 const router = useRouter()
@@ -38,7 +39,7 @@ const client = computed(() => site.value ? store.clientsById[site.value.clientId
 const areas = computed(() => store.areasForSite(siteId.value))
 const loading = ref(true)
 const loadError = ref<string | null>(null)
-const initialTab = (): Tab => route.query.tab === 'findings' ? 'findings' : route.query.tab === 'history' ? 'history' : 'summary'
+const initialTab = (): Tab => route.query.tab === 'vehicles' ? 'vehicles' : route.query.tab === 'findings' ? 'findings' : route.query.tab === 'history' ? 'history' : 'summary'
 const tab = ref<Tab>(initialTab())
 const visited = ref({ devices: false, findings: initialTab() === 'findings' })
 const siteFormOpen = ref(false)
@@ -78,7 +79,7 @@ async function load(): Promise<void> {
 
 async function changeTab(next: Tab, event?: MouseEvent): Promise<void> {
   tab.value = next
-  void router.replace({ query:{ ...route.query,tab:next === 'history' || next === 'findings' ? next : undefined } })
+  void router.replace({ query:{ ...route.query,tab:next === 'history' || next === 'findings' || next === 'vehicles' ? next : undefined } })
   ;(event?.currentTarget as HTMLElement | null)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })
   if (next === 'devices' || next === 'findings') visited.value[next] = true
   if (next === 'areas' && !store.areasBySiteId[siteId.value]) await loadAreas()
@@ -217,7 +218,7 @@ function formatMoney(value: number): string { return new Intl.NumberFormat('es-C
       <BaseButton size="compact" variant="secondary" @click="openSiteEdit"><Pencil :size="16" />Editar Sede</BaseButton>
     </header>
     <nav class="tabs" aria-label="Detalle de Sede">
-      <button v-for="item in ([['summary','Resumen'],['areas','Áreas'],['devices','Puestos de monitoreo'],['findings','Hallazgos'],['history','Historial de servicios'],['settings','Configuración']] as const)" :key="item[0]" :aria-current="tab === item[0] ? 'page' : undefined" @click="changeTab(item[0], $event)">{{ item[1] }}</button>
+      <button v-for="item in ([['summary','Resumen'],['areas','Áreas'],['vehicles','Vehículos'],['devices','Puestos de monitoreo'],['findings','Hallazgos'],['history','Historial de servicios'],['settings','Configuración']] as const)" :key="item[0]" :aria-current="tab === item[0] ? 'page' : undefined" @click="changeTab(item[0], $event)">{{ item[1] }}</button>
     </nav>
 
     <section v-if="tab === 'summary'" class="summary-grid"><article><h2>Contacto principal</h2><p>{{ site.contactoPrincipalNombre }}</p><WhatsAppPhoneLink v-if="site.contactoPrincipalCelular" :phone="site.contactoPrincipalCelular" /><p>{{ site.contactoPrincipalCorreo ?? 'Sin correo' }}</p></article><article><h2>Operación</h2><p>{{ formatMoney(site.valorServicio) }} por Servicio</p><p>Cada {{ site.periodicidadMeses }} mes{{ site.periodicidadMeses === 1 ? '' : 'es' }}</p><p>{{ site.duracionServicioMinutos }} minutos</p></article><article><h2>Configuración</h2><p>{{ site.areasCount }} Áreas</p><p>{{ site.manejaVehiculos ? 'Maneja vehículos' : 'Sin vehículos' }}</p></article><article><h2>Plano</h2><p>{{ site.planoStoragePath?.split('/').slice(-1)[0] ?? 'Sin plano' }}</p><BaseButton v-if="site.planoStoragePath" size="compact" variant="secondary" @click="site.planoStoragePath && openPrivateFile(site.planoStoragePath)">Ver plano</BaseButton></article></section>
@@ -278,6 +279,7 @@ function formatMoney(value: number): string { return new Intl.NumberFormat('es-C
       </aside>
     </section>
 
+    <SiteVehiclesPanel v-else-if="tab === 'vehicles'" :key="siteId" :site-id="siteId" :enabled="site.activo && site.manejaVehiculos" />
     <section v-else-if="tab === 'history'" class="history-card">
       <ContextualServiceHistory :site-id="siteId" />
     </section>
