@@ -9,6 +9,7 @@ import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import StatusBadge from '@/components/base/StatusBadge.vue'
 import StatusPanel from '@/components/base/StatusPanel.vue'
 import ServicePage from '@/components/domain/services/ServicePage.vue'
+import TechnicianPaymentDialog from '@/components/domain/services/TechnicianPaymentDialog.vue'
 import SendReportDialog from '@/components/domain/services/SendReportDialog.vue'
 import TechnicianSignaturePad from '@/components/domain/services/TechnicianSignaturePad.vue'
 import { orderedTechnicianAreas, technicianAreaResolved, technicianAreaIssues } from '@/helpers/technicianServices'
@@ -33,6 +34,7 @@ const saving = ref(false)
 const actionError = ref('')
 const actionMessage = ref('')
 const reportModalOpen = ref(false)
+const paymentOpen = ref(false)
 const emailInfo = ref('')
 const signatures = computed(() => packageValue.value?.signatures)
 const technicianSigned = computed(() => Boolean(signatures.value?.technicianStoragePath || signatures.value?.technicianLocalId))
@@ -213,9 +215,11 @@ async function finish(): Promise<void> {
           <Mail :size="16" aria-hidden="true" /> Enviar informe
         </BaseButton>
       </section>
+      <BaseButton v-if="packageValue.service.tipoServicio==='PRINCIPAL' && ['EN_PROCESO','FINALIZADO'].includes(packageValue.service.estado)" variant="secondary" size="compact" :disabled="!online" @click="paymentOpen=true">Reportar cobro</BaseButton>
       <BaseButton variant="secondary" @click="router.push({ name: 'technician-service-work', params: { id: serviceId } })">Volver al servicio</BaseButton>
     </template>
   </ServicePage>
+  <TechnicianPaymentDialog :open="paymentOpen" :service-id="serviceId" @close="paymentOpen=false" />
   <SendReportDialog v-if="reportModalOpen && packageValue && !simplified" :service-id="serviceId"
     :solicitud="packageValue.service.solicitud" :cliente="packageValue.service.clienteNombre"
     :sede="packageValue.service.sedeNombre" mode="TECNICO"
