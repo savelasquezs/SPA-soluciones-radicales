@@ -56,7 +56,15 @@ export const useAuthStore = defineStore('auth', () => {
     deniedEmail.value = null
     let currentSession: AuthSession = null
     try {
-      currentSession = await getAuthSession({ forceRefresh: forceSession })
+      try {
+        currentSession = await getAuthSession({ forceRefresh: forceSession })
+      } catch (sessionError) {
+        // A stale auth cookie/cache can yield a temporary bad request after switching roles.
+        // Retry the read with a fresh session; never retry a user mutation.
+        if (forceSession || !(sessionError instanceof ApiClientError)
+          || sessionError.code !== 'AUTH_ERROR' || sessionError.status !== 400) throw sessionError
+        currentSession = await getAuthSession({ forceRefresh: true })
+      }
       session.value = currentSession
       if (!session.value?.user) {
         clearRememberedRole()
