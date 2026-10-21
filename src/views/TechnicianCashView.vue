@@ -46,7 +46,7 @@ async function openProof(p:Pago):Promise<void>{
     <template v-else-if="balance">
       <section class="cash-summary">
         <article><span>Efectivo recaudado hoy</span><strong>{{ fmt(balance.recaudadoHoy) }}</strong><small>Acumulado {{ fmt(balance.recaudado) }}</small></article>
-        <article><span>Entregado a administración</span><strong>{{ fmt(balance.entregado) }}</strong></article>
+        <article><span>Entregado hoy</span><strong>{{ fmt(balance.entregadoHoy) }}</strong><small>Acumulado {{ fmt(balance.entregado) }}</small></article>
         <article><span>Pendiente por entregar</span><strong>{{ fmt(balance.saldo) }}</strong></article>
       </section>
       <section class="cash-panel"><h2>Mis cobros reportados</h2>
