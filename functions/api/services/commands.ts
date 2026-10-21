@@ -228,7 +228,7 @@ async function mutation(client: PoolClient, ids: string[], upcomingId?: string):
   return { services: await getServices(client,ids), upcoming: upcomingId ? await getUpcoming(client,upcomingId) : null, pendingCount: await pendingCount(client) }
 }
 
-export async function createService(client: PoolClient, actorId: string, input: ServiceInput, reassignments: ServiceReassignment[], upcoming?: { id: string; version: number; confirmed: boolean }): Promise<ServiceMutation> {
+export async function createService(client: PoolClient, actorId: string, input: ServiceInput, reassignments: ServiceReassignment[], upcoming?: { id: string; version: number; confirmed: boolean }, requestId?: string): Promise<ServiceMutation> {
   const site = await siteForScheduling(client,input.sedeId)
   let proposal: UpcomingService | null = null
   if (upcoming) {
@@ -273,6 +273,17 @@ export async function createService(client: PoolClient, actorId: string, input: 
   [id,input.sedeId,schedule.inicioProgramado,scheduleEnd(schedule),actorId,schedule.tecnicoResponsableId,JSON.stringify(schedule.tecnicosColaboradoresIds),
     input.observaciones,input.cobro.metodoPago,wasPaid ? 'CONFIRMADO' : input.cobro.metodoPago ? 'PENDIENTE' : 'SIN_REGISTRAR',
     input.cobro.tecnicoRecaudoPrevistoId,cashRecipient,wasPaid,site.tipo_sede==='RESIDENCIAL' ? input.valorServicio : 0])
+  // The creation form can confirm an advance payment before the visit begins.
+  // Persist that money in the same canonical ledger as later deposits and abonos.
+  const actualValue = site.tipo_sede==='RESIDENCIAL' ? input.valorServicio ?? 0 : site.valor_servicio ?? 0
+  if (wasPaid && actualValue > 0) {
+    if (!requestId) throw new ApiError(422,'Falta el identificador del cobro.','VALIDATION')
+    await registerPayment(client,actorId,{
+      requestId,clienteId:site.clientId,metodo:input.cobro.metodoPago!,
+      recaudadoPorId:cashRecipient,observacion:'Pago confirmado al programar el servicio',
+      aplicaciones:[{servicioId:id,monto:actualValue}],confirmed:true,
+    })
+  }
   if (reinforcement) {
     const reinforcementId=randomUUID(); ids.push(reinforcementId)
     await client.query(`insert into public.servicios(id,sede_id,tipo_servicio,servicio_principal_id,inicio_programado,fin_programado,
