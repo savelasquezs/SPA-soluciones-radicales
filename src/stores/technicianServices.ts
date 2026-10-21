@@ -368,7 +368,9 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
       while (true) {
         const pending = await reloadMutations(serviceId)
         if (pending.some(item => item.status === 'CONFLICT')) return 'conflict'
-        const operation = pending[0]
+        // The closure must run after every field edit, even when a conflict is resolved
+        // and its replacement mutation was created after the original closure intention.
+        const operation = pending.find(item => item.kind !== 'SERVICE_FINALIZE') ?? pending[0]
         if (!operation) return 'synced'
         let sending = { ...operation, status: 'SENDING' as const, updatedAt: new Date().toISOString(), error: null } as TechnicianMutation
         await saveTechnicianMutation(sending)
@@ -1355,9 +1357,18 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
   }
 
   async function retryFinalize(serviceId: string): Promise<'synced' | 'pending' | 'conflict'> {
-    const operation = (await reloadMutations(serviceId)).find((item): item is TechnicianServiceFinalizeMutation => item.kind === 'SERVICE_FINALIZE')
+    const queued = await reloadMutations(serviceId)
+    const operation = queued.find((item): item is TechnicianServiceFinalizeMutation => item.kind === 'SERVICE_FINALIZE')
     if (!operation) return 'synced'
-    await saveTechnicianMutation({ ...operation, status: 'PENDING', error: null, updatedAt: new Date().toISOString() })
+    const updatedAt = new Date().toISOString()
+    // A prior client/API error can block the entire queue, including the closure. Reuse the same
+    // request IDs to replay it safely; real version conflicts must be resolved in their Area.
+    for (const item of queued) {
+      if (item.kind === 'SERVICE_FINALIZE' || item.status !== 'CONFLICT'
+        || ('conflict' in item && item.conflict)) continue
+      await saveTechnicianMutation({ ...item, status: 'PENDING', error: null, updatedAt })
+    }
+    await saveTechnicianMutation({ ...operation, status: 'PENDING', error: null, updatedAt })
     await reloadMutations(serviceId)
     return syncPending(serviceId)
   }
