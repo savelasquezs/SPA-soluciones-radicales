@@ -41,7 +41,7 @@ export const authGuard: NavigationGuard = async (to) => {
     return { name: 'role-selection', query: { redirect: to.fullPath } }
   }
   if (!auth.profile?.requiereSeleccionRol && to.name === 'role-selection') return { name: 'dashboard' }
-  if (!hasRequiredRole(auth.activeRole, to.meta.roles)) return { name: 'forbidden' }
+  if (!hasRequiredRole(auth.activeRole, to.meta.roles)) return { name: 'dashboard', replace: true }
   if (['login', 'access-denied', 'session-error'].includes(String(to.name))) return { name: 'dashboard' }
   return true
 }
