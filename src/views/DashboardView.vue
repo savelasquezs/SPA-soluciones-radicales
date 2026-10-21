@@ -131,6 +131,11 @@ const attention=computed(()=>{
   ].filter(x=>x.count>0)
 })
 watch([period,clientId,siteId,customRange],()=>{syncUrl();void load()})
+watch(() => session.activeRole, (role, previous) => {
+  // Keep dashboard data scoped to its role; changing role does not remount this view.
+  counter++; request?.abort(); request=null; loading.value=false; error.value=''; snapshot.value=null
+  if (role === 'ADMINISTRADOR' && previous !== role) void load()
+})
 onMounted(()=>void load())
 onBeforeUnmount(()=>{counter++;request?.abort()})
 </script>
