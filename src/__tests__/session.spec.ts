@@ -73,6 +73,15 @@ describe('auth store', () => {
     })
   })
 
+  it('recupera un fallo transitorio de sesión sin mostrar un error al usuario', async () => {
+    getAuthSession.mockRejectedValueOnce(new ApiClientError('HTTP 400', 400, 'AUTH_ERROR'))
+    const auth = useAuthStore()
+    await auth.initialize()
+    expect(auth.status).toBe('authenticated')
+    expect(getAuthSession).toHaveBeenCalledTimes(2)
+    expect(getAuthSession).toHaveBeenLastCalledWith({ forceRefresh: true })
+  })
+
   it('no recuerda un rol único: el backend lo activa automáticamente al renovar JWT', async () => {
     const auth = useAuthStore()
     await auth.initialize()
