@@ -37,7 +37,7 @@ const observations = ref('')
 const photo = ref<File | null>(null)
 const captureError = ref('')
 const photoError = ref('')
-const disabled = computed(() => !props.editable || props.syncing || props.creationMutation?.status === 'CONFLICT' || props.mutation?.status === 'CONFLICT')
+const disabled = computed(() => !props.editable || props.syncing || props.creationMutation?.status === 'CONFLICT' || props.mutation?.status === 'CONFLICT' || props.mutation?.status === 'SENDING')
 const photoRequired = computed(() => technicianDevicePhotoRequired(props.device.estadoAnterior, state.value))
 const hasStoredPhoto = computed(() => Boolean(props.device.revision?.fotoStoragePath || props.device.revision?.fotoLocalId))
 const activePest = computed(() => props.device.plagas.find(pest => pest.codigo === activePestCode.value) ?? null)
@@ -143,7 +143,7 @@ function save(): void {
       <StatusBadge v-if="creationMutation?.status === 'CONFLICT'" tone="warning">Alta en conflicto</StatusBadge>
       <StatusBadge v-else-if="creationMutation" tone="warning">{{ creationMutation.status === 'SENDING' ? 'Creando' : 'Creación local' }}</StatusBadge>
       <StatusBadge v-else-if="mutation?.status === 'CONFLICT'" tone="warning">Conflicto</StatusBadge>
-      <StatusBadge v-else-if="mutation" tone="warning">{{ mutation.status === 'SENDING' ? 'Sincronizando' : 'Guardado local' }}</StatusBadge>
+      <StatusBadge v-else-if="mutation" tone="warning">{{ mutation.status === 'SENDING' ? (syncing ? 'Sincronizando' : 'Reintento pendiente') : 'Guardado local' }}</StatusBadge>
       <StatusBadge v-else :tone="device.revisado ? 'success' : 'neutral'">{{ device.revisado ? 'Revisado' : 'Pendiente' }}</StatusBadge>
       <ChevronDown :size="18" aria-hidden="true" :class="{ 'device-summary__chevron--open': expanded }" />
     </button>
@@ -181,6 +181,10 @@ function save(): void {
         <BaseTextarea :model-value="observations" :name="`device-observations-${device.id}`" label="Observaciones del puesto" :rows="3" maxlength="2000" :disabled="disabled" @update:model-value="observations = $event; changed()" />
       </details>
       <BaseButton :disabled="disabled" @click="save">Guardar puesto de monitoreo</BaseButton>
+      <div v-if="mutation?.status === 'SENDING' && !syncing" class="device-conflict" role="status">
+        <p>{{ mutation.error || 'La revisión permanece guardada en este celular. Vuelve a sincronizar antes de editarla.' }}</p>
+        <BaseButton variant="secondary" size="compact" @click="emit('retry')">Reintentar sincronización</BaseButton>
+      </div>
       <div v-if="mutation?.status === 'CONFLICT'" class="device-conflict">
         <p>{{ mutation.error ?? 'La revisión cambió. Elige cuál versión conservar.' }}</p>
         <div v-if="mutation.conflict" class="device-actions"><BaseButton variant="secondary" :disabled="syncing" @click="emit('useRemote')">Usar revisión sincronizada</BaseButton><BaseButton :loading="syncing" @click="emit('retry')">Reintentar mi revisión</BaseButton></div>
