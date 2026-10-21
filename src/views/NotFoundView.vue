@@ -5,7 +5,6 @@ import BaseButton from '@/components/base/BaseButton.vue'
 <template>
   <main class="not-found">
     <section class="card">
-      <p class="code">404</p>
       <h1>Esta página no existe</h1>
       <p class="muted">Revisa la dirección o vuelve al inicio.</p>
       <RouterLink to="/" custom v-slot="{ navigate }">
@@ -29,12 +28,6 @@ import BaseButton from '@/components/base/BaseButton.vue'
   gap: 1rem;
 }
 
-.code {
-  margin: 0;
-  color: var(--accent);
-  font-size: 3rem;
-  font-weight: 900;
-}
 
 h1,
 p {
