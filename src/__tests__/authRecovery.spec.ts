@@ -66,7 +66,8 @@ describe('renovación de Neon Auth bajo demanda', () => {
     }))
     getSession.mockResolvedValueOnce({ data: { session: { id: 'neon-session-1', token: oldToken }, user: { id: 'user' } }, error: null })
       .mockResolvedValue({ data: { session: { id: 'neon-session-1', token: newToken }, user: { id: 'user' } }, error: null })
-    const fetchRole = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+    // Every HTTP request needs its own Response; a body can only be read once.
+    const fetchRole = vi.fn<typeof fetch>().mockImplementation(async () => new Response(JSON.stringify({
       rolActivo: 'ADMINISTRADOR', requiereSeleccionRol: false,
     }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
     vi.stubGlobal('fetch', fetchRole)

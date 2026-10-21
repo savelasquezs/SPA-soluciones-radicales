@@ -95,6 +95,7 @@ export async function getAccessToken(options: SessionOptions = {}): Promise<stri
   const token = session?.session.token
   if (!token) throw new ApiClientError('No fue posible obtener un token de sesión. Inicia sesión nuevamente.', 401, 'AUTH_REQUIRED')
   if (tokenExpiresSoon(token)) throw new ApiClientError('La sesión venció. Inicia sesión nuevamente.', 401, 'AUTH_EXPIRED')
+  options.signal?.throwIfAborted()
   await activateRememberedRole(session, token)
   options.signal?.throwIfAborted()
   return token

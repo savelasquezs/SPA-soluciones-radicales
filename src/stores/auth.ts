@@ -74,7 +74,10 @@ export const useAuthStore = defineStore('auth', () => {
           catch { clearRememberedRole() } // Let the user choose again if the server rejects it.
         } else if (savedRole) clearRememberedRole()
       } else if (user.value.rolActivo && rolesAvailable.value.includes(user.value.rolActivo)) {
-        rememberRole(user.value.rolActivo)
+        // Only dual-role users need to restore their choice after JWT rotation.
+        // The server automatically activates the sole role for single-role users.
+        if (rolesAvailable.value.length > 1) rememberRole(user.value.rolActivo)
+        else clearRememberedRole()
       }
       status.value = 'authenticated'
     } catch (restoreError) {
