@@ -17,11 +17,19 @@ Corrección sobre `develop` del bloqueo aparente al retomar la SPA. La suspensi�
 
 La sesión se recupera bajo demanda, al hacer una petición tras la inactividad. `exp` se usa únicamente como indicio de renovación (margen de 30 segundos), nunca como autorización. Un token próximo a vencer o vencido fuerza `getSession({ query: { disableCookieCache: true } })`. La renovación también envía `X-Force-Fetch` al cliente Neon para evitar su caché local; el SDK elimina ese header antes de la solicitud HTTP. Una lectura rechazada con 401 fuerza renovación una vez. No se persisten tokens ni se debilita JWT/RLS. Tampoco se cierra sesión por una falla de red ni se recarga la página automáticamente.
 
+## Recuperación del rol al renovar JWT
+
+El rol activo de un usuario con dos roles vive en `private.user_sessions` y su identificador actual depende del `iat/exp` del JWT. Por eso, la renovación del token puede generar un identificador nuevo aunque el usuario siga en la misma sesión de Better Auth. El servidor entonces responde `403: Se requiere el rol Administrador` al listar Servicios, mientras la SPA todavía muestra el rol previamente seleccionado.
+
+`getAccessToken` restablece el rol recordado **antes de enviar solicitudes protegidas** cuando encuentra un JWT distinto, mediante `POST /api/session/role`. Solo se recuerda una selección para usuarios con **dos roles**; con uno solo, el backend lo activa automáticamente y no se hace esta llamada adicional. Solo se usa el rol guardado en `sessionStorage` si coinciden exactamente el usuario Google y el identificador estable de la sesión Better Auth; el servidor vuelve a validar que el rol siga asignado. Las peticiones concurrentes con el mismo token comparten una única reactivación, sin polling ni reintentos de escrituras de negocio. Si el servidor revoca el rol (403/422), se elimina el recordatorio y no se concede acceso. La sesión Google y el JWT no se guardan en almacenamiento web.
+
+La lectura original no se repite: primero se completa la reactivación, luego se ejecuta el request normal. No requiere nuevas tablas, cambios de RLS ni migraciones SQL.
+
 ## Navegación y formularios
 
 `useUnsavedChanges` mantiene la protección mientras una operación está ocupada y exige confirmación si hay cambios. Los clics repetidos comparten la misma promesa: confirmar, cancelar o desmontar resuelve todas las navegaciones pendientes. Los límites de I/O permiten que los `finally` existentes liberen el estado de guardado; no se habilita un segundo envío mientras el primero sigue esperando una respuesta.
 
-No se modifican los borradores persistidos, la cola offline, la selección de roles ni los formularios de negocio.
+No se modifican los borradores persistidos, la cola offline ni los formularios de negocio.
 
 ## PostgreSQL / Functions
 
@@ -37,7 +45,7 @@ Estos límites no son un límite total de una transacción ni de llamadas extern
 ## Pruebas
 
 - `src/__tests__/requestRecovery.spec.ts`: suspensión simulada, 401, permisos, red, límite del cuerpo, cancelación durante Auth/reintento, escrituras sin replay, JSON, PDF y Data API.
-- `src/__tests__/authRecovery.spec.ts`: avance de reloj 5/10/20 min, renovación, token que no se renueva, SDK bloqueado y conservación del verificador OAuth.
+- `src/__tests__/authRecovery.spec.ts`: avance de reloj 5/10/20 min, renovación, reactivación única del rol al cambiar JWT, concurrencia, aislamiento entre sesiones, rechazo de rol revocado, token que no se renueva, SDK bloqueado y conservación del verificador OAuth.
 - `src/__tests__/unsavedNavigation.spec.ts`: guardado ocupado, clics repetidos, cancelar y desmontaje.
 - `src/helpers/staleChunkRecovery.spec.ts`: detección de errores de assets dinámicos, recarga única por ruta y protección contra bucles.
 - `functions/api/db.spec.ts`: configuración, adquisición, liberación, rollback, pérdida de COMMIT y errores ociosos.

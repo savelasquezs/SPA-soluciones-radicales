@@ -73,6 +73,14 @@ describe('auth store', () => {
     })
   })
 
+  it('no recuerda un rol único: el backend lo activa automáticamente al renovar JWT', async () => {
+    const auth = useAuthStore()
+    await auth.initialize()
+    expect(auth.activeRole).toBe('ADMINISTRADOR')
+    expect(auth.rolesAvailable).toEqual(['ADMINISTRADOR'])
+    expect(sessionStorage.getItem('sr-active-role-session')).toBeNull()
+  })
+
   it('restores the remote session only once during normal navigation', async () => {
     const session = useAuthStore()
 
