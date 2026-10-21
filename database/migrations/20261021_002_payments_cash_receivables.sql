@@ -14,6 +14,7 @@ create table public.pagos (
   metodo text not null check (metodo in ('EFECTIVO','TRANSFERENCIA')),
   estado text not null check (estado in ('PENDIENTE','CONFIRMADO','RECHAZADO','ANULADO')),
   recaudado_por_id uuid references public.usuarios(id) on delete restrict,
+  destino_efectivo text check (destino_efectivo in ('TECNICO','CAJA')),
   registrado_por_id uuid not null references public.usuarios(id) on delete restrict,
   confirmado_por_id uuid references public.usuarios(id) on delete restrict,
   confirmado_at timestamptz,
@@ -28,8 +29,8 @@ create table public.pagos (
     or (estado <> 'CONFIRMADO')
   ),
   constraint pagos_receptor_check check (
-    (metodo = 'EFECTIVO' and recaudado_por_id is not null)
-    or (metodo = 'TRANSFERENCIA' and recaudado_por_id is null)
+    (metodo = 'EFECTIVO' and recaudado_por_id is not null and destino_efectivo is not null)
+    or (metodo = 'TRANSFERENCIA' and recaudado_por_id is null and destino_efectivo is null)
   )
 );
 create index pagos_cliente_estado_idx on public.pagos(cliente_id,estado,fecha_pago desc);
@@ -72,12 +73,17 @@ begin
 end $$;
 
 insert into public.pagos (
-  request_id,cliente_id,monto,metodo,estado,recaudado_por_id,registrado_por_id,
+  request_id,cliente_id,monto,metodo,estado,recaudado_por_id,destino_efectivo,registrado_por_id,
   confirmado_por_id,confirmado_at,comprobante_storage_path,fecha_pago,
   observacion,origen_legacy_servicio_id
 )
 select gen_random_uuid(),se.negocio_id,s.valor_servicio,s.metodo_pago,'CONFIRMADO',
   case when s.metodo_pago='EFECTIVO' then s.recaudado_por_id else null end,
+  case when s.metodo_pago='EFECTIVO' then
+    case when s.recaudado_por_id=coalesce(s.pago_registrado_por_id,s.creado_por_id)
+      and exists(select 1 from public.usuarios u where u.id=s.recaudado_por_id and u.es_admin)
+    then 'CAJA' else 'TECNICO' end
+  else null end,
   coalesce(s.pago_registrado_por_id,s.creado_por_id),
   coalesce(s.pago_confirmado_por_id,s.creado_por_id),
   coalesce(s.pago_confirmado_at,s.pago_fecha,s.created_at),
