@@ -5,7 +5,7 @@ const session = vi.hoisted(() => ({
   status: 'authenticated',
   profile: { requiereSeleccionRol: false },
   activeRole: 'TECNICO',
-  initialize: vi.fn(async () => undefined),
+  initialize: vi.fn<() => Promise<void>>(async () => undefined),
 }))
 
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => session }))
