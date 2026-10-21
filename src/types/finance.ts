@@ -57,10 +57,13 @@ export interface ServicioCartera {
   estado: string
   valor: number
   abonado: number
+  porConfirmar: number
   saldo: number
+  disponible: number
   vencimiento: string | null
 }
 export interface ResumenFinanzas {
+  cajaCentral: number
   clientes: ClienteCartera[]
   tecnicos: TecnicoCaja[]
   pagosRevision: Pago[]
