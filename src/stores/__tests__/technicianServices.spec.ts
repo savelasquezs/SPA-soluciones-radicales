@@ -550,7 +550,7 @@ describe('technician services state', () => {
       expect.stringContaining('/technician/'), expect.stringContaining('/client/'), 'Responsable')
   })
 
-  it('retries an earlier API conflict before the saved closure, using the original request IDs', async () => {
+  it('retries a failed edit created after the queued closure before finalizing with the same IDs', async () => {
     const prepared = executionCache()
     for (const area of prepared.package.areas) {
       if (!area.criterios.length) area.criterios.push({ id: crypto.randomUUID(), criterioId: crypto.randomUUID(), nombre: 'Criterio', soloAreaExterna: false, evaluacion: 'C', observacion: null, evidenciasStoragePaths: [], version: 1 })
@@ -569,10 +569,11 @@ describe('technician services state', () => {
     Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
     expect(await store.finalizeService(serviceId, 'Responsable')).toBe('pending')
     const closure = mutationRecords.find(item => item.kind === 'SERVICE_FINALIZE')!
+    const failedAt = new Date(Date.parse(closure.createdAt) + 1000).toISOString()
     const earlier: TechnicianMutation = {
       schemaVersion: 1, kind: 'CRITERION_EVALUATION',
       requestId: crypto.randomUUID(), actorId, serviceId, deviceId, lockToken,
-      createdAt: '2026-10-06T09:00:00.000Z', updatedAt: '2026-10-06T09:01:00.000Z',
+      createdAt: failedAt, updatedAt: failedAt,
       status: 'CONFLICT', error: 'La autorización anterior expiró.', conflict: null,
       areaId: areaIds[0]!, criterionId, evaluation: 'C', observation: '',
       evidences: [], retainedEvidenceStoragePaths: [], version: 1,
