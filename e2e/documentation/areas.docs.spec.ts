@@ -121,8 +121,11 @@ test('video: gestión y reutilización de Áreas por Sede',async({page})=>{
     await demoClick(page.getByRole('button',{name:'Eliminar Cocina'}))
     const confirm=page.getByRole('dialog',{name:'Eliminar Área'})
     await expect(confirm).toBeVisible()
-    await clock.until(.66)
-    await demoClick(confirm.getByRole('button',{name:'Eliminar',exact:true}))
+    await clock.until(.59)
+    const remove=confirm.getByRole('button',{name:'Eliminar',exact:true})
+    await pointAt(remove,240)
+    // Evita la espera provocada por la superposición transitoria de los diálogos.
+    await remove.click({force:true})
     await expect(page.getByRole('dialog',{name:'Desactivar Área'})).toBeVisible()
   })
   await narrate('deactivate',async clock=>{
