@@ -368,7 +368,9 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
       while (true) {
         const pending = await reloadMutations(serviceId)
         if (pending.some(item => item.status === 'CONFLICT')) return 'conflict'
-        const operation = pending[0]
+        // The closure must run after every field edit, even when a conflict is resolved
+        // and its replacement mutation was created after the original closure intention.
+        const operation = pending.find(item => item.kind !== 'SERVICE_FINALIZE') ?? pending[0]
         if (!operation) return 'synced'
         let sending = { ...operation, status: 'SENDING' as const, updatedAt: new Date().toISOString(), error: null } as TechnicianMutation
         await saveTechnicianMutation(sending)
