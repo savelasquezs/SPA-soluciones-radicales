@@ -550,6 +550,93 @@ describe('technician services state', () => {
       expect.stringContaining('/technician/'), expect.stringContaining('/client/'), 'Responsable')
   })
 
+  it('retries an earlier API conflict before the saved closure, using the original request IDs', async () => {
+    const prepared = executionCache()
+    for (const area of prepared.package.areas) {
+      if (!area.criterios.length) area.criterios.push({ id: crypto.randomUUID(), criterioId: crypto.randomUUID(), nombre: 'Criterio', soloAreaExterna: false, evaluacion: 'C', observacion: null, evidenciasStoragePaths: [], version: 1 })
+      for (const criterion of area.criterios) criterion.evaluacion = 'C'
+      for (const device of area.dispositivos) device.revisado = true
+    }
+    vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([prepared])
+    vi.mocked(mutationService.listTechnicianMutations).mockImplementation(async (_actor, selected) =>
+      mutationRecords.filter(item => !selected || item.serviceId === selected)
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt)))
+    const store = useTechnicianServicesStore()
+    await store.ensurePackage(serviceId)
+    const file = new File(['firma'], 'firma.png', { type: 'image/png' })
+    await store.saveSignature(serviceId, 'TECHNICIAN', file)
+    await store.saveSignature(serviceId, 'CLIENT', file)
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+    expect(await store.finalizeService(serviceId, 'Responsable')).toBe('pending')
+    const closure = mutationRecords.find(item => item.kind === 'SERVICE_FINALIZE')!
+    const earlier: TechnicianMutation = {
+      schemaVersion: 1, kind: 'CRITERION_EVALUATION',
+      requestId: crypto.randomUUID(), actorId, serviceId, deviceId, lockToken,
+      createdAt: '2026-10-06T09:00:00.000Z', updatedAt: '2026-10-06T09:01:00.000Z',
+      status: 'CONFLICT', error: 'La autorización anterior expiró.', conflict: null,
+      areaId: areaIds[0]!, criterionId, evaluation: 'C', observation: '',
+      evidences: [], retainedEvidenceStoragePaths: [], version: 1,
+    }
+    mutationRecords.push(earlier)
+    vi.mocked(api.saveTechnicianCriterionEvaluation).mockResolvedValue({ criterion: {
+      id: criterionId, criterioId, nombre: 'Orden y aseo', soloAreaExterna: false,
+      evaluacion: 'C', observacion: null, evidenciasStoragePaths: [], version: 2,
+    }, removedEvidenceStoragePaths: [] })
+    vi.mocked(mediaService.loadTechnicianMedia).mockImplementation(async (_actor, mediaId) => ({
+      schemaVersion: 1, id: mediaId, actorId, serviceId, fileName: file.name, contentType: file.type,
+      size: file.size, lastModified: file.lastModified, file, savedAt: '2026-10-07T13:30:00Z',
+    }))
+    vi.mocked(serviceMedia.uploadTechnicianSignature)
+      .mockResolvedValueOnce(`services/${serviceId}/signatures/technician/tech.png`)
+      .mockResolvedValueOnce(`services/${serviceId}/signatures/client/client.png`)
+    vi.mocked(api.finalizeTechnicianService).mockResolvedValue({ package: servicePackage('FINALIZADO') })
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: true })
+
+    expect(await store.retryFinalize(serviceId)).toBe('synced')
+    expect(api.saveTechnicianCriterionEvaluation).toHaveBeenCalledWith(serviceId, earlier.requestId, deviceId, lockToken,
+      criterionId, 1, 'C', '', [])
+    expect(api.finalizeTechnicianService).toHaveBeenCalledWith(serviceId, closure.requestId, deviceId, lockToken,
+      expect.any(String), expect.any(String), 'Responsable')
+    expect(api.finalizeTechnicianService).toHaveBeenCalledTimes(1)
+    expect(mutationRecords).toHaveLength(0)
+  })
+
+  it('does not overwrite an earlier genuine version conflict when retrying closure', async () => {
+    const prepared = executionCache()
+    for (const area of prepared.package.areas) {
+      if (!area.criterios.length) area.criterios.push({ id: crypto.randomUUID(), criterioId: crypto.randomUUID(), nombre: 'Criterio', soloAreaExterna: false, evaluacion: 'C', observacion: null, evidenciasStoragePaths: [], version: 1 })
+      for (const criterion of area.criterios) criterion.evaluacion = 'C'
+      for (const device of area.dispositivos) device.revisado = true
+    }
+    vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([prepared])
+    const store = useTechnicianServicesStore()
+    await store.ensurePackage(serviceId)
+    const file = new File(['firma'], 'firma.png', { type: 'image/png' })
+    await store.saveSignature(serviceId, 'TECHNICIAN', file)
+    await store.saveSignature(serviceId, 'CLIENT', file)
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+    expect(await store.finalizeService(serviceId, 'Responsable')).toBe('pending')
+    const earlier: TechnicianMutation = {
+      schemaVersion: 1, kind: 'CRITERION_EVALUATION',
+      requestId: crypto.randomUUID(), actorId, serviceId, deviceId, lockToken,
+      createdAt: '2026-10-06T09:00:00.000Z', updatedAt: '2026-10-06T09:01:00.000Z',
+      status: 'CONFLICT', error: 'El criterio fue modificado en otro dispositivo.',
+      areaId: areaIds[0]!, criterionId, evaluation: 'C', observation: '',
+      evidences: [], retainedEvidenceStoragePaths: [], version: 1,
+      conflict: { id: criterionId, criterioId, nombre: 'Orden y aseo', soloAreaExterna: false,
+        evaluacion: 'NC', observacion: 'Cambió', evidenciasStoragePaths: [], version: 2 },
+    }
+    mutationRecords.unshift(earlier)
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: true })
+
+    expect(await store.retryFinalize(serviceId)).toBe('conflict')
+    expect(mutationRecords.find(item => item.requestId === earlier.requestId)).toMatchObject({
+      status: 'CONFLICT', conflict: { version: 2 },
+    })
+    expect(api.saveTechnicianCriterionEvaluation).not.toHaveBeenCalled()
+    expect(api.finalizeTechnicianService).not.toHaveBeenCalled()
+  })
+
   it('keeps a local criterion answer until the technician resolves a version conflict', async () => {
     vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([executionCache()])
     vi.mocked(api.saveTechnicianCriterionEvaluation).mockRejectedValue(new ApiClientError(
