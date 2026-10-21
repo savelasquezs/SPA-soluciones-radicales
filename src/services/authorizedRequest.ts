@@ -60,7 +60,7 @@ export async function authorizedRequest<T>(
             error?: string; message?: string; code?: string; details?: Record<string, unknown>
           } | null
           signal.throwIfAborted()
-          throw new ApiClientError(body?.error ?? body?.message ?? friendlyError(response.status, body), response.status, body?.code, body?.details)
+          throw new ApiClientError(friendlyError(response.status, body), response.status, body?.code, body?.details)
         }
         return read(response)
       }, timeout, request.signal)
