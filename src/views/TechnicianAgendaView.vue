@@ -42,7 +42,7 @@ const items=computed(()=>{
   if(!online.value){
     for(const cache of Object.values(caches.value)){
       const record=cache.package.service
-      if(record.tipoServicio==='PRINCIPAL'&&localDay(record)>=from.value&&localDay(record)<=until.value)
+      if(localDay(record)>=from.value&&localDay(record)<=until.value)
         byId.set(record.id,record)
     }
   }
@@ -68,7 +68,7 @@ function goToday():void{
   void router.replace({name:'agenda',query:{week:monday(today),day:today}})
 }
 function open(record:TechnicianServiceSummary):void{
-  void router.push({name:record.tipoServicio==='REFUERZO'?'technician-client-detail':'technician-service-work',params:{id:record.id}})
+  void router.push({name:'technician-service-work',params:{id:record.id}})
 }
 async function loadWeek():Promise<void>{
   controller?.abort()
@@ -124,7 +124,7 @@ onBeforeUnmount(()=>{requestId++;controller?.abort()})
         </div>
         <div v-if="dayRecords(selected).length" class="technician-agenda__list">
           <TechnicianServiceCard v-for="record in dayRecords(selected)" :key="record.id"
-            :record="record" :contact-only="record.tipoServicio==='REFUERZO'"
+            :record="record"
             :cache="caches[record.id]" :online="online" @open="open(record)"/>
         </div>
         <div v-else class="technician-agenda__empty">No tienes servicios agendados para este día.</div>
@@ -138,7 +138,7 @@ onBeforeUnmount(()=>{requestId++;controller?.abort()})
             </div>
             <div class="technician-agenda__list">
               <TechnicianServiceCard v-for="record in dayRecords(day)" :key="record.id"
-                :record="record" :contact-only="record.tipoServicio==='REFUERZO'"
+                :record="record"
                 :cache="caches[record.id]" :online="online" @open="open(record)"/>
               <span v-if="!dayRecords(day).length" class="technician-agenda__empty">Sin servicios</span>
             </div>
