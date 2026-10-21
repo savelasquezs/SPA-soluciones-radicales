@@ -100,7 +100,7 @@ describe('technician service execution · real PostgreSQL', () => {
     expect(finished.package.service.estado).toBe('FINALIZADO')
     const history = await transaction(client => listTechnicianHistory(client, value.technician, 1, '', null, null))
     expect(history.items.some(item => item.id === reinforcementId)).toBe(true)
-    expect((await pool.query('select count(*)::int as count from public.proximos_servicios where servicio_origen_id=$1', [reinforcementId])).rows[0].count).toBe(0)
+    expect((await pool.query('select count(*)::int as count from public.proximos_servicios where principal_anterior_id=$1', [reinforcementId])).rows[0].count).toBe(0)
   })
 
   it('starts and closes a residential visit with signatures, without Areas or a full MIP route',async()=>{
