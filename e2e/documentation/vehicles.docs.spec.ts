@@ -54,12 +54,12 @@ test('video: vehículos de la Sede, placas y certificados', async ({ page }) => 
     await expect(page.getByRole('heading',{name:'Vehículos',exact:true})).toBeVisible()
   })
   await narrate('vehicles-list',async clock=>{
-    await expect(page.getByRole('cell',{name:'ABC123'})).toBeVisible()
-    await expect(page.getByRole('cell',{name:'GHI789'})).toBeVisible()
+    await expect(page.getByRole('cell',{name:'ABC123',exact:true})).toBeVisible()
+    await expect(page.getByRole('cell',{name:'GHI789',exact:true})).toBeVisible()
     await clock.until(.20)
-    await pointAt(page.getByRole('cell',{name:'ABC123'}),430)
+    await pointAt(page.getByRole('cell',{name:'ABC123',exact:true}),430)
     await clock.until(.68)
-    await pointAt(page.getByRole('cell',{name:'GHI789'}),420)
+    await pointAt(page.getByRole('cell',{name:'GHI789',exact:true}),420)
   })
   await narrate('new-vehicle',async clock=>{
     await clock.until(.34)
@@ -77,14 +77,14 @@ test('video: vehículos de la Sede, placas y certificados', async ({ page }) => 
     await clock.until(.35)
     await demoClick(form.getByRole('button',{name:'Crear vehículo',exact:true}))
     await expect(form).toBeHidden()
-    await expect(page.getByRole('cell',{name:'JKL567'})).toBeVisible()
+    await expect(page.getByRole('cell',{name:'JKL567',exact:true})).toBeVisible()
   })
   const search=page.getByRole('textbox',{name:'Buscar por placa',exact:true})
   await narrate('search-vehicle',async clock=>{
     await clock.until(.20)
     await demoType(search,'jkl')
-    await expect(page.getByRole('cell',{name:'JKL567'})).toBeVisible()
-    await expect(page.getByRole('cell',{name:'ABC123'})).toHaveCount(0)
+    await expect(page.getByRole('cell',{name:'JKL567',exact:true})).toBeVisible()
+    await expect(page.getByRole('cell',{name:'ABC123',exact:true})).toHaveCount(0)
   })
   await narrate('edit-vehicle',async clock=>{
     await clock.until(.34)
@@ -101,7 +101,7 @@ test('video: vehículos de la Sede, placas y certificados', async ({ page }) => 
     await demoClick(form.getByRole('button',{name:'Guardar cambios'}))
     await expect(form).toBeHidden()
     await search.fill('')
-    await expect(page.getByRole('cell',{name:'MNO890'})).toBeVisible()
+    await expect(page.getByRole('cell',{name:'MNO890',exact:true})).toBeVisible()
   })
   await narrate('open-certificates',async clock=>{
     await clock.until(.40)
