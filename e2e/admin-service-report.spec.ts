@@ -326,7 +326,7 @@ test('en móvil las capturas usan una tabla con encabezados reales y filas, no t
 test('un técnico no puede abrir el informe administrativo por URL', async ({page}) => {
   await setup(page, 'TECNICO')
   await page.goto('/servicios/' + serviceId + '/informe')
-  await expect(page).toHaveURL(/prohibido/)
+  await expect(page).toHaveURL(/\/$/)
   await expect(page.getByRole('heading',{name:'Informe técnico de servicio'})).toHaveCount(0)
 })
 
