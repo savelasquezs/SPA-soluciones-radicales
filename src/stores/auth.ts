@@ -3,11 +3,11 @@ import { computed, ref } from 'vue'
 
 import { apiRequest, ApiClientError } from '@/services/apiService'
 import { getAuthSession, signInWithGoogle, signOut as endAuthSession } from '@/services/authService'
+import { clearRememberedRole, readRememberedRole, rememberRoleForSession } from '@/services/sessionRole'
 import type { ActiveRole, PersonalProfile, SessionProfile } from '@/types/domain'
 
 type AuthStatus = 'idle' | 'loading' | 'unauthenticated' | 'authenticated' | 'denied' | 'error'
 type AuthSession = Awaited<ReturnType<typeof getAuthSession>>
-const ROLE_STORAGE_KEY = 'sr-active-role-session'
 
 export const useAuthStore = defineStore('auth', () => {
   const status = ref<AuthStatus>('idle')
@@ -31,33 +31,13 @@ export const useAuthStore = defineStore('auth', () => {
   ].filter((role): role is ActiveRole => Boolean(role)))
   const isAdmin = computed(() => activeRole.value === 'ADMINISTRADOR')
 
-  function clearRememberedRole(): void {
-    try { sessionStorage.removeItem(ROLE_STORAGE_KEY) } catch { /* Storage can be disabled. */ }
-  }
-
   function rememberRole(role: ActiveRole): void {
-    const authUserId = session.value?.user?.id
-    const sessionId = session.value?.session?.id
-    if (!authUserId || !sessionId) return
-    try {
-      sessionStorage.setItem(ROLE_STORAGE_KEY, JSON.stringify({ authUserId, sessionId, role }))
-    } catch { /* Role selection still works without browser storage. */ }
+    rememberRoleForSession(session.value?.user?.id, session.value?.session?.id, role)
   }
 
   function rememberedRole(): ActiveRole | null {
-    const authUserId = session.value?.user?.id
-    const sessionId = session.value?.session?.id
-    try {
-      const raw = sessionStorage.getItem(ROLE_STORAGE_KEY)
-      if (!raw) return null
-      const saved = JSON.parse(raw) as { authUserId?: unknown; sessionId?: unknown; role?: unknown } | null
-      if (authUserId && sessionId && saved?.authUserId === authUserId && saved.sessionId === sessionId
-        && (saved.role === 'ADMINISTRADOR' || saved.role === 'TECNICO')) return saved.role
-    } catch { /* Ignore invalid or unavailable browser storage. */ }
-    clearRememberedRole()
-    return null
+    return readRememberedRole(session.value?.user?.id, session.value?.session?.id)
   }
-
 
   async function initialize(force = false): Promise<void> {
     if (initialization && !force) return initialization

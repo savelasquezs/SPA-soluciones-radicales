@@ -1,5 +1,6 @@
 import { createAuthClient } from '@neondatabase/auth'
 import { ApiClientError, withRequestDeadline } from './requestControl'
+import { clearRememberedRole, readRememberedRole } from './sessionRole'
 
 const authUrl = import.meta.env.VITE_NEON_AUTH_URL
 if (!authUrl) throw new Error('VITE_NEON_AUTH_URL is required')
@@ -36,6 +37,56 @@ function tokenExpiresSoon(token: string): boolean {
   } catch { return false }
 }
 
+// A refreshed Neon JWT has new iat/exp claims, so the backend's
+// per-token role record must be restored before any protected request.
+// Better Auth's session.id stays stable for the actual browser session.
+let roleActivatedToken: string | null = null
+let roleActivation: { token: string; promise: Promise<void> } | null = null
+
+async function activateRememberedRole(session: Awaited<ReturnType<typeof getAuthSession>>, token: string): Promise<void> {
+  if (roleActivatedToken === token) return
+  if (roleActivation?.token === token) return roleActivation.promise
+  const role = readRememberedRole(session?.user?.id, session?.session?.id)
+  if (!role) { roleActivatedToken = token; return }
+
+  // Do not call apiRequest here: it calls getAccessToken, which would recurse.
+  const pending = (async () => {
+    const functionUrl = import.meta.env.VITE_NEON_FUNCTION_URL
+    if (!functionUrl) throw new ApiClientError('VITE_NEON_FUNCTION_URL no está configurada', 500)
+    const url = new URL('api/session/role', functionUrl.endsWith('/') ? functionUrl : `${functionUrl}/`)
+    const { response, body } = await withRequestDeadline(async signal => {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role }),
+        signal,
+      })
+      const body = await response.json().catch(() => null) as {
+        error?: string; rolActivo?: unknown; requiereSeleccionRol?: boolean
+      } | null
+      return { response, body }
+    }, 12_000)
+
+    if (response.status === 403 || response.status === 422) {
+      // The server is authoritative: a revoked or invalid role is never reused.
+      clearRememberedRole()
+      return
+    }
+    if (!response.ok) throw new ApiClientError(body?.error ?? 'No fue posible recuperar el rol activo.', response.status)
+    if (body?.rolActivo !== role || body.requiereSeleccionRol) {
+      throw new ApiClientError('El servidor no pudo restaurar el rol activo.', 502, 'INVALID_RESPONSE')
+    }
+  })()
+
+  roleActivation = { token, promise: pending }
+  try {
+    await pending
+    if (roleActivation?.promise === pending) roleActivatedToken = token
+  } finally {
+    if (roleActivation?.promise === pending) roleActivation = null
+  }
+}
+
 export async function getAccessToken(options: SessionOptions = {}): Promise<string> {
   let session = await getAuthSession(options)
   if (!options.forceRefresh && session?.session.token && tokenExpiresSoon(session.session.token)) {
@@ -44,6 +95,8 @@ export async function getAccessToken(options: SessionOptions = {}): Promise<stri
   const token = session?.session.token
   if (!token) throw new ApiClientError('No fue posible obtener un token de sesión. Inicia sesión nuevamente.', 401, 'AUTH_REQUIRED')
   if (tokenExpiresSoon(token)) throw new ApiClientError('La sesión venció. Inicia sesión nuevamente.', 401, 'AUTH_EXPIRED')
+  await activateRememberedRole(session, token)
+  options.signal?.throwIfAborted()
   return token
 }
 
