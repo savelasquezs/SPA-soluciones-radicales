@@ -160,6 +160,7 @@ export interface PaymentDraft extends RegistrarPago { confirmed: boolean; techni
 export async function registerPayment(client: PoolClient, actor: string, draft: PaymentDraft): Promise<Pago> {
   if (!isId(draft.requestId) || !isId(draft.clienteId) || !Array.isArray(draft.aplicaciones)
     || !draft.aplicaciones.length || draft.aplicaciones.length>30) throw invalid()
+  await client.query("select pg_advisory_xact_lock(hashtextextended($1,0))",[`finance:payment:${draft.requestId}`])
   if (draft.metodo!=='EFECTIVO' && draft.metodo!=='TRANSFERENCIA') throw invalid()
   const observation=(draft.observacion??'').trim()
   if (observation.length>1000) throw invalid('La observación es demasiado larga.')
@@ -268,6 +269,7 @@ export async function reviewPayment(client: PoolClient, actor: string, paymentId
 export async function deliverCash(client: PoolClient, actor: string, technicianId: string, value: number, requestId: string, note: string): Promise<EntregaEfectivo> {
   if(!isId(technicianId)||!isId(requestId)||note.length>1000) throw invalid()
   amount(value)
+  await client.query("select pg_advisory_xact_lock(hashtextextended($1,0))",[`finance:delivery:${requestId}`])
   const previous=(await client.query<{id:string;monto:string;tecnico_id:string}>(
     'select id,monto,tecnico_id from public.movimientos_efectivo where request_id=$1',[requestId])).rows[0]
   if(previous) {
