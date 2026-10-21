@@ -12,10 +12,22 @@ export async function readJson<T>(response: Response): Promise<T> {
   }
 }
 
+function friendlyError(status: number, payload: { error?: string; message?: string } | null): string {
+  const message = payload?.error ?? payload?.message ?? ''
+  // Preserve useful validation messages but never show gateway/HTTP codes.
+  if (message && !/\b(?:HTTP|status(?:\s+code)?|error)\s*[:#-]?\s*[1-5]\d{2}\b/i.test(message)) return message
+  if (status === 401) return 'Tu sesión necesita actualizarse. Vuelve a intentarlo.'
+  if (status === 403) return 'No tienes permiso para realizar esta acción.'
+  if (status === 404) return 'No encontramos la información solicitada.'
+  if (status === 400 || status === 422) return 'No fue posible procesar la solicitud. Revisa los datos e inténtalo de nuevo.'
+  if (status === 429) return 'Hay demasiadas solicitudes. Inténtalo de nuevo en unos momentos.'
+  return 'No fue posible completar la solicitud. Inténtalo de nuevo.'
+}
+
 function retryableRead(error: unknown): boolean {
   return error instanceof RequestTimeoutError || error instanceof TypeError
     || (error instanceof ApiClientError && error.code !== 'INVALID_RESPONSE'
-      && ([401, 502, 503, 504].includes(error.status) || (error.status === 0 && error.code === 'AUTH_ERROR')))
+      && ([401, 502, 503, 504].includes(error.status) || ([0, 400].includes(error.status) && error.code === 'AUTH_ERROR')))
 }
 
 /** At most one automatic retry, and only for GET/HEAD. Never replay mutations. */
@@ -47,7 +59,7 @@ export async function authorizedRequest<T>(
             error?: string; message?: string; code?: string; details?: Record<string, unknown>
           } | null
           signal.throwIfAborted()
-          throw new ApiClientError(body?.error ?? body?.message ?? `La solicitud falló (${response.status})`, response.status, body?.code, body?.details)
+          throw new ApiClientError(body?.error ?? body?.message ?? friendlyError(response.status, body), response.status, body?.code, body?.details)
         }
         return read(response)
       }, timeout, request.signal)
@@ -55,7 +67,7 @@ export async function authorizedRequest<T>(
       request.signal?.throwIfAborted()
       if (safeRead && attempt === 0 && retryableRead(error)
         && (typeof navigator === 'undefined' || navigator.onLine !== false)) {
-        forceRefresh = error instanceof ApiClientError && error.status === 401
+        forceRefresh = error instanceof ApiClientError && (error.status === 401 || (error.code === 'AUTH_ERROR' && error.status === 400))
         await waitForRetry(request.signal)
         continue
       }
