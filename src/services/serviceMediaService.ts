@@ -155,9 +155,16 @@ export async function uploadTechnicianSignature(
     method: 'POST',
     body: JSON.stringify({ deviceId, lockToken, role, fileName: file.name, contentType: file.type, size: file.size }),
   })
-  const response = await fetch(authorization.url, {
-    method: 'PUT', headers: { 'Content-Type': authorization.contentType }, body: file,
-  })
-  if (!response.ok) throw new ApiClientError('No fue posible subir la firma.', response.status)
+  let response: Response
+  try {
+    response = await fetch(authorization.url, {
+      method: 'PUT', headers: { 'Content-Type': authorization.contentType }, body: file,
+    })
+  } catch {
+    throw new ApiClientError('No se pudo conectar al almacenamiento para subir la firma. La firma sigue guardada en este dispositivo; comprueba la conexión y reintenta.', 503, 'SIGNATURE_UPLOAD_UNAVAILABLE')
+  }
+  if (!response.ok) throw new ApiClientError(response.status === 403
+    ? 'El almacenamiento rechazó la firma. Solicita soporte sin borrar los datos de la aplicación.'
+    : 'No fue posible subir la firma.', response.status, 'SIGNATURE_UPLOAD_FAILED')
   return authorization.storagePath
 }

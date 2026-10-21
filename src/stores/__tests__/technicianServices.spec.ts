@@ -510,6 +510,46 @@ describe('technician services state', () => {
     expect(store.currentPackage?.service.estado).toBe('FINALIZADO')
   })
 
+  it('retries a failed signature upload without losing saved signatures or duplicating the closure', async () => {
+    const prepared = executionCache()
+    for (const area of prepared.package.areas) {
+      if (!area.criterios.length) area.criterios.push({ id: crypto.randomUUID(), criterioId: crypto.randomUUID(), nombre: 'Criterio', soloAreaExterna: false, evaluacion: 'C', observacion: null, evidenciasStoragePaths: [], version: 1 })
+      for (const criterion of area.criterios) criterion.evaluacion = 'C'
+      for (const device of area.dispositivos) device.revisado = true
+    }
+    vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([prepared])
+    const file = new File(['signature'], 'firma.png', { type: 'image/png' })
+    vi.mocked(mediaService.loadTechnicianMedia).mockImplementation(async (_actor, mediaId) => ({
+      schemaVersion: 1, id: mediaId, actorId, serviceId, fileName: file.name, contentType: file.type,
+      size: file.size, lastModified: file.lastModified, file, savedAt: '2026-10-07T13:30:00Z',
+    }))
+    vi.mocked(serviceMedia.uploadTechnicianSignature)
+      .mockRejectedValueOnce(new ApiClientError('No se pudo subir la firma.', 503, 'SIGNATURE_UPLOAD_UNAVAILABLE'))
+      .mockResolvedValueOnce(`services/${serviceId}/signatures/technician/tech.png`)
+      .mockResolvedValueOnce(`services/${serviceId}/signatures/client/client.png`)
+    const finalized = servicePackage('FINALIZADO')
+    vi.mocked(api.finalizeTechnicianService).mockResolvedValue({ package: finalized })
+    const store = useTechnicianServicesStore()
+    await store.ensurePackage(serviceId)
+    await store.saveSignature(serviceId, 'TECHNICIAN', file)
+    await store.saveSignature(serviceId, 'CLIENT', file)
+
+    expect(await store.finalizeService(serviceId, 'Responsable')).toBe('pending')
+    const original = mutationRecords.find(item => item.kind === 'SERVICE_FINALIZE')
+    expect(original).toMatchObject({ status: 'SENDING', error: 'No se pudo subir la firma.' })
+    expect(store.currentPackage?.service.estado).toBe('EN_PROCESO')
+    expect(api.finalizeTechnicianService).not.toHaveBeenCalled()
+    expect(mediaService.deleteTechnicianMedia).not.toHaveBeenCalled()
+
+    expect(await store.retryFinalize(serviceId)).toBe('synced')
+    expect(mutationRecords).toHaveLength(0)
+    expect(store.currentPackage?.service.estado).toBe('FINALIZADO')
+    expect(serviceMedia.uploadTechnicianSignature).toHaveBeenCalledTimes(3)
+    expect(api.finalizeTechnicianService).toHaveBeenCalledTimes(1)
+    expect(api.finalizeTechnicianService).toHaveBeenCalledWith(serviceId, original?.requestId, deviceId, lockToken,
+      expect.stringContaining('/technician/'), expect.stringContaining('/client/'), 'Responsable')
+  })
+
   it('keeps a local criterion answer until the technician resolves a version conflict', async () => {
     vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([executionCache()])
     vi.mocked(api.saveTechnicianCriterionEvaluation).mockRejectedValue(new ApiClientError(

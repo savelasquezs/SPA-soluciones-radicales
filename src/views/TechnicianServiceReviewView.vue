@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { Mail } from 'lucide-vue-next'
+import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { useRoute, useRouter } from 'vue-router'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseInput from '@/components/base/BaseInput.vue'
@@ -18,6 +19,7 @@ const route = useRoute()
 const router = useRouter()
 const services = useTechnicianServicesStore()
 const emails = useTechnicianReportEmailStore()
+const { online } = useNetworkStatus()
 const serviceId = computed(() => String(route.params.id ?? ''))
 const loading = ref(true)
 const error = ref('')
@@ -99,11 +101,15 @@ async function finish(): Promise<void> {
   actionError.value = ''
   actionMessage.value = ''
   try {
-    const result = finalization.value?.status === 'CONFLICT'
+    // Reuse the persisted requestId (and signatures) on every retry; never queue a second closure.
+    const result = finalization.value
       ? await services.retryFinalize(serviceId.value)
       : await services.finalizeService(serviceId.value, clientName.value)
     actionMessage.value = result === 'synced' ? 'Servicio finalizado.' : result === 'conflict'
-      ? 'Revisa la información pendiente antes de volver a intentar.' : 'Cierre guardado. Se finalizará al recuperar conexión.'
+      ? 'Revisa el error del cierre antes de volver a intentarlo.'
+      : finalization.value?.error ? 'El cierre sigue guardado. Revisa el error y vuelve a intentar la sincronización.'
+        : online.value ? 'El cierre está pendiente de sincronización.'
+          : 'Cierre guardado. Se finalizará al recuperar conexión.'
     if (result === 'synced') {
       if (!simplified.value) {
         reportModalOpen.value = true
@@ -136,9 +142,9 @@ async function finish(): Promise<void> {
         <article><div><strong>Técnico</strong><span>{{ technicianSigned ? 'Firma guardada' : 'Pendiente' }}</span></div><BaseButton variant="secondary" :disabled="saving || Boolean(finalization)" @click="signatureRole = 'TECHNICIAN'">{{ technicianSigned ? 'Firmar de nuevo' : 'Firmar' }}</BaseButton></article>
         <article><div><strong>Responsable del cliente</strong><span>{{ clientSigned ? 'Firma guardada' : 'Pendiente' }}</span></div><BaseButton variant="secondary" :disabled="saving || Boolean(finalization)" @click="signatureRole = 'CLIENT'">{{ clientSigned ? 'Firmar de nuevo' : 'Firmar' }}</BaseButton></article>
         <BaseInput v-model="clientName" name="client-signer-name" label="Nombre de quien firma por el cliente" maxlength="200" required :disabled="saving || Boolean(finalization)" />
-        <StatusPanel v-if="actionError" compact title="No fue posible cerrar el servicio" :message="actionError" tone="danger" />
+        <StatusPanel v-if="actionError || finalization?.error" compact title="No fue posible sincronizar el cierre" :message="actionError || finalization?.error || ''" tone="danger" />
         <StatusPanel v-else-if="actionMessage" compact title="Estado del cierre" :message="actionMessage" :tone="actionMessage === 'Servicio finalizado.' ? 'success' : 'warning'" />
-        <BaseButton :loading="saving" :disabled="!canFinalize || (Boolean(finalization) && finalization?.status !== 'CONFLICT')" @click="finish">{{ finalization?.status === 'CONFLICT' ? 'Reintentar cierre' : finalization ? 'Cierre pendiente' : 'Finalizar servicio' }}</BaseButton>
+        <BaseButton :loading="saving" :disabled="!canFinalize || (Boolean(finalization) && (!online || services.syncing))" @click="finish">{{ finalization?.status === 'CONFLICT' ? 'Reintentar cierre' : finalization ? (online ? 'Reintentar sincronización' : 'Cierre pendiente') : 'Finalizar servicio' }}</BaseButton>
       </section>
       <section v-if="canOfferReport && !simplified" class="review-email" aria-labelledby="review-email-title">
         <div><h2 id="review-email-title">Enviar informe al cliente</h2>
@@ -149,7 +155,7 @@ async function finish(): Promise<void> {
           message="No se pudo confirmar o completar el envío. Revisa Gmail y solicita apoyo al administrador antes de generar otro intento." />
         <StatusPanel v-else-if="pendingEmailItems.length" compact
           title="Envío pendiente" tone="warning"
-          :message="pendingEmailItems[0]?.error || 'Guardado en este dispositivo. Se enviará después de confirmar el cierre y recuperar internet.'" />
+          :message="pendingEmailItems[0]?.error || (finalization?.error ? 'El cierre requiere atención antes de enviar el informe.' : 'Guardado en este dispositivo. Se enviará después de confirmar el cierre y recuperar internet.')" />
         <p v-if="emailInfo" class="review-email__notice" role="status">{{ emailInfo }}</p>
         <BaseButton variant="secondary" size="compact" :disabled="Boolean(pendingEmailItems.length)" @click="reportModalOpen=true">
           <Mail :size="16" aria-hidden="true" /> Enviar informe
