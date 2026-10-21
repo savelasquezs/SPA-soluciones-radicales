@@ -1355,9 +1355,18 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
   }
 
   async function retryFinalize(serviceId: string): Promise<'synced' | 'pending' | 'conflict'> {
-    const operation = (await reloadMutations(serviceId)).find((item): item is TechnicianServiceFinalizeMutation => item.kind === 'SERVICE_FINALIZE')
+    const queued = await reloadMutations(serviceId)
+    const operation = queued.find((item): item is TechnicianServiceFinalizeMutation => item.kind === 'SERVICE_FINALIZE')
     if (!operation) return 'synced'
-    await saveTechnicianMutation({ ...operation, status: 'PENDING', error: null, updatedAt: new Date().toISOString() })
+    const updatedAt = new Date().toISOString()
+    // A prior client/API error can block the entire queue, including the closure. Reuse the same
+    // request IDs to replay it safely; real version conflicts must be resolved in their Area.
+    for (const item of queued) {
+      if (item.kind === 'SERVICE_FINALIZE' || item.status !== 'CONFLICT'
+        || ('conflict' in item && item.conflict)) continue
+      await saveTechnicianMutation({ ...item, status: 'PENDING', error: null, updatedAt })
+    }
+    await saveTechnicianMutation({ ...operation, status: 'PENDING', error: null, updatedAt })
     await reloadMutations(serviceId)
     return syncPending(serviceId)
   }
