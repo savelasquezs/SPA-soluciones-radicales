@@ -168,6 +168,8 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 
 ### Pagos y efectivo
 
+Los cobros parciales, la cartera consolidada y las entregas de caja se documentan en [Pagos, cartera y caja](payments-cash-receivables.md). La confirmación de dinero es administrativa y no se confunde con cierre técnico ni con venta realizada.
+
 - Todos los montos son enteros en COP.
 - Métodos iniciales: Transferencia y Efectivo.
 - Un pago en efectivo confirmado identifica al Técnico que recauda.
