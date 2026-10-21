@@ -14,6 +14,7 @@ const props = withDefaults(defineProps<{
   syncing: boolean
   continueLabel?: string
   restoredDraft?: { description: string; photos: File[] } | null
+  failureMessage?: string
 }>(), { continueLabel: 'Continuar' })
 
 const emit = defineEmits<{
@@ -33,7 +34,7 @@ const descriptionError = ref('')
 const photoError = ref('')
 const saveError = ref('')
 const submitting = ref(false)
-const disabled = computed(() => !props.editable || props.syncing || submitting.value || props.mutation?.status === 'CONFLICT')
+const disabled = computed(() => !props.editable || props.syncing || submitting.value || props.mutation?.status === 'CONFLICT' || props.mutation?.status === 'SENDING')
 const savedCount = computed(() => (props.area.sinAccesoEvidenciasStoragePaths?.length ?? (props.area.sinAccesoFotoStoragePath ? 1 : 0))
   + (props.area.sinAccesoEvidenciasLocalIds?.length ?? (props.area.sinAccesoFotoLocalId ? 1 : 0)))
 const hasStoredPhoto = computed(() => savedCount.value > 0)
@@ -133,7 +134,7 @@ function continueFlow(): void {
 
   <BaseButton v-else class="access-trigger" size="compact" variant="secondary" :disabled="!editable || syncing || submitting" @click="openException"><ShieldAlert :size="16" aria-hidden="true" />Registrar área sin acceso</BaseButton>
 
-  <BaseDialog :model-value="dialogOpen" :title="completed ? 'Área registrada sin acceso' : 'No fue posible acceder al Área'" :description="completed ? 'La excepción quedó guardada y esta Área ya no tiene tareas pendientes.' : 'Indica el motivo y adjunta evidencia antes de continuar.'" :close-on-escape="!submitting" @update:model-value="value => { if (!value) closeException() }">
+  <BaseDialog :model-value="dialogOpen" :title="completed ? 'Área registrada sin acceso' : 'No fue posible acceder al Área'" :description="completed ? (mutation ? 'Información guardada en este celular. Se confirmará cuando termine la sincronización.' : 'La excepción quedó guardada y esta Área ya no tiene tareas pendientes.') : 'Indica el motivo y adjunta evidencia antes de continuar.'" :close-on-escape="!submitting" @update:model-value="value => { if (!value) closeException() }">
     <div v-if="completed" class="access-completed">
       <ShieldCheck :size="34" aria-hidden="true" />
       <p>Los criterios y puestos de monitoreo quedaron exceptuados para esta visita.</p>
@@ -145,7 +146,10 @@ function continueFlow(): void {
       <BaseTextarea :model-value="description" :name="`area-access-description-${area.id}`" label="Motivo" :rows="3" required :disabled="disabled" :error="descriptionError || undefined" hint="Explica la causa concreta." @update:model-value="changedDescription" />
       <TechnicianEvidencePicker :model-value="photos" :name="`area-access-photo-${area.id}`" :label="hasStoredPhoto ? 'Agregar fotografías' : 'Fotografías del Área'" required :max="Math.max(0, 5 - savedCount)" :disabled="disabled" :error="photoError || undefined" @update:model-value="changedPhoto" />
       <p v-if="hasStoredPhoto" class="access-stored">{{ savedCount }} fotografía(s) ya guardada(s); puedes añadir más.</p>
-      <p v-if="saveError" class="access-error" role="alert">{{ saveError }}</p>
+      <p v-if="saveError" class="access-error" role="alert">{{ failureMessage || saveError }}</p>
+      <p v-else-if="mutation?.status === 'SENDING' && !syncing" class="access-stored" role="status">
+        El Área quedó guardada en este dispositivo y espera la confirmación del servidor.
+      </p>
       <BaseButton variant="danger" :loading="submitting" :disabled="disabled" @click="saveException">Guardar Área sin acceso</BaseButton>
     </div>
     <div v-if="mutation?.status === 'CONFLICT'" class="access-conflict">
