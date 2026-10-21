@@ -225,6 +225,7 @@ test('agrupa capturas por especie y solo detalla puestos con capturas en informe
 
 
 test('los cuatro visores ampliados conservan contraste en modo claro y oscuro en móviles',async ({page})=>{
+  test.slow() // Cuatro gráficos y varios anchos en ambos temas.
   await setup(page,'ADMINISTRADOR')
   const themes=[
     {mode:'light',surface:'rgb(255, 255, 255)',ink:'rgb(29, 52, 69)',
