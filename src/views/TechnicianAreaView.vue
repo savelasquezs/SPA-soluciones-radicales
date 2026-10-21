@@ -351,7 +351,17 @@ async function saveAccess(withoutAccess: boolean, description: string, photos: F
     if (withoutAccess && (saveQueue.size || deviceSaveQueue.size)) await Promise.all([...saveQueue.values(), ...deviceSaveQueue.values()])
     try {
       const result = await services.applyAreaAccess(serviceId.value, expected.areaId, withoutAccess, expected.description, photos)
-      if (result === 'conflict') return false
+      if (result === 'conflict') {
+        const queued = services.mutations[serviceId.value] ?? []
+        const access = queued.find(item => item.kind === 'AREA_ACCESS' && item.areaId === expected.areaId)
+        // A prior unrelated conflict can block the outbox, but this Area and its photos
+        // were already persisted locally. Do not ask for the same photos a second time.
+        if (!access || access.status === 'CONFLICT') {
+          saveError.value = access?.error || queued.find(item => item.status === 'CONFLICT')?.error
+            || 'Hay otra operación pendiente que debes resolver antes de sincronizar esta Área.'
+          return false
+        }
+      }
       if (withoutAccess) { drafts.value = {}; deviceDrafts.value = {} }
       if (currentCache.value?.actorId) {
         const actorId = currentCache.value.actorId
@@ -533,8 +543,15 @@ async function useRemoteDevice(serviceDeviceId: string): Promise<void> {
 
 async function retryDevice(serviceDeviceId: string): Promise<void> {
   saveError.value = ''
-  try { const result = await services.retryDeviceReviewConflict(serviceId.value, serviceDeviceId); if (result !== 'conflict') clearDeviceDraft(serviceDeviceId) }
-  catch (failure) { saveError.value = failure instanceof Error ? failure.message : 'No fue posible reintentar el puesto de monitoreo.' }
+  try {
+    const mutation = deviceMutation(serviceDeviceId)
+    const result = mutation && mutation.status !== 'CONFLICT'
+      ? await services.syncPending(serviceId.value)
+      : await services.retryDeviceReviewConflict(serviceId.value, serviceDeviceId)
+    if (result === 'synced') clearDeviceDraft(serviceDeviceId)
+  } catch (failure) {
+    saveError.value = failure instanceof Error ? failure.message : 'No fue posible reintentar el puesto de monitoreo.'
+  }
 }
 </script>
 
@@ -577,6 +594,7 @@ async function retryDevice(serviceDeviceId: string): Promise<void> {
       <TechnicianAreaAccessEditor
         :area="currentArea"
         :mutation="accessMutation()"
+        :failure-message="saveError"
         :editable="canEditRoute"
         :syncing="syncing"
         :continue-label="continueLabel"
