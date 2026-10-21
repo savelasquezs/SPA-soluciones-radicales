@@ -37,7 +37,9 @@ export interface TecnicoCaja {
   id: string
   nombre: string
   recaudado: number
+  recaudadoHoy: number
   entregado: number
+  entregadoHoy: number
   saldo: number
 }
 export interface EntregaEfectivo {
