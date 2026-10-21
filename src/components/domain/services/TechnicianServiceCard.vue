@@ -38,7 +38,7 @@ const actionLabel=computed(()=>props.contactOnly ? 'Ver cliente'
       <div class="technician-service-card__detail">
         <div class="technician-service-card__identity">
           <h2>{{ record.clienteNombre }}</h2>
-          <p>{{ record.sedeNombre }}<span v-if="record.tipoServicio==='REFUERZO'"> · Refuerzo (solo consulta)</span></p>
+          <p>{{ record.sedeNombre }}<span v-if="record.tipoServicio==='REFUERZO'"> · Refuerzo</span></p>
         </div>
         <span class="technician-service-card__right">
           <Check v-if="cache" :size="18" stroke-width="3" aria-label="Preparado en este celular" role="img" class="technician-service-card__prepared" />
