@@ -1,4 +1,4 @@
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import { ApiError, requireAdmin, requireTechnician, type Identity } from '../auth'
@@ -19,7 +19,7 @@ const allocations=(v:unknown):RegistrarPago['aplicaciones']=>{
   if(!Array.isArray(v)||v.length>30||!v.length)throw new ApiError(422,'Selecciona al menos un servicio.')
   return v.map(item=>{if(!item||typeof item!=='object'||Array.isArray(item))throw new ApiError(422,'Revisa los servicios.');const row=item as Record<string,unknown>;return {servicioId:uuid(row.servicioId),monto:amount(row.monto)}})
 }
-const admin=async <T>(c:{get:(key:'identity')=>Identity},fn:(client:import('pg').PoolClient,userId:string)=>Promise<T>):Promise<T>=>
+const admin=async <T>(c:Context<Environment>,fn:(client:import('pg').PoolClient,userId:string)=>Promise<T>):Promise<T>=>
   transaction(async client=>fn(client,(await requireAdmin(client,c.get('identity'))).id))
 
 financeRoutes.get('/overview',async c=>{c.header('Cache-Control','private, no-store');return c.json(await admin(c,client=>overview(client)))})
@@ -100,7 +100,7 @@ financeRoutes.post('/technician/services/:id/payments',async c=>{
   })
   return c.json(result,201)
 })
-async function accessiblePayment(c:Parameters<typeof admin>[0],paymentId:string):Promise<{id:string;estado:string;metodo:string;registrado_por_id:string}> {
+async function accessiblePayment(c:Context<Environment>,paymentId:string):Promise<{id:string;estado:string;metodo:string;registrado_por_id:string}> {
   return transaction(async client=>{
     const identity=c.get('identity')
     const user=await requireTechnician(client,identity).catch(()=>requireAdmin(client,identity))
