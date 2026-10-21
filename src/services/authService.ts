@@ -40,14 +40,14 @@ function tokenExpiresSoon(token: string): boolean {
 // A refreshed Neon JWT has new iat/exp claims, so the backend's
 // per-token role record must be restored before any protected request.
 // Better Auth's session.id stays stable for the actual browser session.
-let roleActivated: { token: string; role: string | null } | null = null
-let roleActivation: { token: string; role: string; promise: Promise<void> } | null = null
+let roleActivatedToken: string | null = null
+let roleActivation: { token: string; promise: Promise<void> } | null = null
 
 async function activateRememberedRole(session: Awaited<ReturnType<typeof getAuthSession>>, token: string): Promise<void> {
+  if (roleActivatedToken === token) return
+  if (roleActivation?.token === token) return roleActivation.promise
   const role = readRememberedRole(session?.user?.id, session?.session?.id)
-  if (roleActivated?.token === token && roleActivated.role === role) return
-  if (role && roleActivation?.token === token && roleActivation.role === role) return roleActivation.promise
-  if (!role) { roleActivated = { token, role: null }; return }
+  if (!role) { roleActivatedToken = token; return }
 
   // Do not call apiRequest here: it calls getAccessToken, which would recurse.
   const pending = (async () => {
@@ -78,10 +78,10 @@ async function activateRememberedRole(session: Awaited<ReturnType<typeof getAuth
     }
   })()
 
-  roleActivation = { token, role, promise: pending }
+  roleActivation = { token, promise: pending }
   try {
     await pending
-    if (roleActivation?.promise === pending) roleActivated = { token, role: readRememberedRole(session?.user?.id, session?.session?.id) }
+    if (roleActivation?.promise === pending) roleActivatedToken = token
   } finally {
     if (roleActivation?.promise === pending) roleActivation = null
   }
