@@ -15,7 +15,7 @@ export async function getAuthSession(options: SessionOptions = {}) {
     // This SDK-only header is stripped before the actual HTTP request.
     fetchOptions: { signal, ...(options.forceRefresh ? { headers: { 'X-Force-Fetch': 'true' } } : {}) },
   }), 12_000, options.signal)
-  if (error) throw new ApiClientError(error.message ?? 'No fue posible consultar la sesión.', error.status ?? 0, 'AUTH_ERROR')
+  if (error) throw new ApiClientError('No fue posible consultar la sesión. Vuelve a intentarlo.', error.status ?? 0, 'AUTH_ERROR')
   if (data?.session.token) {
     const url = new URL(window.location.href)
     if (url.searchParams.has('neon_auth_session_verifier')) {
@@ -72,7 +72,7 @@ async function activateRememberedRole(session: Awaited<ReturnType<typeof getAuth
       clearRememberedRole()
       return
     }
-    if (!response.ok) throw new ApiClientError(body?.error ?? 'No fue posible recuperar el rol activo.', response.status)
+    if (!response.ok) throw new ApiClientError('No fue posible recuperar el rol activo. Vuelve a intentarlo.', response.status)
     if (body?.rolActivo !== role || body.requiereSeleccionRol) {
       throw new ApiClientError('El servidor no pudo restaurar el rol activo.', 502, 'INVALID_RESPONSE')
     }

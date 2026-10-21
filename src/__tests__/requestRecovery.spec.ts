@@ -68,6 +68,25 @@ describe('solicitudes después de inactividad', () => {
     expect(getAccessToken).toHaveBeenCalledTimes(2)
   })
 
+  it('reintenta únicamente lecturas cuando Auth responde temporalmente con 400', async () => {
+    getAccessToken.mockRejectedValueOnce(new ApiClientError('HTTP 400', 400, 'AUTH_ERROR'))
+    fetchMock.mockResolvedValue(json({ ok: true }))
+    const result = apiRequest('api/users')
+    await vi.advanceTimersByTimeAsync(750)
+    await expect(result).resolves.toEqual({ ok: true })
+    expect(getAccessToken).toHaveBeenNthCalledWith(2, expect.objectContaining({ forceRefresh: true }))
+    expect(fetchMock).toHaveBeenCalledOnce()
+  })
+
+  it('no muestra códigos HTTP crudos enviados por la API', async () => {
+    fetchMock.mockResolvedValue(json({ error: 'HTTP 400' }, 400))
+    await expect(apiRequest('api/users', { method: 'POST', body: '{}' })).rejects.toMatchObject({
+      status: 400,
+      message: 'No fue posible procesar la solicitud. Revisa los datos e inténtalo de nuevo.',
+    })
+    expect(fetchMock).toHaveBeenCalledOnce()
+  })
+
   it('permite respuestas vacías 204', async () => {
     fetchMock.mockResolvedValue(new Response(null, { status: 204 }))
     await expect(apiRequest('api/users/1', { method: 'DELETE' })).resolves.toBeNull()
