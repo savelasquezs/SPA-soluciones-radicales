@@ -89,7 +89,9 @@ test('video: gestión y reutilización de Áreas por Sede',async({page})=>{
     await expect(detail.getByText('2', {exact:true})).toBeVisible()
   })
   await narrate('open-edit',async clock=>{
-    await clock.until(.35)
+    await clock.until(.16)
+    await demoClick(page.getByRole('button',{name:'Cerrar detalle'}))
+    await clock.until(.48)
     await demoClick(page.getByRole('button',{name:'Editar Zona de carga'}))
     const dialog=page.getByRole('dialog',{name:'Editar Área',exact:true})
     await expect(dialog).toBeVisible()
