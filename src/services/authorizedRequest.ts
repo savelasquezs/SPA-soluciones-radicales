@@ -15,7 +15,8 @@ export async function readJson<T>(response: Response): Promise<T> {
 function friendlyError(status: number, payload: { error?: string; message?: string } | null): string {
   const message = payload?.error ?? payload?.message ?? ''
   // Preserve useful validation messages but never show gateway/HTTP codes.
-  if (message && !/\b(?:HTTP|status(?:\s+code)?|error)\s*[:#-]?\s*[1-5]\d{2}\b/i.test(message)) return message
+  if (message && !/^\s*[1-5]\d{2}\s*$/.test(message)
+    && !/\b(?:HTTP|status(?:\s+code)?|error)\s*[:#-]?\s*[1-5]\d{2}\b/i.test(message)) return message
   if (status === 401) return 'Tu sesión necesita actualizarse. Vuelve a intentarlo.'
   if (status === 403) return 'No tienes permiso para realizar esta acción.'
   if (status === 404) return 'No encontramos la información solicitada.'
