@@ -39,8 +39,8 @@ async function lockFamily(client: PoolClient, id: string): Promise<string[]> {
 function mutable(record: AdminService): void {
   if (record.estado !== 'PROGRAMADO') throw new ApiError(409, 'Solo puedes editar la programación de un servicio Programado.', 'SERVICE_NOT_PROGRAMMED')
 }
-async function siteForScheduling(client: PoolClient, id: string): Promise<{ maneja_refuerzo: boolean; tipo_sede: 'NEGOCIO' | 'RESIDENCIAL' }> {
-  const site = (await client.query<{ maneja_refuerzo: boolean; tipo_sede: 'NEGOCIO' | 'RESIDENCIAL' }>(`select s.maneja_refuerzo,s.tipo_sede from public.sedes s join public.negocios n on n.id=s.negocio_id
+async function siteForScheduling(client: PoolClient, id: string): Promise<{ maneja_refuerzo: boolean; tipo_sede: 'NEGOCIO' | 'RESIDENCIAL'; clientId: string; valorServicio: string | null }> {
+  const site = (await client.query<{ maneja_refuerzo: boolean; tipo_sede: 'NEGOCIO' | 'RESIDENCIAL' }>(`select s.maneja_refuerzo,s.tipo_sede,s.negocio_id as "clientId",s.valor_servicio as "valorServicio" from public.sedes s join public.negocios n on n.id=s.negocio_id
     where s.id=$1 and s.activo and n.activo and s.tipo_sede=n.tipo_cliente
       and ((s.tipo_sede='NEGOCIO' and s.valor_servicio is not null and s.periodicidad_meses > 0 and s.duracion_servicio_minutos > 0)
         or s.tipo_sede='RESIDENCIAL')`, [id])).rows[0]
@@ -275,7 +275,7 @@ export async function createService(client: PoolClient, actorId: string, input: 
     input.cobro.tecnicoRecaudoPrevistoId,cashRecipient,wasPaid,site.tipo_sede==='RESIDENCIAL' ? input.valorServicio : 0])
   // The creation form can confirm an advance payment before the visit begins.
   // Persist that money in the same canonical ledger as later deposits and abonos.
-  const actualValue = site.tipo_sede==='RESIDENCIAL' ? input.valorServicio ?? 0 : site.valor_servicio ?? 0
+  const actualValue = site.tipo_sede==='RESIDENCIAL' ? input.valorServicio ?? 0 : Number(site.valorServicio ?? 0)
   if (wasPaid && actualValue > 0) {
     if (!requestId) throw new ApiError(422,'Falta el identificador del cobro.','VALIDATION')
     await registerPayment(client,actorId,{
