@@ -107,7 +107,7 @@ test('technician agenda opens assigned reinforcement work screen',async({page})=
   await expect(page.getByRole('heading',{name:'Mi agenda'})).toBeVisible()
   await expect(page.getByRole('navigation',{name:'Días de la semana'})).toBeVisible()
   await expect(page.getByRole('heading',{name:'Cliente 1',exact:true}).first()).toBeVisible()
-  await expect(page.getByText('Refuerzo',{exact:true}).first()).toBeVisible()
+  await expect(page.getByText('Sede 11 · Refuerzo').first()).toBeVisible()
   await page.getByRole('button',{name:'Ver servicio'}).click()
   await expect(page).toHaveURL(new RegExp('/servicios/'+uid(11)+'/trabajo'))
   await expect(page.getByText('Contacto 11')).toBeVisible()
