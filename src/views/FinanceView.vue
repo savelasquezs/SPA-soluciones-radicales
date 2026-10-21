@@ -219,7 +219,7 @@ async function proof(payment:Pago):Promise<void>{
               <td class="numeric">{{ fmt(t.entregado) }}<small>Hoy {{ fmt(t.entregadoHoy) }}</small></td><td class="numeric"><strong>{{ fmt(t.saldo) }}</strong></td><td><BaseButton size="compact" variant="secondary" :disabled="t.saldo<=0" @click="openCash(t)">Recibir dinero</BaseButton></td>
             </tr></tbody></table></template>
             <template #cards><article v-for="t in technicians" :key="t.id" class="finance-mobile-record"><button class="finance-link" @click="technicianId=t.id">{{ t.nombre }}</button>
-              <small>Recibido {{ fmt(t.recaudado) }} · Entregado {{ fmt(t.entregado) }}</small><span>{{ fmt(t.saldo) }} por entregar</span>
+              <small>Hoy cobrado {{ fmt(t.recaudadoHoy) }} · Entregado {{ fmt(t.entregadoHoy) }}</small><span>{{ fmt(t.saldo) }} por entregar</span>
               <BaseButton size="compact" variant="secondary" :disabled="t.saldo<=0" @click="openCash(t)">Recibir dinero</BaseButton></article></template>
           </ResponsiveTable>
         </section>
