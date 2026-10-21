@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { Download, Eye, FileText, Pencil, Plus, RotateCcw, Search, Trash2 } from 'lucide-vue-next'
+import { Download, Eye, FileText, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-vue-next'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDialog from '@/components/base/BaseDialog.vue'
 import BaseInput from '@/components/base/BaseInput.vue'
