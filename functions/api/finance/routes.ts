@@ -95,7 +95,7 @@ financeRoutes.post('/technician/services/:id/payments',async c=>{
     const metodo=method(value.metodo)
     return registerPayment(client,tech.id,{requestId,clienteId:row.clienteId,metodo,
       recaudadoPorId:metodo==='EFECTIVO'?tech.id:null,
-      observacion:note(value.observacion),aplicaciones:[{servicioId,monto:amount(value.monto)}],
+      observacion:note(value.observacion),aplicaciones:[{servicioId:serviceId,monto:amount(value.monto)}],
       confirmed:false,technicianId:tech.id})
   })
   return c.json(result,201)
