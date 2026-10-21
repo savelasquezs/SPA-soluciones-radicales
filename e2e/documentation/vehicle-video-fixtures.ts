@@ -71,8 +71,38 @@ export async function setupVehicleDemo(page: Page) {
       user:{id:'demo-auth',name:user.nombreCompleto,email:user.correoGoogle,emailVerified:true,createdAt:'2026-10-08T00:00:00.000Z',updatedAt:'2026-10-08T00:00:00.000Z'},
     }})
   })
-  await page.route('**/demo-vehicle-certificate.pdf', async route => {
-    await route.fulfill({status:200,contentType:'application/pdf',headers:{'Content-Disposition':'inline'},body:certificate})
+  // El Chromium headless de la grabación no dibuja su visor PDF nativo.
+  // Mostrar una representación sintética del MISMO certificado de ejemplo en el iframe.
+  // La ruta de descarga conserva el PDF real generado arriba.
+  const inlinePreview = `<!doctype html><html lang="es"><head><meta charset="utf-8">
+    <style>
+    *{box-sizing:border-box}body{margin:0;background:#e9edf1;font-family:Arial,Helvetica,sans-serif;color:#223346;display:grid;place-items:start center;padding:25px}
+    main{background:white;width:560px;min-height:720px;box-shadow:0 4px 24px #0002;padding:0 35px 40px}
+    header{background:#0c263b;color:white;margin:0 -35px;padding:28px 35px}
+    h1{font-size:18px;margin:0;letter-spacing:.06em}header p{margin:7px 0 0;color:#d2e8f5;font-size:12px}
+    h2{font-size:20px;margin:44px 0 25px}dl{display:grid;grid-template-columns:170px 1fr;gap:15px;font-size:14px}
+    dt{color:#6a7888}dd{margin:0;font-weight:600}.plate{font-size:19px;color:#075a93}
+    footer{margin-top:55px;border-top:1px solid #dde3e9;padding-top:23px}
+    footer strong{color:#075a93;font-size:12px}footer p{font-size:12px;color:#697688}
+    </style></head><body><main><header>
+    <h1>SOLUCIONES RADICALES</h1><p>Certificado vehicular · Demostración</p></header>
+    <h2>Control integrado de plagas</h2>
+    <dl><dt>Cliente</dt><dd>Industrias Demo SAS</dd>
+    <dt>Sede</dt><dd>Sede Norte</dd>
+    <dt>Placa del vehículo</dt><dd class="plate">ABC123</dd>
+    <dt>Solicitud del servicio</dt><dd>022</dd>
+    <dt>Fecha de expedición</dt><dd>10/10/2026</dd>
+    <dt>Fecha de vencimiento</dt><dd>10/04/2027</dd></dl>
+    <footer><strong>DOCUMENTO FICTICIO · SIN VALIDEZ</strong>
+    <p>Ejemplo visual para el manual de usuario. No sustituye un certificado real.</p></footer>
+    </main></body></html>`
+  await page.route('**/demo-vehicle-certificate.pdf**', async route => {
+    const download=new URL(route.request().url()).searchParams.has('download')
+    if(download) {
+      await route.fulfill({status:200,contentType:'application/pdf',headers:{'Content-Disposition':'attachment; filename="certificado-demo.pdf"'},body:certificate})
+    } else {
+      await route.fulfill({status:200,contentType:'text/html; charset=utf-8',body:inlinePreview})
+    }
   })
   await page.route('https://api.example.test/api/**', async route => {
     const request=route.request()
