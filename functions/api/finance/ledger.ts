@@ -63,7 +63,7 @@ export async function clientsBalance(client: PoolClient): Promise<ClienteCartera
 export async function cashBalance(client: PoolClient): Promise<TecnicoCaja[]> {
   const rows=await client.query<TecnicoCaja>(`with collected as (
     select p.recaudado_por_id as id,sum(p.monto) as recaudado
-    from public.pagos p where p.metodo='EFECTIVO' and p.estado='CONFIRMADO'
+    from public.pagos p where p.metodo='EFECTIVO' and p.estado='CONFIRMADO' and p.destino_efectivo='TECNICO'
     group by p.recaudado_por_id
   ),delivered as (
     select tecnico_id as id,sum(monto) as entregado from public.movimientos_efectivo
@@ -162,6 +162,7 @@ export async function registerPayment(client: PoolClient, actor: string, draft: 
   const total=[...amounts.values()].reduce((sum,m)=>sum+m,0)
   if (!Number.isSafeInteger(total) || total>limit) throw invalid('El total del pago no es válido.')
   const receiver=draft.metodo==='EFECTIVO' ? draft.recaudadoPorId : null
+  const destination=receiver ? (draft.technicianId || receiver!==actor ? 'TECNICO' : 'CAJA') : null
   if (draft.metodo==='EFECTIVO' && (!isId(receiver) || (draft.technicianId && receiver!==actor))) throw invalid('Selecciona quién recibió el efectivo.')
   const existing=(await client.query<{id:string;cliente_id:string;metodo:string;monto:string;recaudado_por_id:string|null}>(
     'select id,cliente_id,metodo,monto,recaudado_por_id from public.pagos where request_id=$1',[draft.requestId])).rows[0]
@@ -202,12 +203,12 @@ export async function registerPayment(client: PoolClient, actor: string, draft: 
   for(const row of rows) if ((allocated.get(row.id)??0)+amounts.get(row.id)!>n(row.valor_servicio))
     throw conflict('El servicio tiene un cobro pendiente o no admite más abonos. Actualiza la cartera.')
   const inserted=(await client.query<{id:string}>(`insert into public.pagos
-    (request_id,cliente_id,monto,metodo,estado,recaudado_por_id,registrado_por_id,
+    (request_id,cliente_id,monto,metodo,estado,recaudado_por_id,destino_efectivo,registrado_por_id,
      confirmado_por_id,confirmado_at,observacion)
-    values ($1,$2,$3,$4,$5,$6,$7,$8,case when $9::boolean then now() else null end,$10)
+    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,case when $10::boolean then now() else null end,$11)
     returning id`,
     [draft.requestId,draft.clienteId,total,draft.metodo,draft.confirmed?'CONFIRMADO':'PENDIENTE',
-      receiver,actor,draft.confirmed?actor:null,draft.confirmed,observation])).rows[0]!
+      receiver,destination,actor,draft.confirmed?actor:null,draft.confirmed,observation])).rows[0]!
   for (const serviceId of ids) await client.query(
     'insert into public.pago_aplicaciones(pago_id,servicio_id,monto) values ($1,$2,$3)',
     [inserted.id,serviceId,amounts.get(serviceId)])
@@ -218,8 +219,8 @@ export async function registerPayment(client: PoolClient, actor: string, draft: 
 }
 
 export async function reviewPayment(client: PoolClient, actor: string, paymentId: string, action: 'CONFIRMADO'|'RECHAZADO'|'ANULADO', reason: string): Promise<Pago> {
-  const row=(await client.query<{id:string;estado:string;metodo:string;monto:string;recaudado_por_id:string|null;registrado_por_id:string;comprobante_storage_path:string|null}>(
-    'select id,estado,metodo,monto,recaudado_por_id,registrado_por_id,comprobante_storage_path from public.pagos where id=$1::uuid for update',[paymentId])).rows[0]
+  const row=(await client.query<{id:string;estado:string;metodo:string;monto:string;recaudado_por_id:string|null;destino_efectivo:string|null;registrado_por_id:string;comprobante_storage_path:string|null}>(
+    'select id,estado,metodo,monto,recaudado_por_id,destino_efectivo,registrado_por_id,comprobante_storage_path from public.pagos where id=$1::uuid for update',[paymentId])).rows[0]
   if (!row) throw new ApiError(404,'El pago no está disponible.')
   if (row.estado===action) return getPayment(client,paymentId)
   if (action==='ANULADO' ? row.estado!=='CONFIRMADO' : row.estado!=='PENDIENTE') throw conflict('El pago cambió de estado. Actualiza la pantalla.')
@@ -230,7 +231,7 @@ export async function reviewPayment(client: PoolClient, actor: string, paymentId
   const ids=(await client.query<{servicio_id:string}>('select servicio_id from public.pago_aplicaciones where pago_id=$1 order by servicio_id',[paymentId]))
     .rows.map(r=>r.servicio_id)
   await client.query('select id from public.servicios where id=any($1::uuid[]) order by id for update',[ids])
-  if (action==='ANULADO' && row.recaudado_por_id) {
+  if (action==='ANULADO' && row.recaudado_por_id && row.destino_efectivo==='TECNICO') {
     const balance=(await cashBalance(client)).find(x=>x.id===row.recaudado_por_id)?.saldo ?? 0
     if (balance<n(row.monto)) throw conflict('El efectivo ya fue entregado. Primero debe corregirse esa entrega.')
   }
