@@ -62,19 +62,23 @@ export async function clientsBalance(client: PoolClient): Promise<ClienteCartera
 }
 export async function cashBalance(client: PoolClient): Promise<TecnicoCaja[]> {
   const rows=await client.query<TecnicoCaja>(`with collected as (
-    select p.recaudado_por_id as id,sum(p.monto) as recaudado
+    select p.recaudado_por_id as id,sum(p.monto) as recaudado,
+      sum(p.monto) filter(where (p.fecha_pago at time zone 'America/Bogota')::date = (now() at time zone 'America/Bogota')::date) as "recaudadoHoy"
     from public.pagos p where p.metodo='EFECTIVO' and p.estado='CONFIRMADO' and p.destino_efectivo='TECNICO'
     group by p.recaudado_por_id
   ),delivered as (
-    select tecnico_id as id,sum(monto) as entregado from public.movimientos_efectivo
+    select tecnico_id as id,sum(monto) as entregado,
+      sum(monto) filter(where (fecha_hora at time zone 'America/Bogota')::date=(now() at time zone 'America/Bogota')::date) as "entregadoHoy"
+    from public.movimientos_efectivo
     where anulado_at is null group by tecnico_id
   )
   select u.id,u.nombre_completo as nombre,coalesce(c.recaudado,0) as recaudado,
-    coalesce(d.entregado,0) as entregado,
+    coalesce(c."recaudadoHoy",0) as "recaudadoHoy",coalesce(d.entregado,0) as entregado,
+    coalesce(d."entregadoHoy",0) as "entregadoHoy",
     coalesce(c.recaudado,0)-coalesce(d.entregado,0) as saldo
   from public.usuarios u left join collected c on c.id=u.id left join delivered d on d.id=u.id
   where u.es_tecnico order by saldo desc,u.nombre_completo`)
-  return rows.rows.map(row=>({...row,recaudado:n(row.recaudado),entregado:n(row.entregado),saldo:n(row.saldo)}))
+  return rows.rows.map(row=>({...row,recaudado:n(row.recaudado),recaudadoHoy:n(row.recaudadoHoy),entregado:n(row.entregado),entregadoHoy:n(row.entregadoHoy),saldo:n(row.saldo)}))
 }
 export async function deliveries(client: PoolClient, technicianId?: string): Promise<EntregaEfectivo[]> {
   const rows=await client.query<EntregaEfectivo>(`select m.id,m.tecnico_id as "tecnicoId",m.monto,
