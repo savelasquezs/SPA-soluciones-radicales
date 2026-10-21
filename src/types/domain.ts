@@ -140,6 +140,26 @@ export type AreaRecord = {
 
 export type AreaInput = Pick<AreaRecord, 'nombre' | 'esExterna' | 'activo'> & { version?: number }
 
+export type VehicleRecord = {
+  id: string
+  siteId: string
+  placa: string
+  activo: boolean
+  version: number
+}
+export type VehicleInput = Pick<VehicleRecord, 'placa' | 'activo'> & { version?: number }
+export type VehicleCertificate = {
+  id: string
+  serviceId: string
+  solicitud: string
+  issuedOn: string
+  expiresOn: string
+  status: string
+  pdfAvailable: boolean
+}
+export type VehicleCertificatePage = { items: VehicleCertificate[]; page: number; hasMore: boolean }
+
+
 
 export type PaginatedResult<T> = {
   items: T[]

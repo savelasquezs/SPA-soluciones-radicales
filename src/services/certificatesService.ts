@@ -13,5 +13,5 @@ export const listCertificateServices = (siteId: string, page = 1) =>
 export const getCertificateContext = (serviceId: string) => apiRequest<CertificateContext>(`${root}/services/${encodeURIComponent(serviceId)}/context`)
 export const generateCertificates = (input: GenerateCertificateInput) => apiRequest<CertificateGenerationResult>(`${root}/generate`, json(input))
 export const sendCertificates = (input: SendCertificatesInput) => apiRequest<{ sent: boolean; messageId: string }>(`${root}/send`, json(input))
-export const getCertificateUrl = async (id: string): Promise<string> =>
-  (await apiRequest<{ url: string }>(`${root}/documents/${encodeURIComponent(id)}/read-url`, json({}))).url
+export const getCertificateUrl = async (id: string, inline = false): Promise<string> =>
+  (await apiRequest<{ url: string }>(`${root}/documents/${encodeURIComponent(id)}/read-url`, json({ inline }))).url

@@ -7,6 +7,9 @@ import type {
   ClientRecord,
   SiteInput,
   SiteRecord,
+  VehicleInput,
+  VehicleRecord,
+  VehicleCertificatePage,
 } from '@/types/domain'
 
 type ClientWire = Omit<ClientRecord, 'version' | 'sedesCount' | 'residenciaValorServicio'> & {
@@ -155,4 +158,27 @@ function normalizeSite(site: SiteWire): SiteRecord {
 
 function normalizeArea(area: AreaWire): AreaRecord {
   return { ...area, version: Number(area.version), dispositivosCount: Number(area.dispositivosCount) }
+}
+
+export async function listVehicles(siteId: string): Promise<VehicleRecord[]> {
+  const rows = await apiRequest<(Omit<VehicleRecord,'version'> & { version: number | string })[]>(`api/sites/${encodeURIComponent(siteId)}/vehicles`)
+  return rows.map((vehicle) => ({ ...vehicle, version: Number(vehicle.version) }))
+}
+export async function createVehicle(siteId: string, input: VehicleInput): Promise<VehicleRecord> {
+  return apiRequest<VehicleRecord>(`api/sites/${encodeURIComponent(siteId)}/vehicles`, {
+    method: 'POST', body: JSON.stringify({ placa: input.placa.trim().toUpperCase() }),
+  })
+}
+export async function updateVehicle(id: string, input: VehicleInput): Promise<VehicleRecord> {
+  return apiRequest<VehicleRecord>(`api/vehicles/${encodeURIComponent(id)}`, {
+    method: 'PATCH', body: JSON.stringify({ ...input, placa: input.placa.trim().toUpperCase() }),
+  })
+}
+export async function deleteVehicle(id: string, version: number): Promise<void> {
+  await apiRequest(`api/vehicles/${encodeURIComponent(id)}?version=${version}`, { method: 'DELETE' })
+}
+export async function listVehicleCertificates(siteId: string, vehicleId: string, page = 1): Promise<VehicleCertificatePage> {
+  return apiRequest<VehicleCertificatePage>(
+    `api/sites/${encodeURIComponent(siteId)}/vehicles/${encodeURIComponent(vehicleId)}/certificates?page=${page}`,
+  )
 }

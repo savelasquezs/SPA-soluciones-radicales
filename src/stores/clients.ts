@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 
 import * as clientsService from '@/services/clientsService'
 import { useAdminServicesStore } from '@/stores/adminServices'
-import type { AreaInput, AreaRecord, ClientInput, ClientRecord, SiteInput, SiteRecord } from '@/types/domain'
+import type { AreaInput, AreaRecord, ClientInput, ClientRecord, SiteInput, SiteRecord, VehicleInput, VehicleRecord } from '@/types/domain'
 
 type ClientsState = {
   clientsById: Record<string, ClientRecord>
@@ -12,6 +12,8 @@ type ClientsState = {
   sitesById: Record<string, SiteRecord>
   areasBySiteId: Record<string, string[]>
   areasById: Record<string, AreaRecord>
+  vehiclesBySiteId: Record<string, string[]>
+  vehiclesById: Record<string, VehicleRecord>
   activeLoaded: boolean
   inactiveLoaded: boolean
 }
@@ -25,6 +27,8 @@ export const useClientsStore = defineStore('clients', {
     sitesById: {},
     areasBySiteId: {},
     areasById: {},
+    vehiclesBySiteId: {},
+    vehiclesById: {},
     activeLoaded: false,
     inactiveLoaded: false,
   }),
@@ -35,6 +39,8 @@ export const useClientsStore = defineStore('clients', {
       .map((id) => state.sitesById[id]).filter(Boolean) as SiteRecord[],
     areasForSite: (state) => (siteId: string) => (state.areasBySiteId[siteId] ?? [])
       .map((id) => state.areasById[id]).filter(Boolean) as AreaRecord[],
+    vehiclesForSite: (state) => (siteId: string) => (state.vehiclesBySiteId[siteId] ?? [])
+      .map((id) => state.vehiclesById[id]).filter(Boolean) as VehicleRecord[],
   },
   actions: {
     async loadClients(active: boolean, force = false): Promise<ClientRecord[]> {
@@ -141,6 +147,35 @@ export const useClientsStore = defineStore('clients', {
       await clientsService.deleteArea(area.id, area.version)
       this.areasBySiteId[area.siteId] = (this.areasBySiteId[area.siteId] ?? []).filter((id) => id !== area.id)
       delete this.areasById[area.id]
+    },
+
+    async loadVehicles(siteId: string, force = false): Promise<VehicleRecord[]> {
+      if (!force && this.vehiclesBySiteId[siteId]) return this.vehiclesForSite(siteId)
+      const rows = await clientsService.listVehicles(siteId)
+      rows.forEach((vehicle) => { this.vehiclesById[vehicle.id] = vehicle })
+      this.vehiclesBySiteId[siteId] = rows.map((vehicle) => vehicle.id)
+      return rows
+    },
+    async createVehicle(siteId: string, input: VehicleInput): Promise<VehicleRecord> {
+      const saved = await clientsService.createVehicle(siteId, input)
+      this.upsertVehicle(saved)
+      return saved
+    },
+    async updateVehicle(id: string, input: VehicleInput): Promise<VehicleRecord> {
+      const saved = await clientsService.updateVehicle(id, input)
+      this.upsertVehicle(saved)
+      return saved
+    },
+    async removeVehicle(vehicle: VehicleRecord): Promise<void> {
+      await clientsService.deleteVehicle(vehicle.id, vehicle.version)
+      this.vehiclesBySiteId[vehicle.siteId] = (this.vehiclesBySiteId[vehicle.siteId] ?? []).filter(id => id !== vehicle.id)
+      delete this.vehiclesById[vehicle.id]
+    },
+    upsertVehicle(vehicle: VehicleRecord): void {
+      this.vehiclesById[vehicle.id] = vehicle
+      const ids = this.vehiclesBySiteId[vehicle.siteId] ?? []
+      if (!ids.includes(vehicle.id)) ids.push(vehicle.id)
+      this.vehiclesBySiteId[vehicle.siteId] = ids
     },
     upsertArea(area: AreaRecord): void {
       this.areasById[area.id] = area
