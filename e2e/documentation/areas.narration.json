@@ -1,0 +1,86 @@
+{
+  "title": "Gestión de áreas",
+  "subtitle": "Organiza las Sedes y reutiliza las áreas en cada visita",
+  "segments": [
+    {
+      "id": "intro",
+      "text": "Aprenderás a administrar las Áreas de una Sede y a reutilizarlas en los siguientes servicios."
+    },
+    {
+      "id": "open-client",
+      "text": "En Clientes, selecciona el Negocio que deseas gestionar."
+    },
+    {
+      "id": "open-site",
+      "text": "Abre la Sede correspondiente para consultar sus espacios y configuraciones."
+    },
+    {
+      "id": "open-areas",
+      "text": "Selecciona la pestaña Áreas. Aquí verás el nombre, la ubicación, los puestos de monitoreo y el estado de cada Área."
+    },
+    {
+      "id": "area-types",
+      "text": "Las Áreas pueden ser interiores o exteriores. Esta diferencia también determina qué criterios se aplican durante un servicio."
+    },
+    {
+      "id": "open-create",
+      "text": "Para registrar una nueva Área, selecciona Agregar Área."
+    },
+    {
+      "id": "name-create",
+      "text": "Escribe un nombre claro y reconocible, por ejemplo, Zona de carga."
+    },
+    {
+      "id": "mark-exterior",
+      "text": "Activa Zona exterior o perimetral cuando se trate de un espacio exterior."
+    },
+    {
+      "id": "save-create",
+      "text": "Confirma con Agregar Área. El registro aparece inmediatamente en el listado."
+    },
+    {
+      "id": "show-details",
+      "text": "Selecciona un Área para consultar su ubicación y la cantidad de puestos de monitoreo asociados."
+    },
+    {
+      "id": "open-edit",
+      "text": "Con Editar Área, puedes cambiar el nombre y la clasificación, usando el mismo formulario de creación."
+    },
+    {
+      "id": "save-edit",
+      "text": "Realiza los ajustes y selecciona Guardar cambios."
+    },
+    {
+      "id": "reuse",
+      "text": "Las Áreas se registran una sola vez en la Sede. En las siguientes visitas el sistema reutiliza las Áreas activas, sin volver a crearlas."
+    },
+    {
+      "id": "snapshots",
+      "text": "Al iniciar un Servicio Principal, se conserva una copia de sus nombres, su clasificación, los criterios y los puestos. Así, los cambios futuros no alteran el historial."
+    },
+    {
+      "id": "delete-attempt",
+      "text": "Una Área que ya tiene puestos o hallazgos no puede eliminarse, porque posee información relacionada."
+    },
+    {
+      "id": "deactivate",
+      "text": "En ese caso, selecciona Desactivar para conservar los datos históricos."
+    },
+    {
+      "id": "inactive",
+      "text": "El Área permanece identificada como inactiva y deja de incluirse en los nuevos recorridos."
+    },
+    {
+      "id": "reactivate",
+      "text": "Cuando vuelva a utilizarse, puedes seleccionar Reactivar."
+    },
+    {
+      "id": "delete-empty",
+      "text": "Si una Área no tiene dependencias, sí puedes eliminarla después de confirmar."
+    },
+    {
+      "id": "outro",
+      "text": "Así administras una sola estructura de Áreas por Sede, mientras cada Servicio conserva su propia información histórica."
+    }
+  ]
+}
