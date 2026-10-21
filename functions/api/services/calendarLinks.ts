@@ -38,18 +38,14 @@ export function resolveCalendarAppOrigin(
 
 type CalendarServiceFields = Pick<AdminService, 'id' | 'solicitud' | 'tipoServicio' | 'responsable' | 'colaboradores'>
 
-/** A Principal opens its actual field-work screen. Reinforcement work is not
- * yet enabled in the technician SPA, so its invitation opens their service list.
- */
+/** Both Principals and Reinforcements open their assigned technician work screen. */
 export function calendarServiceLink(
   serviceId: string,
-  kind: CalendarServiceFields['tipoServicio'],
+  _kind: CalendarServiceFields['tipoServicio'],
   appOrigin: string,
 ): string {
   if (!isServiceId(serviceId)) throw new Error('Servicio inválido para enlace de Calendar')
-  return appOrigin + (kind === 'PRINCIPAL'
-    ? '/servicios/' + encodeURIComponent(serviceId) + '/trabajo'
-    : '/servicios')
+  return appOrigin + '/servicios/' + encodeURIComponent(serviceId) + '/trabajo'
 }
 
 export function calendarServiceDescription(
@@ -64,7 +60,7 @@ export function calendarServiceDescription(
   ]
   if (appOrigin) {
     details.push('',
-      service.tipoServicio === 'PRINCIPAL' ? 'Abrir servicio en Soluciones Radicales:' : 'Ver mis servicios en Soluciones Radicales:',
+      'Abrir servicio en Soluciones Radicales:',
       calendarServiceLink(service.id, service.tipoServicio, appOrigin),
       'Accede con tu cuenta Google autorizada.')
   }
