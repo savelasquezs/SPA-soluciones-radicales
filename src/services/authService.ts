@@ -15,7 +15,7 @@ export async function getAuthSession(options: SessionOptions = {}) {
     // This SDK-only header is stripped before the actual HTTP request.
     fetchOptions: { signal, ...(options.forceRefresh ? { headers: { 'X-Force-Fetch': 'true' } } : {}) },
   }), 12_000, options.signal)
-  if (error) throw new ApiClientError(error.message ?? 'No fue posible consultar la sesión.', error.status ?? 0, 'AUTH_ERROR')
+  if (error) throw new ApiClientError('No fue posible consultar la sesión. Vuelve a intentarlo.', error.status ?? 0, 'AUTH_ERROR')
   if (data?.session.token) {
     const url = new URL(window.location.href)
     if (url.searchParams.has('neon_auth_session_verifier')) {
@@ -40,14 +40,14 @@ function tokenExpiresSoon(token: string): boolean {
 // A refreshed Neon JWT has new iat/exp claims, so the backend's
 // per-token role record must be restored before any protected request.
 // Better Auth's session.id stays stable for the actual browser session.
-let roleActivatedToken: string | null = null
-let roleActivation: { token: string; promise: Promise<void> } | null = null
+let roleActivated: { token: string; role: string | null } | null = null
+let roleActivation: { token: string; role: string; promise: Promise<void> } | null = null
 
 async function activateRememberedRole(session: Awaited<ReturnType<typeof getAuthSession>>, token: string): Promise<void> {
-  if (roleActivatedToken === token) return
-  if (roleActivation?.token === token) return roleActivation.promise
   const role = readRememberedRole(session?.user?.id, session?.session?.id)
-  if (!role) { roleActivatedToken = token; return }
+  if (roleActivated?.token === token && roleActivated.role === role) return
+  if (role && roleActivation?.token === token && roleActivation.role === role) return roleActivation.promise
+  if (!role) { roleActivated = { token, role: null }; return }
 
   // Do not call apiRequest here: it calls getAccessToken, which would recurse.
   const pending = (async () => {
@@ -78,10 +78,10 @@ async function activateRememberedRole(session: Awaited<ReturnType<typeof getAuth
     }
   })()
 
-  roleActivation = { token, promise: pending }
+  roleActivation = { token, role, promise: pending }
   try {
     await pending
-    if (roleActivation?.promise === pending) roleActivatedToken = token
+    if (roleActivation?.promise === pending) roleActivated = { token, role: readRememberedRole(session?.user?.id, session?.session?.id) }
   } finally {
     if (roleActivation?.promise === pending) roleActivation = null
   }
