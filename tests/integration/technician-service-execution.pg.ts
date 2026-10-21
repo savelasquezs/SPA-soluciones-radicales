@@ -347,6 +347,32 @@ describe('technician service execution · real PostgreSQL', () => {
     expect(Number((await pool.query("select count(*) from public.auditoria where registro_id=$1 and accion='SERVICIO_DISPOSITIVO_REVISADO'", [value.service])).rows[0].count)).toBe(1)
   })
 
+  it('updates an existing device review with contiguous SQL parameters', async () => {
+    const value = await fixture(), phoneId = randomUUID(), reviewId = randomUUID()
+    const session = await transaction(client => startTechnicianService(client, value.technician, value.service, 1, phoneId))
+    const device = session.package.areas.find(area => area.areaId === value.internalArea)!.dispositivos[0]!
+    const input = {
+      estadoObservado: 'ACTIVO' as const, capturas: [],
+      consumo: '', productoQuimico: '', antidoto: '', observaciones: 'Primera visita',
+    }
+    const first = await transaction(client => saveTechnicianDeviceReview(client, value.technician, value.service, phoneId,
+      session.lock.token, device.id, reviewId, 0, input, null))
+    expect(first.review).toMatchObject({ id: reviewId, version: 1, observaciones: 'Primera visita' })
+
+    // This used to fail with PostgreSQL 42P18: UPDATE supplied 15 arguments
+    // while leaving $1 and $3-$7 unspecified.
+    const updated = await transaction(client => saveTechnicianDeviceReview(client, value.technician, value.service, phoneId,
+      session.lock.token, device.id, reviewId, first.review.version,
+      { ...input, consumo: 'Parcial', observaciones: 'Revisión corregida' }, null))
+    expect(updated.review).toMatchObject({
+      id: reviewId, version: 2, estadoObservado: 'ACTIVO',
+      consumo: 'Parcial', observaciones: 'Revisión corregida',
+    })
+    const persisted = (await pool.query(
+      'select version,observaciones from public.revisiones_dispositivos where id=$1', [reviewId])).rows[0]
+    expect(persisted).toMatchObject({ version: 2, observaciones: 'Revisión corregida' })
+  })
+
   it('does not require a new photo when the frozen device was already damaged', async () => {
     const value = await fixture('30 minutes', 'DANADO'), phoneId = randomUUID()
     const session = await transaction(client => startTechnicianService(client, value.technician, value.service, 1, phoneId))
