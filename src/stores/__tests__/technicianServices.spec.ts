@@ -579,7 +579,7 @@ describe('technician services state', () => {
     }
     mutationRecords.push(earlier)
     vi.mocked(api.saveTechnicianCriterionEvaluation).mockResolvedValue({ criterion: {
-      id: criterionId, criterioId, nombre: 'Orden y aseo', soloAreaExterna: false,
+      id: criterionId, criterioId: criterionId, nombre: 'Orden y aseo', soloAreaExterna: false,
       evaluacion: 'C', observacion: null, evidenciasStoragePaths: [], version: 2,
     }, removedEvidenceStoragePaths: [] })
     vi.mocked(mediaService.loadTechnicianMedia).mockImplementation(async (_actor, mediaId) => ({
@@ -623,7 +623,7 @@ describe('technician services state', () => {
       status: 'CONFLICT', error: 'El criterio fue modificado en otro dispositivo.',
       areaId: areaIds[0]!, criterionId, evaluation: 'C', observation: '',
       evidences: [], retainedEvidenceStoragePaths: [], version: 1,
-      conflict: { id: criterionId, criterioId, nombre: 'Orden y aseo', soloAreaExterna: false,
+      conflict: { id: criterionId, criterioId: criterionId, nombre: 'Orden y aseo', soloAreaExterna: false,
         evaluacion: 'NC', observacion: 'Cambió', evidenciasStoragePaths: [], version: 2 },
     }
     mutationRecords.unshift(earlier)
