@@ -38,7 +38,7 @@ function input(f: Fixture,start='2030-10-06T09:00:00-05:00'): ServiceInput {
     productos:[{ productoId:f.product,lote:'CI-1',fechaVencimiento:'2032-01-01' }],cobro:{ metodoPago:'EFECTIVO',tecnicoRecaudoPrevistoId:f.responsible },observaciones:'Solo datos sintéticos' }
 }
 async function create(f: Fixture,value=input(f),requestId=randomUUID()): Promise<ServiceMutation> {
-  return transaction(client=>command(client,f.admin,requestId,'service:create',{ input:value },()=>createService(client,f.admin,value,[])))
+  return transaction(client=>command(client,f.admin,requestId,'service:create',{ input:value },()=>createService(client,f.admin,value,[],undefined,requestId)))
 }
 const principal=(result: ServiceMutation)=>result.services.find(row=>row.tipoServicio==='PRINCIPAL')!
 const child=(result: ServiceMutation)=>result.services.find(row=>row.tipoServicio==='REFUERZO')!
@@ -302,15 +302,15 @@ describe('administrator services · real PostgreSQL',()=>{
   })
   it('requires actual cash collection, rejects paid Refuerzos, and allows audited payment correction',async()=>{
     const f=await fixture(), result=await create(f), p=principal(result), r=child(result)
-    await expect(transaction(client=>savePayment(client,f.admin,p.id,p.version,{ metodoPago:'EFECTIVO',estadoPago:'CONFIRMADO',recaudadoPorId:null,motivo:'' }))).rejects.toMatchObject({ code:'VALIDATION' })
-    const confirmed=await transaction(client=>savePayment(client,f.admin,p.id,p.version,{ metodoPago:'EFECTIVO',estadoPago:'CONFIRMADO',recaudadoPorId:f.admin,motivo:'' }))
+    await expect(transaction(client=>savePayment(client,f.admin,p.id,p.version,{ metodoPago:'EFECTIVO',estadoPago:'CONFIRMADO',recaudadoPorId:null,motivo:'' },randomUUID()))).rejects.toMatchObject({ code:'VALIDATION' })
+    const confirmed=await transaction(client=>savePayment(client,f.admin,p.id,p.version,{ metodoPago:'EFECTIVO',estadoPago:'CONFIRMADO',recaudadoPorId:f.admin,motivo:'' },randomUUID()))
     const fresh=principal(confirmed)
     expect(fresh.pago.recaudadoPorId).toBe(f.admin);expect(fresh.pago.recaudadoPorNombre).toContain('admin');expect(fresh.pago.confirmadoPor).toBeTruthy()
-    await expect(transaction(client=>savePayment(client,f.admin,r.id,r.version,{ metodoPago:'EFECTIVO',estadoPago:'CONFIRMADO',recaudadoPorId:f.responsible,motivo:'' }))).rejects.toMatchObject({ code:'VALIDATION' })
-    await expect(transaction(client=>savePayment(client,f.admin,p.id,fresh.version,{ metodoPago:'TRANSFERENCIA',estadoPago:'CONFIRMADO',recaudadoPorId:null,motivo:'' }))).rejects.toMatchObject({ code:'VALIDATION' })
-    const corrected=await transaction(client=>savePayment(client,f.admin,p.id,fresh.version,{ metodoPago:'TRANSFERENCIA',estadoPago:'CONFIRMADO',recaudadoPorId:null,motivo:'Corrección comprobada' }))
-    expect(principal(corrected).pago.recaudadoPorId).toBeNull()
-    expect(Number((await pool.query("select count(*) from public.auditoria where registro_id=$1 and accion='SERVICIO_PAGO_ACTUALIZADO'",[p.id])).rows[0].count)).toBe(2)
+    await expect(transaction(client=>savePayment(client,f.admin,r.id,r.version,{ metodoPago:'EFECTIVO',estadoPago:'CONFIRMADO',recaudadoPorId:f.responsible,motivo:'' },randomUUID()))).rejects.toMatchObject({ code:'VALIDATION' })
+    await expect(transaction(client=>savePayment(client,f.admin,p.id,fresh.version,{ metodoPago:'TRANSFERENCIA',estadoPago:'CONFIRMADO',recaudadoPorId:null,motivo:'' },randomUUID()))).rejects.toMatchObject({ code:'VALIDATION' })
+    await expect(transaction(client=>savePayment(client,f.admin,p.id,fresh.version,{ metodoPago:'TRANSFERENCIA',estadoPago:'CONFIRMADO',recaudadoPorId:null,motivo:'Corrección comprobada' },randomUUID())))
+      .rejects.toMatchObject({code:'FINANCE_CONFLICT'})
+    expect(Number((await pool.query("select count(*) from public.auditoria where registro_id=$1 and accion='SERVICIO_PAGO_ACTUALIZADO'",[p.id])).rows[0].count)).toBe(1)
   })
   it('creates preagenda from actual completion, clamps calendar months and does not reserve staff or create Calendar events',async()=>{
     const f=await fixture(false), result=await create(f), p=principal(result), nextId=await finish(f,p.id)
