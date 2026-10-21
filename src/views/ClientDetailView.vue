@@ -269,6 +269,7 @@ function formatDate(value: string): string { return new Intl.DateTimeFormat('es-
         </div>
       </div>
       <div class="header-actions">
+        <BaseButton size="compact" variant="secondary" @click="router.push({name:'payments',query:{cliente:clientId}})">Cartera</BaseButton>
         <BaseButton size="compact" variant="secondary" @click="openClientEdit"><Pencil :size="16" />Editar</BaseButton>
         <BaseButton v-if="client.tipoCliente === 'NEGOCIO' && client.activo" size="compact" @click="openSiteCreate"><Plus :size="16" />Agregar Sede</BaseButton>
         <details class="action-menu">
