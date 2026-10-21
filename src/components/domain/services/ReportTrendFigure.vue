@@ -123,7 +123,7 @@ function categoryDelta(kind:'voladores'|'rastreros'){
             <template v-for="kind in kinds" :key="kind">
               <template v-if="visit.categories[kind]!==null">
                 <circle :cx="visit.x" :cy="cy(visit.categories[kind]!)" :r="currentIndex===index?5.5:3.7"
-                  :fill="kind==='voladores'?'var(--report-chart-voladores)':'var(--report-chart-rastreros)'" stroke="#fff" stroke-width="1.3" />
+                  :fill="kind==='voladores'?'var(--report-chart-voladores)':'var(--report-chart-rastreros)'" stroke="var(--report-chart-point-outline)" stroke-width="1.3" />
                 <text :x="visit.x" :y="kind==='voladores'?Math.max(cy(visit.categories[kind]!)-10,16):cy(visit.categories[kind]!)+12"
                   text-anchor="middle" class="report-trend-figure__value">
                   {{ countFormat.format(visit.categories[kind]!) }}</text>
@@ -186,9 +186,9 @@ function categoryDelta(kind:'voladores'|'rastreros'){
 .report-trend-figure__hit{cursor:crosshair;outline:none}
 .report-trend-figure__hit:focus-visible{stroke:var(--report-accent);stroke-dasharray:3 3}
 .report-trend-figure__tooltip{position:absolute;right:3px;top:3px;display:grid;gap:.18rem;max-width:195px;z-index:2;padding:.55rem .65rem;background:var(--report-tooltip);color:var(--report-ink);border:1px solid var(--report-border);border-radius:7px;box-shadow:0 5px 16px rgba(18,46,62,.12);font-size:.73rem;line-height:1.45;pointer-events:none}
-.report-trend-figure__tooltip small{color:#536b7b;font-size:.7rem}
+.report-trend-figure__tooltip small{color:var(--report-muted);font-size:.7rem}
 .report-trend-figure figcaption{font-size:.67rem;color:var(--report-muted);line-height:1.4;margin-top:.3rem}
-.report-trend-figure--expanded{border:0;padding:0;color:#203645}
+.report-trend-figure--expanded{border:0;padding:0;color:var(--report-ink)}
 .report-trend-figure--expanded .report-trend-figure__change{font-size:.81rem;margin:.05rem 0 .35rem}
 .report-trend-figure--expanded .report-trend-figure__visual{display:grid;gap:.55rem}
 .report-trend-figure--expanded .report-trend-figure__svg{
@@ -199,7 +199,7 @@ function categoryDelta(kind:'voladores'|'rastreros'){
   height:auto;
   margin:0 auto;
 }
-.report-trend-figure--expanded .report-trend-figure__legend{color:#203645;margin:.2rem 0 .3rem}
+.report-trend-figure--expanded .report-trend-figure__legend{color:var(--report-ink);margin:.2rem 0 .3rem}
 .report-trend-figure--expanded .report-trend-figure__tooltip{
   position:static;
   width:100%;
@@ -208,15 +208,15 @@ function categoryDelta(kind:'voladores'|'rastreros'){
   margin:0;
   padding:.6rem .7rem;
   font-size:.78rem;
-  color:#203645;
-  background:#f4f8fa;
+  color:var(--report-ink);
+  background:var(--report-light);
 }
-.report-trend-figure--expanded figcaption{font-size:.72rem;line-height:1.5;color:#536b7b;margin-top:.5rem}
+.report-trend-figure--expanded figcaption{font-size:.72rem;line-height:1.5;color:var(--report-muted);margin-top:.5rem}
 @media(max-width:600px){
  .report-trend-figure--expanded .report-trend-figure__svg{max-width:100%;min-height:0;max-height:none}
  .report-trend-figure--expanded .report-trend-figure__axis,
- .report-trend-figure--expanded .report-trend-figure__date{fill:#536b7b}
- .report-trend-figure--expanded .report-trend-figure__value{fill:#203645}
+ .report-trend-figure--expanded .report-trend-figure__date{fill:var(--report-muted)}
+ .report-trend-figure--expanded .report-trend-figure__value{fill:var(--report-ink)}
 }
 @media print{
 .report-chart-expand,.report-trend-figure__tooltip{display:none!important}

@@ -51,7 +51,7 @@ Los gráficos presentan **solo el título, indicadores, leyendas, ejes y valores
 ### Interacción y ubicación
 
 - La misma **guía vertical** sigue el cursor o el dedo al recorrer una gráfica. También se puede navegar con tabulador, Enter y barra espaciadora.
-- Cada gráfica tiene un botón **Ampliar**, que abre el componente BaseDialog: visor ancho en escritorio y casi pantalla completa en móvil. Se puede cerrar con Escape y volver al informe.
+- Cada gráfica tiene un botón **Ampliar**, que abre el componente BaseDialog: visor ancho en escritorio y casi pantalla completa en móvil. El visor usa los mismos colores del informe (claro u oscuro) para fondo, encabezado, ejes, leyendas, tooltip y tablas; el PDF impreso conserva la paleta clara. Se puede cerrar con Escape y volver al informe.
 - Las dos gráficas de especies muestran la especie, cantidad y hasta tres **áreas / puestos / ubicaciones** directamente en el tooltip. En el visor ampliado se ve toda la tabla de capturas por ubicación y especie de la fecha seleccionada.
 - Las ubicaciones se recuperan de los snapshots históricos de áreas, puestos, ubicaciones y capturas de dispositivos, **solo de esas seis visitas**. No se exponen ID internos ni rutas privadas de fotografías. No se necesita una solicitud al servidor por movimiento del dedo.
 - Los colores de cada especie dependen de su código, no del orden de llegada; permanecen iguales al aparecer otras especies en visitas posteriores.
