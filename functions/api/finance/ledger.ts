@@ -1,5 +1,5 @@
 import type { PoolClient } from 'pg'
-import type { AplicacionPago, ClienteCartera, DetalleCartera, EntregaEfectivo, Pago, RegistrarPago, ResumenFinanzas, ServicioCartera, TecnicoCaja } from '../../../src/types/finance'
+import type { ClienteCartera, DetalleCartera, EntregaEfectivo, Pago, RegistrarPago, ResumenFinanzas, ServicioCartera, TecnicoCaja } from '../../../src/types/finance'
 import { ApiError } from '../auth'
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
