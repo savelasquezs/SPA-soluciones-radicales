@@ -64,3 +64,5 @@ El PDF ilustrativo se genera localmente mediante `pdf-lib`; nunca se consulta in
 - Se presenta el rechazo de borrado con dependencias y se demuestra la desactivación.
 - Sin credenciales, datos reales, llamadas a API de producción ni archivos ajenos.
 - El MP4 es un **candidato**; revisión y aprobación humana preceden cualquier publicación en R2/Mintlify.
+
+**Entrega:** candidato generado por GitHub Actions y sometido a revisión antes de su publicación.
