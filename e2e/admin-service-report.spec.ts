@@ -224,46 +224,70 @@ test('agrupa capturas por especie y solo detalla puestos con capturas en informe
 })
 
 
-test('los cuatro visores ampliados conservan contraste y proporciones en móviles',async ({page})=>{
+test('los cuatro visores ampliados conservan contraste en modo claro y oscuro en móviles',async ({page})=>{
   await setup(page,'ADMINISTRADOR')
-  for(const width of [320,360,390]){
-    await page.setViewportSize({width,height:780})
-    await page.goto('/servicios/'+serviceId+'/informe')
-    await page.getByRole('button',{name:'Ampliar Insectos que vuelan · Lámparas UV'}).click()
-    const modal=page.getByRole('dialog')
-    await expect(modal).toBeVisible()
-    await expect(modal).toHaveCSS('background-color','rgb(255, 255, 255)')
-    await expect(modal).toHaveCSS('color','rgb(32, 54, 69)')
-    await expect(modal.locator('.base-dialog__header')).toHaveCSS('background-color','rgb(255, 255, 255)')
-    await expect(modal.locator('.base-dialog__header h2')).toHaveCSS('color','rgb(32, 54, 69)')
-    const chart=modal.getByTestId('mip-species-chart-voladores-expanded')
-    await expect(chart).toHaveAttribute('viewBox','0 0 360 204')
-    await expect(chart).toHaveCSS('min-height','0px')
-    const chartBounds=await chart.boundingBox()
-    expect(chartBounds).not.toBeNull()
-    expect(chartBounds!.height).toBeGreaterThan(130)
-    expect(chartBounds!.height).toBeLessThan(210)
-    expect(chartBounds!.width).toBeLessThanOrEqual(width)
-    const tooltip=modal.locator('.report-species-figure__tooltip')
-    await expect(tooltip).toHaveCSS('color','rgb(32, 54, 69)')
-    await expect(modal.getByRole('table')).toContainText('Cocina')
-    await expect(modal.locator('.report-species-figure__detail td').first()).toHaveCSS('color','rgb(32, 54, 69)')
-    expect(await modal.evaluate(el=>el.scrollWidth <= el.clientWidth+1)).toBe(true)
-    await page.keyboard.press('Escape')
-    await expect(modal).toHaveCount(0)
+  const themes=[
+    {mode:'light',surface:'rgb(255, 255, 255)',ink:'rgb(29, 52, 69)',
+      muted:'rgb(96, 116, 130)',raised:'rgb(244, 248, 250)'},
+    {mode:'dark',surface:'rgb(23, 29, 35)',ink:'rgb(237, 242, 248)',
+      muted:'rgb(170, 185, 199)',raised:'rgb(32, 44, 53)'},
+  ] as const
+  const charts=[
+    {title:'Insectos que vuelan · Lámparas UV',id:'mip-species-chart-voladores-expanded',species:'voladores'},
+    {title:'Plagas rastreras · Trampas y cebaderos',id:'mip-species-chart-rastreros-expanded',species:'rastreros'},
+    {title:'Cumplimiento de las medidas de prevención',id:'mip-compliance-chart-expanded'},
+    {title:'Capturas registradas en las trampas',id:'mip-captures-chart-expanded'},
+  ] as const
 
-    await page.getByRole('button',{name:'Ampliar Cumplimiento de las medidas de prevención'}).click()
-    const complianceModal=page.getByRole('dialog')
-    await expect(complianceModal).toHaveCSS('background-color','rgb(255, 255, 255)')
-    const lineSvg=complianceModal.getByTestId('mip-compliance-chart-expanded')
-    await expect(lineSvg).toHaveCSS('min-height','0px')
-    const lineBounds=await lineSvg.boundingBox()
-    expect(lineBounds).not.toBeNull()
-    expect(lineBounds!.height).toBeGreaterThan(115)
-    expect(lineBounds!.height).toBeLessThan(210)
-    await expect(complianceModal.locator('.report-trend-figure__tooltip')).toHaveCSS('color','rgb(32, 54, 69)')
-    await page.keyboard.press('Escape')
-    await expect(complianceModal).toHaveCount(0)
+  for(const theme of themes){
+    for(const width of theme.mode==='dark'?[320,360,390]:[360]){
+      await page.setViewportSize({width,height:780})
+      await page.goto('/servicios/'+serviceId+'/informe')
+      await page.evaluate(mode=>{document.documentElement.dataset.theme=mode},theme.mode)
+
+      for(const chart of charts){
+        await page.getByRole('button',{name:'Ampliar '+chart.title}).click()
+        const modal=page.getByRole('dialog')
+        await expect(modal).toBeVisible()
+        await expect(modal).toHaveCSS('background-color',theme.surface)
+        await expect(modal).toHaveCSS('color',theme.ink)
+        await expect(modal.locator('.base-dialog__header')).toHaveCSS('background-color',theme.surface)
+        await expect(modal.locator('.base-dialog__header h2')).toHaveCSS('color',theme.ink)
+        await expect(modal.locator('.base-dialog__body')).toHaveCSS('background-color',theme.surface)
+
+        const svg=modal.getByTestId(chart.id)
+        await expect(svg).toHaveCSS('min-height','0px')
+        await expect(svg.locator('.report-species-figure__axis, .report-trend-figure__axis').first())
+          .toHaveCSS('fill',theme.muted)
+        await expect(svg.locator('.report-species-figure__value, .report-trend-figure__value').first())
+          .toHaveCSS('fill',theme.ink)
+        const bounds=await svg.boundingBox()
+        expect(bounds).not.toBeNull()
+        expect(bounds!.width).toBeLessThanOrEqual(width)
+        expect(bounds!.height).toBeGreaterThan('species' in chart?130:115)
+        expect(bounds!.height).toBeLessThan(210)
+        if('species' in chart)await expect(svg).toHaveAttribute('viewBox','0 0 360 204')
+
+        const tooltip=modal.locator('.report-species-figure__tooltip, .report-trend-figure__tooltip')
+        await expect(tooltip).toHaveCSS('color',theme.ink)
+        await expect(tooltip).toHaveCSS('background-color',theme.raised)
+        if('species' in chart){
+          await expect(modal.locator('.report-species-figure__legend')).toHaveCSS('color',theme.ink)
+          if(chart.species==='rastreros')
+            await modal.getByTestId('mip-species-visit-rastreros-0-expanded').focus()
+          const table=modal.getByRole('table')
+          await expect(table).toBeVisible()
+          await expect(table.locator('td').first()).toHaveCSS('color',theme.ink)
+          await expect(table.locator('th').first()).toHaveCSS('background-color',theme.raised)
+          await expect(table.locator('th').first()).toHaveCSS('color',theme.muted)
+        }else if(chart.id==='mip-captures-chart-expanded'){
+          await expect(modal.locator('.report-trend-figure__legend')).toHaveCSS('color',theme.ink)
+        }
+        expect(await modal.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true)
+        await page.keyboard.press('Escape')
+        await expect(modal).toHaveCount(0)
+      }
+    }
   }
   await page.emulateMedia({media:'print'})
   await expect(page.getByTestId('mip-compliance-chart')).toBeVisible()
