@@ -153,7 +153,7 @@ adminServiceRoutes.get('/:id/audit',async context => {
 adminServiceRoutes.post('/',async context => {
   const payload=await body(context.req.raw), input=serviceInput(payload.input,true)
   const proposal=payload.upcoming == null ? null : object(payload.upcoming)
-  return context.json(await write(context,payload,'service:create',(client,admin)=>createService(client,admin.id,input,reassignmentsInput(payload.reassignments),proposal ? { id:id(proposal.id),version:version(proposal.version),confirmed:proposal.confirmed === true } : undefined)),201)
+  return context.json(await write(context,payload,'service:create',(client,admin)=>createService(client,admin.id,input,reassignmentsInput(payload.reassignments),proposal ? { id:id(proposal.id),version:version(proposal.version),confirmed:proposal.confirmed === true } : undefined,id(payload.requestId))),201)
 })
 adminServiceRoutes.put('/:id',async context => {
   const payload=await body(context.req.raw), recordId=id(context.req.param('id')), input=serviceInput(payload.input)
