@@ -111,3 +111,36 @@ create policy pago_aplicaciones_lectura on public.pago_aplicaciones for select t
 revoke all on public.pagos,public.pago_aplicaciones from public,anonymous,authenticated;
 comment on table public.pagos is 'Cobros identificables, confirmados solo por Administrador; no equivalen a facturación.';
 comment on table public.pago_aplicaciones is 'Abonos aplicados a servicios de un mismo cliente, incluso sedes distintas.';
+
+-- Anular una entrega histórica no depende de que Técnico/registrador sigan
+-- activos. Los datos monetarios son inmutables después de insertarlos.
+create or replace function private.validate_cash_movement()
+returns trigger language plpgsql set search_path='' as $$
+begin
+  if tg_op='UPDATE' then
+    if (new.id,new.tecnico_id,new.monto,new.fecha_hora,new.registrado_por_id,new.request_id,
+        new.observacion,new.created_at)
+       is distinct from
+       (old.id,old.tecnico_id,old.monto,old.fecha_hora,old.registrado_por_id,old.request_id,
+        old.observacion,old.created_at) then
+      raise exception 'Los datos de una entrega son inmutables; registra anulación auditada';
+    end if;
+    if old.anulado_at is not null and
+      (new.anulado_at,new.anulado_por_id,new.motivo_anulacion) is distinct from
+      (old.anulado_at,old.anulado_por_id,old.motivo_anulacion) then
+      raise exception 'Una entrega anulada no puede reactivarse';
+    end if;
+    return new;
+  end if;
+  if not exists (
+    select 1 from public.usuarios where id=new.tecnico_id and activo and es_tecnico
+  ) then
+    raise exception 'El técnico de la entrega no es válido';
+  end if;
+  if not exists (
+    select 1 from public.usuarios where id=new.registrado_por_id and activo and es_admin
+  ) then
+    raise exception 'La entrega requiere un Administrador activo';
+  end if;
+  return new;
+end; $$;
