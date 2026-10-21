@@ -69,7 +69,7 @@ financeRoutes.get('/me',async c=>{c.header('Cache-Control','private, no-store');
   const rows=await client.query(`select id from public.pagos where registrado_por_id=$1
     order by creado_at desc limit 20`,[technician.id])
   const myPayments=await Promise.all(rows.rows.map((r:{id:string})=>getPayment(client,r.id)))
-  return {balance:balance??{id:technician.id,nombre:technician.nombreCompleto,recaudado:0,entregado:0,saldo:0},pagos:myPayments}
+  return {balance:balance??{id:technician.id,nombre:technician.nombreCompleto,recaudado:0,recaudadoHoy:0,entregado:0,entregadoHoy:0,saldo:0},pagos:myPayments}
 }) )})
 financeRoutes.get('/technician/services/:id/balance',async c=>{
   const serviceId=uuid(c.req.param('id'))
