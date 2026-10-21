@@ -716,6 +716,141 @@ app.delete('/api/areas/:id', async (context) => {
   return context.body(null, 204)
 })
 
+
+const VEHICLE_SELECT = `select v.id, v.sede_id as "siteId", v.placa, v.activo, v.version
+  from public.vehiculos v`
+
+async function findVehicle(client: PoolClient, id: string) {
+  const { rows } = await client.query(`${VEHICLE_SELECT} where v.id = $1`, [id])
+  if (!rows[0]) throw new ApiError(404, 'El vehículo no existe')
+  return rows[0]
+}
+
+function vehiclePlate(value: unknown): string {
+  if (typeof value !== 'string') throw new ApiError(422, 'Ingresa una placa válida')
+  const plate = value.trim().toUpperCase()
+  if (!/^[A-Z0-9-]{3,12}$/.test(plate)) throw new ApiError(422, 'La placa debe tener entre 3 y 12 caracteres, letras, números o guion')
+  return plate
+}
+
+app.get('/api/sites/:id/vehicles', async (context) => {
+  const rows = await transaction(async (client) => {
+    await requireAdmin(client, context.get('identity'))
+    const siteId = context.req.param('id')
+    const exists = await client.query("select id from public.sedes where id = $1 and tipo_sede = 'NEGOCIO'", [siteId])
+    if (!exists.rowCount) throw new ApiError(404, 'La Sede no existe')
+    return (await client.query(`${VEHICLE_SELECT} where v.sede_id = $1 order by v.activo desc, v.placa`, [siteId])).rows
+  })
+  return context.json(rows)
+})
+
+app.post('/api/sites/:id/vehicles', async (context) => {
+  const body = await jsonBody(context.req.raw)
+  const placa = vehiclePlate(body.placa)
+  const siteId = context.req.param('id')
+  const record = await transaction(async (client) => {
+    const admin = await requireAdmin(client, context.get('identity'))
+    const inserted = await client.query<{ id: string }>(
+      `insert into public.vehiculos(sede_id, placa)
+       select s.id, $2 from public.sedes s
+       where s.id = $1 and s.tipo_sede = 'NEGOCIO' and s.activo and s.maneja_vehiculos
+       returning id`, [siteId, placa])
+    const id = inserted.rows[0]?.id
+    if (!id) throw new ApiError(422, 'Habilita la gestión de vehículos en una Sede activa')
+    await audit(client, admin.id, 'VEHICULO_CREADO', 'Vehiculos', id, { siteId })
+    return findVehicle(client, id)
+  })
+  return context.json(record, 201)
+})
+
+app.patch('/api/vehicles/:id', async (context) => {
+  const body = await jsonBody(context.req.raw)
+  const placa = vehiclePlate(body.placa)
+  const activo = requiredBoolean(body, 'activo')
+  const version = requiredPositiveInteger(body, 'version')
+  const id = context.req.param('id')
+  const record = await transaction(async (client) => {
+    const admin = await requireAdmin(client, context.get('identity'))
+    const previous = await client.query<{ placa: string; activo: boolean; siteId: string; enabled: boolean }>(
+      `select v.placa, v.activo, v.sede_id as "siteId",
+        (s.maneja_vehiculos and s.activo and s.tipo_sede = 'NEGOCIO') as enabled
+        from public.vehiculos v join public.sedes s on s.id=v.sede_id
+        where v.id=$1 for update of v`, [id])
+    const current = previous.rows[0]
+    if (!current) throw new ApiError(404, 'El vehículo no existe')
+    if (!current.enabled && (activo || placa !== current.placa)) {
+      throw new ApiError(422, 'La Sede debe estar activa y manejar vehículos para esta operación')
+    }
+    if (placa !== current.placa) {
+      const history = await client.query(
+        `select (
+           exists(select 1 from public.certificados where vehiculo_id=$1)
+           or exists(select 1 from public.servicios
+             where sede_id=$2 and coalesce(vehiculos_atendidos_ids_json, '[]'::jsonb) ? ($1::uuid)::text)
+         ) as used`, [id, current.siteId])
+      if (history.rows[0]?.used) throw new ApiError(409,
+        'La placa tiene historial y no puede modificarse. Desactiva el vehículo y registra la placa correcta.', 'VEHICLE_HISTORY')
+    }
+    const updated = await client.query('update public.vehiculos set placa=$1, activo=$2 where id=$3 and version=$4 returning id',
+      [placa, activo, id, version])
+    if (!updated.rowCount) throw conflictError('Vehículo')
+    await audit(client, admin.id, current.activo === activo ? 'VEHICULO_ACTUALIZADO' : activo ? 'VEHICULO_REACTIVADO' : 'VEHICULO_DESACTIVADO',
+      'Vehiculos', id, null)
+    return findVehicle(client, id)
+  })
+  return context.json(record)
+})
+
+app.delete('/api/vehicles/:id', async (context) => {
+  const id = context.req.param('id')
+  const version = integerValue(context.req.query('version'), 'version')
+  await transaction(async (client) => {
+    const admin = await requireAdmin(client, context.get('identity'))
+    const result = await client.query<{ siteId: string }>(
+      'select sede_id as "siteId" from public.vehiculos where id=$1 for update', [id])
+    const current = result.rows[0]
+    if (!current) throw new ApiError(404, 'El vehículo no existe')
+    const history = await client.query(
+      `select (
+         exists(select 1 from public.certificados where vehiculo_id=$1)
+         or exists(select 1 from public.servicios where sede_id=$2
+           and coalesce(vehiculos_atendidos_ids_json, '[]'::jsonb) ? ($1::uuid)::text)
+       ) as used`, [id, current.siteId])
+    if (history.rows[0]?.used) throw dependencyError('Vehículo')
+    const deleted = await client.query('delete from public.vehiculos where id=$1 and version=$2', [id, version])
+    if (!deleted.rowCount) throw conflictError('Vehículo')
+    await audit(client, admin.id, 'VEHICULO_ELIMINADO', 'Vehiculos', id, null)
+  })
+  return context.body(null, 204)
+})
+
+app.get('/api/sites/:siteId/vehicles/:vehicleId/certificates', async (context) => {
+  const siteId = context.req.param('siteId')
+  const vehicleId = context.req.param('vehicleId')
+  const page = integerValue(context.req.query('page') ?? '1', 'page')
+  if (page < 1 || page > 10000) throw new ApiError(422, 'Página no válida')
+  const result = await transaction(async (client) => {
+    await requireAdmin(client, context.get('identity'))
+    const vehicle = await client.query(
+      'select id from public.vehiculos where id=$1 and sede_id=$2', [vehicleId, siteId])
+    if (!vehicle.rowCount) throw new ApiError(404, 'El vehículo no pertenece a esta Sede')
+    const { rows } = await client.query(
+      `select c.id, sv.id as "serviceId", sv.solicitud,
+       c.fecha_expedicion::text as "issuedOn", c.fecha_vencimiento::text as "expiresOn",
+       c.estado_generacion as "status",
+       (c.pdf_storage_path is not null and c.estado_generacion in ('GENERADO','ENVIADO')
+        and not exists(select 1 from private.storage_retention_deleted d
+         where d.bucket='sr-generated-documents' and d.storage_path=c.pdf_storage_path)) as "pdfAvailable"
+       from public.certificados c
+       join public.servicios sv on sv.id=c.servicio_id
+       where c.vehiculo_id=$1 and sv.sede_id=$2
+       order by c.fecha_expedicion desc, c.id desc limit 21 offset $3`,
+       [vehicleId, siteId, (page-1)*20])
+    return { items: rows.slice(0,20), page, hasMore: rows.length > 20 }
+  })
+  return context.json(result)
+})
+
 app.get('/api/services', async (context) => {
   const identity = context.get('identity')
   const services = await transaction(async (client) => {
@@ -852,6 +987,7 @@ app.onError((error, context) => {
       usuarios_correo_google_uidx: 'Este correo ya está registrado.',
       negocios_nit_uidx: 'Este NIT ya está registrado.',
       areas_sede_nombre_uidx: 'Ya existe un Área con ese nombre en la Sede.',
+      vehiculos_sede_placa_uidx: 'Ya existe un vehículo con esa placa en la Sede.',
       sedes_residencial_cliente_uidx: 'El Cliente Casa ya tiene una ubicación residencial.',
     }[databaseError.constraint ?? ''] ?? 'Ya existe un registro con esos datos'
     return context.json({ error: message }, 409)

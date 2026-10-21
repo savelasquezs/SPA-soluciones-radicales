@@ -162,6 +162,7 @@ certificateRoutes.post('/generate', async (context) => {
 
 certificateRoutes.post('/documents/:id/read-url', async (context) => {
   const id = uuid(context.req.param('id'))
+  const inline = (await bodyObject(context.req.raw)).inline === true
   const { rows } = await pool.query<{ path: string; available: boolean }>(
     `select c.pdf_storage_path as path,
       not exists(select 1 from private.storage_retention_deleted d
@@ -170,7 +171,7 @@ certificateRoutes.post('/documents/:id/read-url', async (context) => {
   )
   if (!rows[0]) throw new ApiError(404, 'El PDF no está disponible')
   if (!rows[0].available) throw new ApiError(410, 'El PDF venció. Regenera el certificado con la plantilla actual.', 'PDF_EXPIRED')
-  return context.json({ url: createCertificateReadUrl(rows[0].path, `certificado-${id}.pdf`) })
+  return context.json({ url: createCertificateReadUrl(rows[0].path, inline ? undefined : `certificado-${id}.pdf`) })
 })
 
 async function prepareMail(input: SendCertificatesInput) {
