@@ -363,3 +363,20 @@ export function createServiceResultMediaReadUrl(storagePath:string,serviceId:str
     storagePath.includes('..')) throw new ApiError(422,'Ruta no válida')
   return presign('GET',storagePath,undefined,serviceMediaBucket(),{'response-cache-control':'private, no-store'})
 }
+
+/** Comprobantes privados: misma firma y bucket existente, carpeta aislada por pago. */
+export function createPaymentProofUploadUrl(input: {paymentId:string;fileName:string;contentType:string;size:number}): UploadAuthorization {
+  if(!/^[a-f0-9-]{36}$/i.test(input.paymentId))throw new ApiError(422,'El pago no es válido')
+  return createServicePhotoUploadUrl(input,`payments/${input.paymentId}/proof`)
+}
+export function assertPaymentProofStoragePath(storagePath:string,paymentId:string):void {
+  assertServiceMediaStoragePath(storagePath,`payments/${paymentId}/proof/`)
+}
+export async function paymentProofObjectExists(storagePath:string,paymentId:string):Promise<boolean> {
+  assertPaymentProofStoragePath(storagePath,paymentId)
+  return privateServiceMediaObjectExists(storagePath)
+}
+export function createPaymentProofReadUrl(storagePath:string,paymentId:string):string {
+  assertPaymentProofStoragePath(storagePath,paymentId)
+  return presign('GET',storagePath,undefined,serviceMediaBucket(),{'response-cache-control':'private, no-store'})
+}
