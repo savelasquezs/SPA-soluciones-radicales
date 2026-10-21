@@ -68,7 +68,8 @@ async function switchRole(role: ActiveRole): Promise<void> {
   switchingRole.value = true
   try {
     await auth.selectRole(role)
-    if (route.meta.roles?.length && !route.meta.roles.includes(role)) await router.replace('/')
+    // Reset the workspace for either role, even when both can open the current page.
+    await router.replace('/')
     close()
     notifications.show('Rol activo: ' + (role === 'ADMINISTRADOR' ? 'Administrador' : 'Técnico'), 'success')
   } catch (error) {
