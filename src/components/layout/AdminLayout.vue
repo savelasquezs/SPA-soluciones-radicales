@@ -75,7 +75,7 @@ const groups: NavigationGroup[] = [
     { to: '/configuracion', label: 'Configuración', icon: Settings2, admin: true },
   ] },
 ]
-const visibleGroups = computed(() => groups.map(group => ({ ...group, items: group.items.filter(item => !item.admin || auth.isAdmin) && (!item.technician || auth.activeRole === 'TECNICO') })).filter(group => group.items.length))
+const visibleGroups = computed(() => groups.map(group => ({ ...group, items: group.items.filter(item => (!item.admin || auth.isAdmin) && (!item.technician || auth.activeRole === 'TECNICO')) })).filter(group => group.items.length))
 type BreadcrumbItem = { label: string; to?: string }
 const breadcrumbItems = computed<BreadcrumbItem[]>(() => {
   const raw=route.meta.breadcrumb
