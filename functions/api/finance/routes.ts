@@ -71,6 +71,20 @@ financeRoutes.get('/me',async c=>{c.header('Cache-Control','private, no-store');
   const myPayments=await Promise.all(rows.rows.map((r:{id:string})=>getPayment(client,r.id)))
   return {balance:balance??{id:technician.id,nombre:technician.nombreCompleto,recaudado:0,entregado:0,saldo:0},pagos:myPayments}
 }) )})
+financeRoutes.get('/technician/services/:id/balance',async c=>{
+  const serviceId=uuid(c.req.param('id'))
+  return c.json(await transaction(async client=>{
+    const tech=await requireTechnician(client,c.get('identity'))
+    const row=(await client.query<{estado:string;disponible:string}>(`
+      select s.estado,(s.valor_servicio-coalesce((select sum(a.monto)
+        from public.pago_aplicaciones a join public.pagos p on p.id=a.pago_id
+        where a.servicio_id=s.id and p.estado in ('PENDIENTE','CONFIRMADO')),0))::text as disponible
+      from public.servicios s where s.id=$1::uuid and s.tipo_servicio='PRINCIPAL'
+        and (s.tecnico_responsable_id=$2::uuid or coalesce(s.tecnicos_colaboradores_ids_json,'[]'::jsonb) ? $2::text)`,[serviceId,tech.id])).rows[0]
+    if(!row)throw new ApiError(404,'El servicio no está disponible.')
+    return {estado:row.estado,disponible:Math.max(0,Number(row.disponible))}
+  }))
+})
 financeRoutes.post('/technician/services/:id/payments',async c=>{
   const value=await json(c.req.raw),serviceId=uuid(c.req.param('id')),requestId=uuid(value.requestId)
   const result=await transaction(async client=>{
