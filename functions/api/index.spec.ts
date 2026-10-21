@@ -325,7 +325,7 @@ describe('technician service authorization', () => {
     const response=await app.request('/api/technician/services',{ headers:{ Authorization:'Bearer synthetic-token' } })
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual([])
-    expect(clientQuery).toHaveBeenCalledWith(expect.stringContaining("s.tipo_servicio='PRINCIPAL'"),['technician-id'])
+    expect(clientQuery).toHaveBeenCalledWith(expect.stringContaining("s.tipo_servicio in ('PRINCIPAL','REFUERZO')"),['technician-id'])
   })
   it('validates finding authorization before checking whether a prior visit already has closure evidence',async()=>{
     requireTechnician.mockResolvedValue({ id:'technician-id' })
