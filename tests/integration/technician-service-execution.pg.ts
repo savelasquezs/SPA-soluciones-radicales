@@ -7,7 +7,7 @@ vi.mock('@neon/functions', () => ({ attachDatabasePool: vi.fn<() => void>(), wai
 import { pool, transaction } from '../../functions/api/db'
 import { claimTechnicianService, createTechnicianDevice, createTechnicianFinding, finalizeTechnicianService, releaseTechnicianServiceLock, saveTechnicianAreaAccess, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, saveTechnicianFindingStatus, startTechnicianService, technicianCommand } from '../../functions/api/technician-services/commands'
 import type { DeviceState } from '../../src/types/technicianServices'
-import { getTechnicianPackage } from '../../functions/api/technician-services/queries'
+import { getTechnicianPackage, listTechnicianHistory, listTechnicianServices } from '../../functions/api/technician-services/queries'
 
 const target = new URL(process.env.TEST_DATABASE_URL ?? '')
 if (process.env.CI !== 'true' || !['localhost', '127.0.0.1'].includes(target.hostname) || target.pathname !== '/sr_certificates_test') throw new Error('Ephemeral CI database required')
@@ -75,6 +75,34 @@ beforeAll(async () => {
 afterAll(async () => { await pool.end() })
 
 describe('technician service execution · real PostgreSQL', () => {
+  it('lists, starts and finishes an assigned reinforcement without MIP snapshots or report', async () => {
+    const value = await fixture(), reinforcementId = randomUUID(), phoneId = randomUUID()
+    await transaction(async client => {
+      await client.query('update public.sedes set maneja_refuerzo=true where id=(select sede_id from public.servicios where id=$1)', [value.service])
+      await client.query(`insert into public.servicios(id,sede_id,tipo_servicio,servicio_principal_id,
+        inicio_programado,fin_programado,creado_por_id,tecnico_responsable_id,tecnicos_colaboradores_ids_json,valor_servicio)
+        select $2,sede_id,'REFUERZO',id,inicio_programado,fin_programado,creado_por_id,
+          tecnico_responsable_id,tecnicos_colaboradores_ids_json,0
+        from public.servicios where id=$1`, [value.service, reinforcementId])
+    })
+    const assignments = await transaction(client => listTechnicianServices(client, value.collaborator))
+    expect(assignments.find(item => item.id === reinforcementId)?.tipoServicio).toBe('REFUERZO')
+    const before = await transaction(client => getTechnicianPackage(client, value.technician, reinforcementId))
+    expect(before.canStart).toBe(true)
+    expect(before.areas).toHaveLength(0)
+    expect(before.deviceTypes).toHaveLength(0)
+    const session = await transaction(client => startTechnicianService(client, value.technician, reinforcementId, 1, phoneId))
+    expect(session.package.service.estado).toBe('EN_PROCESO')
+    expect(session.package.areas).toHaveLength(0)
+    expect((await pool.query('select count(*)::int as count from public.servicio_areas where servicio_id=$1', [reinforcementId])).rows[0].count).toBe(0)
+    const finished = await transaction(client => finalizeTechnicianService(client, value.technician, reinforcementId,
+      phoneId, session.lock.token, 'ci/tech.png', 'ci/client.png', 'Responsable del refuerzo'))
+    expect(finished.package.service.estado).toBe('FINALIZADO')
+    const history = await transaction(client => listTechnicianHistory(client, value.technician, 1, '', null, null))
+    expect(history.items.some(item => item.id === reinforcementId)).toBe(true)
+    expect((await pool.query('select count(*)::int as count from public.proximos_servicios where principal_anterior_id=$1', [reinforcementId])).rows[0].count).toBe(0)
+  })
+
   it('starts and closes a residential visit with signatures, without Areas or a full MIP route',async()=>{
     const value=await fixture(), homeClient=randomUUID(),homeSite=randomUUID(),homeService=randomUUID(),phoneId=randomUUID()
     await transaction(async client=>{

@@ -61,8 +61,13 @@ async function setup(page:Page){
           [x.solicitud,x.clienteNombre,x.sedeNombre].join(' ').toLowerCase().includes(q))
         await route.fulfill({json:{items:matches.slice((pg-1)*20,pg*20),total:matches.length,page:pg,pageSize:20}});return
       }
-      if(path==='/api/technician/services/'+uid(11)+'/contact'){
-        await route.fulfill({json:agenda[1]});return
+      if(path==='/api/technician/services/'+uid(11)+'/package'){
+        await route.fulfill({json:{
+          service:agenda[1],serverNow:now,canStart:false,
+          startAvailableAt:agenda[1]!.inicioProgramado,frozen:false,
+          products:[],deviceTypes:[],areas:[],
+          signatures:{technicianStoragePath:null,technicianUserId:null,clientStoragePath:null,clientName:null,clientSignedAt:null},
+        }});return
       }
       if(path==='/api/technician/services/agenda'){
         const start=url.searchParams.get('from')||'',end=url.searchParams.get('to')||''
@@ -95,24 +100,21 @@ test('five compact pending cards fit in one 390px-wide viewport and history is s
   await page.getByLabel('Buscar servicio').fill('Cliente 41')
   await expect.poll(()=>requests.some(x=>x.includes('q=Cliente+41'))).toBe(true)
 })
-test('technician agenda shows weekly assignments including read-only reinforcements',async({page})=>{
+test('technician agenda opens assigned reinforcement work screen',async({page})=>{
   await page.setViewportSize({width:390,height:844})
   const {requests}=await setup(page)
   await page.goto('/agenda')
   await expect(page.getByRole('heading',{name:'Mi agenda'})).toBeVisible()
   await expect(page.getByRole('navigation',{name:'Días de la semana'})).toBeVisible()
   await expect(page.getByRole('heading',{name:'Cliente 1',exact:true}).first()).toBeVisible()
-  await expect(page.getByText('Refuerzo (solo consulta)').first()).toBeVisible()
-  await expect(page.getByRole('button',{name:'Ver cliente'}).first()).toBeVisible()
-  await page.getByRole('button',{name:'Ver cliente'}).first().click()
-  await expect(page).toHaveURL(new RegExp('/servicios/'+uid(11)+'/cliente'))
-  await expect(page.getByRole('heading',{name:'Datos del cliente'})).toBeVisible()
-  await expect(page.getByText('Refuerzo · información de solo consulta.',{exact:false})).toBeVisible()
+  await expect(page.getByText('Sede 11 · Refuerzo').first()).toBeVisible()
+  await page.getByRole('button',{name:'Ver servicio'}).click()
+  await expect(page).toHaveURL(new RegExp('/servicios/'+uid(11)+'/trabajo'))
   await expect(page.getByText('Contacto 11')).toBeVisible()
   await expect(page.getByRole('link',{name:/Hablar por WhatsApp con/})).toHaveAttribute('href','https://wa.me/573001112233')
   await expect(page.getByRole('link',{name:'Llamar'})).toHaveAttribute('href','tel:+573001112233')
   await expect(page.getByRole('link',{name:'contacto@example.test'})).toHaveAttribute('href','mailto:contacto%40example.test')
-  await expect(page.getByRole('button',{name:'Iniciar servicio'})).toHaveCount(0)
+  await expect(page.getByRole('button',{name:'Iniciar servicio'})).toBeVisible()
   await page.goto('/agenda')
   await expect(page.getByRole('button',{name:'Continuar'}).first()).toBeVisible()
   const week=monday(today)

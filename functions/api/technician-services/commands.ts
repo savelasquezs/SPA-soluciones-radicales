@@ -51,7 +51,7 @@ async function assertExecutionLock(client: PoolClient, userId: string, serviceId
 
 export async function authorizeTechnicianServiceChange(client: PoolClient, userId: string, serviceId: string, deviceId: string, lockToken: string): Promise<void> {
   const service = await assignedServiceState(client, userId, serviceId, true)
-  if (service.tipo_servicio !== 'PRINCIPAL' || service.estado !== 'EN_PROCESO') {
+  if (service.estado !== 'EN_PROCESO') {
     throw new ApiError(409, 'El servicio no está disponible para edición técnica.', 'SERVICE_NOT_IN_PROGRESS')
   }
   await assertExecutionLock(client, userId, serviceId, deviceId, lockToken)
@@ -619,13 +619,13 @@ async function lockSnapshotSources(client: PoolClient, serviceId: string): Promi
 export async function startTechnicianService(client: PoolClient, userId: string, serviceId: string, expectedVersion: number, deviceId: string): Promise<TechnicianExecutionSession> {
   const service = await assignedServiceState(client, userId, serviceId, true)
   assertVersion(Number(service.version), expectedVersion)
-  if (service.tipo_servicio !== 'PRINCIPAL') throw new ApiError(422, 'La ejecución móvil inicial solo admite servicios Principales.', 'SERVICE_KIND_UNSUPPORTED')
   if (service.estado !== 'PROGRAMADO') throw new ApiError(409, 'El servicio ya no está Programado.', 'SERVICE_NOT_PROGRAMMED')
   if (!service.eligible) throw new ApiError(409, 'Puedes iniciar el servicio desde una hora antes de la programación.', 'SERVICE_TOO_EARLY')
   const incomplete = (await client.query<{ count: number }>(`select count(*)::integer as count from public.productos_aplicados
     where servicio_id=$1 and (nullif(btrim(lote),'') is null or fecha_vencimiento is null)`, [serviceId])).rows[0]?.count ?? 0
   if (incomplete) throw new ApiError(422, 'El Administrador debe completar lote y vencimiento de cada producto antes de iniciar.', 'PRODUCTS_INCOMPLETE')
-  const sources = await lockSnapshotSources(client, serviceId)
+  const mipVisit = service.tipo_servicio === 'PRINCIPAL'
+  const sources = mipVisit ? await lockSnapshotSources(client, serviceId) : { areaIds: [], criterionIds: [], deviceIds: [] }
   const missingCatalog = (await client.query<{ nombre: string }>(`select p.nombre from public.productos_aplicados pa
     join public.productos p on p.id=pa.producto_id where pa.servicio_id=$1 and (
       nullif(btrim(p.dosis_aplicacion),'') is null or not exists (
@@ -635,6 +635,7 @@ export async function startTechnicianService(client: PoolClient, userId: string,
     order by p.nombre limit 1`, [serviceId])).rows[0]
   if (missingCatalog) throw new ApiError(422, `El producto ${missingCatalog.nombre} necesita dosis y método configurados en el catálogo MIP.`, 'PRODUCT_CATALOG_INCOMPLETE')
   const executionLock = await acquireLock(client, userId, serviceId, deviceId)
+  if (mipVisit) {
   await client.query(`insert into public.servicio_areas(servicio_id,area_id,nombre_snapshot,es_externa_snapshot,posicion_inicial,posicion_recorrido)
     select $1,a.id,a.nombre,a.es_externa,(row_number() over(order by lower(btrim(a.nombre)),a.id)-1)::integer,
       (row_number() over(order by lower(btrim(a.nombre)),a.id)-1)::integer
@@ -660,6 +661,7 @@ export async function startTechnicianService(client: PoolClient, userId: string,
     from public.servicio_areas sa join public.dispositivos d on d.area_id=sa.area_id
     join public.trampas t on t.clave=d.tipo_dispositivo_codigo
     where sa.servicio_id=$1 and d.id=any($2::uuid[]) order by sa.posicion_inicial,lower(btrim(d.numero)),d.id`, [serviceId, sources.deviceIds])
+  }
   await client.query(`update public.productos_aplicados pa set aplicado=true,producto_nombre_snapshot=p.nombre,
     principio_activo_snapshot=p.principio_activo_composicion,registro_sanitario_snapshot=p.registro_sanitario,
     dosis_referencia_snapshot=p.dosis_aplicacion,dosis=to_jsonb(p.dosis_aplicacion),
@@ -670,13 +672,13 @@ export async function startTechnicianService(client: PoolClient, userId: string,
     from public.productos p
     where pa.servicio_id=$1 and p.id=pa.producto_id`, [serviceId])
   await client.query("update public.servicios set estado='EN_PROCESO',inicio_real=now() where id=$1", [serviceId])
-  await audit(client, userId, 'SERVICIO_INICIADO', serviceId, { deviceId, productosSoloLectura: true, snapshotsCongelados: true })
+  await audit(client, userId, 'SERVICIO_INICIADO', serviceId, { deviceId, productosSoloLectura: true, snapshotsCongelados: mipVisit })
   return { package: await getTechnicianPackage(client, userId, serviceId), lock: executionLock }
 }
 
 export async function claimTechnicianService(client: PoolClient, userId: string, serviceId: string, deviceId: string): Promise<TechnicianExecutionSession> {
   const service = await assignedServiceState(client, userId, serviceId, true)
-  if (service.tipo_servicio !== 'PRINCIPAL' || service.estado !== 'EN_PROCESO') throw new ApiError(409, 'Solo se recupera un servicio Principal En proceso.', 'SERVICE_NOT_IN_PROGRESS')
+  if (service.estado !== 'EN_PROCESO') throw new ApiError(409, 'Solo se recupera un servicio En proceso.', 'SERVICE_NOT_IN_PROGRESS')
   const executionLock = await acquireLock(client, userId, serviceId, deviceId)
   return { package: await getTechnicianPackage(client, userId, serviceId), lock: executionLock }
 }
@@ -692,8 +694,8 @@ export async function finalizeTechnicianService(
   clientName: string,
 ): Promise<{ package: TechnicianServicePackage }> {
   const service = await assignedServiceState(client, userId, serviceId, true)
-  if (service.tipo_servicio !== 'PRINCIPAL' || service.estado !== 'EN_PROCESO') {
-    throw new ApiError(409, 'Solo se finaliza un servicio Principal En proceso.', 'SERVICE_NOT_IN_PROGRESS')
+  if (service.estado !== 'EN_PROCESO') {
+    throw new ApiError(409, 'Solo se finaliza un servicio En proceso.', 'SERVICE_NOT_IN_PROGRESS')
   }
   await assertExecutionLock(client, userId, serviceId, deviceId, lockToken)
   const incomplete = (await client.query<{ count: number }>(`select count(*)::integer as count

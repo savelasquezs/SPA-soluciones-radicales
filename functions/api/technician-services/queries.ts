@@ -32,12 +32,12 @@ const summaryJson = `jsonb_build_object('id',s.id,'solicitud',s.solicitud,'tipoS
     union select lower(btrim(se.contacto_principal_correo))
       where nullif(btrim(se.contacto_principal_correo),'') is not null
   ) emails where nullif(email,'') is not null),
-  'autoPrepareEligible',(s.estado='EN_PROCESO' or (s.estado='PROGRAMADO' and s.tipo_servicio='PRINCIPAL' and now() >= s.inicio_programado-interval '1 hour')))`
+  'autoPrepareEligible',(s.estado='EN_PROCESO' or (s.estado='PROGRAMADO' and now() >= s.inicio_programado-interval '1 hour')))`
 
 export async function listTechnicianServices(client: PoolClient, userId: string): Promise<TechnicianServiceSummary[]> {
   const { rows } = await client.query<{ record: TechnicianServiceSummary }>(`select ${summaryJson} as record
     from public.servicios s join public.sedes se on se.id=s.sede_id join public.negocios n on n.id=se.negocio_id
-    where ${technicianServiceAssignmentSql} and s.tipo_servicio='PRINCIPAL' and s.estado<>'CANCELADO'
+    where ${technicianServiceAssignmentSql} and s.tipo_servicio in ('PRINCIPAL','REFUERZO') and s.estado<>'CANCELADO'
     order by case s.estado when 'EN_PROCESO' then 0 when 'PROGRAMADO' then 1 else 2 end,
       case when s.estado='FINALIZADO' then s.inicio_programado end desc,
       case when s.estado<>'FINALIZADO' then s.inicio_programado end,s.id limit 200`, [userId])
@@ -46,7 +46,7 @@ export async function listTechnicianServices(client: PoolClient, userId: string)
 
 export async function assignedServiceState(client: PoolClient, userId: string, serviceId: string, lock = false): Promise<ServiceStateRow> {
   const { rows } = await client.query<ServiceStateRow>(`select s.id,s.estado,s.tipo_servicio,s.version,s.inicio_programado,
-    (s.tipo_servicio='PRINCIPAL' and now() >= s.inicio_programado-interval '1 hour') as eligible
+    (now() >= s.inicio_programado-interval '1 hour') as eligible
     from public.servicios s join public.sedes se on se.id=s.sede_id
     where s.id=$2::uuid and ${technicianServiceAssignmentSql}${lock ? ' for update of s' : ''}`, [userId, serviceId])
   if (!rows[0]) throw new ApiError(404, 'El servicio no está disponible.', 'SERVICE_NOT_FOUND')
@@ -61,7 +61,7 @@ async function serviceHeader(client: PoolClient, userId: string, serviceId: stri
 }> {
   const { rows } = await client.query<{ service: TechnicianServiceSummary; serverNow: string; canStart: boolean; startAvailableAt: string }>(`select
     ${summaryJson} as service,to_jsonb(now()) #>> '{}' as "serverNow",
-    (s.estado='PROGRAMADO' and s.tipo_servicio='PRINCIPAL' and now() >= s.inicio_programado-interval '1 hour') as "canStart",
+    (s.estado='PROGRAMADO' and now() >= s.inicio_programado-interval '1 hour') as "canStart",
     to_jsonb(s.inicio_programado-interval '1 hour') #>> '{}' as "startAvailableAt"
     from public.servicios s join public.sedes se on se.id=s.sede_id join public.negocios n on n.id=se.negocio_id
     where s.id=$2::uuid and ${technicianServiceAssignmentSql}`, [userId, serviceId])
@@ -199,8 +199,10 @@ export async function getTechnicianPackage(client: PoolClient, userId: string, s
     firma_tecnico_storage_path as "technicianStoragePath",firma_tecnico_usuario_id as "technicianUserId",
     firma_cliente_storage_path as "clientStoragePath",firma_cliente_nombre as "clientName",firma_cliente_at as "clientSignedAt"
     from public.servicios where id=$1`, [serviceId])).rows[0]!
-  return { ...header, frozen, products: await products(client, serviceId, frozen), deviceTypes: await deviceTypes(client, serviceId, frozen),
-    areas: frozen ? await frozenAreas(client, serviceId) : await liveAreas(client, serviceId), signatures }
+  const reinforcement = header.service.tipoServicio === 'REFUERZO'
+  return { ...header, frozen, products: await products(client, serviceId, frozen),
+    deviceTypes: reinforcement ? [] : await deviceTypes(client, serviceId, frozen),
+    areas: reinforcement ? [] : frozen ? await frozenAreas(client, serviceId) : await liveAreas(client, serviceId), signatures }
 }
 
 
@@ -211,7 +213,7 @@ export async function listTechnicianHistory(
   const pageSize=20
   const scope=` from public.servicios s
     join public.sedes se on se.id=s.sede_id join public.negocios n on n.id=se.negocio_id
-    where ${technicianServiceAssignmentSql} and s.tipo_servicio='PRINCIPAL' and s.estado='FINALIZADO'
+    where ${technicianServiceAssignmentSql} and s.tipo_servicio in ('PRINCIPAL','REFUERZO') and s.estado='FINALIZADO'
       and ($2::date is null or s.fin_real>=($2::date::timestamp at time zone 'America/Bogota'))
       and ($3::date is null or s.fin_real<($3::date::timestamp at time zone 'America/Bogota'))
       and ($4::text='' or s.solicitud ilike '%'||$4||'%'
@@ -239,8 +241,7 @@ export async function listTechnicianAgenda(
   return rows.map(row=>row.record)
 }
 
-/** Read-only contact details for an assigned principal OR reinforcement.
- * Executing a reinforcement remains prohibited by the existing command guards. */
+/** Contact details for any assigned non-cancelled visit. */
 export async function getTechnicianServiceContact(
   client: PoolClient, userId: string, serviceId: string,
 ): Promise<TechnicianServiceSummary> {

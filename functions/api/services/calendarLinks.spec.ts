@@ -45,12 +45,12 @@ describe('Enlace de servicio en Google Calendar', () => {
     expect(description).toContain('Accede con tu cuenta Google autorizada')
   })
 
-  it('envía al listado cuando el servicio es Refuerzo (aún no ejecutable en el módulo técnico)', () => {
+  it('abre directamente el refuerzo asignado al técnico', () => {
     const reinforcement = { ...service,tipoServicio:'REFUERZO' } as typeof service
-    expect(calendarServiceLink(id,'REFUERZO',dev)).toBe(dev+'/servicios')
+    expect(calendarServiceLink(id,'REFUERZO',dev)).toBe(dev+'/servicios/'+id+'/trabajo')
     const description=calendarServiceDescription(reinforcement,dev)
-    expect(description).toContain('Ver mis servicios en Soluciones Radicales:')
-    expect(description).not.toContain('/trabajo')
+    expect(description).toContain('Abrir servicio en Soluciones Radicales:')
+    expect(description).toContain('/servicios/'+id+'/trabajo')
   })
 
   it('no bloquea la cita ni inventa enlaces cuando el dominio no está configurado', () => {
