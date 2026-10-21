@@ -159,7 +159,8 @@ async function finish(): Promise<void> {
           : 'Cierre guardado. Se finalizará al recuperar conexión.'
     if (result === 'synced') {
       if (!simplified.value) {
-        reportModalOpen.value = true
+        // An earlier offline email is already queued and will be delivered after closure.
+        if (!pendingEmailItems.value.length) reportModalOpen.value = true
         void emails.flushAll()
       }
     }
