@@ -13,7 +13,7 @@ import { useTechnicianReportEmailStore } from '@/stores/technicianReportEmails'
 import { useTechnicianServicesStore } from '@/stores/technicianServices'
 import type { ThemePreference } from '@/types/domain'
 
-type NavigationItem = { to: string; label: string; icon: typeof Gauge; admin?: boolean }
+type NavigationItem = { to: string; label: string; icon: typeof Gauge; admin?: boolean; technician?: boolean }
 type NavigationGroup = { label: string; items: NavigationItem[] }
 const auth = useAuthStore(), app = useAppStore()
 provide(accountTransitionKey, createAccountTransition())
@@ -58,7 +58,7 @@ onUnmounted(() => {
   document.removeEventListener('visibilitychange', onVisibilityChange)
 })
 const route = useRoute()
-const compactRoutes = new Set(['dashboard', 'clients', 'client-detail', 'site-detail', 'payments', 'my-profile', 'users', 'settings', 'catalogs', 'certificates', 'integrations'])
+const compactRoutes = new Set(['dashboard', 'clients', 'client-detail', 'site-detail', 'payments', 'my-cash', 'my-profile', 'users', 'settings', 'catalogs', 'certificates', 'integrations'])
 const compactLayout = computed(() => compactRoutes.has(String(route.name)))
 const navigationOpen = ref(false)
 const groups: NavigationGroup[] = [
@@ -68,13 +68,14 @@ const groups: NavigationGroup[] = [
   { label: 'GESTIÓN', items: [
     { to: '/clientes', label: 'Clientes', icon: Building2, admin: true },
     { to: '/pagos', label: 'Pagos y caja', icon: WalletCards, admin: true },
+    { to: '/mi-caja', label: 'Mi caja', icon: WalletCards, technician: true },
   ] },
   { label: 'ADMINISTRACIÓN', items: [
     { to: '/usuarios', label: 'Usuarios', icon: Users, admin: true },
     { to: '/configuracion', label: 'Configuración', icon: Settings2, admin: true },
   ] },
 ]
-const visibleGroups = computed(() => groups.map(group => ({ ...group, items: group.items.filter(item => !item.admin || auth.isAdmin) })).filter(group => group.items.length))
+const visibleGroups = computed(() => groups.map(group => ({ ...group, items: group.items.filter(item => !item.admin || auth.isAdmin) && (!item.technician || auth.activeRole === 'TECNICO') })).filter(group => group.items.length))
 type BreadcrumbItem = { label: string; to?: string }
 const breadcrumbItems = computed<BreadcrumbItem[]>(() => {
   const raw=route.meta.breadcrumb
