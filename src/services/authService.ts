@@ -72,7 +72,7 @@ async function activateRememberedRole(session: Awaited<ReturnType<typeof getAuth
       clearRememberedRole()
       return
     }
-    if (!response.ok) throw new ApiClientError(body?.error ?? 'No fue posible recuperar el rol activo.', response.status)
+    if (!response.ok) throw new ApiClientError('No fue posible recuperar el rol activo. Vuelve a intentarlo.', response.status)
     if (body?.rolActivo !== role || body.requiereSeleccionRol) {
       throw new ApiClientError('El servidor no pudo restaurar el rol activo.', 502, 'INVALID_RESPONSE')
     }
