@@ -15,6 +15,7 @@ vi.mock('@/services/servicesService', () => ({
   fetchTechnicianPackage: vi.fn<typeof api.fetchTechnicianPackage>(),
   startTechnicianService: vi.fn<typeof api.startTechnicianService>(),
   claimTechnicianService: vi.fn<typeof api.claimTechnicianService>(),
+  createTechnicianSiteArea: vi.fn<typeof api.createTechnicianSiteArea>(),
   saveTechnicianAreaOrder: vi.fn<typeof api.saveTechnicianAreaOrder>(),
   saveTechnicianCriterionEvaluation: vi.fn<typeof api.saveTechnicianCriterionEvaluation>(),
   saveTechnicianAreaAccess: vi.fn<typeof api.saveTechnicianAreaAccess>(),
@@ -85,6 +86,10 @@ const servicePackage = (estado: TechnicianServiceSummary['estado'] = 'PROGRAMADO
   canStart: estado === 'PROGRAMADO',
   startAvailableAt: '2026-10-07T13:00:00Z',
   products: [],
+  areaCriteriaCatalog: [
+    { id: criterionId, nombre: 'Orden y aseo', soloAreaExterna: false },
+    { id: '10000000-0000-4000-8000-000000000033', nombre: 'Control perimetral', soloAreaExterna: true },
+  ],
   deviceTypes: [{ codigo: 'TRAMPA', nombre: 'Trampa', clasificacion: 'RASTREROS', plagas: [{ codigo: 'CUCARACHA', nombre: 'Cucaracha' }] }],
   areas: [],
   signatures: { technicianStoragePath: null, technicianUserId: null, clientStoragePath: null, clientName: null, clientSignedAt: null },
@@ -194,6 +199,69 @@ describe('technician services state', () => {
     expect(saved.some(item => item.pendingOperation?.kind === 'START')).toBe(true)
     expect(saved[saved.length - 1]).toMatchObject({ lock: session.lock, pendingOperation: null })
     expect(store.currentPackage?.service.estado).toBe('EN_PROCESO')
+  })
+
+  it('creates an Area belonging to the Sede offline and syncs before evaluating it', async () => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+    vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([executionCache()])
+    const store = useTechnicianServicesStore()
+    await store.ensurePackage(serviceId)
+    const created = await store.applySiteAreaCreation(serviceId, { nombre: 'Almacén', esExterna: false })
+    expect(created.status).toBe('pending')
+    const siteAreaCreation = mutationRecords.find(
+      (item): item is Extract<TechnicianMutation, { kind: 'AREA_CREATE' }> => item.kind === 'AREA_CREATE')!
+    expect(siteAreaCreation.areaId).not.toBe(created.serviceAreaId)
+    expect(siteAreaCreation).toMatchObject({ nombre: 'Almacén', esExterna: false, status: 'PENDING' })
+    const area = store.currentPackage!.areas.find(item => item.id === created.serviceAreaId)!
+    expect(area).toMatchObject({
+      areaId: siteAreaCreation.areaId, nombre: 'Almacén', creacionPendiente: true,
+      criterios: [{ criterioId, nombre: 'Orden y aseo', evaluacion: null }],
+    })
+    await store.applyCriterionEvaluation(serviceId, area.id, area.criterios[0]!.id, 'NC', 'Se requiere limpieza.')
+    expect(mutationRecords.map(item => item.kind)).toEqual(['AREA_CREATE', 'CRITERION_EVALUATION'])
+    expect(api.createTechnicianSiteArea).not.toHaveBeenCalled()
+    vi.mocked(api.createTechnicianSiteArea).mockImplementation(async () => ({
+      area: { ...area, creacionPendiente: false },
+    }))
+    vi.mocked(api.saveTechnicianCriterionEvaluation).mockResolvedValue({
+      criterion: { ...area.criterios[0]!, evaluacion: 'NC', observacion: 'Se requiere limpieza.', version: 2 },
+      removedEvidenceStoragePaths: [],
+    })
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: true })
+    expect(await store.syncPending(serviceId)).toBe('synced')
+    expect(api.createTechnicianSiteArea).toHaveBeenCalledWith(serviceId,
+      siteAreaCreation.requestId, deviceId, lockToken, siteAreaCreation.areaId,
+      created.serviceAreaId, { nombre: 'Almacén', esExterna: false },
+      [{ id: area.criterios[0]!.id, criterioId }])
+    expect(api.saveTechnicianCriterionEvaluation).toHaveBeenCalledWith(serviceId,
+      expect.any(String), deviceId, lockToken, area.criterios[0]!.id, 1, 'NC', 'Se requiere limpieza.', [])
+    expect(store.currentPackage!.areas.find(item => item.id === created.serviceAreaId))
+      .toMatchObject({ creacionPendiente: false, criterios: [{ evaluacion: 'NC', version: 2 }] })
+    expect(store.pendingSyncCount).toBe(0)
+  })
+
+  it('rejects another Area with an existing name in the prepared Sede visit', async () => {
+    vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([executionCache()])
+    const store = useTechnicianServicesStore()
+    await store.ensurePackage(serviceId)
+    await expect(store.applySiteAreaCreation(serviceId, { nombre: 'cocina', esExterna: false }))
+      .rejects.toThrow('ya está en el recorrido')
+  })
+
+  it('keeps duplicate-name creation conflicts local and allows discarding without altering the Sede', async () => {
+    vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([executionCache()])
+    vi.mocked(api.createTechnicianSiteArea).mockRejectedValue(
+      new ApiClientError('Esta Área ya existe en la Sede.', 409, 'SITE_AREA_EXISTS'))
+    const store = useTechnicianServicesStore()
+    await store.ensurePackage(serviceId)
+    const created = await store.applySiteAreaCreation(serviceId, { nombre: 'Nuevo patio', esExterna: true })
+    expect(created.status).toBe('conflict')
+    const newArea = store.currentPackage!.areas.find(item => item.id === created.serviceAreaId)!
+    expect(newArea.criterios).toHaveLength(2)
+    expect(mutationRecords[0]).toMatchObject({ kind: 'AREA_CREATE', status: 'CONFLICT' })
+    await store.discardSiteAreaCreationConflict(serviceId, created.serviceAreaId)
+    expect(store.currentPackage!.areas.map(area => area.id)).toEqual(areaIds)
+    expect(mutationRecords).toHaveLength(0)
   })
 
   it('applies an offline area order durably without calling the API', async () => {
