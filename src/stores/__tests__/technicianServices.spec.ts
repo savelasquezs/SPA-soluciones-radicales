@@ -215,7 +215,7 @@ describe('technician services state', () => {
     const area = store.currentPackage!.areas.find(item => item.id === created.serviceAreaId)!
     expect(area).toMatchObject({
       areaId: siteAreaCreation.areaId, nombre: 'Almacén', creacionPendiente: true,
-      criterios: [{ criterioId, nombre: 'Orden y aseo', evaluacion: null }],
+      criterios: [{ criterioId: criterionId, nombre: 'Orden y aseo', evaluacion: null }],
     })
     await store.applyCriterionEvaluation(serviceId, area.id, area.criterios[0]!.id, 'NC', 'Se requiere limpieza.')
     expect(mutationRecords.map(item => item.kind)).toEqual(['AREA_CREATE', 'CRITERION_EVALUATION'])
@@ -232,7 +232,7 @@ describe('technician services state', () => {
     expect(api.createTechnicianSiteArea).toHaveBeenCalledWith(serviceId,
       siteAreaCreation.requestId, deviceId, lockToken, siteAreaCreation.areaId,
       created.serviceAreaId, { nombre: 'Almacén', esExterna: false },
-      [{ id: area.criterios[0]!.id, criterioId }])
+      [{ id: area.criterios[0]!.id, criterioId: criterionId }])
     expect(api.saveTechnicianCriterionEvaluation).toHaveBeenCalledWith(serviceId,
       expect.any(String), deviceId, lockToken, area.criterios[0]!.id, 1, 'NC', 'Se requiere limpieza.', [])
     expect(store.currentPackage!.areas.find(item => item.id === created.serviceAreaId))
