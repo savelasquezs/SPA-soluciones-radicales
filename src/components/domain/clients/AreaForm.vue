@@ -6,9 +6,10 @@ import BaseInput from '@/components/base/BaseInput.vue'
 import { validateAreaInput } from '@/helpers/clients'
 import type { AreaInput } from '@/types/domain'
 
-const props = withDefaults(defineProps<{ mode: 'create' | 'edit'; formId?: string; idPrefix?: string }>(), {
+const props = withDefaults(defineProps<{ mode: 'create' | 'edit'; formId?: string; idPrefix?: string; typeDisabled?: boolean }>(), {
   formId: 'area-form',
   idPrefix: 'area',
+  typeDisabled: false,
 })
 const model = defineModel<AreaInput>({ required: true })
 const emit = defineEmits<{ submit: []; invalid: [] }>()
@@ -36,7 +37,7 @@ function submit(): void {
       @update:model-value="model = { ...model, nombre: $event }"
       @blur="touched = true"
     />
-    <BaseCheckbox :model-value="modelValue.esExterna" :name="externalField" label="Zona exterior o perimetral" @update:model-value="model = { ...model, esExterna: $event }" />
+    <BaseCheckbox :model-value="modelValue.esExterna" :name="externalField" label="Zona exterior o perimetral" :disabled="typeDisabled" @update:model-value="model = { ...model, esExterna: $event }" />
   </form>
 </template>
 
