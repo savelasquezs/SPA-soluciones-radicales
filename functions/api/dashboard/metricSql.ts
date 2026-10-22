@@ -2,11 +2,16 @@
 export const bogotaToday = "(now() at time zone 'America/Bogota')::date"
 export const todayStart = '('+bogotaToday+"::timestamp at time zone 'America/Bogota')"
 export const tomorrowStart = '(('+bogotaToday+"+1)::timestamp at time zone 'America/Bogota')"
+// Un abono confirmado reduce la deuda; un reporte pendiente no es recaudo.
+export const serviceBalanceSql = `greatest(0,s.valor_servicio-
+  coalesce((select sum(a.monto) from public.pago_aplicaciones a
+    join public.pagos p on p.id=a.pago_id and p.estado='CONFIRMADO'
+    where a.servicio_id=s.id),0))`
 export const serviceMetricSql = {
   today: "s.estado in ('PROGRAMADO','EN_PROCESO','FINALIZADO') and s.inicio_programado>="+todayStart+' and s.inicio_programado<'+tomorrowStart,
   delayed: "s.estado='PROGRAMADO' and s.inicio_programado<now()-interval '15 minutes'",
   performed: "s.estado='FINALIZADO'",
-  unpaid: "s.estado='FINALIZADO' and s.valor_servicio>0 and s.estado_pago<>'CONFIRMADO'",
+  unpaid: "s.estado='FINALIZADO' and s.valor_servicio>0 and "+serviceBalanceSql+'>0',
   calendarError: "s.calendar_sync_estado='ERROR'",
   next: "s.estado in ('PROGRAMADO','EN_PROCESO') and (s.estado='EN_PROCESO' or s.inicio_programado>=now()-interval '12 hours')",
   recent: "s.estado='FINALIZADO'",
