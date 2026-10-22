@@ -221,7 +221,7 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     return onlineNow() ? syncPending(serviceId) : 'pending'
   }
 
-  async function discardFailedVehicle(serviceId: string, vehicleId: string): Promise<void> {
+  async function discardFailedVehicle(serviceId: string, vehicleId: string): Promise<{ closureCancelled: boolean }> {
     const cache = caches.value[serviceId]
     if (!cache?.lock || cache.package.service.estado !== 'EN_PROCESO')
       throw new Error('Este celular no puede descartar la placa.')
