@@ -44,7 +44,10 @@ describe('technician device identity recovery', () => {
     const { getTechnicianDeviceId, restoreTechnicianDeviceIdFromCaches } =
       await import('@/services/technicianPackageService')
 
-    restoreTechnicianDeviceIdFromCaches([cached(differentDevice), cached(originalDevice, true)])
+    restoreTechnicianDeviceIdFromCaches([
+      cached(differentDevice),
+      { ...cached(originalDevice, true), deviceId: extraDevice },
+    ])
 
     expect(getTechnicianDeviceId()).toBe(originalDevice)
   })
