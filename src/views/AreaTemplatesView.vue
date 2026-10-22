@@ -28,6 +28,7 @@ const saving = ref(false)
 const search = ref('')
 const active = ref(true)
 const editorOpen = ref(false)
+const editorKey = ref(0)
 const editing = ref<AreaTemplateRecord | null>(null)
 const draft = ref<AreaTemplateInput>(blank())
 const actionTarget = ref<AreaTemplateRecord | null>(null)
@@ -64,6 +65,7 @@ function upsert(record: AreaTemplateRecord): void {
     .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
 }
 function openEditor(record: AreaTemplateRecord | null = null): void {
+  editorKey.value += 1
   editing.value = record
   draft.value = record ? toInput(record) : blank()
   editorOpen.value = true
@@ -154,7 +156,7 @@ async function toggle(): Promise<void> {
     </ResponsiveTable>
 
     <BaseDialog :model-value="editorOpen" :title="title" :close-on-escape="!saving" @update:model-value="!saving && (editorOpen = $event)">
-      <AreaTemplateForm :key="editing?.id ?? 'new'" v-model="draft" :clients="clients" :saving="saving"
+      <AreaTemplateForm :key="editorKey" v-model="draft" :clients="clients" :saving="saving"
         @submit="save" @invalid="notifications.show('Revisa los nombres, el cliente y las áreas.', 'error')" />
       <template #footer>
         <BaseButton variant="secondary" :disabled="saving" @click="editorOpen = false">Cancelar</BaseButton>
