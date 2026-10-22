@@ -78,8 +78,8 @@ describe('optimización previa al upload', () => {
 
   function mockNativePhotoCanvas(): void {
     class NativeURL extends URL {
-      static createObjectURL = vi.fn(() => 'blob:comprobante')
-      static revokeObjectURL = vi.fn()
+      static createObjectURL = vi.fn<() => string>(() => 'blob:comprobante')
+      static revokeObjectURL = vi.fn<() => void>()
     }
     class NativeImage {
       naturalWidth = 1200
@@ -91,7 +91,7 @@ describe('optimización previa al upload', () => {
     vi.stubGlobal('URL', NativeURL)
     vi.stubGlobal('Image', NativeImage)
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext')
-      .mockReturnValue({ drawImage: vi.fn() } as unknown as CanvasRenderingContext2D)
+      .mockReturnValue({ drawImage: vi.fn<() => void>() } as unknown as CanvasRenderingContext2D)
     vi.spyOn(HTMLCanvasElement.prototype, 'toBlob')
       .mockImplementation((callback) => callback(new Blob(['webp'], { type: 'image/webp' })))
   }
