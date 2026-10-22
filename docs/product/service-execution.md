@@ -24,6 +24,7 @@ Servicio
 │  ├─ Monitoreo
 │  │  └─ Puestos de monitoreo permanentes + revisión del Servicio
 │  └─ Hallazgos y evidencias
+├─ Vehículos atendidos (solo Sede de Negocio con maneja_vehiculos)
 ├─ Resumen de la ejecución
 ├─ Firma del Técnico
 └─ Firma del responsable del cliente
@@ -32,6 +33,40 @@ Servicio
 El Técnico puede desplazarse entre Áreas en cualquier orden y volver a una anterior. No existe un orden obligatorio de inspección.
 
 El orden del recorrido es editable dentro del Servicio. Lista, selector y navegación secuencial comparten la misma secuencia. El Técnico puede abrir libremente cualquier Área o pestaña sin evaluar para cambiar de sección. Los botones de avance guiado (Criterios → Puestos → Hallazgos → Siguiente Área/Cierre) comprueban la sección correspondiente y envían al primer elemento pendiente con mensaje contextual; «Anterior» nunca exige completitud. Al llegar a Cierre se ofrece la revisión global con enlaces a los pendientes, y la finalización permanece bloqueada hasta completar la matriz requerida. Reorganizar no modifica la Sede ni los datos de evaluación. Véase [service-area-route.md](service-area-route.md).
+
+## Vehículos atendidos
+
+Una Sede de Negocio puede tener muchos Vehículos registrados, pero una visita puede atender solo algunos.
+Si la Sede tiene `maneja_vehiculos` habilitado, el Servicio Principal incluye una etapa
+independiente `Servicio → Áreas → Vehículos → Cierre`. Se usa la navegación superior existente,
+extraída en un componente reutilizable. Los criterios, puestos y hallazgos continúan siendo
+subpestañas **del Área**, nunca del Vehículo.
+
+El paquete offline del Técnico incluye las placas activas de la Sede, las inactivas que
+fueron seleccionadas en ese servicio y el arreglo de IDs atendidos. El Técnico busca,
+marca y desmarca placas sin generar solicitudes por cada toque. La selección se conserva
+como borrador durable en IndexedDB. La acción **Confirmar N atendidos** guarda el conjunto
+completo en la cola idempotente y luego permite ir al cierre; puede confirmar **cero**.
+La llegada de conexión sincroniza primero vehículos nuevos, después el conjunto
+seleccionado y finalmente la firma/cierre. No se crea una tabla de atenciones.
+
+El campo existente `servicios.vehiculos_atendidos_ids_json` distingue:
+- `NULL`: sin confirmar, impide finalizar si la etapa aplica;
+- `[]`: confirmado, ningún vehículo atendido;
+- `[IDs]`: vehículos atendidos confirmados.
+
+La creación rápida del Técnico solicita solamente placa, normalizada y validada en el servidor,
+y crea un registro permanente de Sede solo durante un servicio Principal activo asignado
+y con bloqueo de edición válido. No concede CRUD administrativo. Placas duplicadas convergen
+en el registro ya existente, sin duplicar fichas. La pantalla lista solo registros de su Sede.
+No es obligatorio marcar todos los vehículos registrados. El informe y el generador de
+certificados solo usan vehículos atendidos. Un servicio anterior finalizado sin registro
+se reconoce como histórico sin confirmación, no como cero atendidos.
+
+En el cierre, la interfaz muestra la cantidad y permite volver al listado. El backend
+revalida `NULL` para impedir el cierre incluso si se manipula el frontend.
+Las Sedes no pueden cambiar la opción `maneja_vehiculos` vía API administrativa
+mientras tengan Servicios Principales en proceso.
 
 Los Servicios de Refuerzo y los Servicios residenciales conservan sus reglas simplificadas y no ejecutan este recorrido MIP completo.
 

@@ -24,6 +24,16 @@ El correo incluye un enlace de solo lectura a /informe/consulta/:token, vigente 
 - Gmail usa el outbox idempotente existente con un scope independiente. Cuando la entrega es incierta se avisa revisar Enviados antes de repetirla.
 - No se crea PDF de informe en Neon, Google Drive ni R2; los certificados mantienen su pipeline.
 
+## Vehículos atendidos
+
+Los informes de Servicios Principales con gestión vehicular presentan una sección compacta
+de **Vehículos atendidos**, con cantidad y placas de la visita; se obtiene del campo
+`servicios.vehiculos_atendidos_ids_json` y del catálogo de la Sede. Se conserva en
+la consulta pública y en el PDF impreso. No expone la flota completa ni IDs internos.
+Se diferencia claramente la confirmación de cero vehículos de un servicio histórico
+sin registro (`NULL`). Los certificados siguen emitiéndose únicamente para los vehículos
+atendidos, en lotes de hasta diez por operación y con sus reglas actuales.
+
 ## Hallazgos acumulados y seguimiento
 
 El informe describe la situación **al finalizar el servicio consultado**, no el estado actual de la sede: muestra hallazgos abiertos en ese momento (aunque provengan de visitas anteriores), nuevas aperturas y hallazgos cerrados durante esa visita. Un informe anterior no incorpora seguimientos posteriores ni cambia de estado por cierres futuros.

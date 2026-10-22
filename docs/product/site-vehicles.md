@@ -6,7 +6,11 @@ y certificados, BaseInput, BaseButton, ConfirmDialog y los toasts globales.
 
 ## Datos y permisos
 
-- Solo el rol Administrador puede consultar o mutar Vehículos.
+- El rol Administrador conserva el CRUD completo de Sede.
+- Un Técnico **solo** puede listar vehículos mediante el paquete de su Servicio asignado,
+  crear una placa y confirmar IDs atendidos mediante los endpoints de ese Servicio en
+  estado `EN_PROCESO`, con bloqueo de celular, auditoría e idempotencia. No puede editar,
+  desactivar, eliminar ni acceder al CRUD administrativo de otra Sede.
 - La tabla existente `public.vehiculos` conserva `id, sede_id, placa, activo`; la migración
   añade `version`, `updated_at` y un trigger que normaliza la placa a mayúsculas
   desde PostgreSQL (sin confiar en el cliente HTTP).
@@ -31,6 +35,21 @@ o descargarlo. La lectura `inline` no cambia el comportamiento de descarga previ
 Esta funcionalidad no genera ni envía certificados. La vigencia continúa configurada
 en la Sede, las plantillas permanecen globales y el seguimiento del servicio usa
 IDs de Vehículos en `vehiculos_atendidos_ids_json`.
+
+## Ejecución móvil del Técnico
+
+En el Servicio Principal de una Sede con `maneja_vehiculos`, el Técnico ve la sección
+**Vehículos** entre el recorrido por Áreas y el Cierre. Se reutiliza el catálogo permanente,
+con búsqueda y filtros compactos, contador de seleccionados, selección por toque y alta rápida.
+Un Servicio puede atender una fracción arbitraria de una flota grande.
+La pantalla ofrece `Todos` / `Atendidos` y muestra progresivamente lotes de 40
+sin descargar otra vez las placas al filtrar. Se conservan borradores IndexedDB, y
+la confirmación explícita envía el conjunto completo de IDs como una operación
+idempotente; no se envía una petición por toque. Los nuevos registros se procesan
+antes de su selección al reconectar. `NULL` en el Servicio significa `sin confirmar`
+y `[]` significa `confirmado, sin vehículos atendidos`.
+La acción de cierre no está disponible mientras quede sin confirmar.
+Los Refuerzos y servicios residenciales mantienen su ejecución simplificada.
 
 ## Manual en video
 
