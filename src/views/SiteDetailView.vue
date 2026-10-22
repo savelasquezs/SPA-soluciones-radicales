@@ -46,10 +46,9 @@ const tab = ref<Tab>(initialTab())
 const visited = ref({ devices: false, findings: initialTab() === 'findings' })
 const siteFormOpen = ref(false)
 const siteForm = ref<SiteInput>(blankSite())
-const newArea = ref<AreaInput>(blankArea())
-const areaCreateOpen = ref(false)
+const areaDraft = ref<AreaInput>(blankArea())
+const areaEditorOpen = ref(false)
 const editingArea = ref<AreaRecord | null>(null)
-const editAreaForm = ref<AreaInput>(blankArea())
 const selectedArea = ref<AreaRecord | null>(null)
 const deleteAreaTarget = ref<AreaRecord | null>(null)
 const dependencyAreaTarget = ref<AreaRecord | null>(null)
@@ -172,39 +171,30 @@ async function applyTemplate(): Promise<void> {
 }
 
 function openAreaCreate(): void {
-  newArea.value = blankArea()
-  areaCreateOpen.value = true
-}
-
-async function createArea(): Promise<void> {
-  if (saving.value) return
-  saving.value = true
-  try {
-    await store.createArea(siteId.value, newArea.value)
-    areaCreateOpen.value = false
-    newArea.value = blankArea()
-    notifications.show('Área creada correctamente.', 'success')
-  } catch (error) { notifications.show(message(error, 'No fue posible crear el Área'), 'error') }
-  finally { saving.value = false }
+  editingArea.value = null
+  areaDraft.value = blankArea()
+  areaEditorOpen.value = true
 }
 
 function openAreaEdit(area: AreaRecord): void {
   editingArea.value = area
-  editAreaForm.value = { nombre: area.nombre, esExterna: area.esExterna, activo: area.activo, version: area.version }
+  areaDraft.value = { nombre: area.nombre, esExterna: area.esExterna, activo: area.activo, version: area.version }
   selectedArea.value = null
+  areaEditorOpen.value = true
 }
 
-async function updateArea(): Promise<void> {
-  if (!editingArea.value || saving.value) return
+async function saveArea(): Promise<void> {
+  if (saving.value) return
   saving.value = true
   try {
-    const updated = await store.updateArea(editingArea.value.id, editAreaForm.value)
-    if (selectedArea.value?.id === updated.id) selectedArea.value = updated
+    if (editingArea.value) await store.updateArea(editingArea.value.id, areaDraft.value)
+    else await store.createArea(siteId.value, areaDraft.value)
+    notifications.show(editingArea.value ? 'Área actualizada correctamente.' : 'Área creada correctamente.', 'success')
+    areaEditorOpen.value = false
     editingArea.value = null
-    notifications.show('Área actualizada correctamente.', 'success')
   } catch (error) {
     if (error instanceof ApiClientError && error.code === 'VERSION_CONFLICT') await loadAreas(true)
-    notifications.show(message(error, 'No fue posible actualizar el Área'), 'error')
+    notifications.show(message(error, 'No fue posible guardar el Área'), 'error')
   } finally { saving.value = false }
 }
 
@@ -330,11 +320,16 @@ function formatMoney(value: number): string { return new Intl.NumberFormat('es-C
     <SiteMonitoringPanel v-if="visited.devices" v-show="tab === 'devices'" :site-id="siteId" :active="tab === 'devices'" />
     <SiteFindingsPanel v-if="visited.findings" v-show="tab === 'findings'" :site-id="siteId" :active="tab === 'findings'" />
 
-    <BaseDialog :model-value="areaCreateOpen" title="Agregar Área" @update:model-value="!saving && (areaCreateOpen = $event)">
-      <AreaForm v-model="newArea" mode="create" form-id="area-create-form" id-prefix="new-area" @submit="createArea" @invalid="notifications.show('Ingresa el nombre del Área.', 'error')" />
+    <BaseDialog :model-value="areaEditorOpen" :title="editingArea ? 'Editar Área' : 'Agregar Área'"
+      :close-on-escape="!saving" @update:model-value="!saving && (areaEditorOpen = $event)">
+      <AreaForm :key="editingArea?.id ?? 'new'" v-model="areaDraft" :mode="editingArea ? 'edit' : 'create'"
+        form-id="site-area-form" id-prefix="site-area" @submit="saveArea"
+        @invalid="notifications.show('Ingresa el nombre del Área.', 'error')" />
       <template #footer>
-        <BaseButton variant="secondary" :disabled="saving" @click="areaCreateOpen = false">Cancelar</BaseButton>
-        <BaseButton type="submit" form="area-create-form" :loading="saving">Agregar Área</BaseButton>
+        <BaseButton variant="secondary" :disabled="saving" @click="areaEditorOpen = false">Cancelar</BaseButton>
+        <BaseButton type="submit" form="site-area-form" :loading="saving">
+          {{ editingArea ? 'Guardar cambios' : 'Agregar Área' }}
+        </BaseButton>
       </template>
     </BaseDialog>
     <BaseDialog :model-value="templateApplyOpen" title="Aplicar plantilla" size="compact" :close-on-escape="!templateSaving"
@@ -354,7 +349,7 @@ function formatMoney(value: number): string { return new Intl.NumberFormat('es-C
       </template>
     </BaseDialog>
     <BaseDialog :model-value="siteFormOpen" title="Editar Sede" @update:model-value="!saving && (siteFormOpen = $event)"><SiteForm v-model="siteForm" mode="edit" :saving="saving" :client-name="client.nombre" @submit="saveSite" @invalid="notifications.show('Revisa los campos marcados.', 'error')" @file-selected="selectSiteFile" @view-plan="siteForm.planoStoragePath && openPrivateFile(siteForm.planoStoragePath)" /><template #footer><BaseButton variant="secondary" :disabled="saving" @click="siteFormOpen = false">Cancelar</BaseButton><BaseButton type="submit" form="site-form" :loading="saving">{{ savePhaseLabel ?? 'Guardar cambios' }}</BaseButton></template></BaseDialog>
-    <BaseDialog :model-value="Boolean(editingArea)" title="Editar Área" @update:model-value="!$event && (editingArea = null)"><AreaForm v-model="editAreaForm" mode="edit" form-id="area-edit-form" id-prefix="edit-area" @submit="updateArea" @invalid="notifications.show('Ingresa el nombre del Área.', 'error')" /><template #footer><BaseButton variant="secondary" @click="editingArea = null">Cancelar</BaseButton><BaseButton type="submit" form="area-edit-form" :loading="saving">Guardar cambios</BaseButton></template></BaseDialog>
+    
     <ConfirmDialog :open="Boolean(deleteAreaTarget)" title="Eliminar Área" :message="`Se eliminará ${deleteAreaTarget?.nombre ?? 'el Área'} si no tiene historial ni dependencias.`" confirm-label="Eliminar" danger :loading="saving" @cancel="deleteAreaTarget = null" @confirm="removeArea" />
     <ConfirmDialog :open="Boolean(dependencyAreaTarget)" title="Desactivar Área" message="El Área tiene historial o dependencias. Se conservará y quedará inactiva." confirm-label="Desactivar" danger :loading="saving" @cancel="dependencyAreaTarget = null" @confirm="dependencyAreaTarget && setAreaActive(dependencyAreaTarget, false)" />
   </div>
