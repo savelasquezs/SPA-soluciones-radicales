@@ -51,7 +51,7 @@ export async function loadServiceResultsData(client:PoolClient,serviceId:string)
         select v.placa from public.vehiculos v where v.sede_id=$1
           and v.id=any($2::uuid[]) order by v.placa,v.id
       `, [sv.sedeId, sv.attendedVehicleIds])).rows : []
-  const attendedVehicles = sv.attendedVehicleIds === null ? null : vehicleRows.map(vehicle => vehicle.placa)
+  const attendedVehicles = sv.attendedVehicleIds == null ? null : vehicleRows.map(vehicle => vehicle.placa)
   const areas=(await client.query<{id:string;nombre:string;sinAcceso:boolean;motivo:string|null;fotos:unknown}>(`
     select id,nombre_snapshot as nombre,sin_acceso as "sinAcceso",sin_acceso_descripcion as motivo,
       case when jsonb_array_length(coalesce(to_jsonb(sa)->'sin_acceso_evidencias_storage_paths','[]'::jsonb))>0 then to_jsonb(sa)->'sin_acceso_evidencias_storage_paths'
@@ -218,7 +218,7 @@ export async function loadServiceResultsData(client:PoolClient,serviceId:string)
      firmaTecnicoVencida:sv.firmaTecnicoVencida,firmaClienteVencida:sv.firmaClienteVencida,
     inicioProgramado:sv.inicioProgramado.toISOString(),inicioReal:sv.inicioReal.toISOString(),finReal:sv.finReal.toISOString(),
     productos,areas,
-    ...(sv.vehicleEnabled || sv.attendedVehicleIds !== null
+    ...(sv.vehicleEnabled || sv.attendedVehicleIds != null
       ? { vehiclesEnabled: true, attendedVehicles } : {}),
     historico:historico.map(h=>({solicitud:h.solicitud,fecha:new Date(h.fecha).toISOString(),
       cumplimiento:h.cumplimiento==null?null:Number(h.cumplimiento),capturas:Number(h.capturas)||0,
