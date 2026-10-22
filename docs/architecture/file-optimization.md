@@ -15,6 +15,24 @@ Flujo: archivo → comprimir localmente → autorizar → PUT privado a R2.
 - DOC/DOCX y formatos fuera del motor siguen el flujo existente sin transformación; el backend conserva la autoridad sobre extensiones permitidas.
 - Se usa el original si la salida no es más pequeña. Si el proceso falla, no se solicita URL ni se sube silenciosamente el original.
 
+### Recuperación de fotografías de servicio en navegadores móviles
+
+Para `SERVICE_PHOTO` (evidencias técnicas y comprobantes de pago), si el Web Worker
+falla por falta de compatibilidad con `ImageBitmap` o `OffscreenCanvas`, la misma
+función de optimización reintenta el procesamiento con Canvas en la página.
+Antes de hacerlo valida la firma del archivo JPG/PNG/WebP y que el navegador
+pueda decodificarlo. Mantiene dimensiones máximas, transparencia donde aplica,
+el límite de 10 MiB del backend y el MIME/extensión del resultado. Solo conserva
+el original **después de una decodificación y conversión válidas** cuando el
+resultado no reduce tamaño; no se suben a ciegas archivos defectuosos ni se
+aplica este rescate a PDF/documentos.
+
+La pantalla del comprobante utiliza `TechnicianEvidencePicker` con una imagen
+máxima: cámara, galería, previsualización, dibujo y recorte. Si falla la subida
+a R2, el cobro reportado continúa pendiente de revisión y puede reintentarse
+con la misma imagen, sin crear otro pago. El servidor valida con HEAD que el
+objeto firmado exista antes de guardar la referencia.
+
 Se usa Canvas + pdf-lib directamente en lugar de añadir una segunda biblioteca general de compresión: permite controlar explícitamente las excepciones documentales y mantener un único worker, sin descargas en runtime desde terceros.
 
 ## Límites y alcance

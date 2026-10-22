@@ -2,7 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { RefreshCw } from 'lucide-vue-next'
 import BaseButton from '@/components/base/BaseButton.vue'
-import BaseFileUpload from '@/components/base/BaseFileUpload.vue'
+import TechnicianEvidencePicker from '@/components/domain/services/TechnicianEvidencePicker.vue'
 import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import ServicePage from '@/components/domain/services/ServicePage.vue'
 import StatusBadge from '@/components/base/StatusBadge.vue'
@@ -13,7 +13,7 @@ import type { Pago, TecnicoCaja } from '@/types/finance'
 const notifications=useNotificationsStore()
 const loading=ref(true),busy=ref(''),error=ref('')
 const balance=ref<TecnicoCaja|null>(null),payments=ref<Pago[]>([])
-const files=ref<Record<string,File|null>>({})
+const photos=ref<Record<string,File[]>>({})
 const fmt=(v:number)=>new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(v)
 const date=(iso:string)=>new Intl.DateTimeFormat('es-CO',{dateStyle:'medium',timeStyle:'short',timeZone:'America/Bogota'}).format(new Date(iso))
 onMounted(()=>{void refresh()})
@@ -24,10 +24,10 @@ async function refresh():Promise<void>{
   finally{loading.value=false}
 }
 async function attach(p:Pago):Promise<void>{
-  const file=files.value[p.id]
+  const file=photos.value[p.id]?.[0]
   if(!file||busy.value)return
   busy.value=p.id
-  try{await uploadPaymentProof(p.id,file);files.value[p.id]=null;notifications.show('Comprobante adjuntado.','success');await refresh()}
+  try{await uploadPaymentProof(p.id,file);delete photos.value[p.id];notifications.show('Comprobante adjuntado.','success');await refresh()}
   catch(e){notifications.show(e instanceof Error?e.message:'No fue posible subir el comprobante.','error')}
   finally{busy.value=''}
 }
@@ -59,9 +59,9 @@ async function openProof(p:Pago):Promise<void>{
           <template v-if="p.metodo==='TRANSFERENCIA'">
             <BaseButton v-if="p.comprobanteDisponible" size="compact" variant="ghost" @click="openProof(p)">Ver comprobante</BaseButton>
             <div v-else-if="p.estado==='PENDIENTE'" class="cash-upload">
-              <BaseFileUpload :model-value="files[p.id]??null" :name="'cash-proof-'+p.id" label="Adjuntar comprobante" size="compact" accept=".jpg,.jpeg,.png,.webp"
-                @update:model-value="files[p.id]=$event"/>
-              <BaseButton variant="secondary" size="compact" :loading="busy===p.id" :disabled="!files[p.id]" @click="attach(p)">Subir</BaseButton>
+              <TechnicianEvidencePicker :model-value="photos[p.id]??[]" :name="'cash-proof-'+p.id" label="Comprobante de la transferencia" :max="1" :disabled="Boolean(busy)"
+                @update:model-value="photos[p.id]=$event"/>
+              <BaseButton variant="secondary" size="compact" :loading="busy===p.id" :disabled="!photos[p.id]?.length" @click="attach(p)">Subir</BaseButton>
             </div>
           </template>
         </article>
