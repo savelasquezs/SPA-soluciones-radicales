@@ -41,10 +41,10 @@ export function getTechnicianDeviceId(): string {
  * A new phone has no matching IndexedDB cache, so it cannot inherit the lock.
  */
 export function restoreTechnicianDeviceIdFromCaches(caches: TechnicianPackageCache[]): void {
-  const active = caches.filter(cache => cache.package.service.estado === 'EN_PROCESO'
-    && cache.lock?.deviceId === cache.deviceId)
-  const candidates = active.length ? active : caches
-  const knownIds = new Set(candidates.map(cache => cache.deviceId))
+  const active = caches.filter(cache => cache.package.service.estado === 'EN_PROCESO' && cache.lock)
+  const knownIds = new Set(active.length
+    ? active.map(cache => cache.lock!.deviceId)
+    : caches.map(cache => cache.deviceId))
   if (knownIds.size !== 1) return
   const [knownId] = knownIds
   if (!isServiceId(knownId)) return
