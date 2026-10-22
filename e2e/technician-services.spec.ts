@@ -804,6 +804,9 @@ test('vehicle fleet: a drafted plate persists offline across reload and syncs wh
   await page.getByRole('button', { name: 'Iniciar servicio' }).click()
   await page.getByRole('link', { name: 'Vehículos' }).click()
   await page.getByRole('button', { name: 'ABC001' }).click()
+  // The checkbox is durably saved in IndexedDB before the technician leaves.
+  await expect(page.getByText('Selección guardada en este celular.')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'ABC001' })).toHaveAttribute('aria-pressed', 'true')
   await page.evaluate(() => {
     Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false })
     window.dispatchEvent(new Event('offline'))
