@@ -5,6 +5,7 @@ import { Pencil, Plus, RotateCcw, Trash2, X } from 'lucide-vue-next'
 
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDialog from '@/components/base/BaseDialog.vue'
+import BaseSelect from '@/components/base/BaseSelect.vue'
 import ConfirmDialog from '@/components/base/ConfirmDialog.vue'
 import EmptyState from '@/components/base/EmptyState.vue'
 import ErrorState from '@/components/base/ErrorState.vue'
@@ -20,11 +21,12 @@ import AreaForm from '@/components/domain/clients/AreaForm.vue'
 import SiteForm from '@/components/domain/clients/SiteForm.vue'
 import SiteVehiclesPanel from '@/components/domain/clients/SiteVehiclesPanel.vue'
 import { ApiClientError } from '@/services/apiService'
+import { applyTemplateToSite, listAreaTemplates } from '@/services/areaTemplatesService'
 import { getSite } from '@/services/clientsService'
 import { deleteMasterFile, getMasterFileUrl, uploadMasterFile } from '@/services/filesService'
 import { useClientsStore } from '@/stores/clients'
 import { useNotificationsStore } from '@/stores/notifications'
-import type { AreaInput, AreaRecord, SiteInput, SiteRecord } from '@/types/domain'
+import type { AreaInput, AreaRecord, AreaTemplateRecord, SiteInput, SiteRecord } from '@/types/domain'
 
 type Tab = 'summary' | 'areas' | 'vehicles' | 'devices' | 'findings' | 'history'
 
@@ -44,16 +46,21 @@ const tab = ref<Tab>(initialTab())
 const visited = ref({ devices: false, findings: initialTab() === 'findings' })
 const siteFormOpen = ref(false)
 const siteForm = ref<SiteInput>(blankSite())
-const newArea = ref<AreaInput>(blankArea())
-const areaCreateOpen = ref(false)
+const areaDraft = ref<AreaInput>(blankArea())
+const areaEditorOpen = ref(false)
 const editingArea = ref<AreaRecord | null>(null)
-const editAreaForm = ref<AreaInput>(blankArea())
 const selectedArea = ref<AreaRecord | null>(null)
 const deleteAreaTarget = ref<AreaRecord | null>(null)
 const dependencyAreaTarget = ref<AreaRecord | null>(null)
 const saving = ref(false)
 const areasLoading = ref(false)
 const sitePlanFile = ref<File | null>(null)
+const templateApplyOpen = ref(false)
+const templateOptions = ref<AreaTemplateRecord[]>([])
+const templateSelectedId = ref('')
+const templateLoading = ref(false)
+const templateSaving = ref(false)
+const selectedTemplate = computed(() => templateOptions.value.find(item => item.id === templateSelectedId.value) ?? null)
 let loadRequest = 0
 
 onMounted(load)
@@ -132,40 +139,62 @@ async function saveSite(): Promise<void> {
   }
 }
 
-function openAreaCreate(): void {
-  newArea.value = blankArea()
-  areaCreateOpen.value = true
+async function openTemplateApply(): Promise<void> {
+  const current = site.value
+  if (!current) return
+  templateSelectedId.value = ''
+  templateOptions.value = []
+  templateApplyOpen.value = true
+  templateLoading.value = true
+  try {
+    const options = await listAreaTemplates(current.clientId, true)
+    if (siteId.value === current.id) templateOptions.value = options
+  } catch (error) { notifications.show(message(error, 'No fue posible cargar las plantillas.'), 'error') }
+  finally { templateLoading.value = false }
 }
 
-async function createArea(): Promise<void> {
-  if (saving.value) return
-  saving.value = true
+async function applyTemplate(): Promise<void> {
+  if (templateSaving.value || !templateSelectedId.value) return
+  templateSaving.value = true
   try {
-    await store.createArea(siteId.value, newArea.value)
-    areaCreateOpen.value = false
-    newArea.value = blankArea()
-    notifications.show('Área creada correctamente.', 'success')
-  } catch (error) { notifications.show(message(error, 'No fue posible crear el Área'), 'error') }
-  finally { saving.value = false }
+    const result = await applyTemplateToSite(siteId.value, templateSelectedId.value)
+    templateApplyOpen.value = false
+    notifications.show(result.created
+      ? `${result.created} área(s) agregada(s). ${result.skipped} existente(s) sin cambios.`
+      : 'Todas las áreas de la plantilla ya existían. No se modificó ninguna.', 'success')
+    try {
+      await store.loadAreas(siteId.value, true)
+      store.upsertSite(await getSite(siteId.value))
+    } catch { notifications.show('Se aplicó la plantilla, pero no se pudo actualizar la lista. Vuelve a abrir Áreas.', 'warning') }
+  } catch (error) { notifications.show(message(error, 'No fue posible aplicar la plantilla.'), 'error') }
+  finally { templateSaving.value = false }
+}
+
+function openAreaCreate(): void {
+  editingArea.value = null
+  areaDraft.value = blankArea()
+  areaEditorOpen.value = true
 }
 
 function openAreaEdit(area: AreaRecord): void {
   editingArea.value = area
-  editAreaForm.value = { nombre: area.nombre, esExterna: area.esExterna, activo: area.activo, version: area.version }
+  areaDraft.value = { nombre: area.nombre, esExterna: area.esExterna, activo: area.activo, version: area.version }
   selectedArea.value = null
+  areaEditorOpen.value = true
 }
 
-async function updateArea(): Promise<void> {
-  if (!editingArea.value || saving.value) return
+async function saveArea(): Promise<void> {
+  if (saving.value) return
   saving.value = true
   try {
-    const updated = await store.updateArea(editingArea.value.id, editAreaForm.value)
-    if (selectedArea.value?.id === updated.id) selectedArea.value = updated
+    if (editingArea.value) await store.updateArea(editingArea.value.id, areaDraft.value)
+    else await store.createArea(siteId.value, areaDraft.value)
+    notifications.show(editingArea.value ? 'Área actualizada correctamente.' : 'Área creada correctamente.', 'success')
+    areaEditorOpen.value = false
     editingArea.value = null
-    notifications.show('Área actualizada correctamente.', 'success')
   } catch (error) {
     if (error instanceof ApiClientError && error.code === 'VERSION_CONFLICT') await loadAreas(true)
-    notifications.show(message(error, 'No fue posible actualizar el Área'), 'error')
+    notifications.show(message(error, 'No fue posible guardar el Área'), 'error')
   } finally { saving.value = false }
 }
 
@@ -228,7 +257,10 @@ function formatMoney(value: number): string { return new Intl.NumberFormat('es-C
     <section v-else-if="tab === 'areas'" class="areas-layout">
       <div class="areas-toolbar">
         <div><strong>Áreas</strong><span>{{ areas.length }} {{ areas.length === 1 ? 'área' : 'áreas' }}</span></div>
-        <BaseButton size="compact" @click="openAreaCreate"><Plus :size="16" />Agregar Área</BaseButton>
+        <div class="areas-toolbar__actions">
+          <BaseButton size="compact" variant="secondary" @click="openTemplateApply">Aplicar plantilla</BaseButton>
+          <BaseButton size="compact" @click="openAreaCreate"><Plus :size="16" />Agregar Área</BaseButton>
+        </div>
       </div>
       <div class="areas-panel">
         <LoadingSkeleton v-if="areasLoading" label="Cargando Áreas" :lines="5" />
@@ -288,15 +320,36 @@ function formatMoney(value: number): string { return new Intl.NumberFormat('es-C
     <SiteMonitoringPanel v-if="visited.devices" v-show="tab === 'devices'" :site-id="siteId" :active="tab === 'devices'" />
     <SiteFindingsPanel v-if="visited.findings" v-show="tab === 'findings'" :site-id="siteId" :active="tab === 'findings'" />
 
-    <BaseDialog :model-value="areaCreateOpen" title="Agregar Área" @update:model-value="!saving && (areaCreateOpen = $event)">
-      <AreaForm v-model="newArea" mode="create" form-id="area-create-form" id-prefix="new-area" @submit="createArea" @invalid="notifications.show('Ingresa el nombre del Área.', 'error')" />
+    <BaseDialog :model-value="areaEditorOpen" :title="editingArea ? 'Editar Área' : 'Agregar Área'"
+      :close-on-escape="!saving" @update:model-value="!saving && (areaEditorOpen = $event)">
+      <AreaForm :key="editingArea?.id ?? 'new'" v-model="areaDraft" :mode="editingArea ? 'edit' : 'create'"
+        form-id="site-area-form" id-prefix="site-area" @submit="saveArea"
+        @invalid="notifications.show('Ingresa el nombre del Área.', 'error')" />
       <template #footer>
-        <BaseButton variant="secondary" :disabled="saving" @click="areaCreateOpen = false">Cancelar</BaseButton>
-        <BaseButton type="submit" form="area-create-form" :loading="saving">Agregar Área</BaseButton>
+        <BaseButton variant="secondary" :disabled="saving" @click="areaEditorOpen = false">Cancelar</BaseButton>
+        <BaseButton type="submit" form="site-area-form" :loading="saving">
+          {{ editingArea ? 'Guardar cambios' : 'Agregar Área' }}
+        </BaseButton>
+      </template>
+    </BaseDialog>
+    <BaseDialog :model-value="templateApplyOpen" title="Aplicar plantilla" size="compact" :close-on-escape="!templateSaving"
+      @update:model-value="!templateSaving && (templateApplyOpen = $event)">
+      <div class="template-apply">
+        <BaseSelect v-model="templateSelectedId" name="apply-area-template" label="Plantilla" :disabled="templateLoading">
+          <option value="">Selecciona una plantilla</option>
+          <option v-for="item in templateOptions" :key="item.id" :value="item.id">{{ item.nombre }} · {{ item.areas.length }} áreas</option>
+        </BaseSelect>
+        <p v-if="templateLoading">Cargando plantillas…</p>
+        <p v-else-if="selectedTemplate">Se añadirán únicamente las áreas que no existan. No se modifican áreas existentes, su historial ni sus puestos.</p>
+        <p v-else-if="!templateOptions.length">No hay plantillas activas disponibles para este cliente.</p>
+      </div>
+      <template #footer>
+        <BaseButton variant="secondary" :disabled="templateSaving" @click="templateApplyOpen = false">Cancelar</BaseButton>
+        <BaseButton :disabled="!templateSelectedId || templateLoading" :loading="templateSaving" @click="applyTemplate">Aplicar</BaseButton>
       </template>
     </BaseDialog>
     <BaseDialog :model-value="siteFormOpen" title="Editar Sede" @update:model-value="!saving && (siteFormOpen = $event)"><SiteForm v-model="siteForm" mode="edit" :saving="saving" :client-name="client.nombre" @submit="saveSite" @invalid="notifications.show('Revisa los campos marcados.', 'error')" @file-selected="selectSiteFile" @view-plan="siteForm.planoStoragePath && openPrivateFile(siteForm.planoStoragePath)" /><template #footer><BaseButton variant="secondary" :disabled="saving" @click="siteFormOpen = false">Cancelar</BaseButton><BaseButton type="submit" form="site-form" :loading="saving">{{ savePhaseLabel ?? 'Guardar cambios' }}</BaseButton></template></BaseDialog>
-    <BaseDialog :model-value="Boolean(editingArea)" title="Editar Área" @update:model-value="!$event && (editingArea = null)"><AreaForm v-model="editAreaForm" mode="edit" form-id="area-edit-form" id-prefix="edit-area" @submit="updateArea" @invalid="notifications.show('Ingresa el nombre del Área.', 'error')" /><template #footer><BaseButton variant="secondary" @click="editingArea = null">Cancelar</BaseButton><BaseButton type="submit" form="area-edit-form" :loading="saving">Guardar cambios</BaseButton></template></BaseDialog>
+    
     <ConfirmDialog :open="Boolean(deleteAreaTarget)" title="Eliminar Área" :message="`Se eliminará ${deleteAreaTarget?.nombre ?? 'el Área'} si no tiene historial ni dependencias.`" confirm-label="Eliminar" danger :loading="saving" @cancel="deleteAreaTarget = null" @confirm="removeArea" />
     <ConfirmDialog :open="Boolean(dependencyAreaTarget)" title="Desactivar Área" message="El Área tiene historial o dependencias. Se conservará y quedará inactiva." confirm-label="Desactivar" danger :loading="saving" @cancel="dependencyAreaTarget = null" @confirm="dependencyAreaTarget && setAreaActive(dependencyAreaTarget, false)" />
   </div>
@@ -325,6 +378,10 @@ function formatMoney(value: number): string { return new Intl.NumberFormat('es-C
 .areas-toolbar { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem; }
 .areas-toolbar > div { display:flex; align-items:center; flex-wrap:wrap; gap:0.65rem; }
 .areas-toolbar > div > span { color:var(--text-secondary); font-size:0.82rem; }
+.areas-toolbar__actions { display:flex; align-items:center; gap:0.35rem; flex-wrap:wrap; }
+.template-apply { display:grid; gap:0.65rem; }
+.template-apply p { font-size:0.8rem; color:var(--text-secondary); margin:0; }
+.template-apply :deep(select) { min-height:36px; padding:0.4rem 0.6rem; }
 .areas-panel { min-width:0; border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--surface); padding:0.7rem; }
 .history-card { min-width:0; }
 .areas-panel { padding:0; overflow:hidden; }

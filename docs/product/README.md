@@ -38,7 +38,7 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 | `negocios` | Cliente tipo Negocio o Casa; conserva identidad, estado y configuración compartida |
 | `sedes` | Lugar de servicio, contacto, precio y configuración operativa |
 | `areas` | Espacios de una Sede utilizados en evaluación MIP y monitoreo |
-| `plantillas_areas` | Conjuntos reutilizables de Áreas globales o privadas |
+| `plantillas_areas` | Conjuntos reutilizables de Áreas globales o privadas ([flujo](area-templates.md)) |
 | `servicios` | Programación, ejecución, pago, firmas, informe y publicación |
 | Próximos por confirmar | Preagenda derivada de periodicidad para contacto y confirmación antes de crear un Servicio |
 | `criterios_mip` | Catálogo administrable de criterios de inspección aplicables a Áreas |

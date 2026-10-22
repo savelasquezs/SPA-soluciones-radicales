@@ -45,6 +45,7 @@ const router = createRouter({
         { path: 'perfil', name: 'my-profile', component: () => import('@/views/ProfileView.vue'), meta: { breadcrumb: 'Mi perfil' } },
         { path: 'usuarios', name: 'users', component: () => import('@/views/UsersView.vue'), meta: { roles: adminOnly, breadcrumb: 'Administración / Usuarios' } },
         { path: 'configuracion', name: 'settings', component: () => import('@/views/SettingsView.vue'), meta: { roles: adminOnly } },
+        { path: 'configuracion/plantillas-areas', name: 'area-templates', component: () => import('@/views/AreaTemplatesView.vue'), meta: { roles: adminOnly, breadcrumb: [{ label: 'Configuración', to: '/configuracion' }, { label: 'Plantillas de áreas' }] } },
         { path: 'configuracion/catalogos', name: 'catalogs', component: () => import('@/views/MipCatalogsView.vue'), meta: { roles: adminOnly, breadcrumb: [{ label: 'Configuración', to: '/configuracion' }, { label: 'Catálogos MIP' }] } },
         { path: 'configuracion/certificados', name: 'certificates', component: () => import('@/views/CertificatesView.vue'), meta: { roles: adminOnly, breadcrumb: [{ label: 'Configuración', to: '/configuracion' }, { label: 'Certificados' }] } },
         { path: 'integraciones', name: 'integrations', component: () => import('@/views/IntegrationsView.vue'), meta: { roles: adminOnly, breadcrumb: 'Integraciones' } },

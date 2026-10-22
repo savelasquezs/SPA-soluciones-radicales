@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { Boxes, FileCheck2, Plug } from 'lucide-vue-next'
+import { Boxes, FileCheck2, Layers3, Plug } from 'lucide-vue-next'
 import SettingsEntry from '@/components/layout/SettingsEntry.vue'
 </script>
 <template>
   <section class="settings-page">
     <h1>Configuración</h1>
     <div class="settings-groups">
-      <section aria-labelledby="settings-operation"><h2 id="settings-operation">Operación</h2><div class="settings-list"><SettingsEntry to="/configuracion/catalogos" title="Catálogos MIP" description="Productos, trampas y plagas"><template #icon><Boxes :size="22" /></template></SettingsEntry></div></section>
+      <section aria-labelledby="settings-operation"><h2 id="settings-operation">Operación</h2><div class="settings-list"><SettingsEntry to="/configuracion/catalogos" title="Catálogos MIP" description="Productos, trampas y plagas"><template #icon><Boxes :size="22" /></template></SettingsEntry><SettingsEntry to="/configuracion/plantillas-areas" title="Plantillas de áreas" description="Áreas globales y por cliente"><template #icon><Layers3 :size="22" /></template></SettingsEntry></div></section>
       <section aria-labelledby="settings-documents"><h2 id="settings-documents">Documentos</h2><div class="settings-list"><SettingsEntry to="/configuracion/certificados" title="Certificados" description="Plantillas, generación y envío"><template #icon><FileCheck2 :size="22" /></template></SettingsEntry></div></section>
       <section aria-labelledby="settings-integrations"><h2 id="settings-integrations">Integraciones</h2><div class="settings-list"><SettingsEntry to="/integraciones" title="Integraciones" description="Google, Calendar y conexiones"><template #icon><Plug :size="22" /></template></SettingsEntry></div></section>
     </div>

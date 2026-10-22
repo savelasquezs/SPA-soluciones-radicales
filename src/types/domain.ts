@@ -126,7 +126,22 @@ export type SiteInput = Pick<
   | 'vigenciaCertificadoVehiculoMeses'
   | 'duracionServicioMinutos'
   | 'activo'
-> & { version?: number }
+> & { version?: number; areaTemplateId?: string | null }
+
+export type AreaTemplateArea = { nombre: string; esExterna: boolean }
+export type AreaTemplateScope = 'GLOBAL' | 'PRIVADA'
+export type AreaTemplateRecord = {
+  id: string
+  nombre: string
+  alcance: AreaTemplateScope
+  clientId: string | null
+  clientName: string | null
+  areas: AreaTemplateArea[]
+  activo: boolean
+  version: number
+}
+export type AreaTemplateInput = Omit<AreaTemplateRecord, 'id' | 'clientName' | 'version'> & { version?: number }
+export type AreaTemplateApplyResult = { created: number; skipped: number }
 
 export type AreaRecord = {
   id: string
