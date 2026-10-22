@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { ClipboardCheck, Clock3, CloudOff, Map, MapPin, PackageCheck, RefreshCw, Wifi } from 'lucide-vue-next'
+import { ClipboardCheck, Clock3, CloudOff, Map, MapPin, PackageCheck, Plus, RefreshCw, Wifi } from 'lucide-vue-next'
 import { useRoute, useRouter } from 'vue-router'
 import BaseButton from '@/components/base/BaseButton.vue'
 import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
@@ -10,6 +10,7 @@ import StatusPanel from '@/components/base/StatusPanel.vue'
 import ServicePage from '@/components/domain/services/ServicePage.vue'
 import TechnicianPaymentDialog from '@/components/domain/services/TechnicianPaymentDialog.vue'
 import TechnicianProductsList from '@/components/domain/services/TechnicianProductsList.vue'
+import TechnicianSiteAreaDialog from '@/components/domain/services/TechnicianSiteAreaDialog.vue'
 import TechnicianClientContact from '@/components/domain/services/TechnicianClientContact.vue'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { formatTechnicianDateTime, orderedTechnicianAreas, technicianAreaResolved, technicianServiceStateLabel, technicianServiceStateTone } from '@/helpers/technicianServices'
@@ -23,11 +24,15 @@ const notifications = useNotificationsStore()
 const { online } = useNetworkStatus()
 const { currentPackage: packageValue, currentCache, packageLoading, packageError, currentFromCache, action, pendingSyncCount } = storeToRefs(services)
 const paymentOpen = ref(false)
+const newAreaOpen = ref(false)
 const viewError = ref('')
 const serviceId = computed(() => String(route.params.id ?? ''))
 const overviewRequested = computed(() => route.query.overview === '1')
 const localLock = computed(() => currentCache.value?.lock ?? null)
 const orderedAreas = computed(() => orderedTechnicianAreas(packageValue.value?.areas ?? []))
+const canCreateArea = computed(() => packageValue.value?.service.estado === 'EN_PROCESO'
+  && packageValue.value.service.tipoServicio === 'PRINCIPAL'
+  && packageValue.value.service.tipoSede !== 'RESIDENCIAL' && Boolean(localLock.value))
 const startMessage = computed(() => {
   if (!packageValue.value || packageValue.value.service.estado !== 'PROGRAMADO') return ''
   if (!online.value) return 'Conéctate a internet para iniciar.'
@@ -93,6 +98,10 @@ function openAreas(): void {
   void router.push({ name: 'technician-service-area', params: { id: serviceId.value, areaId: target.id } })
 }
 
+function openNewArea(serviceAreaId: string): void {
+  void router.push({ name: 'technician-service-area', params: { id: serviceId.value, areaId: serviceAreaId } })
+}
+
 function openReview(): void {
   void router.push({ name: 'technician-service-review', params: { id: serviceId.value } })
 }
@@ -122,13 +131,14 @@ function openReview(): void {
         <div v-else-if="packageValue.service.estado === 'EN_PROCESO'" class="technician-start">
           <p>{{ localLock ? 'Este celular conserva el acceso de edición del servicio.' : 'Activa este celular para continuar la ejecución.' }}</p>
           <BaseButton v-if="!localLock" :loading="action === 'CLAIM'" :disabled="!online" @click="claim">Activar en este celular</BaseButton>
-          <div v-else class="technician-work-actions"><BaseButton v-if="orderedAreas.length" @click="openAreas"><Map :size="18" aria-hidden="true" />Ir a las Áreas</BaseButton><BaseButton variant="secondary" @click="openReview"><ClipboardCheck :size="18" aria-hidden="true" />Revisar cierre</BaseButton></div>
+          <div v-else class="technician-work-actions"><BaseButton v-if="orderedAreas.length" @click="openAreas"><Map :size="18" aria-hidden="true" />Ir a las Áreas</BaseButton><BaseButton v-if="canCreateArea" variant="secondary" @click="newAreaOpen=true"><Plus :size="18" aria-hidden="true" />Nueva Área de la Sede</BaseButton><BaseButton variant="secondary" @click="openReview"><ClipboardCheck :size="18" aria-hidden="true" />Revisar cierre</BaseButton></div>
         </div>
       </section>
       <details class="technician-summary"><summary>Productos previstos ({{ packageValue.products.length }})</summary><TechnicianProductsList :products="packageValue.products" :service-id="serviceId" /></details>
     </template>
   </ServicePage>
   <TechnicianPaymentDialog :open="paymentOpen" :service-id="serviceId" @close="paymentOpen=false" />
+  <TechnicianSiteAreaDialog :open="newAreaOpen" :service-id="serviceId" @close="newAreaOpen=false" @created="openNewArea" />
 </template>
 
 <style scoped>
