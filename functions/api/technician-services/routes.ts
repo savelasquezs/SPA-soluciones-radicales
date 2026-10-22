@@ -9,7 +9,7 @@ import { findSiteEvidence } from '../site-insights/queries'
 import type { EvidenceAccess, EvidenceKind } from '../../../src/types/siteInsights'
 import { kickServiceJobs } from '../services/jobs'
 import { assertAreaNoAccessStoragePath, assertCriterionEvidenceStoragePath, assertDeviceReviewStoragePath, assertFindingEvidenceStoragePath, assertServiceSignatureStoragePath, createAreaNoAccessUploadUrl, createCriterionEvidenceUploadUrl, createDeviceReviewUploadUrl, createFindingEvidenceUploadUrl, createServiceMediaReadUrl, createServiceSignatureUploadUrl, criterionEvidenceObjectExists, deleteAreaNoAccessObject, deleteCriterionEvidenceObject, deleteDeviceReviewObject, deleteFindingEvidenceObject, deviceReviewMediaObjectExists, findingEvidenceObjectExists, serviceMediaObjectExists, serviceSignatureObjectExists, type FindingEvidencePhase, type ServiceSignatureRole } from '../r2'
-import { authorizeTechnicianAreaChange, authorizeTechnicianDeviceChange, authorizeTechnicianFindingChange, authorizeTechnicianServiceChange, claimTechnicianService, createTechnicianDevice, createTechnicianFinding, finalizeTechnicianService, saveTechnicianAreaAccess, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, saveTechnicianFindingStatus, startTechnicianService, technicianCommand } from './commands'
+import { authorizeTechnicianAreaChange, authorizeTechnicianDeviceChange, authorizeTechnicianFindingChange, authorizeTechnicianServiceChange, claimTechnicianService, createTechnicianSiteArea, createTechnicianDevice, createTechnicianFinding, finalizeTechnicianService, saveTechnicianAreaAccess, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, saveTechnicianFindingStatus, startTechnicianService, technicianCommand } from './commands'
 import { getTechnicianPackage, listTechnicianServices, assignedServiceState, listTechnicianHistory, listTechnicianAgenda, getTechnicianServiceContact } from './queries'
 import { technicianProductSheetUrl } from '../service-results/productSheets'
 
@@ -160,6 +160,35 @@ technicianServiceRoutes.post('/:id/finalize', async context => {
   kickServiceJobs()
   return context.json(result)
 })
+technicianServiceRoutes.post('/:id/areas', async context => {
+  const payload = await body(context.req.raw)
+  const serviceId = id(context.req.param('id'))
+  const requestId = id(payload.requestId)
+  const deviceId = id(payload.deviceId)
+  const lockToken = id(payload.lockToken)
+  const areaId = id(payload.areaId)
+  const serviceAreaId = id(payload.serviceAreaId)
+  const nombre = requiredString(payload.nombre, 'Escribe el nombre del Área.', 150)
+  if (typeof payload.esExterna !== 'boolean') throw new ApiError(422, 'Indica el tipo de Área.', 'VALIDATION')
+  if (!Array.isArray(payload.criteria) || payload.criteria.length > 500) {
+    throw new ApiError(422, 'Actualiza los criterios del servicio.', 'VALIDATION')
+  }
+  const criteria = payload.criteria.map(item => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw new ApiError(422, 'Actualiza los criterios del servicio.', 'VALIDATION')
+    }
+    const record = item as Record<string, unknown>
+    return { id: id(record.id), criterioId: id(record.criterioId) }
+  })
+  const input = { nombre, esExterna: payload.esExterna }
+  const commandPayload = { deviceId, areaId, serviceAreaId, ...input, criteria }
+  return context.json(await read(context, (client, technician) => technicianCommand(
+    client, technician.id, requestId, 'SITE_AREA_CREATE', serviceId, null, commandPayload,
+    () => createTechnicianSiteArea(client, technician.id, serviceId, deviceId, lockToken,
+      areaId, serviceAreaId, input, criteria),
+  )))
+})
+
 technicianServiceRoutes.post('/:id/areas/order', async context => {
   const payload = await body(context.req.raw)
   const serviceId = id(context.req.param('id'))
