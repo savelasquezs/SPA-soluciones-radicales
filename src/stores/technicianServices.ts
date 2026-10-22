@@ -194,7 +194,7 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
       throw new Error('El cierre ya está preparado. No es posible modificar vehículos.')
     // A new confirmation always gets its own idempotency key.
     for (const op of existing) {
-      if (op.kind === 'VEHICLE_SELECTION' && op.status === 'PENDING') await deleteTechnicianMutation(op)
+      if (op.kind === 'VEHICLE_SELECTION' && op.status !== 'SENDING') await deleteTechnicianMutation(op)
     }
     const now = new Date().toISOString()
     await saveTechnicianMutation({
@@ -205,6 +205,43 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     await saveVehicleDraft(serviceId, ids, true)
     await reloadMutations(serviceId)
     return onlineNow() ? syncPending(serviceId) : 'pending'
+  }
+
+  async function retryVehicleMutations(serviceId: string): Promise<'synced' | 'pending' | 'conflict'> {
+    const pending = await reloadMutations(serviceId)
+    const now = new Date().toISOString()
+    for (const item of pending) {
+      if ((item.kind === 'VEHICLE_CREATE' || item.kind === 'VEHICLE_SELECTION')
+        && item.status === 'CONFLICT') {
+        await saveTechnicianMutation({ ...item, status: 'PENDING', error: null, updatedAt: now })
+      }
+    }
+    await reloadMutations(serviceId)
+    return onlineNow() ? syncPending(serviceId) : 'pending'
+  }
+
+  async function discardFailedVehicle(serviceId: string, vehicleId: string): Promise<void> {
+    const cache = caches.value[serviceId]
+    if (!cache?.lock || cache.package.service.estado !== 'EN_PROCESO')
+      throw new Error('Este celular no puede descartar la placa.')
+    const pending = await reloadMutations(serviceId)
+    const creation = pending.find(item => item.kind === 'VEHICLE_CREATE'
+      && item.vehicleId === vehicleId && item.status === 'CONFLICT')
+    if (!creation) throw new Error('Esta placa no está pendiente de corrección.')
+    if (pending.some(item => item.kind === 'VEHICLE_SELECTION' && item.status === 'SENDING'
+      && item.selectedIds.includes(vehicleId))) throw new Error('Se está sincronizando la selección.')
+    await deleteTechnicianMutation(creation)
+    for (const item of pending.filter(item => item.kind === 'VEHICLE_SELECTION' && item.selectedIds.includes(vehicleId))) {
+      await deleteTechnicianMutation(item)
+    }
+    const remaining = (cache.package.vehicleDraftIds ?? cache.package.attendedVehicleIds ?? [])
+      .filter(id => id !== vehicleId)
+    await persistPackage({ ...cache.package,
+      vehicles: cache.package.vehicles.filter(vehicle => vehicle.id !== vehicleId),
+      vehicleDraftIds: remaining,
+      attendedVehicleIds: null,
+    })
+    await reloadMutations(serviceId)
   }
 
   async function persistLocalSignature(serviceId: string, role: 'TECHNICIAN' | 'CLIENT', mediaId: string): Promise<void> {
@@ -1779,6 +1816,8 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     applyVehicleDraft,
     applyVehicleCreation,
     confirmVehicleSelection,
+    retryVehicleMutations,
+    discardFailedVehicle,
     applySiteAreaCreation,
     discardSiteAreaCreationConflict,
     retrySiteAreaCreationConflict,

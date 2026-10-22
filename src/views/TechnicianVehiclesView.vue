@@ -39,6 +39,8 @@ const pendingChanges = computed(() => services.currentMutations.filter(
   item => item.kind === 'VEHICLE_CREATE' || item.kind === 'VEHICLE_SELECTION'))
 const conflict = computed(() => pendingChanges.value.find(item => item.status === 'CONFLICT'))
 const hasFinalization = computed(() => services.currentMutations.some(item => item.kind === 'SERVICE_FINALIZE'))
+const failedNew = computed(() => pendingChanges.value.find(item => item.kind === 'VEHICLE_CREATE'
+  && item.status === 'CONFLICT'))
 const visible = computed(() => {
   const term = search.value.trim().toUpperCase().replace(/\s/g, '')
   return (context.value?.vehicles ?? []).filter(vehicle =>
@@ -89,6 +91,28 @@ async function addVehicle(): Promise<void> {
   finally { busy.value = false }
 }
 
+async function retry(): Promise<void> {
+  busy.value = true
+  error.value = ''
+  try {
+    const outcome = await services.retryVehicleMutations(serviceId.value)
+    if (outcome === 'conflict') error.value = 'No se pudieron sincronizar los datos. Revisa la placa pendiente.'
+    else notice.value = outcome === 'pending' ? 'Los cambios se sincronizarán al recuperar la conexión.' : 'Cambios sincronizados.'
+  } catch (failure) { error.value = failure instanceof Error ? failure.message : 'No fue posible reintentar.' }
+  finally { busy.value = false }
+}
+
+async function discardFailed(): Promise<void> {
+  if (!failedNew.value || failedNew.value.kind !== 'VEHICLE_CREATE') return
+  busy.value = true
+  error.value = ''
+  try {
+    await services.discardFailedVehicle(serviceId.value, failedNew.value.vehicleId)
+    notice.value = 'Se descartó la placa que no pudo registrarse. Revisa y confirma de nuevo la selección.'
+  } catch (failure) { error.value = failure instanceof Error ? failure.message : 'No fue posible descartar la placa.' }
+  finally { busy.value = false }
+}
+
 async function confirm(): Promise<void> {
   if (!editable.value || busy.value || savingDraft.value || hasFinalization.value) return
   busy.value = true
@@ -130,6 +154,12 @@ function openPrevious(): void {
         <p class="vehicle-help">Marca solo los vehículos que realmente recibieron atención. No necesitas atender toda la flota.</p>
         <StatusPanel v-if="conflict" tone="warning" compact title="Sincronización pendiente de revisión"
           :message="conflict.error || 'Conservamos los datos en este dispositivo; revisa la selección antes de reintentar.'" />
+        <div v-if="conflict" class="vehicle-conflict-actions">
+          <BaseButton size="compact" variant="secondary" :loading="busy" :disabled="!online" @click="retry">Reintentar</BaseButton>
+          <BaseButton v-if="failedNew" size="compact" variant="ghost" :disabled="busy" @click="discardFailed">
+            Descartar placa pendiente
+          </BaseButton>
+        </div>
         <p v-if="error" role="alert" class="vehicle-error">{{ error }}</p>
         <div v-if="notice" class="vehicle-feedback" role="status">{{ notice }}</div>
         <section class="vehicle-workspace">
@@ -239,6 +269,7 @@ function openPrevious(): void {
 .vehicle-footer__actions { display:flex; gap:.5rem; justify-content:space-between; }
 .vehicle-footer__actions :deep(.base-button:last-child) { flex:1; max-width:21rem; }
 .vehicle-feedback { color:var(--success); font-size:.8rem; }
+.vehicle-conflict-actions { display:flex; gap:.5rem; flex-wrap:wrap; }
 .vehicle-error { margin:0; color:var(--danger); font-size:.82rem; }
 .vehicle-empty { margin:0; color:var(--text-secondary); font-size:.84rem; padding:.75rem 0; }
 @media(max-width:410px) {

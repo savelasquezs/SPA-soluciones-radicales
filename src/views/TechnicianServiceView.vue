@@ -101,7 +101,8 @@ async function enterRoute(): Promise<void> {
 function openAreas(): void {
   const target = orderedAreas.value.find(area => !technicianAreaResolved(area)) ?? orderedAreas.value[0]
   if (!target) {
-    void router.push({ name: 'technician-service-review', params: { id: serviceId.value } })
+    void router.push({ name: packageValue.value?.vehiclesEnabled
+      ? 'technician-service-vehicles' : 'technician-service-review', params: { id: serviceId.value } })
     return
   }
   void router.push({ name: 'technician-service-area', params: { id: serviceId.value, areaId: target.id } })
