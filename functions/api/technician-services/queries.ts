@@ -204,10 +204,20 @@ export async function getTechnicianPackage(client: PoolClient, userId: string, s
   const areaCriteriaCatalog = reinforcement ? [] : (await client.query<TechnicianAreaCriterionTemplate>(
     'select id,nombre,solo_area_externa as "soloAreaExterna" from public.criterios_mip where activo order by lower(btrim(nombre)),id',
   )).rows
+  const vehicleContext = (await client.query<{ enabled: boolean; attendedVehicleIds: string[] | null }>(`select
+    (s.tipo_servicio='PRINCIPAL' and se.tipo_sede='NEGOCIO' and se.maneja_vehiculos) as enabled,
+    s.vehiculos_atendidos_ids_json as "attendedVehicleIds"
+    from public.servicios s join public.sedes se on se.id=s.sede_id where s.id=$1`, [serviceId])).rows[0]!
+  const vehicles = vehicleContext.enabled ? (await client.query<{ id: string; placa: string; activo: boolean }>(`
+    select v.id,v.placa,v.activo from public.vehiculos v join public.servicios s on s.sede_id=v.sede_id
+    where s.id=$1 and (v.activo or coalesce(s.vehiculos_atendidos_ids_json,'[]'::jsonb) ? v.id::text)
+    order by v.placa,v.id`, [serviceId])).rows : []
   return { ...header, frozen, products: await products(client, serviceId, frozen),
     areaCriteriaCatalog,
     deviceTypes: reinforcement ? [] : await deviceTypes(client, serviceId, frozen),
-    areas: reinforcement ? [] : frozen ? await frozenAreas(client, serviceId) : await liveAreas(client, serviceId), signatures }
+    areas: reinforcement ? [] : frozen ? await frozenAreas(client, serviceId) : await liveAreas(client, serviceId),
+    vehiclesEnabled: vehicleContext.enabled, vehicles,
+    attendedVehicleIds: vehicleContext.enabled ? vehicleContext.attendedVehicleIds : null, signatures }
 }
 
 

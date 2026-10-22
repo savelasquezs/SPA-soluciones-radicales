@@ -600,8 +600,15 @@ app.patch('/api/sites/:id', async (context) => {
   const id = context.req.param('id')
   const record = await transaction(async (client) => {
     const admin = await requireAdmin(client, context.get('identity'))
-    const current = await client.query<{ activo: boolean }>('select activo from public.sedes where id = $1 and tipo_sede = $2', [id, 'NEGOCIO'])
+    const current = await client.query<{ activo: boolean; manejaVehiculos: boolean }>(
+      'select activo, maneja_vehiculos as "manejaVehiculos" from public.sedes where id=$1 and tipo_sede=$2 for update', [id, 'NEGOCIO'])
     if (!current.rows[0]) throw new ApiError(404, 'La Sede no existe')
+    if (current.rows[0].manejaVehiculos !== input.manejaVehiculos) {
+      const running = await client.query(
+        "select 1 from public.servicios where sede_id=$1 and tipo_servicio='PRINCIPAL' and estado='EN_PROCESO' limit 1", [id])
+      if (running.rowCount) throw new ApiError(409,
+        'No cambies la gestión de vehículos mientras exista un servicio principal en proceso.', 'SITE_VEHICLES_BUSY')
+    }
     const updated = await client.query(
       `update public.sedes
        set nombre = $1, direccion = $2, correos_json = $3::jsonb,
