@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, ArrowRight, Check, Plus, Search, Truck, WifiOff } from 'lucide-vue-next'
+import { ArrowLeft, ArrowRight, Check, Plus, Truck, WifiOff } from 'lucide-vue-next'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseInput from '@/components/base/BaseInput.vue'
 import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
@@ -171,7 +171,7 @@ function openPrevious(): void {
               </span>
             </button>
           </div>
-          <BaseButton v-if="visible.length > visibleLimit" variant="secondary" size="compact" block
+          <BaseButton v-if="visible.length > visibleLimit" variant="secondary" size="compact" class="vehicle-show-more"
             @click="visibleLimit += 40">Mostrar más ({{ visible.length - visibleLimit }} restantes)</BaseButton>
         </section>
         <div class="vehicle-footer">
@@ -220,6 +220,7 @@ function openPrevious(): void {
 .vehicle-filters button[aria-pressed="true"] { color:var(--accent); background:var(--accent-subtle);
   border-color:var(--accent); font-weight:600; }
 .vehicle-list { display:grid; gap:.25rem; }
+.vehicle-show-more { width:100%; }
 .vehicle-item { display:flex; align-items:center; width:100%; min-height:49px; text-align:left;
   gap:.75rem; padding:.42rem .6rem; background:transparent; border:1px solid transparent;
   color:var(--text); border-radius:var(--radius); font:inherit; cursor:pointer; }

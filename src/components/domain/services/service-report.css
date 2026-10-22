@@ -94,6 +94,9 @@
 .report-document__table td{overflow-wrap:anywhere}
 .report-document__table strong{font-weight:650}
 .report-document__empty{color:var(--report-muted);padding:.85rem 0;font-size:.78rem}
+.report-vehicle-plates{display:flex;flex-wrap:wrap;gap:.4rem}
+.report-vehicle-plates span{border:1px solid var(--report-border);background:var(--report-light);
+  padding:.25rem .55rem;border-radius:4px;font-size:.76rem;font-weight:650;break-inside:avoid}
 .report-area{margin-top:1.2rem}
 .report-area:first-of-type{margin-top:0}
 .report-area__head{display:flex;align-items:center;justify-content:space-between;gap:.5rem;background:var(--report-light);border-left:3px solid var(--report-accent);padding:.6rem .75rem}

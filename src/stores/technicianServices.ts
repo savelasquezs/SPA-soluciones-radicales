@@ -148,7 +148,9 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     const cache = caches.value[serviceId]
     if (!cache?.lock || cache.package.service.estado !== 'EN_PROCESO' || !cache.package.vehiclesEnabled)
       throw new Error('Este celular no puede modificar los vehículos del servicio.')
-    const available = new Set(cache.package.vehicles.filter(vehicle => vehicle.activo).map(vehicle => vehicle.id))
+    const previous = new Set(cache.package.attendedVehicleIds ?? [])
+    const available = new Set(cache.package.vehicles.filter(vehicle => vehicle.activo || previous.has(vehicle.id))
+      .map(vehicle => vehicle.id))
     if (!ids.every(id => available.has(id))) throw new Error('La selección contiene vehículos no disponibles.')
     await saveVehicleDraft(serviceId, [...new Set(ids)])
   }
@@ -173,6 +175,7 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     })
     await persistPackage({
       ...cache.package, vehicles: [...cache.package.vehicles, { id: vehicleId, placa: plate, activo: true, creacionPendiente: true }],
+      vehicleDraftIds: [...new Set([...(cache.package.vehicleDraftIds ?? cache.package.attendedVehicleIds ?? []), vehicleId])],
     })
     await reloadMutations(serviceId)
     return onlineNow() ? syncPending(serviceId) : 'pending'
@@ -183,7 +186,8 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     if (!cache?.lock || !cache.package.vehiclesEnabled || cache.package.service.estado !== 'EN_PROCESO')
       throw new Error('Este servicio no permite confirmar vehículos.')
     const ids = [...new Set(cache.package.vehicleDraftIds ?? cache.package.attendedVehicleIds ?? [])].sort()
-    if (!ids.every(id => cache.package.vehicles.some(vehicle => vehicle.id === id && vehicle.activo)))
+    if (!ids.every(id => cache.package.vehicles.some(vehicle => vehicle.id === id
+      && (vehicle.activo || cache.package.attendedVehicleIds?.includes(vehicle.id)))))
       throw new Error('Actualiza la selección: hay placas no disponibles.')
     const existing = await reloadMutations(serviceId)
     if (existing.some(item => item.kind === 'SERVICE_FINALIZE'))

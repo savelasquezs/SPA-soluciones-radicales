@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { ArrowLeft, ArrowRight, CheckCheck, CheckCircle2, ClipboardCheck, FileText, ListChecks, ListOrdered, Map as MapIcon, Plus, Search, Wrench } from 'lucide-vue-next'
+import { ArrowLeft, ArrowRight, CheckCheck, CheckCircle2, ListChecks, ListOrdered, Plus, Search, Wrench } from 'lucide-vue-next'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import BaseButton from '@/components/base/BaseButton.vue'
 import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
