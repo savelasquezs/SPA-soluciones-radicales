@@ -64,6 +64,14 @@ async function setup(page: Page) {
   await page.goto(`/clientes/${ids.client}/sedes/${ids.site}`)
   return calls
 }
+test('la configuración de la Sede se edita desde el botón principal, sin pestaña duplicada', async ({ page }) => {
+  await setup(page)
+  const tabs = page.getByRole('navigation', { name: 'Detalle de Sede' })
+  await expect(tabs.getByRole('button', { name: 'Configuración', exact: true })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Editar Sede', exact: true }).click()
+  await expect(page.getByRole('dialog', { name: 'Editar Sede', exact: true })).toBeVisible()
+})
+
 test('monitoring histories, private gallery, bounded requests and keyboard closing', async ({ page }) => {
   const calls = await setup(page)
   await page.getByRole('button', { name: 'Puestos de monitoreo', exact: true }).click()
