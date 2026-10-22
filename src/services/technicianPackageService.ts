@@ -36,6 +36,22 @@ export function getTechnicianDeviceId(): string {
   }
 }
 
+/**
+ * Restore the browser's device identity from its durable offline work.
+ * A new phone has no matching IndexedDB cache, so it cannot inherit the lock.
+ */
+export function restoreTechnicianDeviceIdFromCaches(caches: TechnicianPackageCache[]): void {
+  const active = caches.filter(cache => cache.package.service.estado === 'EN_PROCESO' && cache.lock)
+  const knownIds = new Set(active.length
+    ? active.map(cache => cache.lock!.deviceId)
+    : caches.map(cache => cache.deviceId))
+  if (knownIds.size !== 1) return
+  const [knownId] = knownIds
+  if (!isServiceId(knownId)) return
+  memoryDeviceId = knownId
+  try { localStorage.setItem(deviceKey, knownId) } catch { /* IndexedDB remains the durable fallback. */ }
+}
+
 export async function listTechnicianPackageCaches(actorId: string): Promise<TechnicianPackageCache[]> {
   if (!isServiceId(actorId)) return []
   const values = await (await offlineDatabase).getAll('technicianPackages')

@@ -91,17 +91,17 @@ test('un modal permite crear, editar y desactivar plantillas en la vista compact
   await dialog.locator('input[name="template-area-0"]').fill('Recepción')
   await dialog.getByRole('button', { name: 'Crear plantilla' }).click()
   await expect(dialog).not.toBeVisible()
-  await expect(page.getByRole('button', { name: 'Nueva distribución' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Nueva distribución', exact: true })).toBeVisible()
 
   await page.getByRole('button', { name: 'Editar Nueva distribución' }).click()
   const edit = page.getByRole('dialog', { name: 'Editar plantilla' })
   await edit.getByLabel('Nombre de la plantilla').fill('Distribución revisada')
   await edit.getByRole('button', { name: 'Guardar cambios' }).click()
-  await expect(page.getByRole('button', { name: 'Distribución revisada' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Distribución revisada', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Desactivar Distribución revisada' }).click()
   await page.getByRole('dialog', { name: 'Desactivar plantilla' }).getByRole('button', { name: 'Desactivar' }).click()
   await page.getByRole('button', { name: 'Inactivas' }).click()
-  await expect(page.getByRole('button', { name: 'Distribución revisada' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Distribución revisada', exact: true })).toBeVisible()
 })
 
 test('aplicar dos veces conserva áreas existentes y no duplica las nuevas', async ({ page }) => {
@@ -117,7 +117,7 @@ test('aplicar dos veces conserva áreas existentes y no duplica las nuevas', asy
   await page.getByRole('button', { name: 'Aplicar plantilla' }).click()
   await page.getByRole('dialog', { name: 'Aplicar plantilla' }).getByLabel('Plantilla').selectOption(ids.template)
   await page.getByRole('dialog', { name: 'Aplicar plantilla' }).getByRole('button', { name: 'Aplicar', exact: true }).click()
-  expect(track.getApplyCount()).toBe(2)
+  await expect.poll(() => track.getApplyCount()).toBe(2)
   await expect(page.getByRole('button', { name: 'Patio', exact: true })).toHaveCount(1)
 })
 

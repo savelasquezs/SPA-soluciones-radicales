@@ -43,6 +43,7 @@ vi.mock('@/services/serviceMediaService', () => ({
 }))
 vi.mock('@/services/technicianPackageService', () => ({
   getTechnicianDeviceId: vi.fn<typeof cacheService.getTechnicianDeviceId>(),
+  restoreTechnicianDeviceIdFromCaches: vi.fn<typeof cacheService.restoreTechnicianDeviceIdFromCaches>(),
   listTechnicianPackageCaches: vi.fn<typeof cacheService.listTechnicianPackageCaches>(),
   loadTechnicianPackageCache: vi.fn<typeof cacheService.loadTechnicianPackageCache>(),
   saveTechnicianPackageCache: vi.fn<typeof cacheService.saveTechnicianPackageCache>(),
@@ -146,6 +147,7 @@ beforeEach(() => {
   Object.defineProperty(navigator, 'onLine', { configurable: true, value: true })
   useAuthStore().user = { id: actorId, nombreCompleto: 'Técnico', correoGoogle: 'tecnico@example.invalid', esAdmin: false, esTecnico: true, rolActivo: 'TECNICO', requiereSeleccionRol: false }
   vi.mocked(cacheService.getTechnicianDeviceId).mockReturnValue(deviceId)
+  vi.mocked(cacheService.restoreTechnicianDeviceIdFromCaches).mockImplementation(() => {})
   vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([])
   vi.mocked(cacheService.loadTechnicianPackageCache).mockResolvedValue(null)
   vi.mocked(cacheService.saveTechnicianPackageCache).mockResolvedValue()
@@ -199,6 +201,60 @@ describe('technician services state', () => {
     expect(saved.some(item => item.pendingOperation?.kind === 'START')).toBe(true)
     expect(saved[saved.length - 1]).toMatchObject({ lock: session.lock, pendingOperation: null })
     expect(store.currentPackage?.service.estado).toBe('EN_PROCESO')
+  })
+
+  it('recovers an execution lock when returning on the original phone', async () => {
+    const prepared = { ...executionCache(), lock: null }
+    vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([prepared])
+    vi.mocked(cacheService.getTechnicianDeviceId).mockReturnValue('10000000-0000-4000-8000-000000000099')
+    vi.mocked(api.fetchTechnicianPackage).mockResolvedValue(servicePackage('EN_PROCESO'))
+    const session: TechnicianExecutionSession = {
+      package: servicePackage('EN_PROCESO'),
+      lock: { token: lockToken, deviceId, acquiredAt: '2026-10-07T13:30:00Z' },
+    }
+    vi.mocked(api.claimTechnicianService).mockResolvedValue(session)
+
+    const store = useTechnicianServicesStore()
+    await store.loadPackage(serviceId)
+
+    expect(cacheService.restoreTechnicianDeviceIdFromCaches).toHaveBeenCalledWith([prepared])
+    expect(api.claimTechnicianService).toHaveBeenCalledWith(serviceId, expect.any(String), deviceId)
+    expect(store.currentCache).toMatchObject({ deviceId, lock: session.lock, pendingOperation: null })
+    expect(vi.mocked(cacheService.saveTechnicianPackageCache).mock.lastCall?.[0].deviceId).toBe(deviceId)
+  })
+
+  it('retains a saved lock on refresh without trying to acquire a new one', async () => {
+    vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([executionCache()])
+    vi.mocked(api.fetchTechnicianPackage).mockResolvedValue(servicePackage('EN_PROCESO'))
+    const store = useTechnicianServicesStore()
+
+    await store.loadPackage(serviceId)
+
+    expect(store.currentCache?.lock).toMatchObject({ token: lockToken, deviceId })
+    expect(api.claimTechnicianService).not.toHaveBeenCalled()
+  })
+
+  it('does not replace another device lock during automatic recovery', async () => {
+    vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([{ ...executionCache(), lock: null }])
+    vi.mocked(api.fetchTechnicianPackage).mockResolvedValue(servicePackage('EN_PROCESO'))
+    vi.mocked(api.claimTechnicianService).mockRejectedValue(new ApiClientError('Servicio ocupado', 409, 'SERVICE_LOCKED'))
+    const store = useTechnicianServicesStore()
+
+    await store.loadPackage(serviceId)
+
+    expect(store.currentCache?.lock).toBeNull()
+    expect(store.packageError).toContain('No pudimos confirmar el acceso')
+    expect(store.currentPackage?.service.estado).toBe('EN_PROCESO')
+  })
+
+  it('only recovers automatically when there was prior local execution', async () => {
+    vi.mocked(api.fetchTechnicianPackage).mockResolvedValue(servicePackage('EN_PROCESO'))
+    const store = useTechnicianServicesStore()
+
+    await store.loadPackage(serviceId)
+
+    expect(api.claimTechnicianService).not.toHaveBeenCalled()
+    expect(store.currentCache?.lock).toBeNull()
   })
 
   it('creates an Area belonging to the Sede offline and syncs before evaluating it', async () => {
