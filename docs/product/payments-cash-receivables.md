@@ -36,6 +36,10 @@ el servicio pasa a Finalizado. No se genera cargo duplicado.
   recibir entrega total o parcial, dejar observación y anular con motivo.
 - Técnico → trabajo de campo / cierre: reportar efectivo o transferencia de una
   visita asignada Principal iniciada o finalizada; solo reporta, no confirma.
+- En el comprobante de transferencia se reutiliza el selector de fotos de
+  servicios: **Tomar foto / Subir foto**, previsualización, dibujar y recortar.
+  Si una subida falla, se conserva la selección y se reintenta sin duplicar
+  el cobro. Las fotografías se validan y comprimen antes de R2.
 - Técnico → Mi caja: ve el efectivo confirmado, entregas, saldo y sus reportes,
   con reintento de subida de comprobante si se interrumpió el primer intento.
 - Cliente/Sede → Historial del servicio → Ver pagos y abonos: acceso contextual
