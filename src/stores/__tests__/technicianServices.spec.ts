@@ -14,6 +14,8 @@ vi.mock('@/services/servicesService', () => ({
   fetchTechnicianServices: vi.fn<typeof api.fetchTechnicianServices>(),
   fetchTechnicianPackage: vi.fn<typeof api.fetchTechnicianPackage>(),
   startTechnicianService: vi.fn<typeof api.startTechnicianService>(),
+  createTechnicianVehicle: vi.fn<typeof api.createTechnicianVehicle>(),
+  saveTechnicianVehicleSelection: vi.fn<typeof api.saveTechnicianVehicleSelection>(),
   claimTechnicianService: vi.fn<typeof api.claimTechnicianService>(),
   createTechnicianSiteArea: vi.fn<typeof api.createTechnicianSiteArea>(),
   saveTechnicianAreaOrder: vi.fn<typeof api.saveTechnicianAreaOrder>(),
@@ -93,6 +95,9 @@ const servicePackage = (estado: TechnicianServiceSummary['estado'] = 'PROGRAMADO
   ],
   deviceTypes: [{ codigo: 'TRAMPA', nombre: 'Trampa', clasificacion: 'RASTREROS', plagas: [{ codigo: 'CUCARACHA', nombre: 'Cucaracha' }] }],
   areas: [],
+  vehiclesEnabled: false,
+  vehicles: [],
+  attendedVehicleIds: null,
   signatures: { technicianStoragePath: null, technicianUserId: null, clientStoragePath: null, clientName: null, clientSignedAt: null },
 })
 const cache = (): TechnicianPackageCache => ({

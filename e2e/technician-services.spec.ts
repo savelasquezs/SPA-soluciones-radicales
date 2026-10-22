@@ -3,6 +3,9 @@ import type { TechnicianExecutionSession, TechnicianServicePackage, TechnicianSe
 
 const uid = (value: number) => `20000000-0000-4000-8000-${String(value).padStart(12, '0')}`
 const ids = { actor: uid(1), service: uid(2), product: uid(3), area: uid(4), criterion: uid(5), device: uid(6), lock: uid(7), area2: uid(8), criterion2: uid(9), finding: uid(10), priorService: uid(11) }
+const fleet = Array.from({ length: 150 }, (_, index) => ({
+  id: uid(100 + index), placa: `ABC${String(index + 1).padStart(3, '0')}`, activo: true,
+}))
 const summary = (state: TechnicianServiceSummary['estado'] = 'PROGRAMADO'): TechnicianServiceSummary => ({
   id: ids.service,
   solicitud: 'SR-0201',
@@ -41,6 +44,9 @@ const servicePackage = (state: TechnicianServiceSummary['estado'] = 'PROGRAMADO'
     fichaTecnicaDisponible: true,
   }],
   deviceTypes: [{ codigo: 'TRAMPA_ADHESIVA', nombre: 'Trampa adhesiva', clasificacion: 'RASTREROS', plagas: [{ codigo: 'CUCARACHA', nombre: 'Cucaracha' }] }],
+  vehiclesEnabled: false,
+  vehicles: [],
+  attendedVehicleIds: null,
   areas: [{
     id: ids.area,
     areaId: ids.area,
@@ -87,10 +93,10 @@ const servicePackage = (state: TechnicianServiceSummary['estado'] = 'PROGRAMADO'
   signatures: { technicianStoragePath: null, technicianUserId: null, clientStoragePath: null, clientName: null, clientSignedAt: null },
 })
 
-async function setup(page: Page, withPriorFinding = false, failFirstPackage: boolean | number = false, initialState: TechnicianServiceSummary['estado'] = 'PROGRAMADO', kind: 'PRINCIPAL' | 'REFUERZO' = 'PRINCIPAL') {
+async function setup(page: Page, withPriorFinding = false, failFirstPackage: boolean | number = false, initialState: TechnicianServiceSummary['estado'] = 'PROGRAMADO', kind: 'PRINCIPAL' | 'REFUERZO' = 'PRINCIPAL', vehicleMode = false) {
   const asVisit = (value: TechnicianServicePackage): TechnicianServicePackage => kind === 'REFUERZO'
     ? { ...value, service: { ...value.service, tipoServicio: 'REFUERZO' }, areas: [], deviceTypes: [] }
-    : value
+    : vehicleMode ? { ...value, vehiclesEnabled: true, vehicles: fleet, attendedVehicleIds: null } : value
   let current = asVisit(servicePackage(initialState, withPriorFinding))
   let packageReads = 0
   const starts: Array<Record<string, unknown>> = []
@@ -98,6 +104,8 @@ async function setup(page: Page, withPriorFinding = false, failFirstPackage: boo
   const evaluations: Array<Record<string, unknown>> = []
   const deviceCreations: Array<Record<string, unknown>> = []
   const reportSends: Array<Record<string, unknown>> = []
+  const vehicleCreations: Array<Record<string, unknown>> = []
+  const vehicleSelections: Array<string[]> = []
   await page.route('**/get-session', route => route.fulfill({ json: {
     session: { id: 'session', userId: 'auth-tech', token: 'e2e-token', expiresAt: '2099-01-01T00:00:00.000Z', createdAt: '2026-10-04T00:00:00.000Z', updatedAt: '2026-10-04T00:00:00.000Z' },
     user: { id: 'auth-tech', name: 'Técnico de prueba', email: 'santyvan974@gmail.com', emailVerified: true, createdAt: '2026-10-04T00:00:00.000Z', updatedAt: '2026-10-04T00:00:00.000Z' },
@@ -146,6 +154,22 @@ async function setup(page: Page, withPriorFinding = false, failFirstPackage: boo
       await json(route, session)
       return
     }
+    if (path === `/api/technician/services/${ids.service}/vehicles` && request.method() === 'POST') {
+      const body = request.postDataJSON() as { vehicleId: string; placa: string }
+      vehicleCreations.push(body as unknown as Record<string, unknown>)
+      const existing = current.vehicles.find(vehicle => vehicle.placa === body.placa)
+      const vehicle = existing ?? { id: body.vehicleId, placa: body.placa, activo: true }
+      if (!existing) current = { ...current, vehicles: [...current.vehicles, vehicle] }
+      await json(route, { vehicle, created: !existing })
+      return
+    }
+    if (path === `/api/technician/services/${ids.service}/vehicles/selection` && request.method() === 'POST') {
+      const body = request.postDataJSON() as { selectedIds: string[] }
+      vehicleSelections.push(body.selectedIds)
+      current = { ...current, attendedVehicleIds: body.selectedIds }
+      await json(route, { attendedVehicleIds: body.selectedIds })
+      return
+    }
     if (path === `/api/technician/services/${ids.service}/areas/order`) {
       const body = request.postDataJSON() as { areaIds: string[] }
       orders.push(request.postDataJSON() as Record<string, unknown>)
@@ -191,7 +215,8 @@ async function setup(page: Page, withPriorFinding = false, failFirstPackage: boo
     }
     await json(route, { error: `Unexpected technician endpoint: ${path}` }, 404)
   })
-  return { starts, orders, evaluations, deviceCreations, reportSends, get packageReads() { return packageReads } }
+  return { starts, orders, evaluations, deviceCreations, reportSends, vehicleCreations, vehicleSelections,
+    get packageReads() { return packageReads } }
 }
 
 test('technician can open and start a reinforcement without a full MIP route or report', async ({ page }) => {
@@ -537,7 +562,7 @@ test('both full-screen signatures and the closure intention survive offline relo
   await page.locator('.area-tabs').getByRole('button', { name: /Criterios/ }).click()
   await page.getByRole('button', { name: 'Cumple', exact: true }).click()
   await expect(page.locator('[aria-label="Guardado"]')).toBeVisible()
-  await page.locator('.service-navigation').getByRole('button', { name: 'Cierre' }).click()
+  await page.locator('.tech-stages').getByRole('link', { name: 'Cierre' }).click()
   for (const label of ['Técnico', 'Responsable del cliente']) {
     await page.getByRole('article').filter({ hasText: label }).getByRole('button', { name: 'Firmar', exact: true }).click()
     await expect(page.getByRole('dialog', { name: `Firma del ${label}` })).toBeVisible()
@@ -734,4 +759,62 @@ test('a technician can crop and draw on a photo in the mobile preview before sav
   await page.getByRole('button', { name: 'Guardar foto' }).click()
   await expect(page.getByRole('button', { name: 'Dibujar o recortar' })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})
+
+test('vehicle fleet: mobile search, selective attention and confirmation before closing', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const api = await setup(page, false, false, 'PROGRAMADO', 'PRINCIPAL', true)
+  await page.goto(`/servicios/${ids.service}/trabajo`)
+  await page.getByRole('button', { name: 'Iniciar servicio' }).click()
+  await page.getByRole('link', { name: 'Vehículos' }).click()
+  await expect(page.getByText('150 registrados')).toBeVisible()
+  await page.getByRole('button', { name: 'ABC001' }).click()
+  await page.getByLabel('Buscar placa').fill('ABC145')
+  await page.getByRole('button', { name: 'ABC145' }).click()
+  await expect(page.getByRole('button', { name: 'Confirmar 2 atendidos' })).toBeEnabled()
+  await page.getByRole('button', { name: 'Confirmar 2 atendidos' }).click()
+  await expect(page).toHaveURL(/\/trabajo\/revision$/)
+  expect(api.vehicleSelections).toEqual([[fleet[0]!.id, fleet[144]!.id]])
+  await expect(page.getByRole('heading', { name: 'Vehículos atendidos' })).toBeVisible()
+  await expect(page.getByText('2 atendidos')).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})
+
+test('vehicle fleet: confirming zero is different from skipping the vehicle step', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 })
+  const api = await setup(page, false, false, 'PROGRAMADO', 'PRINCIPAL', true)
+  await page.goto(`/servicios/${ids.service}/trabajo`)
+  await page.getByRole('button', { name: 'Iniciar servicio' }).click()
+  await page.getByRole('link', { name: 'Cierre' }).click()
+  await expect(page.getByText('Vehículos sin confirmar')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Finalizar servicio' })).toBeDisabled()
+  await page.getByRole('button', { name: /Sin confirmar/ }).click()
+  await page.getByRole('button', { name: 'Confirmar 0 atendidos' }).click()
+  expect(api.vehicleSelections).toEqual([[]])
+  await expect(page.getByText('0 atendidos')).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})
+
+test('vehicle fleet: a drafted plate persists offline across reload and syncs when back online', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const api = await setup(page, false, false, 'PROGRAMADO', 'PRINCIPAL', true)
+  await page.goto(`/servicios/${ids.service}/trabajo`)
+  await page.getByRole('button', { name: 'Iniciar servicio' }).click()
+  await page.getByRole('link', { name: 'Vehículos' }).click()
+  await page.getByRole('button', { name: 'ABC001' }).click()
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false })
+    window.dispatchEvent(new Event('offline'))
+  })
+  await page.addInitScript(() => Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }))
+  await page.reload()
+  await expect(page.getByRole('button', { name: 'ABC001' })).toHaveAttribute('aria-pressed', 'true')
+  await page.getByRole('button', { name: 'Confirmar 1 atendido' }).click()
+  expect(api.vehicleSelections).toHaveLength(0)
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => true })
+    window.dispatchEvent(new Event('online'))
+  })
+  await expect.poll(() => api.vehicleSelections.length).toBe(1)
+  expect(api.vehicleSelections[0]).toEqual([fleet[0]!.id])
 })
