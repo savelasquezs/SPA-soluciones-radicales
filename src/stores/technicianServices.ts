@@ -507,7 +507,9 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
         if (pending.some(item => item.status === 'CONFLICT')) return 'conflict'
         // The closure must run after every field edit, even when a conflict is resolved
         // and its replacement mutation was created after the original closure intention.
-        const operation = pending.find(item => item.kind !== 'SERVICE_FINALIZE') ?? pending[0]
+        const operation = pending.find(item => item.kind === 'VEHICLE_CREATE')
+          ?? pending.find(item => item.kind !== 'SERVICE_FINALIZE' && item.kind !== 'VEHICLE_SELECTION')
+          ?? pending.find(item => item.kind === 'VEHICLE_SELECTION') ?? pending[0]
         if (!operation) return 'synced'
         let sending = { ...operation, status: 'SENDING' as const, updatedAt: new Date().toISOString(), error: null } as TechnicianMutation
         await saveTechnicianMutation(sending)

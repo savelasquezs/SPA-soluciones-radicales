@@ -164,7 +164,7 @@ function openPrevious(): void {
         <div v-if="notice" class="vehicle-feedback" role="status">{{ notice }}</div>
         <section class="vehicle-workspace">
           <div class="vehicle-search">
-            <BaseInput v-model="search" name="service-vehicle-search" label="Buscar placa"
+            <BaseInput v-model="search" name="service-vehicle-search" label="Buscar placa" type="search"
               placeholder="Ej. ABC123" autocomplete="off" />
             <BaseButton v-if="editable && !hasFinalization" variant="secondary" size="compact"
               :disabled="busy" @click="showCreate = !showCreate">

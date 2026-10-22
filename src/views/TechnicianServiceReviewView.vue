@@ -48,7 +48,10 @@ const reinforcement = computed(() => packageValue.value?.service.tipoServicio ==
 const simplified = computed(() => residential.value || reinforcement.value)
 const vehiclesDone = computed(() => !packageValue.value || vehicleChecklistResolved(
   packageValue.value.vehiclesEnabled, packageValue.value.attendedVehicleIds, packageValue.value.vehicleDraftIds))
+const vehicleChangesPending = computed(() => services.currentMutations.some(item =>
+  item.kind === 'VEHICLE_CREATE' || item.kind === 'VEHICLE_SELECTION'))
 const canFinalize = computed(() => !pending.value.length && vehiclesDone.value
+  && !services.currentMutations.some(item => item.status === 'CONFLICT')
   && technicianSigned.value && clientSigned.value && Boolean(clientName.value.trim()))
 const canOfferReport = computed(() => finalized.value
   || (finalization.value && finalization.value.status !== 'CONFLICT'))
@@ -214,8 +217,10 @@ async function finish(): Promise<void> {
         <h2 id="review-vehicles-title">Vehículos atendidos</h2>
         <button type="button" @click="router.push({ name: 'technician-service-vehicles', params: { id: serviceId } })">
           <span class="review-list__name"><strong>{{ vehiclesDone ? (packageValue.attendedVehicleIds?.length ?? 0) + ' atendidos' : 'Sin confirmar' }}</strong>
-            <small>{{ vehiclesDone ? 'Selección registrada para esta visita.' : 'Revisa y confirma esta sección antes de finalizar.' }}</small></span>
-          <StatusBadge :tone="vehiclesDone ? 'success' : 'warning'">{{ vehiclesDone ? 'Confirmado' : 'Pendiente' }}</StatusBadge>
+            <small>{{ vehiclesDone ? vehicleChangesPending ? 'Guardado en este celular · falta sincronizar.' : 'Selección registrada para esta visita.' : 'Revisa y confirma esta sección antes de finalizar.' }}</small></span>
+          <StatusBadge :tone="!vehiclesDone ? 'warning' : vehicleChangesPending ? 'neutral' : 'success'">
+            {{ !vehiclesDone ? 'Pendiente' : vehicleChangesPending ? 'Local' : 'Confirmado' }}
+          </StatusBadge>
         </button>
       </section>
       <section v-if="!finalized" class="signature-section" aria-labelledby="signatures-title">
