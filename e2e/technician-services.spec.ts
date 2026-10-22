@@ -791,6 +791,7 @@ test('vehicle fleet: confirming zero is different from skipping the vehicle step
   await expect(page.getByRole('button', { name: 'Finalizar servicio' })).toBeDisabled()
   await page.getByRole('button', { name: /Sin confirmar/ }).click()
   await page.getByRole('button', { name: 'Confirmar 0 atendidos' }).click()
+  await expect(page).toHaveURL(/\/trabajo\/revision$/)
   expect(api.vehicleSelections).toEqual([[]])
   await expect(page.getByText('0 atendidos')).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
