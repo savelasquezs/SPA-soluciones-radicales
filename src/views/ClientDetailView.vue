@@ -16,11 +16,12 @@ import ClientForm from '@/components/domain/clients/ClientForm.vue'
 import ContextualServiceHistory from '@/components/domain/services/ContextualServiceHistory.vue'
 import SiteForm from '@/components/domain/clients/SiteForm.vue'
 import { ApiClientError } from '@/services/apiService'
+import { listAreaTemplates } from '@/services/areaTemplatesService'
 import { getClient, getSite } from '@/services/clientsService'
 import { deleteMasterFile, getMasterFileUrl, uploadMasterFile } from '@/services/filesService'
 import { useClientsStore } from '@/stores/clients'
 import { useNotificationsStore } from '@/stores/notifications'
-import type { ClientInput, ClientRecord, SiteInput, SiteRecord } from '@/types/domain'
+import type { AreaTemplateRecord, ClientInput, ClientRecord, SiteInput, SiteRecord } from '@/types/domain'
 
 const route = useRoute()
 const router = useRouter()
@@ -50,6 +51,9 @@ const dependencyClientTarget = ref(false)
 const clientForm = ref<ClientInput>(blankClient())
 const siteForm = ref<SiteInput>(blankSite())
 const sitePlanFile = ref<File | null>(null)
+const siteTemplates = ref<AreaTemplateRecord[]>([])
+const siteTemplatesLoading = ref(false)
+let templateRequest = 0
 
 onMounted(load)
 
@@ -82,11 +86,26 @@ function openClientEdit(): void {
 }
 
 function openSiteCreate(): void {
+  void loadSiteTemplates()
   siteFormMode.value = 'create'
   editingSiteId.value = null
   siteForm.value = blankSite()
   sitePlanFile.value = null
   siteFormOpen.value = true
+}
+
+async function loadSiteTemplates(): Promise<void> {
+  const request = ++templateRequest
+  siteTemplatesLoading.value = true
+  siteTemplates.value = []
+  try {
+    const data = await listAreaTemplates(clientId.value, true)
+    if (request === templateRequest) siteTemplates.value = data
+  } catch (error) {
+    if (request === templateRequest) notifications.show(message(error, 'No se pudieron cargar las plantillas de áreas.'), 'error')
+  } finally {
+    if (request === templateRequest) siteTemplatesLoading.value = false
+  }
 }
 
 function openSiteEdit(site: SiteRecord): void {
@@ -322,7 +341,7 @@ function formatDate(value: string): string { return new Intl.DateTimeFormat('es-
     </section>
 
     <BaseDialog :model-value="clientFormOpen" title="Editar cliente" @update:model-value="!saving && (clientFormOpen = $event)"><ClientForm v-model="clientForm" mode="edit" :saving="saving" @submit="saveClient" @invalid="notifications.show('Revisa los campos marcados.', 'error')" /><template #footer><BaseButton variant="secondary" :disabled="saving" @click="clientFormOpen = false">Cancelar</BaseButton><BaseButton type="submit" form="client-form" :loading="saving">{{ savePhaseLabel ?? 'Guardar cambios' }}</BaseButton></template></BaseDialog>
-    <BaseDialog :model-value="siteFormOpen" :title="siteFormMode === 'create' ? 'Crear Sede' : 'Editar Sede'" @update:model-value="!saving && (siteFormOpen = $event)"><SiteForm v-model="siteForm" :mode="siteFormMode" :saving="saving" :client-name="client.nombre" @submit="saveSite" @invalid="notifications.show('Revisa los campos marcados.', 'error')" @file-selected="selectSiteFile" @view-plan="openPlan(siteForm.planoStoragePath)" /><template #footer><BaseButton variant="secondary" :disabled="saving" @click="siteFormOpen = false">Cancelar</BaseButton><BaseButton type="submit" form="site-form" :loading="saving">{{ savePhaseLabel ?? (siteFormMode === 'create' ? 'Crear Sede' : 'Guardar cambios') }}</BaseButton></template></BaseDialog>
+    <BaseDialog :model-value="siteFormOpen" :title="siteFormMode === 'create' ? 'Crear Sede' : 'Editar Sede'" @update:model-value="!saving && (siteFormOpen = $event)"><SiteForm v-model="siteForm" :mode="siteFormMode" :saving="saving" :client-name="client.nombre" :area-templates="siteTemplates" :area-templates-loading="siteTemplatesLoading" @submit="saveSite" @invalid="notifications.show('Revisa los campos marcados.', 'error')" @file-selected="selectSiteFile" @view-plan="openPlan(siteForm.planoStoragePath)" /><template #footer><BaseButton variant="secondary" :disabled="saving" @click="siteFormOpen = false">Cancelar</BaseButton><BaseButton type="submit" form="site-form" :loading="saving">{{ savePhaseLabel ?? (siteFormMode === 'create' ? 'Crear Sede' : 'Guardar cambios') }}</BaseButton></template></BaseDialog>
     <ConfirmDialog :open="deleteClientTarget" title="Eliminar cliente" :message="`Se eliminará ${client.nombre} si no tiene historial ni dependencias.`" confirm-label="Eliminar" danger :loading="saving" @cancel="deleteClientTarget = false" @confirm="removeClient" />
     <ConfirmDialog :open="dependencyClientTarget" title="Desactivar cliente" message="El Cliente tiene historial o dependencias. Se conservará toda la información y pasará a Inactivos." confirm-label="Desactivar" danger :loading="saving" @cancel="dependencyClientTarget = false" @confirm="setClientActive(false)" />
     <ConfirmDialog :open="Boolean(deleteSiteTarget)" title="Eliminar Sede" :message="`Se eliminará ${deleteSiteTarget?.nombre ?? 'la Sede'} si no tiene dependencias.`" confirm-label="Eliminar" danger :loading="saving" @cancel="deleteSiteTarget = null" @confirm="removeSite" />
