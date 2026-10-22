@@ -32,6 +32,9 @@ const editorKey = ref(0)
 const editing = ref<AreaTemplateRecord | null>(null)
 const draft = ref<AreaTemplateInput>(blank())
 const actionTarget = ref<AreaTemplateRecord | null>(null)
+const discardOpen = ref(false)
+const original = ref('')
+const dirty = computed(() => editorOpen.value && JSON.stringify(draft.value) !== original.value)
 const clients = computed(() => [...store.activeClients, ...store.inactiveClients]
   .filter(client => client.tipoCliente === 'NEGOCIO')
   .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')))
@@ -68,8 +71,19 @@ function openEditor(record: AreaTemplateRecord | null = null): void {
   editorKey.value += 1
   editing.value = record
   draft.value = record ? toInput(record) : blank()
+  original.value = JSON.stringify(draft.value)
   editorOpen.value = true
 }
+function requestClose(): void {
+  if (saving.value) return
+  if (dirty.value) discardOpen.value = true
+  else editorOpen.value = false
+}
+function discard(): void {
+  discardOpen.value = false
+  editorOpen.value = false
+}
+
 async function save(): Promise<void> {
   if (saving.value) return
   saving.value = true
@@ -155,14 +169,17 @@ async function toggle(): Promise<void> {
       </template>
     </ResponsiveTable>
 
-    <BaseDialog :model-value="editorOpen" :title="title" :close-on-escape="!saving" @update:model-value="!saving && (editorOpen = $event)">
+    <BaseDialog :model-value="editorOpen" :title="title" :close-on-escape="!saving" @update:model-value="!$event && requestClose()">
       <AreaTemplateForm :key="editorKey" v-model="draft" :clients="clients" :saving="saving"
         @submit="save" @invalid="notifications.show('Revisa los nombres, el cliente y las áreas.', 'error')" />
       <template #footer>
-        <BaseButton variant="secondary" :disabled="saving" @click="editorOpen = false">Cancelar</BaseButton>
+        <BaseButton variant="secondary" :disabled="saving" @click="requestClose">Cancelar</BaseButton>
         <BaseButton type="submit" form="area-template-form" :loading="saving">{{ editing ? 'Guardar cambios' : 'Crear plantilla' }}</BaseButton>
       </template>
     </BaseDialog>
+    <ConfirmDialog :open="discardOpen" title="Descartar cambios"
+      message="Los cambios sin guardar de la plantilla se perderán." confirm-label="Descartar"
+      danger @cancel="discardOpen = false" @confirm="discard" />
     <ConfirmDialog :open="Boolean(actionTarget)" :title="actionTarget?.activo ? 'Desactivar plantilla' : 'Reactivar plantilla'"
       :message="actionTarget?.activo ? 'La plantilla dejará de estar disponible para nuevas sedes. Las áreas existentes no cambian.' : 'La plantilla volverá a estar disponible para su selección.'"
       :confirm-label="actionTarget?.activo ? 'Desactivar' : 'Reactivar'" :loading="saving"
