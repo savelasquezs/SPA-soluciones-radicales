@@ -13,6 +13,7 @@ import TechnicianFindingCard from '@/components/domain/services/TechnicianFindin
 import TechnicianFindingCreateEditor from '@/components/domain/services/TechnicianFindingCreateEditor.vue'
 import TechnicianNewDeviceEditor from '@/components/domain/services/TechnicianNewDeviceEditor.vue'
 import TechnicianSiteAreaDialog from '@/components/domain/services/TechnicianSiteAreaDialog.vue'
+import TechnicianServiceNavigation from '@/components/domain/services/TechnicianServiceNavigation.vue'
 import '@/components/domain/services/services.css'
 import { nextTechnicianRouteStep, orderedTechnicianAreas, technicianAreaIssues, technicianAreaResolved, type TechnicianAreaIssue } from '@/helpers/technicianServices'
 import { useTechnicianServicesStore } from '@/stores/technicianServices'
@@ -209,7 +210,8 @@ function openServiceOverview(): void {
 }
 
 function openReview(): void {
-  void router.push({ name: 'technician-service-review', params: { id: serviceId.value } })
+  void router.push({ name: packageValue.value?.vehiclesEnabled ? 'technician-service-vehicles' : 'technician-service-review',
+    params: { id: serviceId.value } })
 }
 
 const nextUnresolvedArea = computed(() => {
@@ -217,7 +219,8 @@ const nextUnresolvedArea = computed(() => {
   const others = [...orderedAreas.value.slice(index + 1), ...orderedAreas.value.slice(0, index)]
   return others.find(area => !technicianAreaResolved(area, serviceId.value)) ?? null
 })
-const continueLabel = computed(() => nextUnresolvedArea.value ? `Ir a ${nextUnresolvedArea.value.nombre}` : 'Ir al cierre')
+const continueLabel = computed(() => nextUnresolvedArea.value ? `Ir a ${nextUnresolvedArea.value.nombre}`
+  : packageValue.value?.vehiclesEnabled ? 'Ir a vehículos' : 'Ir al cierre')
 function continueAfterException(): void {
   if (nextUnresolvedArea.value) selectArea(nextUnresolvedArea.value.id)
   else openReview()
@@ -580,11 +583,8 @@ async function retryDevice(serviceDeviceId: string): Promise<void> {
           </div>
         </div>
 
-        <nav class="service-navigation" aria-label="Secciones del servicio">
-          <button type="button" @click="openServiceOverview"><FileText :size="17" aria-hidden="true" />Servicio</button>
-          <button type="button" class="service-navigation__active" aria-current="page"><MapIcon :size="17" aria-hidden="true" />Áreas</button>
-          <button type="button" @click="openReview"><ClipboardCheck :size="17" aria-hidden="true" />Cierre</button>
-        </nav>
+        <TechnicianServiceNavigation :service-id="serviceId" active="areas"
+          :vehicles-enabled="Boolean(packageValue?.vehiclesEnabled)" :first-area-id="orderedAreas[0]?.id" />
 
         <nav v-if="!currentArea.sinAcceso" class="area-tabs" aria-label="Contenido del Área">
           <button type="button" :class="{ 'area-tabs__active': activeTab === 'CRITERIA' }" :aria-current="activeTab === 'CRITERIA' ? 'page' : undefined" @click="selectTab('CRITERIA')">
@@ -649,7 +649,7 @@ async function retryDevice(serviceDeviceId: string): Promise<void> {
         <div v-else class="finding-list"><div v-for="finding in findings" :id="`area-item-${finding.id}`" :key="finding.id">
           <TechnicianFindingCard :finding="finding" :current-service-id="serviceId" :mutation="findingMutation(finding.id)" :focus-pending="validationTarget === finding.id" :validation-error="activeIssue?.id === finding.id ? activeIssue.message : ''" :editable="canEditRoute" :saving="findingSavingId === finding.id" @status="(input, files) => saveFindingStatus(finding.id, input, files)" @use-remote="useRemoteFinding(finding.id)" @retry="retryFinding(finding.id)" />
         </div></div>
-        <footer class="workspace-footer"><BaseButton variant="secondary" @click="goPrevious('findings')"><ArrowLeft :size="17" />Anterior</BaseButton><BaseButton @click="goNext('findings')">{{ stepAfterArea.kind === 'AREA' ? 'Siguiente área' : 'Ir al cierre' }}<ArrowRight :size="17" /></BaseButton></footer>
+        <footer class="workspace-footer"><BaseButton variant="secondary" @click="goPrevious('findings')"><ArrowLeft :size="17" />Anterior</BaseButton><BaseButton @click="goNext('findings')">{{ stepAfterArea.kind === 'AREA' ? 'Siguiente área' : packageValue?.vehiclesEnabled ? 'Ir a vehículos' : 'Ir al cierre' }}<ArrowRight :size="17" /></BaseButton></footer>
       </section>
     </template>
     <TechnicianSiteAreaDialog :open="newAreaOpen" :service-id="serviceId" @close="newAreaOpen=false" @created="openNewArea" />
