@@ -93,7 +93,10 @@ async function setup(page: Page, role: 'ADMINISTRADOR' | 'TECNICO'='ADMINISTRADO
       synchronize()
       const items=records.filter(item=>{
         const d=toBogotaInput(item.inicioProgramado).slice(0,10)
-        return d >= (url.searchParams.get('from') || '') && d <= (url.searchParams.get('to') || '9999') && (url.searchParams.get('tab')!=='history' || ['FINALIZADO','CANCELADO'].includes(item.estado))
+        const cancelledFamily=item.estado==='CANCELADO' || item.principal?.estado==='CANCELADO'
+        const history=url.searchParams.get('tab')==='history'
+        return d >= (url.searchParams.get('from') || '') && d <= (url.searchParams.get('to') || '9999')
+          && (history ? item.estado==='FINALIZADO' || cancelledFamily : !cancelledFamily)
       })
       const pageNumber=Number(url.searchParams.get('page') || '1')
       const pageSize=Number(url.searchParams.get('pageSize') || '25')
@@ -377,6 +380,8 @@ test('cancellation requires a reason and cash confirmation requires the actual c
   await page.getByRole('button',{ name:'Cancelar servicio',exact:true }).click()
   await expect(page.getByRole('dialog',{ name:'Cancelar servicio' })).toHaveCount(0)
   expect(api.records.every(value=>value.estado==='CANCELADO')).toBe(true)
+  await page.goto(listUrl)
+  await expect(page.getByText('SR-0101',{exact:true})).toHaveCount(0)
 })
 
 test('admin releases active technician access from the service detail',async({ page })=>{
@@ -450,10 +455,21 @@ test('weekly calendar expands its time grid and reveals operational detail on ho
   await expect(popover.locator('.svc-week-calendar__popover-state svg')).toHaveCount(1)
 })
 
+test('a cancelled Principal also hides a still programmed reinforcement from the calendar',async({page})=>{
+  const api=await setup(page)
+  const parent=api.records[0]!,reinforcement=api.records[1]!
+  parent.estado='CANCELADO'
+  const reinforcedDay=toBogotaInput(reinforcement.inicioProgramado).slice(0,10)
+  await page.goto('/agenda?view=week&from='+reinforcedDay)
+  await expect(page.locator('[data-service-id="'+reinforcement.id+'"]')).toHaveCount(0)
+  await page.goto('/servicios?tab=history&from='+day+'&to='+reinforcedDay)
+  await expect(page.getByText(reinforcement.solicitud,{exact:true}).first()).toBeVisible()
+})
+
 test('weekly calendar highlights every service state and preserves accent on hover',async({page})=>{
   const api=await setup(page)
-  const states=['PROGRAMADO','EN_PROCESO','FINALIZADO','CANCELADO'] as const
-  const labels=['Pendiente de realizar','Servicio en proceso','Servicio finalizado','Servicio cancelado']
+  const states=['PROGRAMADO','EN_PROCESO','FINALIZADO'] as const
+  const labels=['Pendiente de realizar','Servicio en proceso','Servicio finalizado']
   api.records.splice(0,api.records.length,...states.map((state,index)=>{
     const item=record(uid(80+index))
     item.estado=state
@@ -477,7 +493,8 @@ test('weekly calendar highlights every service state and preserves accent on hov
     await expect(event.locator('.svc-week-calendar__popover')).toBeVisible()
     expect(await event.evaluate(element=>getComputedStyle(element).borderLeftColor)).toBe(accent)
   }
-  expect(new Set(colors).size).toBe(4)
+  expect(new Set(colors).size).toBe(3)
+  await expect(calendar.locator('.svc-week-calendar__event--CANCELADO')).toHaveCount(0)
 })
 
 test('error retry, compact desktop, dark mode and mobile do not overflow the page',async({ page },info)=>{

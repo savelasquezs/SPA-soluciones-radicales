@@ -146,12 +146,16 @@ export function validateServiceInput(value: unknown, requireFuture = false, now 
 export function normalizeServiceSearch(value: string): string {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLocaleLowerCase('es')
 }
+/** Cancelled appointments, including reinforcements of a cancelled Principal, stay out of live schedules. */
+export function isCancelledServiceFamily(service: Pick<AdminService,'estado'|'principal'>): boolean {
+  return service.estado==='CANCELADO' || service.principal?.estado==='CANCELADO'
+}
 export function matchesServiceFilter(service: AdminService, filter: ServiceFilter): boolean {
   const day = toBogotaInput(service.inicioProgramado).slice(0, 10)
   return (!filter.from || day >= filter.from) && (!filter.to || day <= filter.to)
     && (!filter.clientId || service.clientId === filter.clientId)
     && (!filter.siteId || service.sedeId === filter.siteId)
-    && (filter.tab !== 'history' || ['FINALIZADO', 'CANCELADO'].includes(service.estado))
+    && (filter.tab === 'history' ? service.estado === 'FINALIZADO' || isCancelledServiceFamily(service) : !isCancelledServiceFamily(service))
     && (!filter.estado || service.estado === filter.estado) && (!filter.tipo || service.tipoServicio === filter.tipo)
     && (!filter.tecnicoId || service.tecnicoResponsableId === filter.tecnicoId || service.tecnicosColaboradoresIds.includes(filter.tecnicoId))
     && (!filter.query || normalizeServiceSearch(`${service.clienteNombre} ${service.sedeNombre} ${service.solicitud} ${service.direccion}`).includes(normalizeServiceSearch(filter.query)))

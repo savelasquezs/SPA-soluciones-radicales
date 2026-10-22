@@ -6,7 +6,7 @@ Este documento define la programación administrativa de Servicios Principales y
 
 ## Principios
 
-- La Agenda contiene Servicios ya confirmados y programados.
+- La Agenda contiene Servicios confirmados que no estén cancelados ni dependan de un Principal cancelado. Las cancelaciones y sus Refuerzos siguen consultables en Historial.
 - Una próxima visita sugerida por periodicidad no es todavía un Servicio y no debe reservar Técnico, bloquear horario ni crear evento de Calendar.
 - El Administrador puede adaptar fechas y horarios a la disponibilidad real del cliente.
 - Las automatizaciones proponen y precargan; no sustituyen la confirmación del cliente ni la decisión final del Administrador.
@@ -24,7 +24,7 @@ La vista Semana ofrece una lista cronológica de un solo día como presentación
 Al ingresar en una semana, se selecciona hoy si pertenece a ella; si no, el primer día con servicios y, si tampoco existe, el lunes. La opción Horario (`mobileView=hours`) presenta una cuadrícula de una sola columna para consultar cruces y crear pulsando en una hora libre. Regresar a Lista conserva la misma fecha. Los servicios cortos usan una etiqueta de una línea y sus detalles permanecen accesibles en Lista.
 
 - Los días e indicadores cuentan los servicios por fecha de inicio programado en Bogotá, sin duplicar servicios nocturnos; la lista indica la fecha de finalización si cruza medianoche.
-- Pulsar un servicio Programado abre la reprogramación rápida existente. Pulsar uno Finalizado o Cancelado abre su detalle. No se anuncia arrastrar con el dedo; el drag-and-drop con mouse permanece en escritorio y exige confirmación.
+- Pulsar un servicio Programado abre la reprogramación rápida existente. Pulsar uno Finalizado abre su detalle. Los Cancelados se consultan únicamente en Historial. No se anuncia arrastrar con el dedo; el drag-and-drop con mouse permanece en escritorio y exige confirmación.
 - Crear desde la fecha elegida precarga el formulario existente y el enlace de regreso conserva el día elegido. Si la fecha no permite programar una visita futura, se usa el formulario normal.
 - Para garantizar indicadores completos, Semana descarga las páginas adicionales cuando el total supera los 100 servicios de la primera página; las lecturas siguen siendo cancelables cuando cambian fecha, filtros o sesión.
 - En 320 px, la franja de días puede desplazarse horizontalmente de forma independiente, nunca la página completa. El calendario de escritorio conserva sus siete columnas originales.
@@ -136,7 +136,9 @@ Si se cancela un Principal y su Refuerzo asociado continúa en estado `PROGRAMAD
 
 Cancelar únicamente el Refuerzo no cancela ni modifica el Principal.
 
-Un Refuerzo que ya esté en ejecución o finalizado conserva su histórico y no se modifica mediante una cancelación posterior del Principal.
+Un Refuerzo que ya esté en ejecución o finalizado conserva su estado y su histórico. Sin embargo, cancelar el Principal retira ambos de la Agenda administrativa (Tabla, Semana y móvil), aunque no se altere el estado del Refuerzo.
+
+La sincronización de Google Calendar elimina el evento del organizador y envía la cancelación a todos los participantes con `sendUpdates=all`. La outbox también reintenta la eliminación de eventos que hayan fallado. Nunca se eliminan los servicios de la base de datos ni su trazabilidad.
 
 ## Próximos por confirmar
 

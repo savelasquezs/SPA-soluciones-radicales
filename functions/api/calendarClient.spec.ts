@@ -32,6 +32,7 @@ describe('Calendar event delivery',()=>{
     await writeCalendarEvent({ ...input,cancelled:true },'synthetic-token')
     expect(fetchMock).toHaveBeenCalledOnce()
     expect(fetchMock.mock.calls[0]?.[1]?.method).toBe('DELETE')
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('sendUpdates=all')
   })
   it('does not overwrite a concurrent external edit',async()=>{
     fetchMock.mockResolvedValueOnce(reply({ id:eventId,etag:'"old"' })).mockResolvedValueOnce(reply({},412))
