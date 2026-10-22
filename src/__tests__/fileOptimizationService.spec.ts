@@ -21,7 +21,7 @@ beforeEach(() => {
   factory = vi.fn<() => FakeWorker>(function () { return worker })
   vi.stubGlobal('Worker', factory)
 })
-afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers() })
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers() })
 
 const original = () => new File(['large image content'], 'foto.png', { type: 'image/png', lastModified: 1234 })
 const result = () => new File(['small'], 'foto.webp', { type: 'image/webp', lastModified: 1234 })
@@ -74,6 +74,62 @@ describe('optimización previa al upload', () => {
     Object.defineProperty(large, 'size', { value: MAX_OPTIMIZATION_SOURCE_BYTES + 1 })
     await expect(optimizeFileForStorage('SITE_PLAN', large)).rejects.toThrow('64 MB')
     expect(factory).not.toHaveBeenCalled()
+  })
+
+  function mockNativePhotoCanvas(): void {
+    class NativeURL extends URL {
+      static createObjectURL = vi.fn(() => 'blob:comprobante')
+      static revokeObjectURL = vi.fn()
+    }
+    class NativeImage {
+      naturalWidth = 1200
+      naturalHeight = 800
+      onload: (() => void) | null = null
+      onerror: (() => void) | null = null
+      set src(_url: string) { queueMicrotask(() => this.onload?.()) }
+    }
+    vi.stubGlobal('URL', NativeURL)
+    vi.stubGlobal('Image', NativeImage)
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue({ drawImage: vi.fn() } as unknown as CanvasRenderingContext2D)
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob')
+      .mockImplementation((callback) => callback(new Blob(['webp'], { type: 'image/webp' })))
+  }
+
+  it('rescata una foto JPG legible si falla el Worker del móvil y preserva MIME y fecha', async () => {
+    mockNativePhotoCanvas()
+    const file = new File([new Uint8Array([255, 216, 255, 224, 0, 1, 2, 3, 4, 5, 6, 7])],
+      'comprobante.jpg', { type: 'image/jpeg', lastModified: 456 })
+    const pending = optimizeFileForStorage('SERVICE_PHOTO', file)
+    worker.onmessage?.({ data: { ok: false, error: 'OffscreenCanvas no disponible en este móvil' } })
+    const result = await pending
+    expect(result.name).toBe('comprobante.webp')
+    expect(result.type).toBe('image/webp')
+    expect(result.size).toBe(4)
+    expect(result.lastModified).toBe(456)
+    expect(worker.terminate).toHaveBeenCalledOnce()
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:comprobante')
+  })
+
+  it('mantiene el JPG original solo después de validar y reintentar la compresión', async () => {
+    mockNativePhotoCanvas()
+    const file = new File([new Uint8Array([255, 216, 255, 224, 1, 2, 3])],
+      'comprobante.jpg', { type: 'image/jpeg' })
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob')
+      .mockImplementation((callback) => callback(new Blob(['más grande'], { type: 'image/webp' })))
+    const pending = optimizeFileForStorage('SERVICE_PHOTO', file)
+    worker.onerror?.()
+    expect(await pending).toBe(file)
+    expect(worker.terminate).toHaveBeenCalledOnce()
+  })
+
+  it('rechaza archivos de imagen falsos aunque el Worker no pueda procesarlos', async () => {
+    mockNativePhotoCanvas()
+    const file = new File(['esto no es un JPEG'], 'comprobante.jpg', { type: 'image/jpeg' })
+    const pending = optimizeFileForStorage('SERVICE_PHOTO', file)
+    worker.onmessage?.({ data: { ok: false, error: 'Worker no pudo procesar la foto' } })
+    await expect(pending).rejects.toThrow('fotografía JPG, PNG o WebP válida')
+    expect(URL.createObjectURL).not.toHaveBeenCalled()
   })
 
   it('no oculta errores de compresión subiendo el original', async () => {
