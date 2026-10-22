@@ -24,10 +24,18 @@ export const reportTechnicianPayment=(serviceId:string,requestId:string,monto:nu
   apiRequest<Pago>(`${root}/technician/services/${serviceId}/payments`,post({requestId,monto,metodo,observacion}))
 export async function uploadPaymentProof(paymentId:string,original:File):Promise<void> {
   const file=await optimizeFileForStorage('SERVICE_PHOTO',original)
+  if(!['image/jpeg','image/png','image/webp'].includes(file.type))
+    throw new Error('Selecciona una fotografía JPG, PNG o WebP.')
   const auth=await apiRequest<{url:string;storagePath:string;contentType:string}>(`${root}/payments/${paymentId}/proof/upload-url`,
     post({fileName:file.name,contentType:file.type,size:file.size}))
-  const saved=await fetch(auth.url,{method:'PUT',headers:{'Content-Type':auth.contentType},body:file})
-  if(!saved.ok)throw new Error('No fue posible subir el comprobante. Vuelve a intentarlo desde Mi caja.')
+  let uploaded: Response
+  try{
+    uploaded=await fetch(auth.url,{method:'PUT',headers:{'Content-Type':auth.contentType},body:file})
+  }catch{
+    throw new Error('No se pudo conectar con el almacenamiento. Revisa la conexión e intenta de nuevo.')
+  }
+  if(!uploaded.ok)throw new Error('El almacenamiento no aceptó el comprobante. Intenta de nuevo con la misma fotografía.')
+  // El servidor comprueba la existencia del objeto privado antes de registrar la evidencia.
   await apiRequest(`${root}/payments/${paymentId}/proof`,post({storagePath:auth.storagePath}))
 }
 export const getPaymentProofUrl=async(id:string)=>(
