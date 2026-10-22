@@ -773,8 +773,10 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     }
     await deleteTechnicianMutation(creation)
     const now = new Date().toISOString()
+    // Preserve the original order: queued criteria, monitoring points and
+    // findings must never sync before the newly registered Sede Area.
     await saveTechnicianMutation({ ...creation, requestId: crypto.randomUUID(), nombre: normalized,
-      status: 'PENDING', error: null, createdAt: now, updatedAt: now })
+      status: 'PENDING', error: null, createdAt: creation.createdAt, updatedAt: now })
     await reloadMutations(serviceId)
     await persistPackage({ ...cache.package, areas: cache.package.areas.map(area => area.id !== serviceAreaId
       ? area : { ...area, nombre: normalized }) })
