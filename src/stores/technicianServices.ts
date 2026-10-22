@@ -250,6 +250,7 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
       attendedVehicleIds: null,
     })
     await reloadMutations(serviceId)
+    return { closureCancelled: Boolean(closure) }
   }
 
   async function persistLocalSignature(serviceId: string, role: 'TECHNICIAN' | 'CLIENT', mediaId: string): Promise<void> {

@@ -107,8 +107,10 @@ async function discardFailed(): Promise<void> {
   busy.value = true
   error.value = ''
   try {
-    await services.discardFailedVehicle(serviceId.value, failedNew.value.vehicleId)
-    notice.value = 'Se descartó la placa que no pudo registrarse. Revisa y confirma de nuevo la selección.'
+    const result = await services.discardFailedVehicle(serviceId.value, failedNew.value.vehicleId)
+    notice.value = result.closureCancelled
+      ? 'Placa descartada. Se canceló el cierre pendiente para que revises los vehículos y finalices de nuevo.'
+      : 'Placa descartada. Revisa y confirma de nuevo la selección.'
   } catch (failure) { error.value = failure instanceof Error ? failure.message : 'No fue posible descartar la placa.' }
   finally { busy.value = false }
 }
