@@ -15,6 +15,7 @@ import {
 } from './auth'
 import { pool, transaction } from './db'
 import { certificateRoutes } from './certificates/routes'
+import { areaTemplatesRoutes, applyAreaTemplate, optionalAreaTemplateId } from './areaTemplates'
 import {
   completeGoogleAuthorization,
   createGoogleAuthorization,
@@ -507,7 +508,7 @@ app.delete('/api/clients/:id', async (context) => {
            or exists (select 1 from public.dispositivos d where d.sede_id = s.id)
            or exists (select 1 from public.vehiculos v where v.sede_id = s.id)
          )
-       ) as "hasDependencies"`,
+       ) or exists (select 1 from public.plantillas_areas where negocio_id = $1) as "hasDependencies"`,
       [id],
     )
     if (dependencies.rows[0]?.hasDependencies) throw dependencyError('Cliente')
@@ -551,7 +552,9 @@ app.get('/api/clients/:id/sites', async (context) => {
 })
 
 app.post('/api/clients/:id/sites', async (context) => {
-  const input = siteInput(await jsonBody(context.req.raw))
+  const body = await jsonBody(context.req.raw)
+  const input = siteInput(body)
+  const areaTemplateId = optionalAreaTemplateId(body.areaTemplateId)
   const clientId = context.req.param('id')
   const record = await transaction(async (client) => {
     const admin = await requireAdmin(client, context.get('identity'))
@@ -577,7 +580,8 @@ app.post('/api/clients/:id/sites', async (context) => {
     )
     const id = inserted.rows[0]?.id
     if (!id) throw new ApiError(500, 'No fue posible crear la Sede')
-    await audit(client, admin.id, 'SEDE_CREADA', 'Sedes', id, { clientId })
+    if (areaTemplateId) await applyAreaTemplate(client, id, areaTemplateId)
+    await audit(client, admin.id, 'SEDE_CREADA', 'Sedes', id, { clientId, areaTemplateId })
     return findSite(client, id)
   })
   return context.json(record, 201)
@@ -971,6 +975,7 @@ app.post('/api/email/test', async (context) => {
 app.notFound((context) => context.json({ error: 'Ruta no encontrada' }, 404))
 
 app.route('/api/certificates', certificateRoutes)
+app.route('/api/area-templates', areaTemplatesRoutes)
 
 app.onError((error, context) => {
   if (error instanceof ApiError) {
@@ -987,6 +992,8 @@ app.onError((error, context) => {
       usuarios_correo_google_uidx: 'Este correo ya está registrado.',
       negocios_nit_uidx: 'Este NIT ya está registrado.',
       areas_sede_nombre_uidx: 'Ya existe un Área con ese nombre en la Sede.',
+      plantillas_areas_global_nombre_uidx: 'Ya existe una plantilla global con ese nombre.',
+      plantillas_areas_privada_nombre_uidx: 'El cliente ya tiene una plantilla con ese nombre.',
       vehiculos_sede_placa_uidx: 'Ya existe un vehículo con esa placa en la Sede.',
       sedes_residencial_cliente_uidx: 'El Cliente Casa ya tiene una ubicación residencial.',
     }[databaseError.constraint ?? ''] ?? 'Ya existe un registro con esos datos'
