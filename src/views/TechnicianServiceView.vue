@@ -4,6 +4,7 @@ import { storeToRefs } from 'pinia'
 import { ClipboardCheck, Clock3, CloudOff, Map, MapPin, PackageCheck, Plus, RefreshCw, Wifi } from 'lucide-vue-next'
 import { useRoute, useRouter } from 'vue-router'
 import BaseButton from '@/components/base/BaseButton.vue'
+import { ApiClientError } from '@/services/apiService'
 import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import StatusBadge from '@/components/base/StatusBadge.vue'
 import StatusPanel from '@/components/base/StatusPanel.vue'
@@ -77,7 +78,9 @@ async function claim(): Promise<void> {
     notifications.show('Servicio habilitado en este celular.', 'success')
     await enterRoute()
   } catch (failure) {
-    viewError.value = failure instanceof Error ? failure.message : 'No fue posible habilitar el servicio.'
+    viewError.value = failure instanceof ApiClientError && failure.code === 'SERVICE_LOCKED'
+      ? 'No pudimos verificar el acceso de este celular. Conserva los datos locales y solicita al Administrador liberar el servicio si necesitas recuperarlo.'
+      : failure instanceof Error ? failure.message : 'No fue posible habilitar el servicio.'
     notifications.show(viewError.value, 'error')
   }
 }
@@ -123,7 +126,7 @@ function openReview(): void {
         </dl>
         <TechnicianClientContact :service="packageValue.service" />
         <BaseButton v-if="packageValue.service.tipoServicio==='PRINCIPAL' && ['EN_PROCESO','FINALIZADO'].includes(packageValue.service.estado)" variant="secondary" size="compact" :disabled="!online" @click="paymentOpen=true">Reportar cobro</BaseButton>
-        <p class="technician-service-hero__saved"><PackageCheck :size="18" aria-hidden="true" />{{ currentFromCache ? 'Copia guardada disponible sin conexión' : `Guardado en este celular · ${formatTechnicianDateTime(currentCache?.savedAt ?? packageValue.serverNow)}` }}</p>
+        <p class="technician-service-hero__saved"><PackageCheck :size="18" aria-hidden="true" />{{ currentFromCache ? 'Copia guardada disponible sin conexión' : `Datos disponibles en este celular · ${formatTechnicianDateTime(currentCache?.savedAt ?? packageValue.serverNow)}` }}</p>
         <div v-if="packageValue.service.estado === 'PROGRAMADO'" class="technician-start">
           <p>{{ startMessage }}</p>
           <BaseButton :loading="action === 'START'" :disabled="!online || !packageValue.canStart" @click="start">Iniciar servicio</BaseButton>
