@@ -53,6 +53,8 @@ Al iniciar, el servidor vuelve a cargar la configuración vigente, congela Área
 
 Solo un celular puede editar un Servicio `EN_PROCESO`. El bloqueo dura toda la ejecución y se identifica por usuario, Servicio y dispositivo físico; cerrar el navegador no lo libera. En el detalle administrativo del Servicio se muestra quién conserva el acceso cuando existe un bloqueo y el Administrador puede liberarlo de forma auditada para permitir recuperación en otro celular. La confirmación advierte que los cambios que existan únicamente en el celular anterior no se transfieren automáticamente. La primera versión no admite edición técnica simultánea ni mezcla automática de dos dispositivos físicos.
 
+Al regresar a la pestaña, la SPA conserva el acceso de edición guardado sin reclamar un nuevo bloqueo. Si falta la identidad del navegador en `localStorage` pero existe el paquete durable del mismo Técnico en IndexedDB, recupera el identificador original en lugar de crear otro. Si el servicio estaba en ejecución y se perdió solamente la confirmación local del bloqueo, intenta restaurarlo con la identidad persistida; el servidor exige que coincidan tanto el Técnico como el identificador del dispositivo. Nunca sustituye un bloqueo ajeno automáticamente. Si se eliminaron los datos del sitio o se cambió de navegador/origen, el Administrador debe liberar el bloqueo antes de usar ese nuevo contexto, y se advierte sobre posibles cambios sin sincronizar en el contexto anterior.
+
 ## Criterios MIP
 
 Los criterios son un catálogo administrable independiente.
