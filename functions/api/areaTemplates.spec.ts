@@ -1,9 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+type QueryResult = { rows: unknown[]; rowCount: number }
+type Query = (sql: string, params?: unknown[]) => Promise<QueryResult>
+type Transaction = (callback: (client: { query: Query }) => Promise<unknown>) => Promise<unknown>
+
 const { requireAdmin, transaction, clientQuery } = vi.hoisted(() => ({
-  requireAdmin: vi.fn(),
-  transaction: vi.fn(),
-  clientQuery: vi.fn(),
+  requireAdmin: vi.fn<(client: unknown, identity: unknown) => Promise<{ id: string }>>(),
+  transaction: vi.fn<Transaction>(),
+  clientQuery: vi.fn<Query>(),
 }))
 vi.mock('./auth', () => ({
   ApiError: class ApiError extends Error {
