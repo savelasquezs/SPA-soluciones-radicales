@@ -471,7 +471,44 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
         await saveTechnicianMutation(sending)
         await reloadMutations(serviceId)
         try {
-          if (sending.kind === 'AREA_CREATE') {
+          if (sending.kind === 'VEHICLE_CREATE') {
+            const result = await createTechnicianVehicle(serviceId, sending.requestId, sending.deviceId,
+              sending.lockToken, sending.vehicleId, sending.placa)
+            const remaining = await listTechnicianMutations(actorId(), serviceId)
+            // A concurrent admin/technician may have registered the same plate during offline work.
+            for (const queued of remaining.filter((item): item is TechnicianVehicleSelectionMutation => item.kind === 'VEHICLE_SELECTION')) {
+              if (queued.selectedIds.includes(sending.vehicleId)) {
+                if (queued.status === 'SENDING') throw new Error('La selección está sincronizando. Intenta de nuevo.')
+                const selectedIds = [...new Set(queued.selectedIds.map(id => id === sending.vehicleId ? result.vehicle.id : id))].sort()
+                await saveTechnicianMutation({ ...queued, selectedIds, updatedAt: new Date().toISOString() })
+              }
+            }
+            await deleteTechnicianMutation(sending)
+            const cached = caches.value[serviceId]
+            if (cached) {
+              const remap = (ids: string[] | null | undefined) =>
+                ids?.map(id => id === sending.vehicleId ? result.vehicle.id : id)
+              await persistPackage({
+                ...cached.package,
+                vehicles: cached.package.vehicles.map(vehicle =>
+                  vehicle.id === sending.vehicleId ? result.vehicle : vehicle)
+                  .filter((vehicle, index, vehicles) => vehicles.findIndex(item => item.id === vehicle.id) === index),
+                vehicleDraftIds: remap(cached.package.vehicleDraftIds),
+                attendedVehicleIds: remap(cached.package.attendedVehicleIds) ?? null,
+              })
+            }
+          } else if (sending.kind === 'VEHICLE_SELECTION') {
+            const result = await saveTechnicianVehicleSelection(serviceId, sending.requestId, sending.deviceId,
+              sending.lockToken, sending.selectedIds)
+            await deleteTechnicianMutation(sending)
+            const remaining = await listTechnicianMutations(actorId(), serviceId)
+            const newer = remaining.filter((item): item is TechnicianVehicleSelectionMutation =>
+              item.kind === 'VEHICLE_SELECTION').at(-1)
+            const cached = caches.value[serviceId]
+            if (cached) await persistPackage({ ...cached.package,
+              attendedVehicleIds: newer?.selectedIds ?? result.attendedVehicleIds,
+            })
+          } else if (sending.kind === 'AREA_CREATE') {
             const result = await createTechnicianSiteArea(serviceId, sending.requestId, sending.deviceId,
               sending.lockToken, sending.areaId, sending.serviceAreaId,
               { nombre: sending.nombre, esExterna: sending.esExterna }, sending.criteria)
@@ -702,7 +739,10 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
           }
           const retryable = !(failure instanceof ApiClientError) || failure.status >= 500 || failure.status === 408 || failure.status === 429
           const error = failure instanceof Error ? failure.message : 'No fue posible sincronizar el cambio.'
-          if (sending.kind === 'AREA_CREATE') {
+          if (sending.kind === 'VEHICLE_CREATE' || sending.kind === 'VEHICLE_SELECTION') {
+            await saveTechnicianMutation({ ...sending, status: retryable ? 'SENDING' : 'CONFLICT',
+              error, updatedAt: new Date().toISOString() })
+          } else if (sending.kind === 'AREA_CREATE') {
             await saveTechnicianMutation({ ...sending, status: retryable ? 'SENDING' : 'CONFLICT',
               error, updatedAt: new Date().toISOString() })
           } else if (sending.kind === 'AREA_ORDER') {
