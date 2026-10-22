@@ -164,7 +164,7 @@ export async function createTechnicianSiteArea(
     [site.siteId, nombre],
   )).rows[0]
   if (existing) throw new ApiError(409, existing.activo
-    ? 'Esta Área ya existe en la Sede. Actualiza el recorrido para verla.'
+    ? 'Esta Área ya existe en la Sede y no puede duplicarse.'
     : 'Esta Área está inactiva. Solicita al administrador que la reactive.', 'SITE_AREA_EXISTS')
 
   const applicable = (await client.query<{ id: string }>(`
