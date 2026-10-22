@@ -12,7 +12,9 @@ import ServicePage from '@/components/domain/services/ServicePage.vue'
 import TechnicianPaymentDialog from '@/components/domain/services/TechnicianPaymentDialog.vue'
 import SendReportDialog from '@/components/domain/services/SendReportDialog.vue'
 import TechnicianSignaturePad from '@/components/domain/services/TechnicianSignaturePad.vue'
+import TechnicianServiceNavigation from '@/components/domain/services/TechnicianServiceNavigation.vue'
 import { orderedTechnicianAreas, technicianAreaResolved, technicianAreaIssues } from '@/helpers/technicianServices'
+import { vehicleChecklistResolved } from '@/helpers/technicianVehicles'
 import { useTechnicianServicesStore } from '@/stores/technicianServices'
 import { useTechnicianReportEmailStore } from '@/stores/technicianReportEmails'
 import type { TechnicianMutation } from '@/types/technicianServices'
@@ -44,7 +46,17 @@ const finalized = computed(() => packageValue.value?.service.estado === 'FINALIZ
 const residential = computed(() => packageValue.value?.service.tipoSede === 'RESIDENCIAL')
 const reinforcement = computed(() => packageValue.value?.service.tipoServicio === 'REFUERZO')
 const simplified = computed(() => residential.value || reinforcement.value)
-const canFinalize = computed(() => !pending.value.length && technicianSigned.value && clientSigned.value && Boolean(clientName.value.trim()))
+const obsoleteVehiclePackage = computed(() => Boolean(packageValue.value
+  && packageValue.value.service.tipoServicio === 'PRINCIPAL'
+  && packageValue.value.service.tipoSede !== 'RESIDENCIAL'
+  && typeof packageValue.value.vehiclesEnabled !== 'boolean'))
+const vehiclesDone = computed(() => !packageValue.value || vehicleChecklistResolved(
+  packageValue.value.vehiclesEnabled, packageValue.value.attendedVehicleIds, packageValue.value.vehicleDraftIds))
+const vehicleChangesPending = computed(() => services.currentMutations.some(item =>
+  item.kind === 'VEHICLE_CREATE' || item.kind === 'VEHICLE_SELECTION'))
+const canFinalize = computed(() => !pending.value.length && !obsoleteVehiclePackage.value && vehiclesDone.value
+  && !services.currentMutations.some(item => item.status === 'CONFLICT')
+  && technicianSigned.value && clientSigned.value && Boolean(clientName.value.trim()))
 const canOfferReport = computed(() => finalized.value
   || (finalization.value && finalization.value.status !== 'CONFLICT'))
 const pendingEmailItems = computed(() => emails.forService(serviceId.value))
@@ -57,6 +69,8 @@ const operationLabels: Record<TechnicianMutation['kind'], string> = {
   DEVICE_REVIEW: 'Revisión de puesto',
   FINDING_CREATE: 'Nuevo Hallazgo',
   FINDING_STATUS: 'Seguimiento de Hallazgo',
+  VEHICLE_CREATE: 'Registro de vehículo',
+  VEHICLE_SELECTION: 'Selección de vehículos',
   SERVICE_FINALIZE: 'Cierre del servicio',
 }
 const syncProblem = computed(() => services.currentMutations.find(item =>
@@ -113,6 +127,10 @@ onMounted(async () => {
 function reviewSyncProblem(): void {
   const problem = syncProblem.value
   if (!problem) return
+  if (problem.kind === 'VEHICLE_CREATE' || problem.kind === 'VEHICLE_SELECTION') {
+    void router.push({ name: 'technician-service-vehicles', params: { id: serviceId.value } })
+    return
+  }
   if (problem.kind === 'AREA_CREATE') {
     void router.push({ name: 'technician-service-area',
       params: { id: serviceId.value, areaId: problem.serviceAreaId }, query: { editArea: '1' } })
@@ -185,14 +203,36 @@ async function finish(): Promise<void> {
     <LoadingSkeleton v-if="loading" label="Revisando pendientes" :rows="5" />
     <StatusPanel v-else-if="error" title="No fue posible revisar el servicio" :message="error" tone="danger" />
     <template v-else-if="packageValue">
+      <TechnicianServiceNavigation :service-id="serviceId" active="review"
+        :vehicles-enabled="packageValue.vehiclesEnabled" :first-area-id="areas[0]?.id" />
       <StatusPanel v-if="simplified && !finalized" compact :title="reinforcement ? 'Servicio de refuerzo' : 'Servicio residencial'" message="No requiere recorrido por Áreas. Registra ambas firmas para finalizar." tone="neutral" />
       <StatusPanel v-else-if="finalized" compact title="Servicio finalizado" message="Las firmas y el cierre fueron confirmados por el servidor." tone="success" />
+      <StatusPanel v-else-if="pending.length && !vehiclesDone" compact title="Áreas y vehículos pendientes"
+        :message="`${pending.length} de ${areas.length} Áreas requieren información y los vehículos aún no se han confirmado.`"
+        tone="warning" />
       <StatusPanel v-else-if="pending.length" compact title="Aún hay Áreas pendientes" :message="`${pending.length} de ${areas.length} Áreas requieren información. Puedes revisar el cierre, pero no finalizar hasta completarlas.`" tone="warning" />
-      <StatusPanel v-else compact title="Recorrido completo" message="Las Áreas están resueltas. Registra ambas firmas para finalizar." tone="success" />
+      <StatusPanel v-else-if="obsoleteVehiclePackage" compact title="Actualiza el servicio"
+        message="Necesitas conexión para cargar la configuración vehicular de este servicio antes de finalizar." tone="warning" />
+      <StatusPanel v-else-if="!vehiclesDone" compact title="Vehículos sin confirmar"
+        message="Revisa la sección Vehículos y confirma los atendidos antes de finalizar." tone="warning" />
+      <StatusPanel v-else compact title="Recorrido completo" message="Las Áreas y la atención vehicular están resueltas. Registra ambas firmas para finalizar." tone="success" />
       <section v-if="!simplified" class="review-list" aria-labelledby="review-areas-title"><h2 id="review-areas-title">Estado por Área</h2>
         <button v-for="area in areas" :key="area.id" type="button" @click="openArea(area.id)">
           <span class="review-list__name"><strong>{{ area.nombre }}</strong><small v-if="technicianAreaIssues(area, serviceId).length">{{ technicianAreaIssues(area, serviceId).filter(issue => issue.tab === 'criteria').length }} criterios · {{ technicianAreaIssues(area, serviceId).filter(issue => issue.tab === 'points').length }} puestos · {{ technicianAreaIssues(area, serviceId).filter(issue => issue.tab === 'findings').length }} hallazgos pendientes</small></span>
           <StatusBadge :tone="technicianAreaResolved(area, serviceId) ? 'success' : 'neutral'">{{ technicianAreaResolved(area, serviceId) ? 'Resuelta' : 'Pendiente' }}</StatusBadge>
+        </button>
+      </section>
+      <section v-if="packageValue.vehiclesEnabled" class="review-list" aria-labelledby="review-vehicles-title">
+        <h2 id="review-vehicles-title">Vehículos atendidos</h2>
+        <button type="button" @click="router.push({ name: 'technician-service-vehicles', params: { id: serviceId } })">
+          <span class="review-list__name"><strong>{{ packageValue.attendedVehicleIds == null && finalized ? 'Sin registro histórico' :
+  vehiclesDone ? (packageValue.attendedVehicleIds?.length ?? 0) + ' atendidos' : 'Sin confirmar' }}</strong>
+            <small>{{ finalized && packageValue.attendedVehicleIds == null ? 'Este servicio finalizado no conserva datos vehiculares.' :
+  vehiclesDone ? vehicleChangesPending ? 'Guardado en este celular · falta sincronizar.' : 'Selección registrada para esta visita.' : 'Revisa y confirma esta sección antes de finalizar.' }}</small></span>
+          <StatusBadge :tone="!vehiclesDone ? 'warning' : vehicleChangesPending ? 'neutral' : 'success'">
+            {{ finalized && packageValue.attendedVehicleIds == null ? 'Histórico' :
+  !vehiclesDone ? 'Pendiente' : vehicleChangesPending ? 'Local' : 'Confirmado' }}
+          </StatusBadge>
         </button>
       </section>
       <section v-if="!finalized" class="signature-section" aria-labelledby="signatures-title">
@@ -204,7 +244,7 @@ async function finish(): Promise<void> {
           :message="syncProblem ? syncProblemMessage : actionError || finalization?.error || ''" tone="danger" />
         <StatusPanel v-else-if="actionMessage" compact title="Estado del cierre" :message="actionMessage" :tone="actionMessage === 'Servicio finalizado.' ? 'success' : 'warning'" />
         <BaseButton v-if="syncProblem" variant="secondary" size="compact" :disabled="saving" @click="reviewSyncProblem">
-          {{ syncProblemArea ? 'Revisar Área' : 'Revisar recorrido' }}
+          {{ syncProblemArea ? 'Revisar Área' : syncProblem?.kind === 'VEHICLE_CREATE' || syncProblem?.kind === 'VEHICLE_SELECTION' ? 'Revisar vehículos' : 'Revisar recorrido' }}
         </BaseButton>
         <BaseButton :loading="saving" :disabled="!canFinalize || needsVersionResolution || (Boolean(finalization) && (!online || services.syncing))" @click="finish">{{ finalization?.status === 'CONFLICT' ? 'Reintentar cierre' : finalization ? (online ? 'Reintentar sincronización' : 'Cierre pendiente') : 'Finalizar servicio' }}</BaseButton>
       </section>

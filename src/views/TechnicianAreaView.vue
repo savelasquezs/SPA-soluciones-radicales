@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { ArrowLeft, ArrowRight, CheckCheck, CheckCircle2, ClipboardCheck, FileText, ListChecks, ListOrdered, Map as MapIcon, Plus, Search, Wrench } from 'lucide-vue-next'
+import { ArrowLeft, ArrowRight, CheckCheck, CheckCircle2, ListChecks, ListOrdered, Plus, Search, Wrench } from 'lucide-vue-next'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import BaseButton from '@/components/base/BaseButton.vue'
 import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
@@ -13,6 +13,7 @@ import TechnicianFindingCard from '@/components/domain/services/TechnicianFindin
 import TechnicianFindingCreateEditor from '@/components/domain/services/TechnicianFindingCreateEditor.vue'
 import TechnicianNewDeviceEditor from '@/components/domain/services/TechnicianNewDeviceEditor.vue'
 import TechnicianSiteAreaDialog from '@/components/domain/services/TechnicianSiteAreaDialog.vue'
+import TechnicianServiceNavigation from '@/components/domain/services/TechnicianServiceNavigation.vue'
 import '@/components/domain/services/services.css'
 import { nextTechnicianRouteStep, orderedTechnicianAreas, technicianAreaIssues, technicianAreaResolved, type TechnicianAreaIssue } from '@/helpers/technicianServices'
 import { useTechnicianServicesStore } from '@/stores/technicianServices'
@@ -209,7 +210,8 @@ function openServiceOverview(): void {
 }
 
 function openReview(): void {
-  void router.push({ name: 'technician-service-review', params: { id: serviceId.value } })
+  void router.push({ name: packageValue.value?.vehiclesEnabled ? 'technician-service-vehicles' : 'technician-service-review',
+    params: { id: serviceId.value } })
 }
 
 const nextUnresolvedArea = computed(() => {
@@ -217,7 +219,8 @@ const nextUnresolvedArea = computed(() => {
   const others = [...orderedAreas.value.slice(index + 1), ...orderedAreas.value.slice(0, index)]
   return others.find(area => !technicianAreaResolved(area, serviceId.value)) ?? null
 })
-const continueLabel = computed(() => nextUnresolvedArea.value ? `Ir a ${nextUnresolvedArea.value.nombre}` : 'Ir al cierre')
+const continueLabel = computed(() => nextUnresolvedArea.value ? `Ir a ${nextUnresolvedArea.value.nombre}`
+  : packageValue.value?.vehiclesEnabled ? 'Ir a vehículos' : 'Ir al cierre')
 function continueAfterException(): void {
   if (nextUnresolvedArea.value) selectArea(nextUnresolvedArea.value.id)
   else openReview()
@@ -580,11 +583,8 @@ async function retryDevice(serviceDeviceId: string): Promise<void> {
           </div>
         </div>
 
-        <nav class="service-navigation" aria-label="Secciones del servicio">
-          <button type="button" @click="openServiceOverview"><FileText :size="17" aria-hidden="true" />Servicio</button>
-          <button type="button" class="service-navigation__active" aria-current="page"><MapIcon :size="17" aria-hidden="true" />Áreas</button>
-          <button type="button" @click="openReview"><ClipboardCheck :size="17" aria-hidden="true" />Cierre</button>
-        </nav>
+        <TechnicianServiceNavigation :service-id="serviceId" active="areas"
+          :vehicles-enabled="Boolean(packageValue?.vehiclesEnabled)" :first-area-id="orderedAreas[0]?.id" />
 
         <nav v-if="!currentArea.sinAcceso" class="area-tabs" aria-label="Contenido del Área">
           <button type="button" :class="{ 'area-tabs__active': activeTab === 'CRITERIA' }" :aria-current="activeTab === 'CRITERIA' ? 'page' : undefined" @click="selectTab('CRITERIA')">
@@ -649,7 +649,7 @@ async function retryDevice(serviceDeviceId: string): Promise<void> {
         <div v-else class="finding-list"><div v-for="finding in findings" :id="`area-item-${finding.id}`" :key="finding.id">
           <TechnicianFindingCard :finding="finding" :current-service-id="serviceId" :mutation="findingMutation(finding.id)" :focus-pending="validationTarget === finding.id" :validation-error="activeIssue?.id === finding.id ? activeIssue.message : ''" :editable="canEditRoute" :saving="findingSavingId === finding.id" @status="(input, files) => saveFindingStatus(finding.id, input, files)" @use-remote="useRemoteFinding(finding.id)" @retry="retryFinding(finding.id)" />
         </div></div>
-        <footer class="workspace-footer"><BaseButton variant="secondary" @click="goPrevious('findings')"><ArrowLeft :size="17" />Anterior</BaseButton><BaseButton @click="goNext('findings')">{{ stepAfterArea.kind === 'AREA' ? 'Siguiente área' : 'Ir al cierre' }}<ArrowRight :size="17" /></BaseButton></footer>
+        <footer class="workspace-footer"><BaseButton variant="secondary" @click="goPrevious('findings')"><ArrowLeft :size="17" />Anterior</BaseButton><BaseButton @click="goNext('findings')">{{ stepAfterArea.kind === 'AREA' ? 'Siguiente área' : packageValue?.vehiclesEnabled ? 'Ir a vehículos' : 'Ir al cierre' }}<ArrowRight :size="17" /></BaseButton></footer>
       </section>
     </template>
     <TechnicianSiteAreaDialog :open="newAreaOpen" :service-id="serviceId" @close="newAreaOpen=false" @created="openNewArea" />
@@ -663,10 +663,9 @@ async function retryDevice(serviceDeviceId: string): Promise<void> {
 .area-picker label { font-size:0.8125rem; font-weight:700; }
 .area-picker__actions { display:flex; align-items:center; gap:0.35rem; }
 .area-picker select { min-width:0; min-height:44px; border:1px solid var(--control-border); border-radius:var(--radius); background:var(--control-bg); padding:0 2.25rem 0 0.75rem; color:var(--text); font:inherit; font-weight:650; }
-.service-navigation, .area-tabs { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:0.35rem; }
-.service-navigation button, .area-tabs button { display:flex; min-width:0; min-height:44px; align-items:center; justify-content:center; gap:0.35rem; border:1px solid transparent; border-radius:var(--radius); background:transparent; color:var(--text-secondary); font:inherit; font-size:0.8125rem; font-weight:650; cursor:pointer; }
-.service-navigation button:hover, .area-tabs button:hover { background:var(--hover); color:var(--text); }
-.service-navigation__active { background:var(--surface-raised) !important; color:var(--text) !important; }
+.area-tabs { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:0.35rem; }
+.area-tabs button { display:flex; min-width:0; min-height:44px; align-items:center; justify-content:center; gap:0.35rem; border:1px solid transparent; border-radius:var(--radius); background:transparent; color:var(--text-secondary); font:inherit; font-size:0.8125rem; font-weight:650; cursor:pointer; }
+.area-tabs button:hover { background:var(--hover); color:var(--text); }
 .area-tabs { border-radius:var(--radius); background:var(--surface); padding:0.25rem; }
 .area-tabs button { position:relative; }
 .area-tabs__active { background:var(--accent-subtle) !important; color:var(--accent) !important; }
@@ -691,5 +690,5 @@ async function retryDevice(serviceDeviceId: string): Promise<void> {
 .area-without-access { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:start; gap:0.75rem; border:1px solid var(--warning); border-radius:var(--radius-lg); background:var(--warning-subtle); padding:1rem; color:var(--warning); }
 @media (min-width:760px) { .area-workspace__sticky { grid-template-columns:minmax(20rem,1fr) auto; align-items:end; } .area-tabs { grid-column:1/-1; } .workspace-panel { padding:1rem; } }
 @media (max-width:520px) { .workspace-panel__actions { flex-wrap:wrap; } .workspace-panel__actions > .base-button { width:auto; } .workspace-footer :deep(.base-button) { padding-inline:.5rem; } }
-@media (max-width:420px) { .area-picker { grid-template-columns:auto minmax(0,1fr); } .area-picker__actions { grid-column:1/-1; justify-self:end; } .service-navigation button, .area-tabs button { font-size:0.75rem; } }
+@media (max-width:420px) { .area-picker { grid-template-columns:auto minmax(0,1fr); } .area-picker__actions { grid-column:1/-1; justify-self:end; } .area-tabs button { font-size:0.75rem; } }
 </style>

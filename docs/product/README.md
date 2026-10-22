@@ -53,7 +53,7 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 | `servicio_tipos_dispositivo` | Tipos, clasificación y Plagas disponibles congelados para altas técnicas durante el Servicio |
 | `revisiones_dispositivos` | Revisión histórica de los Puestos de monitoreo durante un Servicio |
 | `hallazgos` | No conformidades, seguimiento y cierre posterior |
-| `vehiculos` | Vehículos asociados a Sedes habilitadas |
+| `vehiculos` | Vehículos permanentes por Sede; selección de atendidos en Servicios Principales habilitados |
 | `certificados` | Certificados de establecimiento o vehículo |
 | `movimientos_efectivo` | Entregas de efectivo por Técnico |
 | `auditoria` | Eventos sensibles append-only |
@@ -130,6 +130,7 @@ No tiene cuenta. Solo consulta el resultado limitado de un Servicio mediante un 
 - La evaluación histórica debe conservar, como mínimo, la identidad del criterio, nombre y aplicabilidad observados al iniciar, evaluación, observación y referencias de evidencia cuando apliquen.
 - El Técnico puede recorrer las Áreas en cualquier orden y volver a una anterior sin perder el borrador.
 - Los puestos de monitoreo son entidades permanentes de Sede/Área; cada Servicio crea revisiones históricas y puede registrar nuevos puestos de monitoreo para visitas futuras.
+- En las Sedes que manejan Vehículos, el Técnico confirma los IDs realmente atendidos antes del cierre, incluso si fueron cero. No debe atender toda la flota. Puede registrar nuevas placas con su permiso limitado al Servicio en proceso. La selección y sus altas funcionan offline mediante la cola durable.
 - El flujo detallado y las reglas de composición están en [service-execution.md](service-execution.md).
 
 ### Productos

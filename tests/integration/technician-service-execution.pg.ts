@@ -5,7 +5,7 @@ import type { PoolClient } from 'pg'
 vi.mock('@neon/functions', () => ({ attachDatabasePool: vi.fn<() => void>(), waitUntil: vi.fn<() => void>() }))
 
 import { pool, transaction } from '../../functions/api/db'
-import { claimTechnicianService, createTechnicianSiteArea, createTechnicianDevice, createTechnicianFinding, finalizeTechnicianService, releaseTechnicianServiceLock, saveTechnicianAreaAccess, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, saveTechnicianFindingStatus, startTechnicianService, technicianCommand } from '../../functions/api/technician-services/commands'
+import { claimTechnicianService, createTechnicianVehicle, saveTechnicianVehicles, createTechnicianSiteArea, createTechnicianDevice, createTechnicianFinding, finalizeTechnicianService, releaseTechnicianServiceLock, saveTechnicianAreaAccess, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, saveTechnicianFindingStatus, startTechnicianService, technicianCommand } from '../../functions/api/technician-services/commands'
 import type { DeviceState } from '../../src/types/technicianServices'
 import { getTechnicianPackage, listTechnicianHistory, listTechnicianServices } from '../../functions/api/technician-services/queries'
 
@@ -73,6 +73,53 @@ beforeAll(async () => {
     select coalesce(nullif(current_setting('test.auth_session',true),''),'{}')::jsonb $$`)
 })
 afterAll(async () => { await pool.end() })
+
+describe('technician vehicle execution · real PostgreSQL', () => {
+  it('records a site vehicle, confirms its attendance and refuses closure until that step is completed', async () => {
+    const value = await fixture(), phoneId = randomUUID(), vehicleId = randomUUID()
+    await pool.query(`update public.sedes set maneja_vehiculos=true
+      where id=(select sede_id from public.servicios where id=$1)`, [value.service])
+    const session = await transaction(client => startTechnicianService(client,
+      value.technician, value.service, 1, phoneId))
+    expect(session.package.vehiclesEnabled).toBe(true)
+    expect(session.package.attendedVehicleIds).toBeNull()
+
+    const created = await transaction(client => createTechnicianVehicle(client, value.technician,
+      value.service, phoneId, session.lock.token, vehicleId, 'ABC123'))
+    expect(created).toMatchObject({ created: true, vehicle: { id: vehicleId, placa: 'ABC123' } })
+    const duplicate = await transaction(client => createTechnicianVehicle(client, value.technician,
+      value.service, phoneId, session.lock.token, randomUUID(), 'ABC123'))
+    expect(duplicate).toMatchObject({ created: false, vehicle: { id: vehicleId } })
+    await expect(transaction(client => saveTechnicianVehicles(client, value.technician, value.service,
+      phoneId, session.lock.token, [randomUUID()]))).rejects.toMatchObject({ code: 'VEHICLES_INVALID' })
+    expect(await transaction(client => getTechnicianPackage(client, value.technician, value.service)))
+      .toMatchObject({ vehiclesEnabled: true, vehicles: [{ id: vehicleId, placa: 'ABC123' }] })
+
+    for (const area of session.package.areas) {
+      for (const criterion of area.criterios) {
+        await transaction(client => saveTechnicianCriterionEvaluation(client, value.technician,
+          value.service, phoneId, session.lock.token, criterion.id, criterion.version, 'C', ''))
+      }
+      for (const device of area.dispositivos) {
+        await transaction(client => saveTechnicianDeviceReview(client, value.technician, value.service,
+          phoneId, session.lock.token, device.id, randomUUID(), 0,
+          { estadoObservado: 'ACTIVO', capturas: [], consumo: '', productoQuimico: '',
+            antidoto: '', observaciones: '' }, null))
+      }
+    }
+    const finish = () => transaction(client => finalizeTechnicianService(client, value.technician,
+      value.service, phoneId, session.lock.token, 'services/fake-technician.png',
+      'services/fake-client.png', 'Cliente presente'))
+    await expect(finish()).rejects.toMatchObject({ code: 'SERVICE_VEHICLES_INCOMPLETE' })
+    expect(await transaction(client => saveTechnicianVehicles(client, value.technician,
+      value.service, phoneId, session.lock.token, []))).toEqual({ attendedVehicleIds: [] })
+    expect(await transaction(client => saveTechnicianVehicles(client, value.technician,
+      value.service, phoneId, session.lock.token, [vehicleId]))).toEqual({ attendedVehicleIds: [vehicleId] })
+    expect((await finish()).package.service.estado).toBe('FINALIZADO')
+    expect((await pool.query('select vehiculos_atendidos_ids_json from public.servicios where id=$1',
+      [value.service])).rows[0]?.vehiculos_atendidos_ids_json).toEqual([vehicleId])
+  })
+})
 
 describe('technician service execution · real PostgreSQL', () => {
   it('creates an Area in the Sede and only a visit snapshot for the active service', async () => {

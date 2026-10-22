@@ -287,6 +287,18 @@ watch(() => [serviceId.value, publicToken.value], () => { void loadReport() }, {
           </table>
         </section>
 
+        <section v-if="report.vehiclesEnabled" class="report-document__section" aria-labelledby="report-vehicles-title">
+          <header class="report-document__heading"><span class="report-document__number">02A</span><h2 id="report-vehicles-title">Vehículos atendidos</h2></header>
+          <p v-if="report.attendedVehicles == null" class="report-document__empty">Esta visita no tiene registro histórico de vehículos atendidos.</p>
+          <p v-else-if="!report.attendedVehicles.length" class="report-document__empty">Se confirmó que no se atendieron vehículos durante esta visita.</p>
+          <template v-else>
+            <p class="report-document__section-intro">{{ report.attendedVehicles.length }} vehículo(s) atendido(s) durante este servicio.</p>
+            <div class="report-vehicle-plates" aria-label="Placas atendidas">
+              <span v-for="plate in report.attendedVehicles" :key="plate">{{ plate }}</span>
+            </div>
+          </template>
+        </section>
+
         <section class="report-document__section" aria-labelledby="report-criteria-title">
           <header class="report-document__heading"><span class="report-document__number">03</span><h2 id="report-criteria-title">Evaluación de criterios por área</h2></header>
           <p class="report-document__section-intro">C = 100 %, CP = 50 %, NC = 0 %. «No aplica» y las áreas sin acceso no intervienen en el cálculo.</p>

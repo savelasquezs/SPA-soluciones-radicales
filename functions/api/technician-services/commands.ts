@@ -702,6 +702,10 @@ async function lockSnapshotSources(client: PoolClient, serviceId: string): Promi
 
 export async function startTechnicianService(client: PoolClient, userId: string, serviceId: string, expectedVersion: number, deviceId: string): Promise<TechnicianExecutionSession> {
   const service = await assignedServiceState(client, userId, serviceId, true)
+  // Serialize service start with changes to se.maneja_vehiculos on the parent site.
+  // The admin update locks the same site row before checking running visits.
+  await client.query(`select se.id from public.servicios s join public.sedes se on se.id=s.sede_id
+    where s.id=$1 for share of se`, [serviceId])
   assertVersion(Number(service.version), expectedVersion)
   if (service.estado !== 'PROGRAMADO') throw new ApiError(409, 'El servicio ya no está Programado.', 'SERVICE_NOT_PROGRAMMED')
   if (!service.eligible) throw new ApiError(409, 'Puedes iniciar el servicio desde una hora antes de la programación.', 'SERVICE_TOO_EARLY')
@@ -767,6 +771,56 @@ export async function claimTechnicianService(client: PoolClient, userId: string,
   return { package: await getTechnicianPackage(client, userId, serviceId), lock: executionLock }
 }
 
+/** Vehicle operations live inside the service's existing authorization, lock and idempotency model. */
+async function vehicleServiceSite(
+  client: PoolClient, userId: string, serviceId: string, deviceId: string, lockToken: string,
+): Promise<string> {
+  await authorizeTechnicianServiceChange(client, userId, serviceId, deviceId, lockToken)
+  const site = (await client.query<{ siteId: string; enabled: boolean }>(`select s.sede_id as "siteId",
+    (s.tipo_servicio='PRINCIPAL' and se.tipo_sede='NEGOCIO' and se.maneja_vehiculos) as enabled
+    from public.servicios s join public.sedes se on se.id=s.sede_id where s.id=$1`, [serviceId])).rows[0]
+  if (!site?.enabled) throw new ApiError(422, 'Este servicio no requiere atención de vehículos.', 'VEHICLES_NOT_ENABLED')
+  return site.siteId
+}
+
+export async function createTechnicianVehicle(
+  client: PoolClient, userId: string, serviceId: string, deviceId: string, lockToken: string,
+  vehicleId: string, plate: string,
+): Promise<{ vehicle: { id: string; placa: string; activo: boolean }; created: boolean }> {
+  const siteId = await vehicleServiceSite(client, userId, serviceId, deviceId, lockToken)
+  let rows = (await client.query<{ id: string; placa: string; activo: boolean }>(`
+    insert into public.vehiculos(id,sede_id,placa) values($1,$2,$3)
+    on conflict do nothing returning id,placa,activo`, [vehicleId, siteId, plate])).rows
+  const created = rows.length > 0
+  if (!created) {
+    rows = (await client.query<{ id: string; placa: string; activo: boolean }>(`
+      select id,placa,activo from public.vehiculos where sede_id=$1 and lower(btrim(placa))=lower(btrim($2))
+      limit 1`, [siteId, plate])).rows
+  }
+  const vehicle = rows[0]
+  if (!vehicle) throw new ApiError(409, 'No se pudo registrar esta placa. Intenta nuevamente.', 'VEHICLE_CONFLICT')
+  if (!vehicle.activo) throw new ApiError(409, 'Esta placa está inactiva. Solicita al administrador reactivarla.', 'VEHICLE_INACTIVE')
+  if (created) await audit(client, userId, 'VEHICULO_CREADO_POR_TECNICO', vehicle.id, { siteId, serviceId }, 'Vehiculos')
+  return { vehicle, created }
+}
+
+export async function saveTechnicianVehicles(
+  client: PoolClient, userId: string, serviceId: string, deviceId: string, lockToken: string,
+  ids: string[],
+): Promise<{ attendedVehicleIds: string[] }> {
+  const siteId = await vehicleServiceSite(client, userId, serviceId, deviceId, lockToken)
+  const valid = (await client.query<{ id: string }>(`
+    select v.id from public.vehiculos v join public.servicios s on s.id=$2
+    where v.sede_id=$1 and v.id=any($3::uuid[])
+      and (v.activo or coalesce(s.vehiculos_atendidos_ids_json,'[]'::jsonb) ? v.id::text)`,
+    [siteId, serviceId, ids])).rows
+  if (valid.length !== ids.length) throw new ApiError(422, 'Actualiza las placas: una ya no está disponible en la sede.', 'VEHICLES_INVALID')
+  await client.query('update public.servicios set vehiculos_atendidos_ids_json=$2::jsonb where id=$1',
+    [serviceId, JSON.stringify(ids)])
+  await audit(client, userId, 'SERVICIO_VEHICULOS_CONFIRMADOS', serviceId, { cantidad: ids.length })
+  return { attendedVehicleIds: ids }
+}
+
 export async function finalizeTechnicianService(
   client: PoolClient,
   userId: string,
@@ -803,6 +857,12 @@ export async function finalizeTechnicianService(
       and not exists(select 1 from public.hallazgo_seguimientos seg
         where seg.hallazgo_id=h.id and seg.servicio_id=$1)`, [serviceId])).rows[0]?.count ?? 0
   if (missingFollowups) throw new ApiError(422, 'Evalúa los Hallazgos pendientes antes de finalizar.', 'SERVICE_FINDINGS_INCOMPLETE')
+  const vehicleStatus = (await client.query<{ missing: boolean }>(`select
+    (s.tipo_servicio='PRINCIPAL' and se.tipo_sede='NEGOCIO' and se.maneja_vehiculos
+      and s.vehiculos_atendidos_ids_json is null) as missing
+    from public.servicios s join public.sedes se on se.id=s.sede_id where s.id=$1`,
+    [serviceId])).rows[0]
+  if (vehicleStatus?.missing) throw new ApiError(422, 'Confirma los vehículos atendidos, incluso si fueron cero, antes de finalizar.', 'SERVICE_VEHICLES_INCOMPLETE')
   const normalizedClientName = clientName.trim()
   if (!normalizedClientName || normalizedClientName.length > 200) throw new ApiError(422, 'Indica el nombre de quien firma por el cliente.', 'VALIDATION')
   await client.query(`update public.servicios set estado='FINALIZADO',fin_real=now(),

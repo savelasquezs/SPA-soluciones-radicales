@@ -9,7 +9,7 @@ import { findSiteEvidence } from '../site-insights/queries'
 import type { EvidenceAccess, EvidenceKind } from '../../../src/types/siteInsights'
 import { kickServiceJobs } from '../services/jobs'
 import { assertAreaNoAccessStoragePath, assertCriterionEvidenceStoragePath, assertDeviceReviewStoragePath, assertFindingEvidenceStoragePath, assertServiceSignatureStoragePath, createAreaNoAccessUploadUrl, createCriterionEvidenceUploadUrl, createDeviceReviewUploadUrl, createFindingEvidenceUploadUrl, createServiceMediaReadUrl, createServiceSignatureUploadUrl, criterionEvidenceObjectExists, deleteAreaNoAccessObject, deleteCriterionEvidenceObject, deleteDeviceReviewObject, deleteFindingEvidenceObject, deviceReviewMediaObjectExists, findingEvidenceObjectExists, serviceMediaObjectExists, serviceSignatureObjectExists, type FindingEvidencePhase, type ServiceSignatureRole } from '../r2'
-import { authorizeTechnicianAreaChange, authorizeTechnicianDeviceChange, authorizeTechnicianFindingChange, authorizeTechnicianServiceChange, claimTechnicianService, createTechnicianSiteArea, createTechnicianDevice, createTechnicianFinding, finalizeTechnicianService, saveTechnicianAreaAccess, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, saveTechnicianFindingStatus, startTechnicianService, technicianCommand } from './commands'
+import { authorizeTechnicianAreaChange, authorizeTechnicianDeviceChange, authorizeTechnicianFindingChange, authorizeTechnicianServiceChange, claimTechnicianService, createTechnicianVehicle, saveTechnicianVehicles, createTechnicianSiteArea, createTechnicianDevice, createTechnicianFinding, finalizeTechnicianService, saveTechnicianAreaAccess, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, saveTechnicianFindingStatus, startTechnicianService, technicianCommand } from './commands'
 import { getTechnicianPackage, listTechnicianServices, assignedServiceState, listTechnicianHistory, listTechnicianAgenda, getTechnicianServiceContact } from './queries'
 import { technicianProductSheetUrl } from '../service-results/productSheets'
 
@@ -160,6 +160,38 @@ technicianServiceRoutes.post('/:id/finalize', async context => {
   kickServiceJobs()
   return context.json(result)
 })
+technicianServiceRoutes.post('/:id/vehicles', async context => {
+  const payload = await body(context.req.raw)
+  const serviceId = id(context.req.param('id'))
+  const requestId = id(payload.requestId), deviceId = id(payload.deviceId)
+  const lockToken = id(payload.lockToken), vehicleId = id(payload.vehicleId)
+  const placa = requiredString(payload.placa, 'Ingresa una placa.', 12).toUpperCase()
+  if (!/^[A-Z0-9-]{3,12}$/.test(placa)) throw new ApiError(422, 'Ingresa una placa de 3 a 12 caracteres.', 'VALIDATION')
+  return context.json(await read(context, (client, technician) => technicianCommand(
+    client, technician.id, requestId, 'VEHICLE_CREATE', serviceId, null,
+    { deviceId, vehicleId, placa }, () => createTechnicianVehicle(
+      client, technician.id, serviceId, deviceId, lockToken, vehicleId, placa),
+  )))
+})
+
+technicianServiceRoutes.post('/:id/vehicles/selection', async context => {
+  const payload = await body(context.req.raw)
+  const serviceId = id(context.req.param('id'))
+  const requestId = id(payload.requestId), deviceId = id(payload.deviceId)
+  const lockToken = id(payload.lockToken)
+  if (!Array.isArray(payload.selectedIds) || payload.selectedIds.length > 2000) {
+    throw new ApiError(422, 'Selecciona hasta 2000 vehículos por servicio.', 'VALIDATION')
+  }
+  const selectedIds = payload.selectedIds.map(id)
+  if (new Set(selectedIds).size !== selectedIds.length) throw new ApiError(422, 'La selección contiene vehículos repetidos.', 'VALIDATION')
+  selectedIds.sort()
+  return context.json(await read(context, (client, technician) => technicianCommand(
+    client, technician.id, requestId, 'VEHICLE_SELECTION', serviceId, null,
+    { deviceId, selectedIds }, () => saveTechnicianVehicles(
+      client, technician.id, serviceId, deviceId, lockToken, selectedIds),
+  )))
+})
+
 technicianServiceRoutes.post('/:id/areas', async context => {
   const payload = await body(context.req.raw)
   const serviceId = id(context.req.param('id'))

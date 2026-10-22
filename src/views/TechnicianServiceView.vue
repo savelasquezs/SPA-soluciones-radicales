@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { ClipboardCheck, Clock3, CloudOff, Map, MapPin, PackageCheck, Plus, RefreshCw, Wifi } from 'lucide-vue-next'
+import { ClipboardCheck, Clock3, CloudOff, Map, MapPin, PackageCheck, Plus, RefreshCw, Truck, Wifi } from 'lucide-vue-next'
 import { useRoute, useRouter } from 'vue-router'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { ApiClientError } from '@/services/apiService'
@@ -13,8 +13,10 @@ import TechnicianPaymentDialog from '@/components/domain/services/TechnicianPaym
 import TechnicianProductsList from '@/components/domain/services/TechnicianProductsList.vue'
 import TechnicianSiteAreaDialog from '@/components/domain/services/TechnicianSiteAreaDialog.vue'
 import TechnicianClientContact from '@/components/domain/services/TechnicianClientContact.vue'
+import TechnicianServiceNavigation from '@/components/domain/services/TechnicianServiceNavigation.vue'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { formatTechnicianDateTime, orderedTechnicianAreas, technicianAreaResolved, technicianServiceStateLabel, technicianServiceStateTone } from '@/helpers/technicianServices'
+import { vehicleChecklistResolved } from '@/helpers/technicianVehicles'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useTechnicianServicesStore } from '@/stores/technicianServices'
 
@@ -31,6 +33,10 @@ const serviceId = computed(() => String(route.params.id ?? ''))
 const overviewRequested = computed(() => route.query.overview === '1')
 const localLock = computed(() => currentCache.value?.lock ?? null)
 const orderedAreas = computed(() => orderedTechnicianAreas(packageValue.value?.areas ?? []))
+const obsoleteVehiclePackage = computed(() => Boolean(packageValue.value
+  && packageValue.value.service.tipoServicio === 'PRINCIPAL'
+  && packageValue.value.service.tipoSede !== 'RESIDENCIAL'
+  && typeof packageValue.value.vehiclesEnabled !== 'boolean'))
 const canCreateArea = computed(() => packageValue.value?.service.estado === 'EN_PROCESO'
   && packageValue.value.service.tipoServicio === 'PRINCIPAL'
   && packageValue.value.service.tipoSede !== 'RESIDENCIAL' && Boolean(localLock.value))
@@ -89,13 +95,17 @@ async function enterRoute(): Promise<void> {
   const pending = orderedAreas.value.find(area => !technicianAreaResolved(area, serviceId.value))
   await router.replace(pending
     ? { name: 'technician-service-area', params: { id: serviceId.value, areaId: pending.id } }
-    : { name: 'technician-service-review', params: { id: serviceId.value } })
+    : { name: packageValue.value && !vehicleChecklistResolved(packageValue.value.vehiclesEnabled,
+        packageValue.value.attendedVehicleIds, packageValue.value.vehicleDraftIds)
+        ? 'technician-service-vehicles' : 'technician-service-review',
+      params: { id: serviceId.value } })
 }
 
 function openAreas(): void {
   const target = orderedAreas.value.find(area => !technicianAreaResolved(area)) ?? orderedAreas.value[0]
   if (!target) {
-    void router.push({ name: 'technician-service-review', params: { id: serviceId.value } })
+    void router.push({ name: packageValue.value?.vehiclesEnabled
+      ? 'technician-service-vehicles' : 'technician-service-review', params: { id: serviceId.value } })
     return
   }
   void router.push({ name: 'technician-service-area', params: { id: serviceId.value, areaId: target.id } })
@@ -108,6 +118,10 @@ function openNewArea(serviceAreaId: string): void {
 function openReview(): void {
   void router.push({ name: 'technician-service-review', params: { id: serviceId.value } })
 }
+
+function openVehicles(): void {
+  void router.push({ name: 'technician-service-vehicles', params: { id: serviceId.value } })
+}
 </script>
 
 <template>
@@ -117,7 +131,12 @@ function openReview(): void {
     <StatusPanel v-else-if="viewError && !packageValue" title="No fue posible abrir el servicio" :message="viewError" tone="danger"><BaseButton :disabled="!online" @click="load">Reintentar</BaseButton></StatusPanel>
     <template v-else-if="packageValue">
       <div class="technician-network" :class="{ 'technician-network--offline': !online }" role="status" aria-live="polite"><Wifi v-if="online" :size="18" aria-hidden="true" /><CloudOff v-else :size="18" aria-hidden="true" /><span>{{ online ? 'En línea' : 'Sin conexión · copia local' }}</span></div>
+      <StatusPanel v-if="obsoleteVehiclePackage" compact title="Actualiza el servicio"
+        message="El paquete guardado es anterior a la gestión vehicular. Conéctate y pulsa Actualizar antes de finalizar." tone="warning" />
       <StatusPanel v-if="packageError || (viewError && packageValue)" title="Revisa el estado del servicio" :message="viewError || packageError" tone="warning" />
+      <TechnicianServiceNavigation v-if="packageValue.service.estado !== 'PROGRAMADO'"
+        :service-id="serviceId" active="service" :vehicles-enabled="packageValue.vehiclesEnabled"
+        :first-area-id="orderedAreas[0]?.id" />
       <section class="technician-service-hero">
         <header><div><span class="technician-service-hero__request">{{ packageValue.service.solicitud }} · {{ packageValue.service.tipoServicio==='REFUERZO' ? 'Refuerzo' : 'Principal' }}</span><h2>{{ packageValue.service.clienteNombre }}</h2><p v-if="packageValue.service.tipoSede!=='RESIDENCIAL'">{{ packageValue.service.sedeNombre }}</p></div><StatusBadge :tone="technicianServiceStateTone(packageValue.service.estado)">{{ technicianServiceStateLabel(packageValue.service.estado) }}</StatusBadge></header>
         <dl>
@@ -134,7 +153,7 @@ function openReview(): void {
         <div v-else-if="packageValue.service.estado === 'EN_PROCESO'" class="technician-start">
           <p>{{ localLock ? 'Este celular conserva el acceso de edición del servicio.' : 'Activa este celular para continuar la ejecución.' }}</p>
           <BaseButton v-if="!localLock" :loading="action === 'CLAIM'" :disabled="!online" @click="claim">Activar en este celular</BaseButton>
-          <div v-else class="technician-work-actions"><BaseButton v-if="orderedAreas.length" @click="openAreas"><Map :size="18" aria-hidden="true" />Ir a las Áreas</BaseButton><BaseButton v-if="canCreateArea" variant="secondary" @click="newAreaOpen=true"><Plus :size="18" aria-hidden="true" />Nueva Área de la Sede</BaseButton><BaseButton variant="secondary" @click="openReview"><ClipboardCheck :size="18" aria-hidden="true" />Revisar cierre</BaseButton></div>
+          <div v-else class="technician-work-actions"><BaseButton v-if="orderedAreas.length" @click="openAreas"><Map :size="18" aria-hidden="true" />Ir a las Áreas</BaseButton><BaseButton v-if="packageValue.vehiclesEnabled" variant="secondary" @click="openVehicles"><Truck :size="18" aria-hidden="true" />Vehículos</BaseButton><BaseButton v-if="canCreateArea" variant="secondary" @click="newAreaOpen=true"><Plus :size="18" aria-hidden="true" />Nueva Área de la Sede</BaseButton><BaseButton variant="secondary" @click="openReview"><ClipboardCheck :size="18" aria-hidden="true" />Revisar cierre</BaseButton></div>
         </div>
       </section>
       <details class="technician-summary"><summary>Productos previstos ({{ packageValue.products.length }})</summary><TechnicianProductsList :products="packageValue.products" :service-id="serviceId" /></details>

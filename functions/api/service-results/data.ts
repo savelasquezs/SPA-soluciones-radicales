@@ -17,6 +17,8 @@ export interface ServiceResultsData {
   inicioProgramado:string; inicioReal:string; finReal:string
   productos:Array<{nombre:string;principio:string;registro:string;lote:string;dosis:string;metodos:string;fichaTecnicaDisponible:boolean}>
   areas:ServiceArea[]
+  vehiclesEnabled?:boolean
+  attendedVehicles?:string[]|null
   historico:Array<{solicitud:string;fecha:string;cumplimiento:number|null;capturas:number;
     especies:Array<{plagaCodigo:string;plagaNombreSnapshot:string;clasificacion:'VOLADORES'|'RASTREROS';cantidad:number}>;
     puestosRevisados:{voladores:number;rastreros:number};detallesCapturas:HistoricalCapturePlace[]}>
@@ -26,7 +28,7 @@ const arr=(v:unknown):string[]=>Array.isArray(v)?v.filter((x):x is string=>typeo
 export async function loadServiceResultsData(client:PoolClient,serviceId:string):Promise<ServiceResultsData>{
   const sv=(await client.query<{
     id:string;solicitud:string;estado:string;tipo:string;sedeTipo:string;sedeId:string;cliente:string;nit:string;sede:string;direccion:string;tecnico:string
-    firmanteCliente:string|null;firmaTecnico:string|null;firmaCliente:string|null;firmaTecnicoVencida:boolean;firmaClienteVencida:boolean;inicioProgramado:Date;inicioReal:Date|null;finReal:Date|null
+    firmanteCliente:string|null;firmaTecnico:string|null;firmaCliente:string|null;firmaTecnicoVencida:boolean;firmaClienteVencida:boolean;inicioProgramado:Date;inicioReal:Date|null;finReal:Date|null;vehicleEnabled:boolean;attendedVehicleIds:string[]|null
   }>(`select s.id,s.solicitud,s.estado,s.tipo_servicio as tipo,se.tipo_sede as "sedeTipo",se.id as "sedeId",
         n.nombre as cliente,n.nit,se.nombre as sede,se.direccion,u.nombre_completo as tecnico,
         s.firma_cliente_nombre as "firmanteCliente",s.firma_tecnico_storage_path as "firmaTecnico",
@@ -36,13 +38,20 @@ export async function loadServiceResultsData(client:PoolClient,serviceId:string)
         exists(select 1 from private.storage_retention_deleted d where d.bucket='sr-service-media'
           and d.storage_path=s.firma_cliente_storage_path) as "firmaClienteVencida",
         s.inicio_programado as "inicioProgramado",
-        s.inicio_real as "inicioReal",s.fin_real as "finReal"
+        s.inicio_real as "inicioReal",s.fin_real as "finReal",
+        se.maneja_vehiculos as "vehicleEnabled",s.vehiculos_atendidos_ids_json as "attendedVehicleIds"
         from public.servicios s join public.sedes se on se.id=s.sede_id
         join public.negocios n on n.id=se.negocio_id join public.usuarios u on u.id=s.tecnico_responsable_id
         where s.id=$1`, [serviceId])).rows[0]
   if(!sv)throw new ApiError(404,'Servicio no encontrado','SERVICE_NOT_FOUND')
   if(sv.estado!=='FINALIZADO'||sv.tipo!=='PRINCIPAL'||sv.sedeTipo!=='NEGOCIO'||!sv.inicioReal||!sv.finReal||!sv.firmaTecnico||!sv.firmaCliente)
     throw new ApiError(422,'El informe requiere un servicio Principal de negocio finalizado y firmado.','REPORT_NOT_READY')
+  const vehicleRows = sv.attendedVehicleIds?.length
+    ? (await client.query<{ placa: string }>(`
+        select v.placa from public.vehiculos v where v.sede_id=$1
+          and v.id=any($2::uuid[]) order by v.placa,v.id
+      `, [sv.sedeId, sv.attendedVehicleIds])).rows : []
+  const attendedVehicles = sv.attendedVehicleIds == null ? null : vehicleRows.map(vehicle => vehicle.placa)
   const areas=(await client.query<{id:string;nombre:string;sinAcceso:boolean;motivo:string|null;fotos:unknown}>(`
     select id,nombre_snapshot as nombre,sin_acceso as "sinAcceso",sin_acceso_descripcion as motivo,
       case when jsonb_array_length(coalesce(to_jsonb(sa)->'sin_acceso_evidencias_storage_paths','[]'::jsonb))>0 then to_jsonb(sa)->'sin_acceso_evidencias_storage_paths'
@@ -208,7 +217,10 @@ export async function loadServiceResultsData(client:PoolClient,serviceId:string)
     firmanteCliente:sv.firmanteCliente||'',firmaTecnico:sv.firmaTecnico,firmaCliente:sv.firmaCliente,
      firmaTecnicoVencida:sv.firmaTecnicoVencida,firmaClienteVencida:sv.firmaClienteVencida,
     inicioProgramado:sv.inicioProgramado.toISOString(),inicioReal:sv.inicioReal.toISOString(),finReal:sv.finReal.toISOString(),
-    productos,areas,historico:historico.map(h=>({solicitud:h.solicitud,fecha:new Date(h.fecha).toISOString(),
+    productos,areas,
+    ...(sv.vehicleEnabled || sv.attendedVehicleIds != null
+      ? { vehiclesEnabled: true, attendedVehicles } : {}),
+    historico:historico.map(h=>({solicitud:h.solicitud,fecha:new Date(h.fecha).toISOString(),
       cumplimiento:h.cumplimiento==null?null:Number(h.cumplimiento),capturas:Number(h.capturas)||0,
       puestosRevisados:{rastreros:Number(h.puestosRastrerosRevisados)||0,voladores:Number(h.puestosVoladoresRevisados)||0},
       especies:h.especies.map(c=>({plagaCodigo:c.plagaCodigo,plagaNombreSnapshot:c.plagaNombreSnapshot,

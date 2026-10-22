@@ -113,10 +113,11 @@ La operación técnica no utiliza un motor genérico de formularios. La SPA comp
 ```text
 Servicio
   ├─ Productos previstos/aplicados
-  └─ Áreas de la Sede
-      ├─ Criterios MIP aplicables
-      ├─ Dispositivos y revisiones
-      └─ Hallazgos y evidencias
+  ├─ Áreas de la Sede
+  │   ├─ Criterios MIP aplicables
+  │   ├─ Dispositivos y revisiones
+  │   └─ Hallazgos y evidencias
+  ├─ Vehículos atendidos (solo Sedes habilitadas)
   └─ Firmas y cierre
 ```
 

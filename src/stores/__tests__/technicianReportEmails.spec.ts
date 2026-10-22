@@ -60,6 +60,7 @@ beforeEach(() => {
         contactEmails:['contacto@example.test']},
       frozen:true,serverNow:new Date().toISOString(),canStart:false,startAvailableAt:'',
       products:[],deviceTypes:[],areas:[],
+      vehiclesEnabled:false,vehicles:[],attendedVehicleIds:null,
       signatures:{technicianStoragePath:null,technicianUserId:null,clientStoragePath:null,clientName:null,clientSignedAt:null},
     },
     lock:null,pendingOperation:null,
