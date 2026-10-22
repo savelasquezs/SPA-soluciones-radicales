@@ -4,7 +4,7 @@ import { isExactAreaPermutation, sortTechnicianServices, technicianAreaResolved,
 import { useAuthStore } from '@/stores/auth'
 import { claimTechnicianService, createTechnicianSiteArea, createTechnicianDevice, createTechnicianFinding, fetchTechnicianPackage, fetchTechnicianServices, finalizeTechnicianService, saveTechnicianAreaAccess, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, saveTechnicianFindingStatus, startTechnicianService } from '@/services/servicesService'
 import { ApiClientError } from '@/services/apiService'
-import { getTechnicianDeviceId, listTechnicianPackageCaches, loadTechnicianPackageCache, saveTechnicianPackageCache } from '@/services/technicianPackageService'
+import { getTechnicianDeviceId, restoreTechnicianDeviceIdFromCaches, listTechnicianPackageCaches, loadTechnicianPackageCache, saveTechnicianPackageCache } from '@/services/technicianPackageService'
 import { deleteTechnicianMutation, listTechnicianMutations, saveTechnicianMutation } from '@/services/technicianMutationService'
 import { deleteTechnicianMedia, loadTechnicianMedia, saveTechnicianMedia } from '@/services/technicianMediaService'
 import { deleteTechnicianAreaPhoto, deleteTechnicianCriterionEvidence, deleteTechnicianDevicePhoto, deleteTechnicianFindingEvidence, uploadTechnicianAreaPhoto, uploadTechnicianCriterionEvidence, uploadTechnicianDevicePhoto, uploadTechnicianFindingEvidence, uploadTechnicianSignature } from '@/services/serviceMediaService'
@@ -60,6 +60,7 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     resetActorScope(actor)
     if (!force && loadedActorId === actor) return
     const [found, pending] = await Promise.all([listTechnicianPackageCaches(actor), listTechnicianMutations(actor)])
+    restoreTechnicianDeviceIdFromCaches(found)
     caches.value = Object.fromEntries(found.map(item => [item.serviceId, item]))
     const grouped: Record<string, TechnicianMutation[]> = {}
     for (const item of pending) (grouped[item.serviceId] ??= []).push(item)
@@ -119,7 +120,7 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
       schemaVersion: 1,
       actorId: actor,
       serviceId: value.service.id,
-      deviceId: getTechnicianDeviceId(),
+      deviceId: previous?.lock?.deviceId ?? previous?.deviceId ?? getTechnicianDeviceId(),
       savedAt: new Date().toISOString(),
       package: value,
       lock: patch.lock === undefined ? previous?.lock ?? null : patch.lock,
@@ -1553,9 +1554,27 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
             : 'Hay cambios guardados en este celular pendientes de sincronizar.'
           return cached.package
         }
+        const previous = caches.value[serviceId]
+        const wasExecutingHere = previous?.package.service.estado === 'EN_PROCESO'
+          || Boolean(previous?.pendingOperation)
         const value = await fetchTechnicianPackage(serviceId)
         if (request !== packageRequest) return value
         await persistPackage(value)
+        // Recover an execution lock whose local response was lost or whose
+        // cached session was incomplete. The server only accepts the SAME user
+        // and device; another phone can never replace the existing lock here.
+        if (wasExecutingHere && value.service.estado === 'EN_PROCESO' && !caches.value[serviceId]?.lock) {
+          try {
+            const session = await execute('CLAIM', serviceId)
+            return session.package
+          } catch (failure) {
+            if (failure instanceof ApiClientError && failure.code === 'SERVICE_LOCKED') {
+              packageError.value = 'No pudimos confirmar el acceso de este celular. Tus datos locales se conservan; pide al Administrador liberar el acceso si es necesario.'
+              return caches.value[serviceId]!.package
+            }
+            throw failure
+          }
+        }
         return value
       } catch (failure) {
         const cached = caches.value[serviceId]
@@ -1589,7 +1608,7 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
         ? previous
         : { kind, requestId: crypto.randomUUID(), version: expectedVersion }
       await persistPackage(packageValue, { pendingOperation: pending })
-      const deviceId = getTechnicianDeviceId()
+      const deviceId = current?.lock?.deviceId ?? current?.deviceId ?? getTechnicianDeviceId()
       const session = kind === 'START'
         ? await startTechnicianService(serviceId, pending.requestId, deviceId, pending.version ?? packageValue.service.version)
         : await claimTechnicianService(serviceId, pending.requestId, deviceId)
