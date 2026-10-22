@@ -12,6 +12,12 @@ El cambio NO modifica la configuración de la Sede, nombres o identidad de Área
 
 El orden pertenece al Servicio, no a una preferencia global del Técnico. Otro usuario autorizado que continúe el mismo Servicio verá el último orden sincronizado, sujeto a la exclusividad de edición ya vigente. No se habilita por esta decisión edición técnica simultánea.
 
+## Áreas creadas durante la visita
+
+El Técnico registra Áreas **en la Sede**, mediante «Nueva Área» desde el recorrido o el contexto del Servicio. La creación no añade una entidad de Área exclusiva del Servicio. Para evaluar la nueva Área en esta visita se registra su correspondiente snapshot histórico y la matriz MIP aplicable, sin alterar las Áreas o respuestas ya existentes. Mientras se sincroniza, el Área permanece disponible localmente y se señala su estado pendiente.
+
+Una nueva Área entra al **final** del recorrido actual y también al final de su orden inicial de esta visita. La gestión administrativa de la Sede la verá como Área permanente y las próximas visitas la incorporarán desde el inicio. Descartar un alta con conflicto requiere confirmación porque también elimina sus cambios locales aún sin sincronizar.
+
 ## Orden inicial y conservación
 
 - Al preparar/iniciar el recorrido se conserva la lista inicial ordenada de IDs de Áreas aplicables al Servicio.
