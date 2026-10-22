@@ -12,7 +12,9 @@ scope.onmessage = async ({ data }) => {
   } catch {
     scope.postMessage({
       ok: false,
-      error: 'No fue posible comprimir el archivo. Comprueba que sea válido y no esté protegido con contraseña. No se ha subido a R2.',
+      error: data.file.type.startsWith('image/')
+        ? 'El navegador no pudo comprimir esta fotografía. No se ha subido a R2.'
+        : 'No fue posible comprimir el archivo. Comprueba que sea válido y no esté protegido con contraseña. No se ha subido a R2.',
     })
   }
 }
