@@ -49,6 +49,7 @@ const canOfferReport = computed(() => finalized.value
   || (finalization.value && finalization.value.status !== 'CONFLICT'))
 const pendingEmailItems = computed(() => emails.forService(serviceId.value))
 const operationLabels: Record<TechnicianMutation['kind'], string> = {
+  AREA_CREATE: 'Nueva Área de Sede',
   AREA_ORDER: 'Orden de Áreas',
   CRITERION_EVALUATION: 'Evaluación MIP',
   AREA_ACCESS: 'Acceso al Área',
@@ -63,7 +64,9 @@ const syncProblem = computed(() => services.currentMutations.find(item =>
   ?? services.currentMutations.find(item => item.kind !== 'SERVICE_FINALIZE' && Boolean(item.error)))
 const syncProblemArea = computed(() => {
   const problem = syncProblem.value
-  return problem && 'areaId' in problem ? areas.value.find(area => area.id === problem.areaId) ?? null : null
+  return problem?.kind === 'AREA_CREATE'
+    ? areas.value.find(area => area.id === problem.serviceAreaId) ?? null
+    : problem && 'areaId' in problem ? areas.value.find(area => area.id === problem.areaId) ?? null : null
 })
 const needsVersionResolution = computed(() => {
   const problem = syncProblem.value
@@ -110,6 +113,11 @@ onMounted(async () => {
 function reviewSyncProblem(): void {
   const problem = syncProblem.value
   if (!problem) return
+  if (problem.kind === 'AREA_CREATE') {
+    void router.push({ name: 'technician-service-area',
+      params: { id: serviceId.value, areaId: problem.serviceAreaId }, query: { editArea: '1' } })
+    return
+  }
   if (!('areaId' in problem)) {
     void router.push({ name: problem.kind === 'AREA_ORDER' ? 'technician-service-area-order' : 'technician-service-work',
       params: { id: serviceId.value } })
