@@ -110,6 +110,14 @@ La pantalla del Técnico debe derivar automáticamente los criterios aplicables 
 
 El estado de avance del Área se deriva de sus datos reales: criterios evaluados, revisiones de puestos de monitoreo y hallazgos. La UI puede resumir este avance, pero no almacena una estructura de formulario separada.
 
+### Creación de Áreas desde el trabajo de campo
+
+El Técnico puede registrar una nueva Área **de la Sede** mientras ejecuta un Servicio Principal no residencial y conserva el bloqueo de edición en su celular. Se reutilizan el nombre y la clasificación interior/exterior de la gestión administrativa de Áreas. La Sede es la única fuente de verdad de esta identidad; no existe una entidad de Área exclusiva del Servicio.
+
+Para poder evaluarla durante esa misma visita, se genera de manera automática y transaccional el snapshot técnico en `servicio_areas` y sus criterios MIP aplicables. Esa fila es únicamente evidencia histórica de la visita, no una segunda Área administrable. La nueva Área se incorpora al final del recorrido, sin alterar el orden de las anteriores ni modificar los snapshots de Servicios ya iniciados/finalizados. Las visitas futuras la tomarán de la Sede con sus criterios vigentes.
+
+Al trabajar sin conexión, la nueva Área y sus respuestas se conservan en el paquete y la outbox idempotente de ese celular. Primero se sincroniza el alta permanente en la Sede y su snapshot de la visita, luego los cambios relacionados. El usuario ve claramente si está pendiente de sincronizar; no se promete guardado remoto antes de su confirmación. No se permiten duplicados de nombre en la Sede (tampoco si el Área está inactiva); el servidor valida la asignación del Técnico, el bloqueo del celular, el estado del Servicio y los criterios aplicables. Los errores se resuelven sin perder silenciosamente los datos locales.
+
 ## Monitoreo y puestos de monitoreo
 
 Un Puesto de monitoreo es una identidad permanente de una Sede y un Área. El modelo funcional aprobado separa el puesto de sus componentes: puede contener una Trampa, un Producto de cebo o ambos. La creación/asignación del Producto al puesto se implementará en la siguiente entrega de este mismo flujo; no se vuelve a capturar como texto libre durante la revisión.
