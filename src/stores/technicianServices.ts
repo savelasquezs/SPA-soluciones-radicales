@@ -2,13 +2,13 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { isExactAreaPermutation, sortTechnicianServices, technicianAreaResolved, technicianDevicePhotoRequired } from '@/helpers/technicianServices'
 import { useAuthStore } from '@/stores/auth'
-import { claimTechnicianService, createTechnicianSiteArea, createTechnicianDevice, createTechnicianFinding, fetchTechnicianPackage, fetchTechnicianServices, finalizeTechnicianService, saveTechnicianAreaAccess, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, saveTechnicianFindingStatus, startTechnicianService } from '@/services/servicesService'
+import { claimTechnicianService, createTechnicianVehicle, saveTechnicianVehicleSelection, createTechnicianSiteArea, createTechnicianDevice, createTechnicianFinding, fetchTechnicianPackage, fetchTechnicianServices, finalizeTechnicianService, saveTechnicianAreaAccess, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, saveTechnicianFindingStatus, startTechnicianService } from '@/services/servicesService'
 import { ApiClientError } from '@/services/apiService'
 import { getTechnicianDeviceId, restoreTechnicianDeviceIdFromCaches, listTechnicianPackageCaches, loadTechnicianPackageCache, saveTechnicianPackageCache } from '@/services/technicianPackageService'
 import { deleteTechnicianMutation, listTechnicianMutations, saveTechnicianMutation } from '@/services/technicianMutationService'
 import { deleteTechnicianMedia, loadTechnicianMedia, saveTechnicianMedia } from '@/services/technicianMediaService'
 import { deleteTechnicianAreaPhoto, deleteTechnicianCriterionEvidence, deleteTechnicianDevicePhoto, deleteTechnicianFindingEvidence, uploadTechnicianAreaPhoto, uploadTechnicianCriterionEvidence, uploadTechnicianDevicePhoto, uploadTechnicianFindingEvidence, uploadTechnicianSignature } from '@/services/serviceMediaService'
-import type { MipEvaluation, TechnicianAreaAccessMutation, TechnicianAreaAccessState, TechnicianAreaOrderConflict, TechnicianAreaOrderMutation, TechnicianAreaOrderResult, TechnicianSiteAreaCreationInput, TechnicianSiteAreaCreationMutation, TechnicianArea, TechnicianCriterion, TechnicianCriterionEvaluationMutation, TechnicianDevice, TechnicianDeviceCreationInput, TechnicianDeviceCreationMutation, TechnicianDeviceReview, TechnicianDeviceReviewInput, TechnicianDeviceReviewMutation, TechnicianExecutionSession, TechnicianFinding, TechnicianFindingCreateInput, TechnicianFindingCreateMutation, TechnicianFindingStatusInput, TechnicianFindingStatusMutation, TechnicianMutation, TechnicianPackageCache, TechnicianPendingOperation, TechnicianServiceFinalizeMutation, TechnicianServicePackage, TechnicianServiceSummary } from '@/types/technicianServices'
+import type { MipEvaluation, TechnicianAreaAccessMutation, TechnicianAreaAccessState, TechnicianAreaOrderConflict, TechnicianAreaOrderMutation, TechnicianAreaOrderResult, TechnicianSiteAreaCreationInput, TechnicianSiteAreaCreationMutation, TechnicianArea, TechnicianCriterion, TechnicianCriterionEvaluationMutation, TechnicianDevice, TechnicianDeviceCreationInput, TechnicianDeviceCreationMutation, TechnicianDeviceReview, TechnicianDeviceReviewInput, TechnicianDeviceReviewMutation, TechnicianExecutionSession, TechnicianFinding, TechnicianFindingCreateInput, TechnicianFindingCreateMutation, TechnicianFindingStatusInput, TechnicianFindingStatusMutation, TechnicianMutation, TechnicianPackageCache, TechnicianPendingOperation, TechnicianServiceFinalizeMutation, TechnicianVehicleSelectionMutation, TechnicianServicePackage, TechnicianServiceSummary } from '@/types/technicianServices'
 
 function onlineNow(): boolean {
   return typeof navigator === 'undefined' || navigator.onLine
@@ -122,13 +122,85 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
       serviceId: value.service.id,
       deviceId: previous?.lock?.deviceId ?? previous?.deviceId ?? getTechnicianDeviceId(),
       savedAt: new Date().toISOString(),
-      package: value,
+      package: {
+        ...value,
+        // Keep any unconfirmed selection when refreshing the package online.
+        vehicleDraftIds: value.vehicleDraftIds ?? previous?.package.vehicleDraftIds,
+      },
       lock: patch.lock === undefined ? previous?.lock ?? null : patch.lock,
       pendingOperation: patch.pendingOperation === undefined ? previous?.pendingOperation ?? null : patch.pendingOperation,
     }
     await saveTechnicianPackageCache(next)
     caches.value = { ...caches.value, [next.serviceId]: next }
     return next
+  }
+
+  async function saveVehicleDraft(serviceId: string, ids: string[], confirmed = false): Promise<void> {
+    const cache = caches.value[serviceId]
+    if (!cache) throw new Error('Prepara el servicio antes de registrar vehículos.')
+    await persistPackage({
+      ...cache.package, vehicleDraftIds: [...ids],
+      attendedVehicleIds: confirmed ? [...ids] : cache.package.attendedVehicleIds,
+    })
+  }
+
+  async function applyVehicleDraft(serviceId: string, ids: string[]): Promise<void> {
+    const cache = caches.value[serviceId]
+    if (!cache?.lock || cache.package.service.estado !== 'EN_PROCESO' || !cache.package.vehiclesEnabled)
+      throw new Error('Este celular no puede modificar los vehículos del servicio.')
+    const available = new Set(cache.package.vehicles.filter(vehicle => vehicle.activo).map(vehicle => vehicle.id))
+    if (!ids.every(id => available.has(id))) throw new Error('La selección contiene vehículos no disponibles.')
+    await saveVehicleDraft(serviceId, [...new Set(ids)])
+  }
+
+  async function applyVehicleCreation(serviceId: string, placa: string): Promise<'synced' | 'pending' | 'conflict'> {
+    const cache = caches.value[serviceId]
+    if (!cache?.lock || !cache.package.vehiclesEnabled || cache.package.service.estado !== 'EN_PROCESO')
+      throw new Error('Este servicio no permite agregar vehículos.')
+    const plate = placa.trim().toUpperCase()
+    if (!/^[A-Z0-9-]{3,12}$/.test(plate)) throw new Error('Ingresa una placa válida (3 a 12 caracteres).')
+    if (cache.package.vehicles.some(vehicle => vehicle.placa === plate))
+      throw new Error('La placa ya existe. Búscala en el listado y selecciónala.')
+    const existing = await reloadMutations(serviceId)
+    if (existing.some(item => item.kind === 'SERVICE_FINALIZE'))
+      throw new Error('El cierre ya está preparado. No es posible modificar vehículos.')
+    const vehicleId = crypto.randomUUID()
+    const now = new Date().toISOString()
+    await saveTechnicianMutation({
+      schemaVersion: 1, kind: 'VEHICLE_CREATE', requestId: crypto.randomUUID(), actorId: actorId(), serviceId,
+      deviceId: cache.deviceId, lockToken: cache.lock.token, status: 'PENDING',
+      createdAt: now, updatedAt: now, error: null, vehicleId, placa: plate,
+    })
+    await persistPackage({
+      ...cache.package, vehicles: [...cache.package.vehicles, { id: vehicleId, placa: plate, activo: true, creacionPendiente: true }],
+    })
+    await reloadMutations(serviceId)
+    return onlineNow() ? syncPending(serviceId) : 'pending'
+  }
+
+  async function confirmVehicleSelection(serviceId: string): Promise<'synced' | 'pending' | 'conflict'> {
+    const cache = caches.value[serviceId]
+    if (!cache?.lock || !cache.package.vehiclesEnabled || cache.package.service.estado !== 'EN_PROCESO')
+      throw new Error('Este servicio no permite confirmar vehículos.')
+    const ids = [...new Set(cache.package.vehicleDraftIds ?? cache.package.attendedVehicleIds ?? [])].sort()
+    if (!ids.every(id => cache.package.vehicles.some(vehicle => vehicle.id === id && vehicle.activo)))
+      throw new Error('Actualiza la selección: hay placas no disponibles.')
+    const existing = await reloadMutations(serviceId)
+    if (existing.some(item => item.kind === 'SERVICE_FINALIZE'))
+      throw new Error('El cierre ya está preparado. No es posible modificar vehículos.')
+    // A new confirmation always gets its own idempotency key.
+    for (const op of existing) {
+      if (op.kind === 'VEHICLE_SELECTION' && op.status === 'PENDING') await deleteTechnicianMutation(op)
+    }
+    const now = new Date().toISOString()
+    await saveTechnicianMutation({
+      schemaVersion: 1, kind: 'VEHICLE_SELECTION', requestId: crypto.randomUUID(), actorId: actorId(), serviceId,
+      deviceId: cache.deviceId, lockToken: cache.lock.token, status: 'PENDING',
+      createdAt: now, updatedAt: now, error: null, selectedIds: ids,
+    })
+    await saveVehicleDraft(serviceId, ids, true)
+    await reloadMutations(serviceId)
+    return onlineNow() ? syncPending(serviceId) : 'pending'
   }
 
   async function persistLocalSignature(serviceId: string, role: 'TECHNICIAN' | 'CLIENT', mediaId: string): Promise<void> {
@@ -1489,6 +1561,11 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     const cache = caches.value[serviceId]
     if (!cache || cache.package.service.estado !== 'EN_PROCESO' || !cache.lock) throw new Error('Este celular no puede finalizar el servicio.')
     if (!cache.package.areas.every(area => technicianAreaResolved(area, serviceId))) throw new Error('Completa todas las Áreas antes de finalizar.')
+    if (cache.package.vehiclesEnabled && cache.package.attendedVehicleIds === null)
+      throw new Error('Confirma los vehículos atendidos antes de finalizar, incluso si fueron cero.')
+    if (cache.package.vehiclesEnabled && cache.package.vehicleDraftIds
+      && JSON.stringify([...cache.package.vehicleDraftIds].sort()) !== JSON.stringify([...(cache.package.attendedVehicleIds ?? [])].sort()))
+      throw new Error('Guarda los cambios de vehículos antes de finalizar.')
     const signatures = cache.package.signatures
     const technicianMediaId = signatures?.technicianLocalId
     const clientMediaId = signatures?.clientLocalId
@@ -1655,6 +1732,9 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     start,
     claim,
     syncPending,
+    applyVehicleDraft,
+    applyVehicleCreation,
+    confirmVehicleSelection,
     applySiteAreaCreation,
     discardSiteAreaCreationConflict,
     retrySiteAreaCreationConflict,
