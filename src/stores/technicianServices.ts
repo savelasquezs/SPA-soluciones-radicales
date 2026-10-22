@@ -2,13 +2,13 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { isExactAreaPermutation, sortTechnicianServices, technicianAreaResolved, technicianDevicePhotoRequired } from '@/helpers/technicianServices'
 import { useAuthStore } from '@/stores/auth'
-import { claimTechnicianService, createTechnicianDevice, createTechnicianFinding, fetchTechnicianPackage, fetchTechnicianServices, finalizeTechnicianService, saveTechnicianAreaAccess, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, saveTechnicianFindingStatus, startTechnicianService } from '@/services/servicesService'
+import { claimTechnicianService, createTechnicianSiteArea, createTechnicianDevice, createTechnicianFinding, fetchTechnicianPackage, fetchTechnicianServices, finalizeTechnicianService, saveTechnicianAreaAccess, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, saveTechnicianFindingStatus, startTechnicianService } from '@/services/servicesService'
 import { ApiClientError } from '@/services/apiService'
 import { getTechnicianDeviceId, listTechnicianPackageCaches, loadTechnicianPackageCache, saveTechnicianPackageCache } from '@/services/technicianPackageService'
 import { deleteTechnicianMutation, listTechnicianMutations, saveTechnicianMutation } from '@/services/technicianMutationService'
 import { deleteTechnicianMedia, loadTechnicianMedia, saveTechnicianMedia } from '@/services/technicianMediaService'
 import { deleteTechnicianAreaPhoto, deleteTechnicianCriterionEvidence, deleteTechnicianDevicePhoto, deleteTechnicianFindingEvidence, uploadTechnicianAreaPhoto, uploadTechnicianCriterionEvidence, uploadTechnicianDevicePhoto, uploadTechnicianFindingEvidence, uploadTechnicianSignature } from '@/services/serviceMediaService'
-import type { MipEvaluation, TechnicianAreaAccessMutation, TechnicianAreaAccessState, TechnicianAreaOrderConflict, TechnicianAreaOrderMutation, TechnicianAreaOrderResult, TechnicianCriterion, TechnicianCriterionEvaluationMutation, TechnicianDevice, TechnicianDeviceCreationInput, TechnicianDeviceCreationMutation, TechnicianDeviceReview, TechnicianDeviceReviewInput, TechnicianDeviceReviewMutation, TechnicianExecutionSession, TechnicianFinding, TechnicianFindingCreateInput, TechnicianFindingCreateMutation, TechnicianFindingStatusInput, TechnicianFindingStatusMutation, TechnicianMutation, TechnicianPackageCache, TechnicianPendingOperation, TechnicianServiceFinalizeMutation, TechnicianServicePackage, TechnicianServiceSummary } from '@/types/technicianServices'
+import type { MipEvaluation, TechnicianAreaAccessMutation, TechnicianAreaAccessState, TechnicianAreaOrderConflict, TechnicianAreaOrderMutation, TechnicianAreaOrderResult, TechnicianSiteAreaCreationInput, TechnicianSiteAreaCreationMutation, TechnicianArea, TechnicianCriterion, TechnicianCriterionEvaluationMutation, TechnicianDevice, TechnicianDeviceCreationInput, TechnicianDeviceCreationMutation, TechnicianDeviceReview, TechnicianDeviceReviewInput, TechnicianDeviceReviewMutation, TechnicianExecutionSession, TechnicianFinding, TechnicianFindingCreateInput, TechnicianFindingCreateMutation, TechnicianFindingStatusInput, TechnicianFindingStatusMutation, TechnicianMutation, TechnicianPackageCache, TechnicianPendingOperation, TechnicianServiceFinalizeMutation, TechnicianServicePackage, TechnicianServiceSummary } from '@/types/technicianServices'
 
 function onlineNow(): boolean {
   return typeof navigator === 'undefined' || navigator.onLine
@@ -146,6 +146,28 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     const value = await fetchTechnicianPackage(serviceId)
     await persistPackage(value)
     return value
+  }
+
+  async function persistSiteAreaCreation(serviceId: string, definitive: TechnicianArea): Promise<void> {
+    const cache = caches.value[serviceId]
+    if (!cache) throw new Error('Prepara el servicio antes de registrar Áreas.')
+    const local = cache.package.areas.find(item => item.id === definitive.id)
+    // Keep any locally entered evaluations and the technician's pending route
+    // arrangement while replacing the provisional Area with the server snapshot.
+    const pendingOrder = (mutations.value[serviceId] ?? []).some(item => item.kind === 'AREA_ORDER')
+    const criteria = definitive.criterios.map(criterion => {
+      const pending = local?.criterios.find(item => item.id === criterion.id)
+      return pending ? { ...criterion, evaluacion: pending.evaluacion,
+        observacion: pending.observacion, evidenciasStoragePaths: pending.evidenciasStoragePaths,
+        evidenciasLocalIds: pending.evidenciasLocalIds } : criterion
+    })
+    const saved = { ...definitive, criterios: criteria,
+      posicionRecorrido: local && pendingOrder ? local.posicionRecorrido : definitive.posicionRecorrido,
+      creacionPendiente: false }
+    const areas = local
+      ? cache.package.areas.map(item => item.id === saved.id ? saved : item)
+      : [...cache.package.areas, saved]
+    await persistPackage({ ...cache.package, areas })
   }
 
   async function persistAreaOrder(serviceId: string, areaIds: string[], result?: TechnicianAreaOrderResult): Promise<void> {
@@ -376,7 +398,14 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
         await saveTechnicianMutation(sending)
         await reloadMutations(serviceId)
         try {
-          if (sending.kind === 'AREA_ORDER') {
+          if (sending.kind === 'AREA_CREATE') {
+            const result = await createTechnicianSiteArea(serviceId, sending.requestId, sending.deviceId,
+              sending.lockToken, sending.areaId, sending.serviceAreaId,
+              { nombre: sending.nombre, esExterna: sending.esExterna }, sending.criteria)
+            await deleteTechnicianMutation(sending)
+            await reloadMutations(serviceId)
+            await persistSiteAreaCreation(serviceId, result.area)
+          } else if (sending.kind === 'AREA_ORDER') {
             const result = await saveTechnicianAreaOrder(serviceId, sending.requestId, sending.deviceId, sending.lockToken, sending.areaIds, sending.versions)
             await deleteTechnicianMutation(sending)
             const remaining = await listTechnicianMutations(actorId(), serviceId)
@@ -600,7 +629,10 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
           }
           const retryable = !(failure instanceof ApiClientError) || failure.status >= 500 || failure.status === 408 || failure.status === 429
           const error = failure instanceof Error ? failure.message : 'No fue posible sincronizar el cambio.'
-          if (sending.kind === 'AREA_ORDER') {
+          if (sending.kind === 'AREA_CREATE') {
+            await saveTechnicianMutation({ ...sending, status: retryable ? 'SENDING' : 'CONFLICT',
+              error, updatedAt: new Date().toISOString() })
+          } else if (sending.kind === 'AREA_ORDER') {
             await saveTechnicianMutation({ ...sending, status: retryable ? 'SENDING' : 'CONFLICT',
               conflict: failure instanceof ApiClientError ? conflictDetails(failure) : null, error, updatedAt: new Date().toISOString() })
           } else if (sending.kind === 'CRITERION_EVALUATION') {
@@ -630,6 +662,123 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     } finally {
       syncing.value = false
     }
+  }
+
+  async function applySiteAreaCreation(
+    serviceId: string, input: TechnicianSiteAreaCreationInput,
+  ): Promise<{ serviceAreaId: string; status: 'synced' | 'pending' | 'conflict' }> {
+    const cache = caches.value[serviceId]
+    if (!cache || cache.package.service.estado !== 'EN_PROCESO' || !cache.lock
+      || cache.package.service.tipoServicio !== 'PRINCIPAL' || cache.package.service.tipoSede === 'RESIDENCIAL') {
+      throw new Error('Solo puedes registrar Áreas durante un servicio Principal activo en este celular.')
+    }
+    const nombre = input.nombre.trim()
+    if (!nombre || nombre.length > 150) throw new Error('Escribe un nombre de Área válido (máximo 150 caracteres).')
+    if (cache.package.areas.some(area => area.nombre.trim().localeCompare(nombre, 'es', { sensitivity: 'base' }) === 0)) {
+      throw new Error('Esta Área ya está en el recorrido. Selecciónala para continuar.')
+    }
+    if (cache.package.areas.length >= 500) throw new Error('Este servicio alcanzó el máximo de Áreas.')
+    const catalog = cache.package.areaCriteriaCatalog
+    if (!catalog?.length) throw new Error('Actualiza el servicio con conexión para obtener los criterios MIP antes de crear un Área.')
+    const applicable = catalog.filter(criterion => !criterion.soloAreaExterna || input.esExterna)
+    if (!applicable.length) throw new Error('No hay criterios MIP para esta Área.')
+    const now = new Date().toISOString()
+    const operation: TechnicianSiteAreaCreationMutation = {
+      schemaVersion: 1,
+      requestId: crypto.randomUUID(),
+      actorId: actorId(),
+      serviceId,
+      deviceId: cache.deviceId,
+      lockToken: cache.lock.token,
+      kind: 'AREA_CREATE',
+      areaId: crypto.randomUUID(),
+      serviceAreaId: crypto.randomUUID(),
+      nombre,
+      esExterna: input.esExterna,
+      criteria: applicable.map(item => ({ id: crypto.randomUUID(), criterioId: item.id })),
+      status: 'PENDING',
+      createdAt: now,
+      updatedAt: now,
+      error: null,
+    }
+    const nextInitial = Math.max(-1, ...cache.package.areas.map(item => item.posicionInicial)) + 1
+    const nextPosition = Math.max(-1, ...cache.package.areas.map(item => item.posicionRecorrido)) + 1
+    const area: TechnicianArea = {
+      id: operation.serviceAreaId,
+      areaId: operation.areaId,
+      nombre, esExterna: operation.esExterna,
+      posicionInicial: nextInitial,
+      posicionRecorrido: nextPosition,
+      creacionPendiente: true,
+      sinAcceso: false,
+      sinAccesoDescripcion: null,
+      sinAccesoFotoStoragePath: null,
+      sinAccesoEvidenciasStoragePaths: [],
+      version: 1,
+      criterios: applicable.map((item, index) => ({
+        id: operation.criteria[index]!.id, criterioId: item.id, nombre: item.nombre,
+        soloAreaExterna: item.soloAreaExterna, evaluacion: null, observacion: null,
+        evidenciasStoragePaths: [], version: 1,
+      })),
+      dispositivos: [],
+      hallazgos: [],
+    }
+    await saveTechnicianMutation(operation)
+    await reloadMutations(serviceId)
+    await persistPackage({ ...cache.package, areas: [...cache.package.areas, area] })
+    return { serviceAreaId: operation.serviceAreaId, status: onlineNow() ? await syncPending(serviceId) : 'pending' }
+  }
+
+  async function discardSiteAreaCreationConflict(serviceId: string, serviceAreaId: string): Promise<void> {
+    const pending = await reloadMutations(serviceId)
+    const creation = pending.find((item): item is TechnicianSiteAreaCreationMutation =>
+      item.kind === 'AREA_CREATE' && item.serviceAreaId === serviceAreaId && item.status === 'CONFLICT')
+    if (!creation) throw new Error('No hay un Área nueva en conflicto para descartar.')
+    const criterionIds = new Set(creation.criteria.map(item => item.id))
+    for (const item of pending) {
+      const related = item.kind === 'AREA_CREATE' ? item.serviceAreaId === serviceAreaId
+        : item.kind === 'AREA_ORDER' ? item.areaIds.includes(serviceAreaId)
+          : item.kind === 'CRITERION_EVALUATION' ? criterionIds.has(item.criterionId)
+            : 'areaId' in item && item.areaId === serviceAreaId
+      if (!related) continue
+      await deleteTechnicianMutation(item)
+      const photos = [
+        ...('evidences' in item && Array.isArray(item.evidences) ? item.evidences.map(e => e.mediaId) : []),
+        ...('photoMediaId' in item && item.photoMediaId ? [item.photoMediaId] : []),
+      ]
+      for (const mediaId of photos) await deleteTechnicianMedia(item.actorId, mediaId)
+    }
+    await reloadMutations(serviceId)
+    const cache = caches.value[serviceId]
+    if (cache) {
+      const remaining = cache.package.areas.filter(item => item.id !== serviceAreaId)
+        .sort((a, b) => a.posicionRecorrido - b.posicionRecorrido)
+        .map((item, index) => ({ ...item, posicionRecorrido: index }))
+      await persistPackage({ ...cache.package, areas: remaining })
+    }
+  }
+
+  async function retrySiteAreaCreationConflict(serviceId: string, serviceAreaId: string, nombre: string):
+    Promise<'synced' | 'pending' | 'conflict'> {
+    const pending = await reloadMutations(serviceId)
+    const creation = pending.find((item): item is TechnicianSiteAreaCreationMutation =>
+      item.kind === 'AREA_CREATE' && item.serviceAreaId === serviceAreaId && item.status === 'CONFLICT')
+    const cache = caches.value[serviceId]
+    if (!creation || !cache?.lock) throw new Error('El Área ya no está disponible para corrección.')
+    const normalized = nombre.trim()
+    if (!normalized || normalized.length > 150) throw new Error('Escribe un nombre válido (máximo 150 caracteres).')
+    if (cache.package.areas.some(area => area.id !== serviceAreaId &&
+      area.nombre.trim().localeCompare(normalized, 'es', { sensitivity: 'base' }) === 0)) {
+      throw new Error('Ya existe un Área con ese nombre en el recorrido.')
+    }
+    await deleteTechnicianMutation(creation)
+    const now = new Date().toISOString()
+    await saveTechnicianMutation({ ...creation, requestId: crypto.randomUUID(), nombre: normalized,
+      status: 'PENDING', error: null, createdAt: now, updatedAt: now })
+    await reloadMutations(serviceId)
+    await persistPackage({ ...cache.package, areas: cache.package.areas.map(area => area.id !== serviceAreaId
+      ? area : { ...area, nombre: normalized }) })
+    return onlineNow() ? syncPending(serviceId) : 'pending'
   }
 
   async function applyAreaOrder(serviceId: string, areaIds: string[]): Promise<'synced' | 'pending' | 'conflict'> {
@@ -1485,6 +1634,9 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     start,
     claim,
     syncPending,
+    applySiteAreaCreation,
+    discardSiteAreaCreationConflict,
+    retrySiteAreaCreationConflict,
     applyAreaOrder,
     discardAreaOrderConflict,
     retryAreaOrderConflict,
