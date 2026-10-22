@@ -28,7 +28,7 @@ import { useClientsStore } from '@/stores/clients'
 import { useNotificationsStore } from '@/stores/notifications'
 import type { AreaInput, AreaRecord, AreaTemplateRecord, SiteInput, SiteRecord } from '@/types/domain'
 
-type Tab = 'summary' | 'areas' | 'vehicles' | 'devices' | 'findings' | 'history' | 'settings'
+type Tab = 'summary' | 'areas' | 'vehicles' | 'devices' | 'findings' | 'history'
 
 const route = useRoute()
 const router = useRouter()
@@ -259,7 +259,7 @@ function formatMoney(value: number): string { return new Intl.NumberFormat('es-C
       <BaseButton size="compact" variant="secondary" @click="openSiteEdit"><Pencil :size="16" />Editar Sede</BaseButton>
     </header>
     <nav class="tabs" aria-label="Detalle de Sede">
-      <button v-for="item in ([['summary','Resumen'],['areas','Áreas'],['vehicles','Vehículos'],['devices','Puestos de monitoreo'],['findings','Hallazgos'],['history','Historial de servicios'],['settings','Configuración']] as const)" :key="item[0]" :aria-current="tab === item[0] ? 'page' : undefined" @click="changeTab(item[0], $event)">{{ item[1] }}</button>
+      <button v-for="item in ([['summary','Resumen'],['areas','Áreas'],['vehicles','Vehículos'],['devices','Puestos de monitoreo'],['findings','Hallazgos'],['history','Historial de servicios']] as const)" :key="item[0]" :aria-current="tab === item[0] ? 'page' : undefined" @click="changeTab(item[0], $event)">{{ item[1] }}</button>
     </nav>
 
     <section v-if="tab === 'summary'" class="summary-grid"><article><h2>Contacto principal</h2><p>{{ site.contactoPrincipalNombre }}</p><WhatsAppPhoneLink v-if="site.contactoPrincipalCelular" :phone="site.contactoPrincipalCelular" /><p>{{ site.contactoPrincipalCorreo ?? 'Sin correo' }}</p></article><article><h2>Operación</h2><p>{{ formatMoney(site.valorServicio) }} por Servicio</p><p>Cada {{ site.periodicidadMeses }} mes{{ site.periodicidadMeses === 1 ? '' : 'es' }}</p><p>{{ site.duracionServicioMinutos }} minutos</p></article><article><h2>Configuración</h2><p>{{ site.areasCount }} Áreas</p><p>{{ site.manejaVehiculos ? 'Maneja vehículos' : 'Sin vehículos' }}</p></article><article><h2>Plano</h2><p>{{ site.planoStoragePath?.split('/').slice(-1)[0] ?? 'Sin plano' }}</p><BaseButton v-if="site.planoStoragePath" size="compact" variant="secondary" @click="site.planoStoragePath && openPrivateFile(site.planoStoragePath)">Ver plano</BaseButton></article></section>
@@ -327,7 +327,6 @@ function formatMoney(value: number): string { return new Intl.NumberFormat('es-C
     <section v-else-if="tab === 'history'" class="history-card">
       <ContextualServiceHistory :site-id="siteId" />
     </section>
-    <section v-else-if="tab === 'settings'" class="settings-card"><h2>Configuración de la Sede</h2><p>Modifica contacto, operación, vehículos y plano desde el formulario compartido.</p><BaseButton size="compact" @click="openSiteEdit">Editar configuración</BaseButton></section>
     <SiteMonitoringPanel v-if="visited.devices" v-show="tab === 'devices'" :site-id="siteId" :active="tab === 'devices'" />
     <SiteFindingsPanel v-if="visited.findings" v-show="tab === 'findings'" :site-id="siteId" :active="tab === 'findings'" />
 
@@ -377,7 +376,7 @@ function formatMoney(value: number): string { return new Intl.NumberFormat('es-C
 .summary-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--surface); overflow:hidden; }
 .summary-grid article { display:grid; min-width:0; align-content:start; gap:0.2rem; padding:0.65rem 0.75rem; }
 .summary-grid article + article { border-left:1px solid var(--border); }
-.summary-grid h2, .summary-grid p, .settings-card h2 { margin:0; }
+.summary-grid h2, .summary-grid p { margin:0; }
 .summary-grid h2 { font-size:0.87rem; }
 .summary-grid p { color:var(--text-secondary); font-size:0.82rem; overflow-wrap:anywhere; }
 .areas-layout { position:relative; display:grid; gap:0.6rem; align-items:start; min-width:0; }
@@ -388,7 +387,7 @@ function formatMoney(value: number): string { return new Intl.NumberFormat('es-C
 .template-apply { display:grid; gap:0.65rem; }
 .template-apply p { font-size:0.8rem; color:var(--text-secondary); margin:0; }
 .template-apply :deep(select) { min-height:36px; padding:0.4rem 0.6rem; }
-.areas-panel, .settings-card { min-width:0; border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--surface); padding:0.7rem; }
+.areas-panel { min-width:0; border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--surface); padding:0.7rem; }
 .history-card { min-width:0; }
 .areas-panel { padding:0; overflow:hidden; }
 .areas-table-scroll { max-width:100%; max-height:min(68vh, 42rem); overflow:auto; overscroll-behavior-x:contain; -webkit-overflow-scrolling:touch; }
