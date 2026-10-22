@@ -3,12 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTechnicianVehicle, finalizeTechnicianService, saveTechnicianVehicles } from './commands'
 
 vi.mock('./queries', () => ({
-  assignedServiceState: vi.fn(async () => ({ estado: 'EN_PROCESO', tipo_servicio: 'PRINCIPAL' })),
-  getTechnicianPackage: vi.fn(async () => ({ service: { estado: 'FINALIZADO' } })),
+  assignedServiceState: vi.fn<() => Promise<{ estado: string; tipo_servicio: string }>>(
+    async () => ({ estado: 'EN_PROCESO', tipo_servicio: 'PRINCIPAL' })),
+  getTechnicianPackage: vi.fn<() => Promise<{ service: { estado: string } }>>(
+    async () => ({ service: { estado: 'FINALIZADO' } })),
 }))
 vi.mock('../services/commands', () => ({
-  audit: vi.fn(async () => undefined),
-  assertVersion: vi.fn(),
+  audit: vi.fn<() => Promise<void>>(async () => undefined),
+  assertVersion: vi.fn<() => void>(),
 }))
 
 const user = '11111111-1111-4111-8111-111111111111'
@@ -25,7 +27,7 @@ function mockClient(options: {
   allowedIds?: string[]
 } = {}) {
   const queries: string[] = []
-  const query = vi.fn(async (sql: string, params: unknown[] = []) => {
+  const query = vi.fn<(sql: string) => Promise<{ rows: Record<string, unknown>[]; rowCount?: number }>>(async sql => {
     queries.push(sql)
     if (sql.includes('from private.service_execution_locks')) {
       return { rows: [{ user_id: user, device_id: phone, lock_token: token }] }

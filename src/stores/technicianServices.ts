@@ -524,14 +524,15 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
         await reloadMutations(serviceId)
         try {
           if (sending.kind === 'VEHICLE_CREATE') {
+            const provisionalId = sending.vehicleId
             const result = await createTechnicianVehicle(serviceId, sending.requestId, sending.deviceId,
-              sending.lockToken, sending.vehicleId, sending.placa)
+              sending.lockToken, provisionalId, sending.placa)
             const remaining = await listTechnicianMutations(actorId(), serviceId)
             // A concurrent admin/technician may have registered the same plate during offline work.
             for (const queued of remaining.filter((item): item is TechnicianVehicleSelectionMutation => item.kind === 'VEHICLE_SELECTION')) {
-              if (queued.selectedIds.includes(sending.vehicleId)) {
+              if (queued.selectedIds.includes(provisionalId)) {
                 if (queued.status === 'SENDING') throw new Error('La selección está sincronizando. Intenta de nuevo.')
-                const selectedIds = [...new Set(queued.selectedIds.map(id => id === sending.vehicleId ? result.vehicle.id : id))].sort()
+                const selectedIds = [...new Set(queued.selectedIds.map(id => id === provisionalId ? result.vehicle.id : id))].sort()
                 await saveTechnicianMutation({ ...queued, selectedIds, updatedAt: new Date().toISOString() })
               }
             }
@@ -539,11 +540,11 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
             const cached = caches.value[serviceId]
             if (cached) {
               const remap = (ids: string[] | null | undefined) =>
-                ids?.map(id => id === sending.vehicleId ? result.vehicle.id : id)
+                ids?.map(id => id === provisionalId ? result.vehicle.id : id)
               await persistPackage({
                 ...cached.package,
                 vehicles: cached.package.vehicles.map(vehicle =>
-                  vehicle.id === sending.vehicleId ? result.vehicle : vehicle)
+                  vehicle.id === provisionalId ? result.vehicle : vehicle)
                   .filter((vehicle, index, vehicles) => vehicles.findIndex(item => item.id === vehicle.id) === index),
                 vehicleDraftIds: remap(cached.package.vehicleDraftIds),
                 attendedVehicleIds: remap(cached.package.attendedVehicleIds) ?? null,
@@ -554,8 +555,9 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
               sending.lockToken, sending.selectedIds)
             await deleteTechnicianMutation(sending)
             const remaining = await listTechnicianMutations(actorId(), serviceId)
-            const newer = remaining.filter((item): item is TechnicianVehicleSelectionMutation =>
-              item.kind === 'VEHICLE_SELECTION').at(-1)
+            const futureSelections = remaining.filter((item): item is TechnicianVehicleSelectionMutation =>
+              item.kind === 'VEHICLE_SELECTION')
+            const newer = futureSelections[futureSelections.length - 1]
             const cached = caches.value[serviceId]
             if (cached) await persistPackage({ ...cached.package,
               attendedVehicleIds: newer?.selectedIds ?? result.attendedVehicleIds,
