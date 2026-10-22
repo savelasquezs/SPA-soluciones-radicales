@@ -231,6 +231,13 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     if (!creation) throw new Error('Esta placa no está pendiente de corrección.')
     if (pending.some(item => item.kind === 'VEHICLE_SELECTION' && item.status === 'SENDING'
       && item.selectedIds.includes(vehicleId))) throw new Error('Se está sincronizando la selección.')
+    const closure = pending.find(item => item.kind === 'SERVICE_FINALIZE')
+    if (closure) {
+      // Undo only an unsent local intention. A sent/unknown request must never be discarded.
+      if (closure.status !== 'PENDING') throw new Error(
+        'El cierre ya comenzó a sincronizarse. Revisa su estado antes de cambiar vehículos.')
+      await deleteTechnicianMutation(closure)
+    }
     await deleteTechnicianMutation(creation)
     for (const item of pending.filter(item => item.kind === 'VEHICLE_SELECTION' && item.selectedIds.includes(vehicleId))) {
       await deleteTechnicianMutation(item)
