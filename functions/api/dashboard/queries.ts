@@ -2,7 +2,7 @@ import type { PoolClient } from 'pg'
 import type { DashboardSnapshot, DashboardPeriod, DashboardServiceRow, DashboardFindingRow } from '../../../src/types/dashboard'
 import { addDateDays, todayBogota } from '../../../src/helpers/adminServices'
 import { DASHBOARD_DAYS, resolveDashboardRange, type DashboardBucket } from '../../../src/helpers/dashboardRanges'
-import { actionableUpcomingSql, serviceMetricSql, unresolvedFindingsSql } from './metricSql'
+import { actionableUpcomingSql, serviceBalanceSql, serviceMetricSql, unresolvedFindingsSql } from './metricSql'
 export { DASHBOARD_DAYS }
 
 type Bucket = DashboardBucket
@@ -65,7 +65,7 @@ export async function dashboardSnapshot(client: PoolClient, period: DashboardPer
     count(serviceMetricSql.delayed)+' as delayed,'+
     money(serviceMetricSql.performed+' and s.fin_real>='+bogotaStart+' and s.fin_real<'+bogotaEnd)+' as "performedValue",'+
     money(serviceMetricSql.performed+" and s.fin_real>=($5::date::timestamp at time zone 'America/Bogota') and s.fin_real<"+bogotaStart)+' as "previousValue",'+
-    money(serviceMetricSql.unpaid)+' as "outstandingValue",'+
+    sub('coalesce(sum('+serviceBalanceSql+'),0)::text',serviceMetricSql.unpaid)+' as "outstandingValue",'+
     count(serviceMetricSql.unpaid)+' as "outstandingPayments",'+
     count(serviceMetricSql.calendarError)+' as "calendarErrors"'
     ,[clientId,siteId,from,to,previousFrom])
