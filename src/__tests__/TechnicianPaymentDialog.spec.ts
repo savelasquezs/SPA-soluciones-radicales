@@ -52,7 +52,7 @@ describe('reporte de cobro técnico', () => {
     const photo = new File(['foto'], 'comprobante.jpg', { type: 'image/jpeg' })
     picker.vm.$emit('update:modelValue', [photo])
     await wrapper.vm.$nextTick()
-    expect(wrapper.text()).toContain('Comprobante de la transferencia')
+    expect(picker.props('label')).toBe('Comprobante de la transferencia')
 
     await wrapper.get('#technician-payment-form').trigger('submit')
     await flushPromises()
