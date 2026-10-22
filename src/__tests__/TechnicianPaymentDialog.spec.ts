@@ -27,7 +27,7 @@ const DialogStub = {
 }
 const PhotoStub = {
   name: 'TechnicianEvidencePicker',
-  props: ['modelValue'],
+  props: ['modelValue', 'label', 'max', 'disabled'],
   emits: ['update:modelValue'],
   template: '<div data-test="photo-picker" />',
 }
