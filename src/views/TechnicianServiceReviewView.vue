@@ -207,6 +207,9 @@ async function finish(): Promise<void> {
         :vehicles-enabled="packageValue.vehiclesEnabled" :first-area-id="areas[0]?.id" />
       <StatusPanel v-if="simplified && !finalized" compact :title="reinforcement ? 'Servicio de refuerzo' : 'Servicio residencial'" message="No requiere recorrido por Áreas. Registra ambas firmas para finalizar." tone="neutral" />
       <StatusPanel v-else-if="finalized" compact title="Servicio finalizado" message="Las firmas y el cierre fueron confirmados por el servidor." tone="success" />
+      <StatusPanel v-else-if="pending.length && !vehiclesDone" compact title="Áreas y vehículos pendientes"
+        :message="`${pending.length} de ${areas.length} Áreas requieren información y los vehículos aún no se han confirmado.`"
+        tone="warning" />
       <StatusPanel v-else-if="pending.length" compact title="Aún hay Áreas pendientes" :message="`${pending.length} de ${areas.length} Áreas requieren información. Puedes revisar el cierre, pero no finalizar hasta completarlas.`" tone="warning" />
       <StatusPanel v-else-if="obsoleteVehiclePackage" compact title="Actualiza el servicio"
         message="Necesitas conexión para cargar la configuración vehicular de este servicio antes de finalizar." tone="warning" />

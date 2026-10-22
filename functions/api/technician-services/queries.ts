@@ -211,8 +211,10 @@ export async function getTechnicianPackage(client: PoolClient, userId: string, s
     from public.servicios s join public.sedes se on se.id=s.sede_id where s.id=$1`, [serviceId])).rows[0]!
   const vehicles = vehicleContext.enabled ? (await client.query<{ id: string; placa: string; activo: boolean }>(`
     select v.id,v.placa,v.activo from public.vehiculos v join public.servicios s on s.sede_id=v.sede_id
-    where s.id=$1 and (v.activo or coalesce(s.vehiculos_atendidos_ids_json,'[]'::jsonb) ? v.id::text)
-    order by v.placa,v.id`, [serviceId])).rows : []
+    where s.id=$1 and (
+      (s.estado='FINALIZADO' and coalesce(s.vehiculos_atendidos_ids_json,'[]'::jsonb) ? v.id::text)
+      or (s.estado<>'FINALIZADO' and (v.activo or coalesce(s.vehiculos_atendidos_ids_json,'[]'::jsonb) ? v.id::text))
+    ) order by v.placa,v.id`, [serviceId])).rows : []
   return { ...header, frozen, products: await products(client, serviceId, frozen),
     areaCriteriaCatalog,
     deviceTypes: reinforcement ? [] : await deviceTypes(client, serviceId, frozen),
