@@ -10,6 +10,7 @@ const external=vi.hoisted(()=>({ mail:vi.fn<(input: MailInput) => Promise<string
 vi.mock('../../functions/api/google',()=>({ sendGmailMessage:external.mail,upsertCalendarEvent:external.calendar }))
 import { pool,transaction } from '../../functions/api/db'
 import { account, cashBalance, deliverCash, registerPayment, reviewPayment, voidDelivery } from '../../functions/api/finance/ledger'
+import { dashboardSnapshot } from '../../functions/api/dashboard/queries'
 import { ApiError } from '../../functions/api/auth'
 import { cancelService,command,createService,editService,queueConfirmationEmail,rescheduleService,savePayment,updateUpcoming } from '../../functions/api/services/commands'
 import { getService,getUpcoming,listServices,listUpcoming,pendingCount,workspace } from '../../functions/api/services/queries'
@@ -439,6 +440,7 @@ describe('administrator services · real PostgreSQL',()=>{
     expect(replay.id).toBe(paid.id)
     const partial=await transaction(client=>account(client,f.business))
     expect(partial.cliente.saldo).toBe(400000)
+    expect((await transaction(client=>dashboardSnapshot(client,'30d',f.business,null))).kpis.outstandingValue).toBe(400000)
     expect(partial.servicios.filter(s=>[one.id,two.id].includes(s.id)).map(s=>s.abonado)).toEqual([100000,100000])
     await expect(transaction(client=>registerPayment(client,f.admin,{requestId:randomUUID(),clienteId:f.business,metodo:'TRANSFERENCIA',
       recaudadoPorId:null,observacion:'Excedente',aplicaciones:[{servicioId:one.id,monto:300000}],confirmed:true})))
