@@ -58,8 +58,25 @@ describe('subida privada de comprobantes', () => {
     vi.mocked(fetch).mockResolvedValue({ ok: false, status: 403 } as Response)
 
     await expect(uploadPaymentProof(paymentId, new File(['foto'], 'comprobante.jpg')))
-      .rejects.toThrow('No fue posible subir el comprobante')
+      .rejects.toThrow('El almacenamiento no aceptó el comprobante')
     expect(mocks.api).toHaveBeenCalledTimes(1)
+  })
+
+  it('mantiene el cobro sin adjunto cuando el navegador no puede conectar con R2', async () => {
+    mocks.optimize.mockResolvedValue(new File(['foto'], 'comprobante.webp', { type: 'image/webp' }))
+    mocks.api.mockResolvedValueOnce(upload)
+    vi.mocked(fetch).mockRejectedValue(new TypeError('Failed to fetch'))
+
+    await expect(uploadPaymentProof(paymentId, new File(['foto'], 'comprobante.jpg')))
+      .rejects.toThrow('No se pudo conectar con el almacenamiento')
+    expect(mocks.api).toHaveBeenCalledTimes(1)
+  })
+
+  it('rechaza formatos no permitidos antes de firmar R2', async () => {
+    mocks.optimize.mockResolvedValue(new File(['foto'], 'comprobante.heic', { type: 'image/heic' }))
+    await expect(uploadPaymentProof(paymentId, new File(['foto'], 'comprobante.heic')))
+      .rejects.toThrow('JPG, PNG o WebP')
+    expect(mocks.api).not.toHaveBeenCalled()
   })
 
   it('conserva la posibilidad de reintentar si R2 responde pero no se confirma la referencia', async () => {
