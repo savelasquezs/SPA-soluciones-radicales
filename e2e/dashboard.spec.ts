@@ -4,7 +4,7 @@ const uid=(n:number)=>'10000000-0000-4000-8000-'+String(n).padStart(12,'0')
 const clientId=uid(1),siteId=uid(2),serviceId=uid(3),findingId=uid(4)
 const date='2026-10-19T15:00:00.000Z'
 const sample:DashboardSnapshot={
-  generatedAt:date,period:{id:'30d',from:'2026-09-20',to:'2026-10-19'},
+  generatedAt:date,period:{id:'30d',from:'2026-09-23',to:'2026-10-22'},
   filters:{clients:[{id:clientId,name:'Cliente MIP'}],sites:[{id:siteId,clientId,name:'Sede central'}]},
   kpis:{today:{scheduled:2,ongoing:1,completed:2},delayed:3,upcoming:3,upcomingOverdue:1,
     performedValue:400000,performedDelta:10,outstandingValue:100000,outstandingPayments:1,
@@ -100,6 +100,13 @@ test('dashboard renders all charts, three record tables and filters without over
   await expect(page.locator('html')).toHaveAttribute('data-theme','light')
   await page.setViewportSize({width:390,height:860})
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBeTruthy()
+})
+
+test('the thirty-day dashboard displays today as the end of its last partial week',async({page})=>{
+  await setup(page)
+  await page.goto('/')
+  await expect(page.locator('.dashboard-meta')).toContainText(/23 sept.*22 oct/i)
+  await expect(page.locator('.dashboard-chart').first()).toContainText(/19–22 oct/i)
 })
 
 test('three delayed services open the exact filtered list without a one-year cutoff',async({page})=>{

@@ -2,7 +2,7 @@
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import BaseDateRangePicker from '@/components/base/BaseDateRangePicker.vue'
-import { resolveDashboardRange } from '@/helpers/dashboardRanges'
+import { dashboardPeriodLabel, resolveDashboardRange } from '@/helpers/dashboardRanges'
 import type { ServiceMetric } from '@/types/adminServices'
 import { CalendarDays, CalendarClock, CheckCircle2, CircleAlert, ClipboardList, Clock3,
   FileWarning, MapPin, RefreshCw, TrendingUp, Wallet, WifiOff } from 'lucide-vue-next'
@@ -182,7 +182,7 @@ onBeforeUnmount(()=>{counter++;request?.abort()})
       </div>
       <template v-else>
         <div class="dashboard-meta" aria-live="polite">
-          <span>{{ chartLabel }} · Valores en COP</span>
+          <span>{{ chartLabel }} · {{ dashboardPeriodLabel(snapshot.period) }} · Valores en COP</span>
           <span v-if="loading" class="dashboard-update">Actualizando…</span>
           <span v-else>Actualizado: {{ datetime(snapshot.generatedAt) }}</span>
         </div>
