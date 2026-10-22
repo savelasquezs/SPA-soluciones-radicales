@@ -5,7 +5,7 @@ import type { PoolClient } from 'pg'
 vi.mock('@neon/functions', () => ({ attachDatabasePool: vi.fn<() => void>(), waitUntil: vi.fn<() => void>() }))
 
 import { pool, transaction } from '../../functions/api/db'
-import { claimTechnicianService, createTechnicianDevice, createTechnicianFinding, finalizeTechnicianService, releaseTechnicianServiceLock, saveTechnicianAreaAccess, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, saveTechnicianFindingStatus, startTechnicianService, technicianCommand } from '../../functions/api/technician-services/commands'
+import { claimTechnicianService, createTechnicianSiteArea, createTechnicianDevice, createTechnicianFinding, finalizeTechnicianService, releaseTechnicianServiceLock, saveTechnicianAreaAccess, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, saveTechnicianFindingStatus, startTechnicianService, technicianCommand } from '../../functions/api/technician-services/commands'
 import type { DeviceState } from '../../src/types/technicianServices'
 import { getTechnicianPackage, listTechnicianHistory, listTechnicianServices } from '../../functions/api/technician-services/queries'
 
@@ -75,6 +75,56 @@ beforeAll(async () => {
 afterAll(async () => { await pool.end() })
 
 describe('technician service execution · real PostgreSQL', () => {
+  it('creates an Area in the Sede and only a visit snapshot for the active service', async () => {
+    const value = await fixture(), phoneId = randomUUID(), permanentAreaId = randomUUID()
+    const serviceAreaId = randomUUID(), requestId = randomUUID()
+    const started = await transaction(client => startTechnicianService(client, value.technician,
+      value.service, 1, phoneId))
+    const catalog = started.package.areaCriteriaCatalog ?? []
+    const criteria = catalog.filter(item => !item.soloAreaExterna)
+      .map(item => ({ id: randomUUID(), criterioId: item.id }))
+    const input = { nombre: 'Nueva bodega MIP', esExterna: false }
+    const payload = { deviceId: phoneId, areaId: permanentAreaId, serviceAreaId, ...input, criteria }
+    const save = () => transaction(client => technicianCommand(client, value.technician, requestId,
+      'SITE_AREA_CREATE', value.service, null, payload,
+      () => createTechnicianSiteArea(client, value.technician, value.service,
+        phoneId, started.lock.token, permanentAreaId, serviceAreaId, input, criteria)))
+    const saved = await save()
+    expect(saved.area).toMatchObject({ id: serviceAreaId, areaId: permanentAreaId,
+      nombre: 'Nueva bodega MIP', esExterna: false, posicionInicial: 2, posicionRecorrido: 2 })
+    expect(saved.area.criterios.map(item => [item.id, item.criterioId]))
+      .toEqual(criteria.map(item => [item.id, item.criterioId]))
+    expect(saved.area.dispositivos).toEqual([])
+    const permanent = (await pool.query<{ sede_id: string; nombre: string; activo: boolean }>(
+      'select sede_id,nombre,activo from public.areas where id=$1', [permanentAreaId])).rows[0]
+    expect(permanent).toMatchObject({ nombre: 'Nueva bodega MIP', activo: true })
+    expect(permanent.sede_id).toBe((await pool.query('select sede_id from public.servicios where id=$1',
+      [value.service])).rows[0].sede_id)
+    expect((await pool.query('select count(*)::int as count from public.areas where id=$1',
+      [permanentAreaId])).rows[0].count).toBe(1)
+    // Idempotency does not create another Area or snapshot after uncertain replies.
+    expect((await save()).area.id).toBe(serviceAreaId)
+    expect((await pool.query('select count(*)::int as count from public.servicio_areas where area_id=$1',
+      [permanentAreaId])).rows[0].count).toBe(1)
+
+    const futureId = randomUUID()
+    await transaction(client => client.query(`insert into public.servicios
+      (id,sede_id,tipo_servicio,inicio_programado,fin_programado,creado_por_id,tecnico_responsable_id,valor_servicio)
+      select $2,sede_id,'PRINCIPAL',now()+interval '200 days',now()+interval '200 days 90 minutes',
+        creado_por_id,tecnico_responsable_id,valor_servicio
+      from public.servicios where id=$1`, [value.service, futureId]))
+    const future = await transaction(client => getTechnicianPackage(client, value.technician, futureId))
+    expect(future.areas.some(item => item.areaId === permanentAreaId)).toBe(true)
+    await expect(transaction(client => createTechnicianSiteArea(client, value.unrelated,
+      value.service, phoneId, started.lock.token, randomUUID(), randomUUID(),
+      { nombre: 'No autorizado', esExterna: false }, criteria)))
+      .rejects.toMatchObject({ status: 404 })
+    await expect(transaction(client => createTechnicianSiteArea(client, value.technician,
+      value.service, phoneId, started.lock.token, randomUUID(), randomUUID(),
+      { nombre: 'cocina', esExterna: false }, criteria)))
+      .rejects.toMatchObject({ status: 409, code: 'SITE_AREA_EXISTS' })
+  })
+
   it('lists, starts and finishes an assigned reinforcement without MIP snapshots or report', async () => {
     const value = await fixture(), reinforcementId = randomUUID(), phoneId = randomUUID()
     await transaction(async client => {

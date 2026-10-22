@@ -82,7 +82,9 @@ async function changeTab(next: Tab, event?: MouseEvent): Promise<void> {
   void router.replace({ query:{ ...route.query,tab:next === 'history' || next === 'findings' || next === 'vehicles' ? next : undefined } })
   ;(event?.currentTarget as HTMLElement | null)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })
   if (next === 'devices' || next === 'findings') visited.value[next] = true
-  if (next === 'areas' && !store.areasBySiteId[siteId.value]) await loadAreas()
+  // Las Áreas pueden ser creadas por un Técnico mientras el Administrador
+  // tiene la Sede en caché. Refrescar al volver a esta pestaña.
+  if (next === 'areas') await loadAreas(true)
 }
 
 async function loadAreas(force = false): Promise<void> {

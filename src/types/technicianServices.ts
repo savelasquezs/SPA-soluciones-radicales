@@ -171,6 +171,8 @@ export interface TechnicianFindingStatusInput {
 }
 
 export interface TechnicianArea {
+  /** An offline site Area waiting for its authoritative creation. */
+  creacionPendiente?: boolean
   id: string
   areaId: string
   nombre: string
@@ -189,7 +191,24 @@ export interface TechnicianArea {
   hallazgos: TechnicianFinding[]
 }
 
+export interface TechnicianAreaCriterionTemplate {
+  id: string
+  nombre: string
+  soloAreaExterna: boolean
+}
+
+export interface TechnicianSiteAreaCreationInput {
+  nombre: string
+  esExterna: boolean
+}
+
+export interface TechnicianSiteAreaCreationResult {
+  area: TechnicianArea
+}
+
 export interface TechnicianServicePackage {
+  /** Catalog applicable to newly discovered Areas; stored with the offline package. */
+  areaCriteriaCatalog?: TechnicianAreaCriterionTemplate[]
   service: TechnicianServiceSummary
   frozen: boolean
   serverNow: string
@@ -264,6 +283,15 @@ interface TechnicianMutationBase {
   createdAt: string
   updatedAt: string
   error: string | null
+}
+
+export interface TechnicianSiteAreaCreationMutation extends TechnicianMutationBase, TechnicianSiteAreaCreationInput {
+  kind: 'AREA_CREATE'
+  /** Stable ID in the Sede, not an Area exclusive to the Servicio. */
+  areaId: string
+  /** Snapshot identity only for recording this visit's evidence. */
+  serviceAreaId: string
+  criteria: Array<{ id: string; criterioId: string }>
 }
 
 export interface TechnicianAreaOrderMutation extends TechnicianMutationBase {
@@ -397,4 +425,4 @@ export interface TechnicianMediaDraft {
   savedAt: string
 }
 
-export type TechnicianMutation = TechnicianAreaOrderMutation | TechnicianCriterionEvaluationMutation | TechnicianAreaAccessMutation | TechnicianDeviceCreationMutation | TechnicianDeviceReviewMutation | TechnicianFindingCreateMutation | TechnicianFindingStatusMutation | TechnicianServiceFinalizeMutation
+export type TechnicianMutation = TechnicianSiteAreaCreationMutation | TechnicianAreaOrderMutation | TechnicianCriterionEvaluationMutation | TechnicianAreaAccessMutation | TechnicianDeviceCreationMutation | TechnicianDeviceReviewMutation | TechnicianFindingCreateMutation | TechnicianFindingStatusMutation | TechnicianServiceFinalizeMutation

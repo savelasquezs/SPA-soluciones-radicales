@@ -12,6 +12,7 @@ import TechnicianDeviceReviewEditor from '@/components/domain/services/Technicia
 import TechnicianFindingCard from '@/components/domain/services/TechnicianFindingCard.vue'
 import TechnicianFindingCreateEditor from '@/components/domain/services/TechnicianFindingCreateEditor.vue'
 import TechnicianNewDeviceEditor from '@/components/domain/services/TechnicianNewDeviceEditor.vue'
+import TechnicianSiteAreaDialog from '@/components/domain/services/TechnicianSiteAreaDialog.vue'
 import '@/components/domain/services/services.css'
 import { nextTechnicianRouteStep, orderedTechnicianAreas, technicianAreaIssues, technicianAreaResolved, type TechnicianAreaIssue } from '@/helpers/technicianServices'
 import { useTechnicianServicesStore } from '@/stores/technicianServices'
@@ -33,6 +34,7 @@ const loading = ref(true)
 const error = ref('')
 const saveError = ref('')
 const newDeviceOpen = ref(false)
+const newAreaOpen = ref(false)
 const newDeviceSaving = ref(false)
 const openDeviceId = ref('')
 const newFindingOpen = ref(false)
@@ -66,7 +68,7 @@ const stepAfterArea = computed(() => nextTechnicianRouteStep(orderedAreas.value,
 const creationConflict = computed(() => currentMutations.value.find((item): item is TechnicianDeviceCreationMutation => item.kind === 'DEVICE_CREATE'
   && item.areaId === currentArea.value?.id && item.status === 'CONFLICT') ?? null)
 
-onMounted(async () => { await load(); await revealRequested() })
+onMounted(async () => { await load(); await revealRequested(); if (route.query.editArea === '1') newAreaOpen.value = true })
 watch(routeAreaId, value => {
   drafts.value = {}
   deviceDrafts.value = {}
@@ -179,6 +181,7 @@ function pendingForArea(area: TechnicianArea): number {
 }
 
 function areaOption(area: TechnicianArea, index: number): string {
+  if (area.creacionPendiente) return `○ ${index + 1}. ${area.nombre} · Pendiente de sincronizar`
   if (area.sinAcceso) return `⛔ ${index + 1}. ${area.nombre} · Sin acceso`
   if (technicianAreaResolved(area, serviceId.value)) return `✓ ${index + 1}. ${area.nombre} · Completa`
   const pending = pendingForArea(area)
@@ -191,6 +194,10 @@ function selectArea(areaId: string): void {
 
 function selectTab(tab: AreaTab): void {
   void router.replace({ query: { ...route.query, tab: tab.toLowerCase() } })
+}
+
+function openNewArea(serviceAreaId: string): void {
+  void router.push({ name: 'technician-service-area', params: { id: serviceId.value, areaId: serviceAreaId } })
 }
 
 function orderAreas(): void {
@@ -567,7 +574,10 @@ async function retryDevice(serviceDeviceId: string): Promise<void> {
           <select id="technician-area-selector" :value="selectedAreaId" @change="selectArea(($event.target as HTMLSelectElement).value)">
             <option v-for="(area, index) in orderedAreas" :key="area.id" :value="area.id">{{ areaOption(area, index) }}</option>
           </select>
-          <BaseButton size="compact" variant="ghost" aria-label="Ordenar Áreas" @click="orderAreas"><ListOrdered :size="18" aria-hidden="true" />Orden</BaseButton>
+          <div class="area-picker__actions">
+            <BaseButton v-if="canEditRoute" size="compact" variant="secondary" @click="newAreaOpen=true"><Plus :size="18" aria-hidden="true" />Nueva Área</BaseButton>
+            <BaseButton size="compact" variant="ghost" aria-label="Ordenar Áreas" @click="orderAreas"><ListOrdered :size="18" aria-hidden="true" />Orden</BaseButton>
+          </div>
         </div>
 
         <nav class="service-navigation" aria-label="Secciones del servicio">
@@ -589,6 +599,9 @@ async function retryDevice(serviceDeviceId: string): Promise<void> {
         </nav>
       </section>
 
+      <p v-if="currentArea.creacionPendiente" class="area-sync-notice" role="status">
+        Área guardada en este celular · Se registrará en la Sede al sincronizar.
+      </p>
       <p v-if="saveError" class="area-save-error" role="alert">{{ saveError }}</p>
 
       <TechnicianAreaAccessEditor
@@ -639,6 +652,7 @@ async function retryDevice(serviceDeviceId: string): Promise<void> {
         <footer class="workspace-footer"><BaseButton variant="secondary" @click="goPrevious('findings')"><ArrowLeft :size="17" />Anterior</BaseButton><BaseButton @click="goNext('findings')">{{ stepAfterArea.kind === 'AREA' ? 'Siguiente área' : 'Ir al cierre' }}<ArrowRight :size="17" /></BaseButton></footer>
       </section>
     </template>
+    <TechnicianSiteAreaDialog :open="newAreaOpen" :service-id="serviceId" @close="newAreaOpen=false" @created="openNewArea" />
   </div>
 </template>
 
@@ -647,6 +661,7 @@ async function retryDevice(serviceDeviceId: string): Promise<void> {
 .area-workspace__sticky { position:sticky; top:0; z-index:5; display:grid; gap:0.55rem; margin-inline:-0.25rem; border-bottom:1px solid var(--border); background:color-mix(in srgb,var(--page) 96%,transparent); padding:0.35rem 0.25rem 0.65rem; backdrop-filter:blur(12px); }
 .area-picker { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:0.55rem; }
 .area-picker label { font-size:0.8125rem; font-weight:700; }
+.area-picker__actions { display:flex; align-items:center; gap:0.35rem; }
 .area-picker select { min-width:0; min-height:44px; border:1px solid var(--control-border); border-radius:var(--radius); background:var(--control-bg); padding:0 2.25rem 0 0.75rem; color:var(--text); font:inherit; font-weight:650; }
 .service-navigation, .area-tabs { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:0.35rem; }
 .service-navigation button, .area-tabs button { display:flex; min-width:0; min-height:44px; align-items:center; justify-content:center; gap:0.35rem; border:1px solid transparent; border-radius:var(--radius); background:transparent; color:var(--text-secondary); font:inherit; font-size:0.8125rem; font-weight:650; cursor:pointer; }
@@ -662,6 +677,7 @@ async function retryDevice(serviceDeviceId: string): Promise<void> {
 .workspace-footer :deep(.base-button) { min-width:0; min-height:44px; font-size:.8rem; }
 .workspace-footer :deep(.base-button:last-child) { flex:1; max-width:15rem; }
 .area-inline-feedback { margin:0; color:var(--success); font-size:.78rem; }
+.area-sync-notice { margin:0; padding:.5rem .65rem; color:var(--text-secondary); font-size:.78rem; }
 .area-validation, .area-save-error { margin:.4rem 0 0; font-size:.78rem; color:var(--danger); }
 .area-save-error { padding:.55rem .75rem; border:1px solid var(--danger); border-radius:var(--radius); }
 .area-focus-item { border-radius:var(--radius); }
@@ -675,5 +691,5 @@ async function retryDevice(serviceDeviceId: string): Promise<void> {
 .area-without-access { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:start; gap:0.75rem; border:1px solid var(--warning); border-radius:var(--radius-lg); background:var(--warning-subtle); padding:1rem; color:var(--warning); }
 @media (min-width:760px) { .area-workspace__sticky { grid-template-columns:minmax(20rem,1fr) auto; align-items:end; } .area-tabs { grid-column:1/-1; } .workspace-panel { padding:1rem; } }
 @media (max-width:520px) { .workspace-panel__actions { flex-wrap:wrap; } .workspace-panel__actions > .base-button { width:auto; } .workspace-footer :deep(.base-button) { padding-inline:.5rem; } }
-@media (max-width:420px) { .area-picker { grid-template-columns:auto minmax(0,1fr); } .area-picker > :last-child { grid-column:1/-1; justify-self:end; } .service-navigation button, .area-tabs button { font-size:0.75rem; } }
+@media (max-width:420px) { .area-picker { grid-template-columns:auto minmax(0,1fr); } .area-picker__actions { grid-column:1/-1; justify-self:end; } .service-navigation button, .area-tabs button { font-size:0.75rem; } }
 </style>

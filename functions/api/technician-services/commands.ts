@@ -1,5 +1,5 @@
 import type { PoolClient } from 'pg'
-import type { MipEvaluation, TechnicianAreaAccessResult, TechnicianAreaAccessState, TechnicianAreaOrderResult, TechnicianAreaOrderVersion, TechnicianCriterion, TechnicianCriterionEvaluationResult, TechnicianDevice, TechnicianDeviceCapture, TechnicianDeviceCreationInput, TechnicianDeviceCreationResult, TechnicianDeviceReview, TechnicianDeviceReviewInput, TechnicianDeviceReviewResult, TechnicianExecutionLock, TechnicianExecutionSession, TechnicianFinding, TechnicianFindingCreateInput, TechnicianFindingResult, TechnicianFindingStatusInput, TechnicianPestSnapshot, TechnicianServicePackage } from '../../../src/types/technicianServices'
+import type { MipEvaluation, TechnicianAreaAccessResult, TechnicianAreaAccessState, TechnicianSiteAreaCreationInput, TechnicianSiteAreaCreationResult, TechnicianAreaOrderResult, TechnicianAreaOrderVersion, TechnicianCriterion, TechnicianCriterionEvaluationResult, TechnicianDevice, TechnicianDeviceCapture, TechnicianDeviceCreationInput, TechnicianDeviceCreationResult, TechnicianDeviceReview, TechnicianDeviceReviewInput, TechnicianDeviceReviewResult, TechnicianExecutionLock, TechnicianExecutionSession, TechnicianFinding, TechnicianFindingCreateInput, TechnicianFindingResult, TechnicianFindingStatusInput, TechnicianPestSnapshot, TechnicianServicePackage } from '../../../src/types/technicianServices'
 import { technicianDevicePhotoRequired } from '../../../src/helpers/technicianServices'
 import { ApiError } from '../auth'
 import { assertVersion, audit } from '../services/commands'
@@ -120,6 +120,85 @@ export async function saveTechnicianAreaAccess(
     removedPhotoPaths: (current.sinAccesoEvidenciasStoragePaths ?? (current.sinAccesoFotoStoragePath ? [current.sinAccesoFotoStoragePath] : []))
       .filter(path => !(area.sinAccesoEvidenciasStoragePaths ?? []).includes(path)),
   }
+}
+
+/**
+ * Create the permanent Area in the Sede. The companion servicio_areas row is
+ * only an immutable visit snapshot, needed to evaluate the Area right now.
+ * All records are inserted atomically in the existing technician transaction.
+ */
+export async function createTechnicianSiteArea(
+  client: PoolClient,
+  userId: string,
+  serviceId: string,
+  deviceId: string,
+  lockToken: string,
+  areaId: string,
+  serviceAreaId: string,
+  input: TechnicianSiteAreaCreationInput,
+  criteria: Array<{ id: string; criterioId: string }>,
+): Promise<TechnicianSiteAreaCreationResult> {
+  const service = await assignedServiceState(client, userId, serviceId, true)
+  if (service.tipo_servicio !== 'PRINCIPAL' || service.estado !== 'EN_PROCESO') {
+    throw new ApiError(409, 'Solo puedes registrar Áreas de una Sede durante un servicio Principal en proceso.', 'SERVICE_NOT_IN_PROGRESS')
+  }
+  await assertExecutionLock(client, userId, serviceId, deviceId, lockToken)
+  const site = (await client.query<{ siteId: string; siteType: string }>(
+    `select s.sede_id as "siteId",se.tipo_sede as "siteType"
+     from public.servicios s join public.sedes se on se.id=s.sede_id where s.id=$1`, [serviceId],
+  )).rows[0]
+  if (!site || site.siteType !== 'NEGOCIO') throw new ApiError(422, 'Esta Sede no admite Áreas MIP.', 'VALIDATION')
+  const nombre = input.nombre.trim()
+  if (!nombre || nombre.length > 150) throw new ApiError(422, 'El nombre del Área es obligatorio (máximo 150 caracteres).', 'VALIDATION')
+  if (criteria.length > 500 || new Set(criteria.map(item => item.criterioId)).size !== criteria.length
+    || new Set(criteria.map(item => item.id)).size !== criteria.length) {
+    throw new ApiError(422, 'Actualiza los criterios disponibles del servicio.', 'VALIDATION')
+  }
+
+  // Serialize creation by Sede/name; a pre-existing inactive Area must be
+  // reactivated administratively rather than silently duplicated.
+  await client.query('select pg_advisory_xact_lock(hashtextextended($1,0))',
+    [`site-area:${site.siteId}:${nombre.toLocaleLowerCase('es-CO')}`])
+  const existing = (await client.query<{ activo: boolean }>(
+    'select activo from public.areas where sede_id=$1 and lower(btrim(nombre))=lower(btrim($2)) limit 1',
+    [site.siteId, nombre],
+  )).rows[0]
+  if (existing) throw new ApiError(409, existing.activo
+    ? 'Esta Área ya existe en la Sede y no puede duplicarse.'
+    : 'Esta Área está inactiva. Solicita al administrador que la reactive.', 'SITE_AREA_EXISTS')
+
+  const applicable = (await client.query<{ id: string }>(`
+    select id from public.criterios_mip
+    where activo and (not solo_area_externa or $1::boolean)
+    order by id for share`, [input.esExterna])).rows.map(item => item.id)
+  if (!applicable.length || applicable.length !== criteria.length ||
+    criteria.some(item => !applicable.includes(item.criterioId))) {
+    throw new ApiError(409, 'Los criterios MIP cambiaron. Actualiza el servicio antes de registrar esta Área.', 'AREA_CRITERIA_CONFLICT')
+  }
+  const count = (await client.query<{ total: number }>(
+    'select count(*)::integer as total from public.servicio_areas where servicio_id=$1', [serviceId],
+  )).rows[0]?.total ?? 0
+  if (count >= 500) throw new ApiError(422, 'Este servicio alcanzó el máximo de Áreas.', 'VALIDATION')
+
+  await client.query(`insert into public.areas(id,sede_id,nombre,es_externa,activo)
+    values($1,$2,$3,$4,true)`, [areaId, site.siteId, nombre, input.esExterna])
+  await client.query(`insert into public.servicio_areas
+    (id,servicio_id,area_id,nombre_snapshot,es_externa_snapshot,posicion_inicial,posicion_recorrido)
+    select $1,$2,$3,$4,$5,coalesce(max(posicion_inicial),-1)+1,coalesce(max(posicion_recorrido),-1)+1
+    from public.servicio_areas where servicio_id=$2`,
+  [serviceAreaId, serviceId, areaId, nombre, input.esExterna])
+  const inserted = await client.query(`insert into public.evaluaciones_mip_area
+    (id,servicio_id,servicio_area_id,area_id,criterio_id,criterio_nombre_snapshot,solo_area_externa_snapshot)
+    select requested.id,$1,$2,$3,c.id,c.nombre,c.solo_area_externa
+    from unnest($4::uuid[],$5::uuid[]) as requested(id,criterio_id)
+    join public.criterios_mip c on c.id=requested.criterio_id`,
+  [serviceId, serviceAreaId, areaId, criteria.map(item => item.id), criteria.map(item => item.criterioId)])
+  if (inserted.rowCount !== criteria.length) throw new ApiError(409, 'Los criterios MIP cambiaron. Actualiza el servicio.', 'AREA_CRITERIA_CONFLICT')
+  await audit(client, userId, 'SEDE_AREA_CREADA_POR_TECNICO', serviceId,
+    { siteId: site.siteId, areaId, serviceAreaId, nombre, esExterna: input.esExterna })
+  const area = (await getTechnicianPackage(client, userId, serviceId)).areas.find(item => item.id === serviceAreaId)
+  if (!area) throw new ApiError(500, 'No fue posible recuperar el Área creada.', 'UNEXPECTED')
+  return { area }
 }
 
 export async function saveTechnicianAreaOrder(

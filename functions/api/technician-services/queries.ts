@@ -1,6 +1,7 @@
 import type { PoolClient } from 'pg'
 import type {
   TechnicianArea,
+  TechnicianAreaCriterionTemplate,
   TechnicianCriterion,
   TechnicianDevice,
   TechnicianDeviceTypeSnapshot,
@@ -200,7 +201,11 @@ export async function getTechnicianPackage(client: PoolClient, userId: string, s
     firma_cliente_storage_path as "clientStoragePath",firma_cliente_nombre as "clientName",firma_cliente_at as "clientSignedAt"
     from public.servicios where id=$1`, [serviceId])).rows[0]!
   const reinforcement = header.service.tipoServicio === 'REFUERZO'
+  const areaCriteriaCatalog = reinforcement ? [] : (await client.query<TechnicianAreaCriterionTemplate>(
+    'select id,nombre,solo_area_externa as "soloAreaExterna" from public.criterios_mip where activo order by lower(btrim(nombre)),id',
+  )).rows
   return { ...header, frozen, products: await products(client, serviceId, frozen),
+    areaCriteriaCatalog,
     deviceTypes: reinforcement ? [] : await deviceTypes(client, serviceId, frozen),
     areas: reinforcement ? [] : frozen ? await frozenAreas(client, serviceId) : await liveAreas(client, serviceId), signatures }
 }
