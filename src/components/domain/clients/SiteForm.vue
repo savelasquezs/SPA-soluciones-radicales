@@ -5,11 +5,12 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import BaseCheckbox from '@/components/base/BaseCheckbox.vue'
 import BaseFileUpload from '@/components/base/BaseFileUpload.vue'
 import BaseInput from '@/components/base/BaseInput.vue'
+import BaseSelect from '@/components/base/BaseSelect.vue'
 import BaseTextarea from '@/components/base/BaseTextarea.vue'
 import { parseEmails, validateSiteInput, type SiteFormErrors } from '@/helpers/clients'
-import type { SiteInput } from '@/types/domain'
+import type { AreaTemplateRecord, SiteInput } from '@/types/domain'
 
-const props = defineProps<{ mode: 'create' | 'edit'; clientName?: string; saving?: boolean }>()
+const props = defineProps<{ mode: 'create' | 'edit'; clientName?: string; saving?: boolean; areaTemplates?: AreaTemplateRecord[]; areaTemplatesLoading?: boolean }>()
 const model = defineModel<SiteInput>({ required: true })
 const emit = defineEmits<{ submit: []; invalid: []; 'file-selected': [kind: 'plan', file: File | null]; 'view-plan': [] }>()
 const touched = reactive<Partial<Record<keyof SiteFormErrors, boolean>>>({})
@@ -72,6 +73,18 @@ function removePlan(): void {
         <BaseCheckbox :model-value="modelValue.manejaRefuerzo" name="site-reinforcement" label="Maneja visita de refuerzo" @update:model-value="update('manejaRefuerzo', $event)" />
         <BaseCheckbox :model-value="modelValue.manejaVehiculos" name="site-vehicles" label="Maneja vehículos" @update:model-value="update('manejaVehiculos', $event)" />
       </div>
+    </section>
+
+    <section v-if="mode === 'create'">
+      <header><h3>Áreas iniciales</h3><p>Opcional: se crearán junto con la Sede.</p></header>
+      <BaseSelect :model-value="modelValue.areaTemplateId ?? ''" name="site-area-template" label="Plantilla de áreas"
+        :disabled="areaTemplatesLoading" :hint="areaTemplatesLoading ? 'Cargando plantillas…' : 'Podrás añadir otras áreas más adelante.'"
+        @update:model-value="update('areaTemplateId', $event || null)">
+        <option value="">Sin plantilla</option>
+        <option v-for="template in areaTemplates ?? []" :key="template.id" :value="template.id">
+          {{ template.nombre }} · {{ template.areas.length }} áreas {{ template.alcance === 'PRIVADA' ? '(privada)' : '' }}
+        </option>
+      </BaseSelect>
     </section>
 
     <section>
