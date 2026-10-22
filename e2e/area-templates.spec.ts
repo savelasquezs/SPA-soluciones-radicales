@@ -27,6 +27,7 @@ async function setup(page: Page) {
   let site = { ...initialSite }
   let areas = [{ id: ids.area, siteId: ids.site, nombre: 'Cocina', esExterna: false, activo: true, version: 1, dispositivosCount: 0 }]
   let applyCount = 0
+  let siteCreatePayload: Record<string, unknown> | null = null
   await page.route('**/get-session', route => route.fulfill({ json: {
     session: { id: 'session', userId: 'auth-1', token: 'e2e-token', expiresAt: '2099-01-01T00:00:00.000Z', createdAt: date, updatedAt: date },
     user: { id: 'auth-1', name: 'Admin de prueba', email: 'admin@example.test', emailVerified: true, createdAt: date, updatedAt: date },
@@ -40,7 +41,13 @@ async function setup(page: Page) {
     }
     if (path === '/api/clients') { await send(url.searchParams.get('active') === 'false' ? [] : [client]); return }
     if (path === '/api/clients/' + ids.client) { await send(client); return }
-    if (path === '/api/clients/' + ids.client + '/sites') { await send([site]); return }
+    if (path === '/api/clients/' + ids.client + '/sites') {
+      if (method === 'POST') {
+        siteCreatePayload = request.postDataJSON()
+        await send({ ...site, ...siteCreatePayload, id: uuid(7), areasCount: initialTemplate.areas.length, version: 1 }, 201)
+      } else await send([site])
+      return
+    }
     if (path === '/api/sites/' + ids.site) { await send(site); return }
     if (path === '/api/sites/' + ids.site + '/areas') { await send(areas); return }
     if (path === '/api/area-templates' && method === 'GET') {
@@ -71,7 +78,7 @@ async function setup(page: Page) {
     }
     await send({ error: 'Endpoint no previsto en la prueba' }, 404)
   })
-  return { getApplyCount: () => applyCount }
+  return { getApplyCount: () => applyCount, getSiteCreatePayload: () => siteCreatePayload }
 }
 
 test('un modal permite crear, editar y desactivar plantillas en la vista compacta', async ({ page }) => {
@@ -112,4 +119,21 @@ test('aplicar dos veces conserva áreas existentes y no duplica las nuevas', asy
   await page.getByRole('dialog', { name: 'Aplicar plantilla' }).getByRole('button', { name: 'Aplicar', exact: true }).click()
   expect(track.getApplyCount()).toBe(2)
   await expect(page.getByRole('button', { name: 'Patio' })).toHaveCount(1)
+})
+
+test('crear una Sede permite escoger plantilla sin alterar el formulario compartido', async ({ page }) => {
+  const track = await setup(page)
+  await page.goto('/clientes/' + ids.client)
+  await page.getByRole('button', { name: 'Agregar Sede' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Crear Sede' })
+  await dialog.getByLabel('Nombre', { exact: true }).fill('Nueva Sede')
+  await dialog.getByLabel('Dirección').fill('Carrera 1 # 20-30')
+  await dialog.getByLabel('Contacto principal').fill('Contacto nuevo')
+  await dialog.getByLabel('Celular').fill('3001234567')
+  await dialog.getByLabel('Plantilla de áreas').selectOption(ids.template)
+  await dialog.getByRole('button', { name: 'Crear Sede' }).click()
+  await expect(dialog).not.toBeVisible()
+  expect(track.getSiteCreatePayload()).toMatchObject({
+    nombre: 'Nueva Sede', areaTemplateId: ids.template,
+  })
 })
