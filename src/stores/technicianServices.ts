@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { isExactAreaPermutation, sortTechnicianServices, technicianAreaResolved, technicianDevicePhotoRequired } from '@/helpers/technicianServices'
+import { vehicleChecklistResolved } from '@/helpers/technicianVehicles'
 import { useAuthStore } from '@/stores/auth'
 import { claimTechnicianService, createTechnicianVehicle, saveTechnicianVehicleSelection, createTechnicianSiteArea, createTechnicianDevice, createTechnicianFinding, fetchTechnicianPackage, fetchTechnicianServices, finalizeTechnicianService, saveTechnicianAreaAccess, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, saveTechnicianFindingStatus, startTechnicianService } from '@/services/servicesService'
 import { ApiClientError } from '@/services/apiService'
@@ -1642,11 +1643,8 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     const cache = caches.value[serviceId]
     if (!cache || cache.package.service.estado !== 'EN_PROCESO' || !cache.lock) throw new Error('Este celular no puede finalizar el servicio.')
     if (!cache.package.areas.every(area => technicianAreaResolved(area, serviceId))) throw new Error('Completa todas las Áreas antes de finalizar.')
-    if (cache.package.vehiclesEnabled && cache.package.attendedVehicleIds === null)
+    if (!vehicleChecklistResolved(cache.package.vehiclesEnabled, cache.package.attendedVehicleIds, cache.package.vehicleDraftIds))
       throw new Error('Confirma los vehículos atendidos antes de finalizar, incluso si fueron cero.')
-    if (cache.package.vehiclesEnabled && cache.package.vehicleDraftIds
-      && JSON.stringify([...cache.package.vehicleDraftIds].sort()) !== JSON.stringify([...(cache.package.attendedVehicleIds ?? [])].sort()))
-      throw new Error('Guarda los cambios de vehículos antes de finalizar.')
     const signatures = cache.package.signatures
     const technicianMediaId = signatures?.technicianLocalId
     const clientMediaId = signatures?.clientLocalId

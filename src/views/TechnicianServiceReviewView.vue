@@ -14,6 +14,7 @@ import SendReportDialog from '@/components/domain/services/SendReportDialog.vue'
 import TechnicianSignaturePad from '@/components/domain/services/TechnicianSignaturePad.vue'
 import TechnicianServiceNavigation from '@/components/domain/services/TechnicianServiceNavigation.vue'
 import { orderedTechnicianAreas, technicianAreaResolved, technicianAreaIssues } from '@/helpers/technicianServices'
+import { vehicleChecklistResolved } from '@/helpers/technicianVehicles'
 import { useTechnicianServicesStore } from '@/stores/technicianServices'
 import { useTechnicianReportEmailStore } from '@/stores/technicianReportEmails'
 import type { TechnicianMutation } from '@/types/technicianServices'
@@ -45,9 +46,8 @@ const finalized = computed(() => packageValue.value?.service.estado === 'FINALIZ
 const residential = computed(() => packageValue.value?.service.tipoSede === 'RESIDENCIAL')
 const reinforcement = computed(() => packageValue.value?.service.tipoServicio === 'REFUERZO')
 const simplified = computed(() => residential.value || reinforcement.value)
-const vehiclesDone = computed(() => !packageValue.value?.vehiclesEnabled
-  || (packageValue.value.attendedVehicleIds != null && JSON.stringify([...(packageValue.value.vehicleDraftIds ?? packageValue.value.attendedVehicleIds)].sort())
-    === JSON.stringify([...packageValue.value.attendedVehicleIds].sort())))
+const vehiclesDone = computed(() => !packageValue.value || vehicleChecklistResolved(
+  packageValue.value.vehiclesEnabled, packageValue.value.attendedVehicleIds, packageValue.value.vehicleDraftIds))
 const canFinalize = computed(() => !pending.value.length && vehiclesDone.value
   && technicianSigned.value && clientSigned.value && Boolean(clientName.value.trim()))
 const canOfferReport = computed(() => finalized.value

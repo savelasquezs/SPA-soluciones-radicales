@@ -16,6 +16,7 @@ import TechnicianClientContact from '@/components/domain/services/TechnicianClie
 import TechnicianServiceNavigation from '@/components/domain/services/TechnicianServiceNavigation.vue'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { formatTechnicianDateTime, orderedTechnicianAreas, technicianAreaResolved, technicianServiceStateLabel, technicianServiceStateTone } from '@/helpers/technicianServices'
+import { vehicleChecklistResolved } from '@/helpers/technicianVehicles'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useTechnicianServicesStore } from '@/stores/technicianServices'
 
@@ -90,10 +91,8 @@ async function enterRoute(): Promise<void> {
   const pending = orderedAreas.value.find(area => !technicianAreaResolved(area, serviceId.value))
   await router.replace(pending
     ? { name: 'technician-service-area', params: { id: serviceId.value, areaId: pending.id } }
-    : { name: packageValue.value?.vehiclesEnabled
-        && (packageValue.value.attendedVehicleIds == null
-          || JSON.stringify([...(packageValue.value.vehicleDraftIds ?? [])].sort())
-             !== JSON.stringify([...(packageValue.value.attendedVehicleIds ?? [])].sort()))
+    : { name: packageValue.value && !vehicleChecklistResolved(packageValue.value.vehiclesEnabled,
+        packageValue.value.attendedVehicleIds, packageValue.value.vehicleDraftIds)
         ? 'technician-service-vehicles' : 'technician-service-review',
       params: { id: serviceId.value } })
 }
