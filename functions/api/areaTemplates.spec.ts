@@ -48,7 +48,7 @@ describe('Aplicación transaccional', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     requireAdmin.mockResolvedValue({ id: 'admin' })
-    transaction.mockImplementation(async (callback: (client: unknown) => Promise<unknown>) => callback({ query: clientQuery }))
+    transaction.mockImplementation(async callback => callback({ query: clientQuery }))
   })
 
   it('inserta únicamente faltantes, usa lock y devuelve cuántas se omitieron', async () => {
