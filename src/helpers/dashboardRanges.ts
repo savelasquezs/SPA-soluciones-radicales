@@ -41,7 +41,7 @@ export function dashboardWeekLabel(bucketStart: string, period: { from: string; 
   const from = bucketStart < period.from ? period.from : bucketStart
   const weekEnd = addDateDays(bucketStart, 6)
   const to = weekEnd > period.to ? period.to : weekEnd
-  if (from > to || from === to) return dashboardShortDate(from > to ? bucketStart : from)
+  if (from >= to) return dashboardShortDate(from > to ? bucketStart : from)
   if (from.slice(0, 7) === to.slice(0, 7)) {
     return `${Number(from.slice(8, 10))}–${dashboardShortDate(to)}`
   }
