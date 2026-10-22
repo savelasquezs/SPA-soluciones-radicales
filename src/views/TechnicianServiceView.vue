@@ -8,6 +8,7 @@ import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import StatusBadge from '@/components/base/StatusBadge.vue'
 import StatusPanel from '@/components/base/StatusPanel.vue'
 import ServicePage from '@/components/domain/services/ServicePage.vue'
+import TechnicianPaymentDialog from '@/components/domain/services/TechnicianPaymentDialog.vue'
 import TechnicianProductsList from '@/components/domain/services/TechnicianProductsList.vue'
 import TechnicianClientContact from '@/components/domain/services/TechnicianClientContact.vue'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
@@ -21,6 +22,7 @@ const services = useTechnicianServicesStore()
 const notifications = useNotificationsStore()
 const { online } = useNetworkStatus()
 const { currentPackage: packageValue, currentCache, packageLoading, packageError, currentFromCache, action, pendingSyncCount } = storeToRefs(services)
+const paymentOpen = ref(false)
 const viewError = ref('')
 const serviceId = computed(() => String(route.params.id ?? ''))
 const overviewRequested = computed(() => route.query.overview === '1')
@@ -111,6 +113,7 @@ function openReview(): void {
           <div><dt><MapPin :size="17" aria-hidden="true" />Dirección</dt><dd>{{ packageValue.service.direccion }}</dd></div>
         </dl>
         <TechnicianClientContact :service="packageValue.service" />
+        <BaseButton v-if="packageValue.service.tipoServicio==='PRINCIPAL' && ['EN_PROCESO','FINALIZADO'].includes(packageValue.service.estado)" variant="secondary" size="compact" :disabled="!online" @click="paymentOpen=true">Reportar cobro</BaseButton>
         <p class="technician-service-hero__saved"><PackageCheck :size="18" aria-hidden="true" />{{ currentFromCache ? 'Copia guardada disponible sin conexión' : `Guardado en este celular · ${formatTechnicianDateTime(currentCache?.savedAt ?? packageValue.serverNow)}` }}</p>
         <div v-if="packageValue.service.estado === 'PROGRAMADO'" class="technician-start">
           <p>{{ startMessage }}</p>
@@ -125,6 +128,7 @@ function openReview(): void {
       <details class="technician-summary"><summary>Productos previstos ({{ packageValue.products.length }})</summary><TechnicianProductsList :products="packageValue.products" :service-id="serviceId" /></details>
     </template>
   </ServicePage>
+  <TechnicianPaymentDialog :open="paymentOpen" :service-id="serviceId" @close="paymentOpen=false" />
 </template>
 
 <style scoped>

@@ -153,7 +153,7 @@ adminServiceRoutes.get('/:id/audit',async context => {
 adminServiceRoutes.post('/',async context => {
   const payload=await body(context.req.raw), input=serviceInput(payload.input,true)
   const proposal=payload.upcoming == null ? null : object(payload.upcoming)
-  return context.json(await write(context,payload,'service:create',(client,admin)=>createService(client,admin.id,input,reassignmentsInput(payload.reassignments),proposal ? { id:id(proposal.id),version:version(proposal.version),confirmed:proposal.confirmed === true } : undefined)),201)
+  return context.json(await write(context,payload,'service:create',(client,admin)=>createService(client,admin.id,input,reassignmentsInput(payload.reassignments),proposal ? { id:id(proposal.id),version:version(proposal.version),confirmed:proposal.confirmed === true } : undefined,id(payload.requestId))),201)
 })
 adminServiceRoutes.put('/:id',async context => {
   const payload=await body(context.req.raw), recordId=id(context.req.param('id')), input=serviceInput(payload.input)
@@ -173,7 +173,7 @@ adminServiceRoutes.post('/:id/cancel',async context => {
 adminServiceRoutes.post('/:id/payment',async context => {
   const payload=await body(context.req.raw), recordId=id(context.req.param('id')), value=object(payload.input)
   const input: ServicePaymentInput={ metodoPago:choice(value.metodoPago,['EFECTIVO','TRANSFERENCIA']),estadoPago:choice(value.estadoPago,['PENDIENTE','CONFIRMADO','RECHAZADO']),recaudadoPorId:value.recaudadoPorId ? id(value.recaudadoPorId) : null,motivo:text(value.motivo) }
-  return context.json(await write(context,payload,`service:payment:${recordId}`,(client,admin)=>savePayment(client,admin.id,recordId,version(payload.version),input)))
+  return context.json(await write(context,payload,`service:payment:${recordId}`,(client,admin)=>savePayment(client,admin.id,recordId,version(payload.version),input,id(payload.requestId))))
 })
 adminServiceRoutes.post('/:id/calendar/retry',async context => {
   const payload=await body(context.req.raw), recordId=id(context.req.param('id'))

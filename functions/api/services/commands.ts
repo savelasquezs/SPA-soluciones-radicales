@@ -1,3 +1,4 @@
+import { registerPayment } from '../finance/ledger'
 import { createHash, randomUUID } from 'node:crypto'
 import type { PoolClient } from 'pg'
 import type { AdminService, ConfirmationEmail, ScheduleConflict, ServiceInput, ServiceMutation, ServicePaymentInput, ServiceSchedule, ServiceReassignment, UpcomingPatch, UpcomingService } from '../../../src/types/adminServices'
@@ -38,8 +39,8 @@ async function lockFamily(client: PoolClient, id: string): Promise<string[]> {
 function mutable(record: AdminService): void {
   if (record.estado !== 'PROGRAMADO') throw new ApiError(409, 'Solo puedes editar la programación de un servicio Programado.', 'SERVICE_NOT_PROGRAMMED')
 }
-async function siteForScheduling(client: PoolClient, id: string): Promise<{ maneja_refuerzo: boolean; tipo_sede: 'NEGOCIO' | 'RESIDENCIAL' }> {
-  const site = (await client.query<{ maneja_refuerzo: boolean; tipo_sede: 'NEGOCIO' | 'RESIDENCIAL' }>(`select s.maneja_refuerzo,s.tipo_sede from public.sedes s join public.negocios n on n.id=s.negocio_id
+async function siteForScheduling(client: PoolClient, id: string): Promise<{ maneja_refuerzo: boolean; tipo_sede: 'NEGOCIO' | 'RESIDENCIAL'; clientId: string; valorServicio: string | null }> {
+  const site = (await client.query<{ maneja_refuerzo: boolean; tipo_sede: 'NEGOCIO' | 'RESIDENCIAL'; clientId: string; valorServicio: string | null }>(`select s.maneja_refuerzo,s.tipo_sede,s.negocio_id as "clientId",s.valor_servicio as "valorServicio" from public.sedes s join public.negocios n on n.id=s.negocio_id
     where s.id=$1 and s.activo and n.activo and s.tipo_sede=n.tipo_cliente
       and ((s.tipo_sede='NEGOCIO' and s.valor_servicio is not null and s.periodicidad_meses > 0 and s.duracion_servicio_minutos > 0)
         or s.tipo_sede='RESIDENCIAL')`, [id])).rows[0]
@@ -227,7 +228,7 @@ async function mutation(client: PoolClient, ids: string[], upcomingId?: string):
   return { services: await getServices(client,ids), upcoming: upcomingId ? await getUpcoming(client,upcomingId) : null, pendingCount: await pendingCount(client) }
 }
 
-export async function createService(client: PoolClient, actorId: string, input: ServiceInput, reassignments: ServiceReassignment[], upcoming?: { id: string; version: number; confirmed: boolean }): Promise<ServiceMutation> {
+export async function createService(client: PoolClient, actorId: string, input: ServiceInput, reassignments: ServiceReassignment[], upcoming?: { id: string; version: number; confirmed: boolean }, requestId?: string): Promise<ServiceMutation> {
   const site = await siteForScheduling(client,input.sedeId)
   let proposal: UpcomingService | null = null
   if (upcoming) {
@@ -272,6 +273,17 @@ export async function createService(client: PoolClient, actorId: string, input: 
   [id,input.sedeId,schedule.inicioProgramado,scheduleEnd(schedule),actorId,schedule.tecnicoResponsableId,JSON.stringify(schedule.tecnicosColaboradoresIds),
     input.observaciones,input.cobro.metodoPago,wasPaid ? 'CONFIRMADO' : input.cobro.metodoPago ? 'PENDIENTE' : 'SIN_REGISTRAR',
     input.cobro.tecnicoRecaudoPrevistoId,cashRecipient,wasPaid,site.tipo_sede==='RESIDENCIAL' ? input.valorServicio : 0])
+  // The creation form can confirm an advance payment before the visit begins.
+  // Persist that money in the same canonical ledger as later deposits and abonos.
+  const actualValue = site.tipo_sede==='RESIDENCIAL' ? input.valorServicio ?? 0 : Number(site.valorServicio ?? 0)
+  if (wasPaid && actualValue > 0) {
+    if (!requestId) throw new ApiError(422,'Falta el identificador del cobro.','VALIDATION')
+    await registerPayment(client,actorId,{
+      requestId,clienteId:site.clientId,metodo:input.cobro.metodoPago!,
+      recaudadoPorId:cashRecipient,observacion:'Pago confirmado al programar el servicio',
+      aplicaciones:[{servicioId:id,monto:actualValue}],confirmed:true,
+    })
+  }
   if (reinforcement) {
     const reinforcementId=randomUUID(); ids.push(reinforcementId)
     await client.query(`insert into public.servicios(id,sede_id,tipo_servicio,servicio_principal_id,inicio_programado,fin_programado,
@@ -362,22 +374,39 @@ export async function cancelService(client: PoolClient, actorId: string, id: str
   await audit(client,actorId,'SERVICIO_CANCELADO',id,{ motivo:reason, before, afectados:result.services.filter(row=>row.estado==='CANCELADO').map(row=>row.id), dispositivosDesactivados:deactivatedDevices })
   return result
 }
-export async function savePayment(client: PoolClient, actorId: string, id: string, expected: number, input: ServicePaymentInput): Promise<ServiceMutation> {
+export async function savePayment(client: PoolClient, actorId: string, id: string, expected: number, input: ServicePaymentInput, requestId: string): Promise<ServiceMutation> {
+  // Compatibilidad con el editor existente: un primer pago completo usa el mismo libro
+  // de cartera. Los abonos y correcciones posteriores se realizan en Pagos y caja.
+  if (input.estadoPago==='CONFIRMADO' && input.metodoPago==='EFECTIVO' && input.recaudadoPorId)
+    await client.query('select id from public.usuarios where id=$1 for update',[input.recaudadoPorId])
   const ids=await lockFamily(client,id), before=await getService(client,id)
   assertVersion(before.version,expected)
   if (before.tipoServicio==='REFUERZO') throw new ApiError(422,'El Refuerzo es gratuito y no registra pagos.','VALIDATION')
   if (before.estado==='CANCELADO' && input.estadoPago!=='RECHAZADO') throw new ApiError(409,'No se registra un nuevo pago en un servicio cancelado.','SERVICE_TERMINAL')
-  if ((before.pago.estadoPago==='CONFIRMADO' || input.estadoPago==='RECHAZADO') && !input.motivo.trim()) throw new ApiError(422,'Indica el motivo de la corrección o rechazo.','VALIDATION',{ fields:{ motivo:'El motivo es obligatorio.' } })
-  if (input.metodoPago==='EFECTIVO' && input.estadoPago==='CONFIRMADO' && !input.recaudadoPorId) throw new ApiError(422,'Identifica quién recibió el efectivo.','VALIDATION',{ fields:{ recaudadoPorId:'Selecciona quién recibió el efectivo.' } })
-  await validatePaymentReceiver(client,input.recaudadoPorId,actorId,before.pago.recaudadoPorId)
-  const confirmed=input.estadoPago==='CONFIRMADO'
-  await client.query(`update public.servicios set metodo_pago=$2,estado_pago=$3,recaudado_por_id=$4,tecnico_que_recauda_id=$4,
-    pago_fecha=coalesce(pago_fecha,now()),pago_registrado_por_id=coalesce(pago_registrado_por_id,$5),
-    pago_confirmado_por_id=case when $6 then $5::uuid else null end,pago_confirmado_at=case when $6 then now() else null end,
-    tecnico_recaudo_previsto_id=case when $2='EFECTIVO' then tecnico_recaudo_previsto_id else null end where id=$1`,
-  [id,input.metodoPago,input.estadoPago,confirmed && input.metodoPago==='EFECTIVO' ? input.recaudadoPorId : null,actorId,confirmed])
+  if ((before.pago.estadoPago==='CONFIRMADO' || input.estadoPago==='RECHAZADO') && !input.motivo.trim())
+    throw new ApiError(422,'Indica el motivo de la corrección o rechazo.','VALIDATION',{fields:{motivo:'El motivo es obligatorio.'}})
+  const confirmed=(await client.query<{monto:string}>(`select coalesce(sum(a.monto),0)::text as monto
+    from public.pago_aplicaciones a join public.pagos p on p.id=a.pago_id and p.estado='CONFIRMADO'
+    where a.servicio_id=$1`,[id])).rows[0]
+  if (Number(confirmed?.monto??0)>0) throw new ApiError(409,'Los pagos existentes se revisan desde Pagos y caja.','FINANCE_CONFLICT')
+  if(input.estadoPago==='CONFIRMADO' && before.valorServicio>0) {
+    await validatePaymentReceiver(client,input.recaudadoPorId,actorId,before.pago.recaudadoPorId)
+    await registerPayment(client,actorId,{
+      requestId,clienteId:before.clientId,metodo:input.metodoPago,
+      recaudadoPorId:input.metodoPago==='EFECTIVO'?input.recaudadoPorId:null,
+      observacion:input.motivo,aplicaciones:[{servicioId:id,monto:before.valorServicio}],confirmed:true,
+    })
+  } else {
+    await client.query(`update public.servicios set metodo_pago=$2,estado_pago=$3,
+      recaudado_por_id=null,tecnico_que_recauda_id=null,
+      pago_confirmado_por_id=case when $3='CONFIRMADO' then $4::uuid else null end,
+      pago_confirmado_at=case when $3='CONFIRMADO' then now() else null end
+      where id=$1`,[id,input.metodoPago,input.estadoPago,actorId])
+  }
   const result=await mutation(client,ids)
-  await audit(client,actorId,'SERVICIO_PAGO_ACTUALIZADO',id,{ before:before.pago, after:result.services.find(row=>row.id===id)?.pago, valorServicio:before.valorServicio, motivo:input.motivo })
+  await audit(client,actorId,'SERVICIO_PAGO_ACTUALIZADO',id,{
+    before:before.pago,after:result.services.find(row=>row.id===id)?.pago,motivo:input.motivo,
+  })
   return result
 }
 export async function updateUpcoming(client: PoolClient, actorId: string, id: string, expected: number, input: UpcomingPatch): Promise<{ upcoming: UpcomingService; pendingCount: number }> {

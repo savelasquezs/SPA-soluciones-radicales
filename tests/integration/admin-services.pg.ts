@@ -9,6 +9,8 @@ vi.mock('@neon/functions',()=>({ attachDatabasePool:vi.fn<() => void>(),waitUnti
 const external=vi.hoisted(()=>({ mail:vi.fn<(input: MailInput) => Promise<string>>(),calendar:vi.fn<(input: import('../../functions/api/calendarClient').CalendarEventInput) => Promise<string>>() }))
 vi.mock('../../functions/api/google',()=>({ sendGmailMessage:external.mail,upsertCalendarEvent:external.calendar }))
 import { pool,transaction } from '../../functions/api/db'
+import { account, cashBalance, deliverCash, registerPayment, reviewPayment, voidDelivery } from '../../functions/api/finance/ledger'
+import { dashboardSnapshot } from '../../functions/api/dashboard/queries'
 import { ApiError } from '../../functions/api/auth'
 import { cancelService,command,createService,editService,queueConfirmationEmail,rescheduleService,savePayment,updateUpcoming } from '../../functions/api/services/commands'
 import { getService,getUpcoming,listServices,listUpcoming,pendingCount,workspace } from '../../functions/api/services/queries'
@@ -38,7 +40,7 @@ function input(f: Fixture,start='2030-10-06T09:00:00-05:00'): ServiceInput {
     productos:[{ productoId:f.product,lote:'CI-1',fechaVencimiento:'2032-01-01' }],cobro:{ metodoPago:'EFECTIVO',tecnicoRecaudoPrevistoId:f.responsible },observaciones:'Solo datos sintéticos' }
 }
 async function create(f: Fixture,value=input(f),requestId=randomUUID()): Promise<ServiceMutation> {
-  return transaction(client=>command(client,f.admin,requestId,'service:create',{ input:value },()=>createService(client,f.admin,value,[])))
+  return transaction(client=>command(client,f.admin,requestId,'service:create',{ input:value },()=>createService(client,f.admin,value,[],undefined,requestId)))
 }
 const principal=(result: ServiceMutation)=>result.services.find(row=>row.tipoServicio==='PRINCIPAL')!
 const child=(result: ServiceMutation)=>result.services.find(row=>row.tipoServicio==='REFUERZO')!
@@ -302,15 +304,15 @@ describe('administrator services · real PostgreSQL',()=>{
   })
   it('requires actual cash collection, rejects paid Refuerzos, and allows audited payment correction',async()=>{
     const f=await fixture(), result=await create(f), p=principal(result), r=child(result)
-    await expect(transaction(client=>savePayment(client,f.admin,p.id,p.version,{ metodoPago:'EFECTIVO',estadoPago:'CONFIRMADO',recaudadoPorId:null,motivo:'' }))).rejects.toMatchObject({ code:'VALIDATION' })
-    const confirmed=await transaction(client=>savePayment(client,f.admin,p.id,p.version,{ metodoPago:'EFECTIVO',estadoPago:'CONFIRMADO',recaudadoPorId:f.admin,motivo:'' }))
+    await expect(transaction(client=>savePayment(client,f.admin,p.id,p.version,{ metodoPago:'EFECTIVO',estadoPago:'CONFIRMADO',recaudadoPorId:null,motivo:'' },randomUUID()))).rejects.toMatchObject({ code:'VALIDATION' })
+    const confirmed=await transaction(client=>savePayment(client,f.admin,p.id,p.version,{ metodoPago:'EFECTIVO',estadoPago:'CONFIRMADO',recaudadoPorId:f.admin,motivo:'' },randomUUID()))
     const fresh=principal(confirmed)
     expect(fresh.pago.recaudadoPorId).toBe(f.admin);expect(fresh.pago.recaudadoPorNombre).toContain('admin');expect(fresh.pago.confirmadoPor).toBeTruthy()
-    await expect(transaction(client=>savePayment(client,f.admin,r.id,r.version,{ metodoPago:'EFECTIVO',estadoPago:'CONFIRMADO',recaudadoPorId:f.responsible,motivo:'' }))).rejects.toMatchObject({ code:'VALIDATION' })
-    await expect(transaction(client=>savePayment(client,f.admin,p.id,fresh.version,{ metodoPago:'TRANSFERENCIA',estadoPago:'CONFIRMADO',recaudadoPorId:null,motivo:'' }))).rejects.toMatchObject({ code:'VALIDATION' })
-    const corrected=await transaction(client=>savePayment(client,f.admin,p.id,fresh.version,{ metodoPago:'TRANSFERENCIA',estadoPago:'CONFIRMADO',recaudadoPorId:null,motivo:'Corrección comprobada' }))
-    expect(principal(corrected).pago.recaudadoPorId).toBeNull()
-    expect(Number((await pool.query("select count(*) from public.auditoria where registro_id=$1 and accion='SERVICIO_PAGO_ACTUALIZADO'",[p.id])).rows[0].count)).toBe(2)
+    await expect(transaction(client=>savePayment(client,f.admin,r.id,r.version,{ metodoPago:'EFECTIVO',estadoPago:'CONFIRMADO',recaudadoPorId:f.responsible,motivo:'' },randomUUID()))).rejects.toMatchObject({ code:'VALIDATION' })
+    await expect(transaction(client=>savePayment(client,f.admin,p.id,fresh.version,{ metodoPago:'TRANSFERENCIA',estadoPago:'CONFIRMADO',recaudadoPorId:null,motivo:'' },randomUUID()))).rejects.toMatchObject({ code:'VALIDATION' })
+    await expect(transaction(client=>savePayment(client,f.admin,p.id,fresh.version,{ metodoPago:'TRANSFERENCIA',estadoPago:'CONFIRMADO',recaudadoPorId:null,motivo:'Corrección comprobada' },randomUUID())))
+      .rejects.toMatchObject({code:'FINANCE_CONFLICT'})
+    expect(Number((await pool.query("select count(*) from public.auditoria where registro_id=$1 and accion='SERVICIO_PAGO_ACTUALIZADO'",[p.id])).rows[0].count)).toBe(1)
   })
   it('creates preagenda from actual completion, clamps calendar months and does not reserve staff or create Calendar events',async()=>{
     const f=await fixture(false), result=await create(f), p=principal(result), nextId=await finish(f,p.id)
@@ -419,6 +421,74 @@ describe('administrator services · real PostgreSQL',()=>{
     expect(await asUser(f.responsible,async client=>(await client.query('select id from public.proximos_servicios where id=$1',[nextId])).rows)).toEqual([])
     await expect(asUser(f.admin,client=>client.query("update public.proximos_servicios set estado='CONFIRMADO' where id=$1",[nextId]))).rejects.toMatchObject({ code:'42501' })
     await expect(transaction(async client=>{ await client.query('set local role anonymous'); await client.query('select * from public.proximos_servicios') })).rejects.toMatchObject({ code:'42501' })
+  })
+  it('consolidates credit for multiple visits and applies abonos without duplication',async()=>{
+    const f=await fixture(false)
+    const one=principal(await create(f)), two=principal(await create(f,input(f,'2030-10-07T09:00:00-05:00')))
+    await finish(f,one.id);await finish(f,two.id)
+    const prior=await transaction(client=>account(client,f.business))
+    expect(prior.cliente.realizado).toBe(600000)
+    expect(prior.cliente.saldo).toBe(600000)
+    const requestId=randomUUID()
+    const paid=await transaction(client=>registerPayment(client,f.admin,{requestId,clienteId:f.business,metodo:'TRANSFERENCIA',
+      recaudadoPorId:null,observacion:'Abono mensual sintético',
+      aplicaciones:[{servicioId:one.id,monto:100000},{servicioId:two.id,monto:100000}],confirmed:true}))
+    expect(paid.monto).toBe(200000)
+    const replay=await transaction(client=>registerPayment(client,f.admin,{requestId,clienteId:f.business,metodo:'TRANSFERENCIA',
+      recaudadoPorId:null,observacion:'Abono mensual sintético',
+      aplicaciones:[{servicioId:one.id,monto:100000},{servicioId:two.id,monto:100000}],confirmed:true}))
+    expect(replay.id).toBe(paid.id)
+    const partial=await transaction(client=>account(client,f.business))
+    expect(partial.cliente.saldo).toBe(400000)
+    expect((await transaction(client=>dashboardSnapshot(client,'30d',f.business,null))).kpis.outstandingValue).toBe(400000)
+    expect(partial.servicios.filter(s=>[one.id,two.id].includes(s.id)).map(s=>s.abonado)).toEqual([100000,100000])
+    await expect(transaction(client=>registerPayment(client,f.admin,{requestId:randomUUID(),clienteId:f.business,metodo:'TRANSFERENCIA',
+      recaudadoPorId:null,observacion:'Excedente',aplicaciones:[{servicioId:one.id,monto:300000}],confirmed:true})))
+      .rejects.toMatchObject({code:'FINANCE_CONFLICT'})
+    const cash=await transaction(client=>registerPayment(client,f.admin,{requestId:randomUUID(),clienteId:f.business,metodo:'EFECTIVO',
+      recaudadoPorId:f.responsible,observacion:'Pagado al técnico',
+      aplicaciones:[{servicioId:one.id,monto:200000},{servicioId:two.id,monto:200000}],confirmed:true}))
+    expect(cash.estado).toBe('CONFIRMADO')
+    const balances=await transaction(client=>cashBalance(client))
+    expect(balances.find(x=>x.id===f.responsible)?.saldo).toBe(400000)
+    expect((await transaction(client=>account(client,f.business))).cliente.saldo).toBe(0)
+    const deliveryRequest=randomUUID()
+    const delivered=await transaction(client=>deliverCash(client,f.admin,f.responsible,250000,deliveryRequest,'Corte parcial'))
+    expect(delivered.monto).toBe(250000)
+    const duplicate=await transaction(client=>deliverCash(client,f.admin,f.responsible,250000,deliveryRequest,'Corte parcial'))
+    expect(duplicate.id).toBe(delivered.id)
+    expect((await transaction(client=>cashBalance(client))).find(x=>x.id===f.responsible)?.saldo).toBe(150000)
+    await expect(transaction(client=>reviewPayment(client,f.admin,cash.id,'ANULADO','Devolución de pago')))
+      .rejects.toMatchObject({code:'FINANCE_CONFLICT'})
+    await transaction(client=>voidDelivery(client,f.admin,delivered.id,'Anulación de prueba'))
+    expect((await transaction(client=>cashBalance(client))).find(x=>x.id===f.responsible)?.saldo).toBe(400000)
+    await transaction(client=>reviewPayment(client,f.admin,cash.id,'ANULADO','Devolución de pago'))
+    expect((await transaction(client=>account(client,f.business))).cliente.saldo).toBe(400000)
+  })
+  it('requires administrative confirmation and receipt proof for a transfer reported by a technician',async()=>{
+    const f=await fixture(false),p=principal(await create(f))
+    await finish(f,p.id)
+    const requestId=randomUUID()
+    const reported=await transaction(client=>registerPayment(client,f.responsible,{
+      requestId,clienteId:f.business,metodo:'TRANSFERENCIA',recaudadoPorId:null,
+      observacion:'Captura del cliente',aplicaciones:[{servicioId:p.id,monto:150000}],
+      confirmed:false,technicianId:f.responsible,
+    }))
+    expect(reported.estado).toBe('PENDIENTE')
+    expect((await transaction(client=>account(client,f.business))).cliente.saldo).toBe(300000)
+    await expect(transaction(client=>registerPayment(client,f.admin,{
+      requestId:randomUUID(),clienteId:f.business,metodo:'TRANSFERENCIA',recaudadoPorId:null,
+      observacion:'Duplicado',aplicaciones:[{servicioId:p.id,monto:200000}],confirmed:true,
+    }))).rejects.toMatchObject({code:'FINANCE_CONFLICT'})
+    await expect(transaction(client=>reviewPayment(client,f.admin,reported.id,'CONFIRMADO','')))
+      .rejects.toMatchObject({code:'VALIDATION'})
+    await transaction(client=>client.query('update public.pagos set comprobante_storage_path=$2 where id=$1',
+      [reported.id,`payments/${reported.id}/proof/fake-ci.png`]))
+    await transaction(client=>reviewPayment(client,f.admin,reported.id,'CONFIRMADO','Validado contra banco'))
+    expect((await transaction(client=>account(client,f.business))).cliente.saldo).toBe(150000)
+    expect((await transaction(client=>cashBalance(client))).find(x=>x.id===f.responsible)?.saldo).toBe(0)
+    await expect(transaction(client=>reviewPayment(client,f.admin,reported.id,'ANULADO','Corrección aprobada'))).resolves.toBeTruthy()
+    expect((await transaction(client=>account(client,f.business))).cliente.saldo).toBe(300000)
   })
 })
 
