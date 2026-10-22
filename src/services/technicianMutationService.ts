@@ -119,6 +119,12 @@ function validMutation(value: unknown, actorId?: string, serviceId?: string): va
     && validFindingEvidences(record.evidences)
     && (record.conflict === null || (Boolean(record.conflict) && isServiceId(record.conflict?.id)
       && typeof record.conflict?.version === 'number'))
+  if (record.kind === 'VEHICLE_CREATE') return isServiceId(record.vehicleId)
+    && typeof record.placa === 'string' && /^[A-Z0-9-]{3,12}$/.test(record.placa)
+  if (record.kind === 'VEHICLE_SELECTION') return Array.isArray(record.selectedIds)
+    && record.selectedIds.length <= 2000
+    && new Set(record.selectedIds).size === record.selectedIds.length
+    && record.selectedIds.every(isServiceId)
   if (record.kind === 'SERVICE_FINALIZE') return isServiceId(record.technicianMediaId)
     && isServiceId(record.clientMediaId)
     && (record.technicianStoragePath === null || typeof record.technicianStoragePath === 'string')

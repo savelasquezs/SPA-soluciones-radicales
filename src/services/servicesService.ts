@@ -25,6 +25,14 @@ export const startTechnicianService = (serviceId: string, requestId: string, dev
   apiRequest<TechnicianExecutionSession>(`${base}/${serviceId}/start`, json({ requestId, deviceId, version }))
 export const claimTechnicianService = (serviceId: string, requestId: string, deviceId: string) =>
   apiRequest<TechnicianExecutionSession>(`${base}/${serviceId}/claim`, json({ requestId, deviceId }))
+export const createTechnicianVehicle = (
+  serviceId: string, requestId: string, deviceId: string, lockToken: string, vehicleId: string, placa: string,
+) => apiRequest<{ vehicle: import('@/types/technicianServices').TechnicianVehicle; created: boolean }>(
+  `${base}/${serviceId}/vehicles`, json({ requestId, deviceId, lockToken, vehicleId, placa }))
+export const saveTechnicianVehicleSelection = (
+  serviceId: string, requestId: string, deviceId: string, lockToken: string, selectedIds: string[],
+) => apiRequest<{ attendedVehicleIds: string[] }>(
+  `${base}/${serviceId}/vehicles/selection`, json({ requestId, deviceId, lockToken, selectedIds }))
 export const createTechnicianSiteArea = (
   serviceId: string, requestId: string, deviceId: string, lockToken: string,
   areaId: string, serviceAreaId: string, input: TechnicianSiteAreaCreationInput,

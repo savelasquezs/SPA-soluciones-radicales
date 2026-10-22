@@ -206,6 +206,13 @@ export interface TechnicianSiteAreaCreationResult {
   area: TechnicianArea
 }
 
+export interface TechnicianVehicle {
+  id: string
+  placa: string
+  activo: boolean
+  creacionPendiente?: boolean
+}
+
 export interface TechnicianServicePackage {
   /** Catalog applicable to newly discovered Areas; stored with the offline package. */
   areaCriteriaCatalog?: TechnicianAreaCriterionTemplate[]
@@ -217,6 +224,12 @@ export interface TechnicianServicePackage {
   products: TechnicianProduct[]
   deviceTypes: TechnicianDeviceTypeSnapshot[]
   areas: TechnicianArea[]
+  vehiclesEnabled: boolean
+  vehicles: TechnicianVehicle[]
+  /** null = the technician has not confirmed this step, [] = confirmed zero vehicles. */
+  attendedVehicleIds: string[] | null
+  /** Unsaved checklist kept on the same device, even across navigation or offline reload. */
+  vehicleDraftIds?: string[]
   signatures: TechnicianServiceSignatures
 }
 
@@ -400,6 +413,17 @@ export interface TechnicianFindingStatusMutation extends TechnicianMutationBase,
   conflict: TechnicianFinding | null
 }
 
+export interface TechnicianVehicleCreateMutation extends TechnicianMutationBase {
+  kind: 'VEHICLE_CREATE'
+  vehicleId: string
+  placa: string
+}
+
+export interface TechnicianVehicleSelectionMutation extends TechnicianMutationBase {
+  kind: 'VEHICLE_SELECTION'
+  selectedIds: string[]
+}
+
 export interface TechnicianServiceFinalizeMutation extends TechnicianMutationBase {
   kind: 'SERVICE_FINALIZE'
   technicianMediaId: string
@@ -425,4 +449,4 @@ export interface TechnicianMediaDraft {
   savedAt: string
 }
 
-export type TechnicianMutation = TechnicianSiteAreaCreationMutation | TechnicianAreaOrderMutation | TechnicianCriterionEvaluationMutation | TechnicianAreaAccessMutation | TechnicianDeviceCreationMutation | TechnicianDeviceReviewMutation | TechnicianFindingCreateMutation | TechnicianFindingStatusMutation | TechnicianServiceFinalizeMutation
+export type TechnicianMutation = TechnicianSiteAreaCreationMutation | TechnicianAreaOrderMutation | TechnicianCriterionEvaluationMutation | TechnicianAreaAccessMutation | TechnicianDeviceCreationMutation | TechnicianDeviceReviewMutation | TechnicianFindingCreateMutation | TechnicianFindingStatusMutation | TechnicianVehicleCreateMutation | TechnicianVehicleSelectionMutation | TechnicianServiceFinalizeMutation
