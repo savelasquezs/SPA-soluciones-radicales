@@ -173,6 +173,68 @@ beforeEach(() => {
   vi.mocked(serviceMedia.deleteTechnicianFindingEvidence).mockResolvedValue()
 })
 
+describe('technician services vehicle checklist', () => {
+  const plateId = '10000000-0000-4000-8000-000000000040'
+  const serverId = '10000000-0000-4000-8000-000000000041'
+
+  function fleetCache(): TechnicianPackageCache {
+    const prepared = executionCache()
+    prepared.package.vehiclesEnabled = true
+    prepared.package.vehicles = [{ id: plateId, placa: 'ABC123', activo: true }]
+    prepared.package.attendedVehicleIds = null
+    return prepared
+  }
+
+  it('persists each tap locally and confirms one selection operation, not one request per vehicle', async () => {
+    const prepared = fleetCache()
+    vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([prepared])
+    const store = useTechnicianServicesStore()
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+    await store.ensurePackage(serviceId)
+    await store.applyVehicleDraft(serviceId, [plateId])
+    expect(store.currentPackage?.vehicleDraftIds).toEqual([plateId])
+    expect(mutationRecords).toHaveLength(0)
+    expect(await store.confirmVehicleSelection(serviceId)).toBe('pending')
+    expect(store.currentPackage?.attendedVehicleIds).toEqual([plateId])
+    expect(mutationRecords).toMatchObject([{ kind: 'VEHICLE_SELECTION', status: 'PENDING', selectedIds: [plateId] }])
+    expect(api.saveTechnicianVehicleSelection).not.toHaveBeenCalled()
+
+    vi.mocked(api.saveTechnicianVehicleSelection).mockResolvedValue({ attendedVehicleIds: [plateId] })
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: true })
+    expect(await store.syncPending(serviceId)).toBe('synced')
+    expect(api.saveTechnicianVehicleSelection).toHaveBeenCalledTimes(1)
+    expect(store.currentPackage?.attendedVehicleIds).toEqual([plateId])
+    expect(mutationRecords).toHaveLength(0)
+  })
+
+  it('remaps an offline provisional plate to the existing site record before syncing its selection', async () => {
+    const prepared = fleetCache()
+    prepared.package.vehicles = []
+    vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([prepared])
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+    const store = useTechnicianServicesStore()
+    await store.ensurePackage(serviceId)
+    expect(await store.applyVehicleCreation(serviceId, 'abc123')).toBe('pending')
+    const provisional = store.currentPackage!.vehicles[0]!.id
+    expect(store.currentPackage?.vehicleDraftIds).toEqual([provisional])
+    expect(await store.confirmVehicleSelection(serviceId)).toBe('pending')
+    expect(mutationRecords.map(item => item.kind)).toEqual(['VEHICLE_CREATE', 'VEHICLE_SELECTION'])
+
+    vi.mocked(api.createTechnicianVehicle).mockResolvedValue({
+      vehicle: { id: serverId, placa: 'ABC123', activo: true }, created: false,
+    })
+    vi.mocked(api.saveTechnicianVehicleSelection).mockResolvedValue({ attendedVehicleIds: [serverId] })
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: true })
+    expect(await store.syncPending(serviceId)).toBe('synced')
+    expect(api.saveTechnicianVehicleSelection).toHaveBeenCalledWith(
+      serviceId, expect.any(String), deviceId, lockToken, [serverId],
+    )
+    expect(store.currentPackage?.vehicles).toEqual([{ id: serverId, placa: 'ABC123', activo: true }])
+    expect(store.currentPackage?.attendedVehicleIds).toEqual([serverId])
+    expect(mutationRecords).toHaveLength(0)
+  })
+})
+
 describe('technician services state', () => {
   it('loads assigned services from the dedicated technician API', async () => {
     vi.mocked(api.fetchTechnicianServices).mockResolvedValue([summary()])
