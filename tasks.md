@@ -1,5 +1,7 @@
 # Tareas aprobadas
 
+- [x] Plantillas de Áreas globales/privadas en Configuración, modal reutilizado, aplicación a Sedes nuevas y existentes sin duplicar, control de versión y documentación (`docs/product/area-templates.md`).
+
 ## Pagos, cartera y caja
 
 - [x] Implementar libro de pagos/aplicaciones, cartera por Cliente y caja acumulada por Técnico; consulta administrativa compacta y reporte técnico sujeto a confirmación.
