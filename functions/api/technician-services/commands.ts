@@ -702,6 +702,10 @@ async function lockSnapshotSources(client: PoolClient, serviceId: string): Promi
 
 export async function startTechnicianService(client: PoolClient, userId: string, serviceId: string, expectedVersion: number, deviceId: string): Promise<TechnicianExecutionSession> {
   const service = await assignedServiceState(client, userId, serviceId, true)
+  // Serialize service start with changes to se.maneja_vehiculos on the parent site.
+  // The admin update locks the same site row before checking running visits.
+  await client.query(`select se.id from public.servicios s join public.sedes se on se.id=s.sede_id
+    where s.id=$1 for share of se`, [serviceId])
   assertVersion(Number(service.version), expectedVersion)
   if (service.estado !== 'PROGRAMADO') throw new ApiError(409, 'El servicio ya no está Programado.', 'SERVICE_NOT_PROGRAMMED')
   if (!service.eligible) throw new ApiError(409, 'Puedes iniciar el servicio desde una hora antes de la programación.', 'SERVICE_TOO_EARLY')

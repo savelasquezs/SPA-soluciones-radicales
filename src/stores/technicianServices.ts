@@ -1645,6 +1645,10 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     const cache = caches.value[serviceId]
     if (!cache || cache.package.service.estado !== 'EN_PROCESO' || !cache.lock) throw new Error('Este celular no puede finalizar el servicio.')
     if (!cache.package.areas.every(area => technicianAreaResolved(area, serviceId))) throw new Error('Completa todas las Áreas antes de finalizar.')
+    if (cache.package.service.tipoServicio === 'PRINCIPAL'
+      && cache.package.service.tipoSede !== 'RESIDENCIAL'
+      && typeof cache.package.vehiclesEnabled !== 'boolean')
+      throw new Error('Actualiza el servicio con internet antes de finalizar: falta la configuración de vehículos.')
     if (!vehicleChecklistResolved(cache.package.vehiclesEnabled, cache.package.attendedVehicleIds, cache.package.vehicleDraftIds))
       throw new Error('Confirma los vehículos atendidos antes de finalizar, incluso si fueron cero.')
     const signatures = cache.package.signatures

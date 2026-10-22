@@ -46,11 +46,15 @@ const finalized = computed(() => packageValue.value?.service.estado === 'FINALIZ
 const residential = computed(() => packageValue.value?.service.tipoSede === 'RESIDENCIAL')
 const reinforcement = computed(() => packageValue.value?.service.tipoServicio === 'REFUERZO')
 const simplified = computed(() => residential.value || reinforcement.value)
+const obsoleteVehiclePackage = computed(() => Boolean(packageValue.value
+  && packageValue.value.service.tipoServicio === 'PRINCIPAL'
+  && packageValue.value.service.tipoSede !== 'RESIDENCIAL'
+  && typeof packageValue.value.vehiclesEnabled !== 'boolean'))
 const vehiclesDone = computed(() => !packageValue.value || vehicleChecklistResolved(
   packageValue.value.vehiclesEnabled, packageValue.value.attendedVehicleIds, packageValue.value.vehicleDraftIds))
 const vehicleChangesPending = computed(() => services.currentMutations.some(item =>
   item.kind === 'VEHICLE_CREATE' || item.kind === 'VEHICLE_SELECTION'))
-const canFinalize = computed(() => !pending.value.length && vehiclesDone.value
+const canFinalize = computed(() => !pending.value.length && !obsoleteVehiclePackage.value && vehiclesDone.value
   && !services.currentMutations.some(item => item.status === 'CONFLICT')
   && technicianSigned.value && clientSigned.value && Boolean(clientName.value.trim()))
 const canOfferReport = computed(() => finalized.value
@@ -204,6 +208,8 @@ async function finish(): Promise<void> {
       <StatusPanel v-if="simplified && !finalized" compact :title="reinforcement ? 'Servicio de refuerzo' : 'Servicio residencial'" message="No requiere recorrido por Áreas. Registra ambas firmas para finalizar." tone="neutral" />
       <StatusPanel v-else-if="finalized" compact title="Servicio finalizado" message="Las firmas y el cierre fueron confirmados por el servidor." tone="success" />
       <StatusPanel v-else-if="pending.length" compact title="Aún hay Áreas pendientes" :message="`${pending.length} de ${areas.length} Áreas requieren información. Puedes revisar el cierre, pero no finalizar hasta completarlas.`" tone="warning" />
+      <StatusPanel v-else-if="obsoleteVehiclePackage" compact title="Actualiza el servicio"
+        message="Necesitas conexión para cargar la configuración vehicular de este servicio antes de finalizar." tone="warning" />
       <StatusPanel v-else-if="!vehiclesDone" compact title="Vehículos sin confirmar"
         message="Revisa la sección Vehículos y confirma los atendidos antes de finalizar." tone="warning" />
       <StatusPanel v-else compact title="Recorrido completo" message="Las Áreas y la atención vehicular están resueltas. Registra ambas firmas para finalizar." tone="success" />
@@ -216,10 +222,13 @@ async function finish(): Promise<void> {
       <section v-if="packageValue.vehiclesEnabled" class="review-list" aria-labelledby="review-vehicles-title">
         <h2 id="review-vehicles-title">Vehículos atendidos</h2>
         <button type="button" @click="router.push({ name: 'technician-service-vehicles', params: { id: serviceId } })">
-          <span class="review-list__name"><strong>{{ vehiclesDone ? (packageValue.attendedVehicleIds?.length ?? 0) + ' atendidos' : 'Sin confirmar' }}</strong>
-            <small>{{ vehiclesDone ? vehicleChangesPending ? 'Guardado en este celular · falta sincronizar.' : 'Selección registrada para esta visita.' : 'Revisa y confirma esta sección antes de finalizar.' }}</small></span>
+          <span class="review-list__name"><strong>{{ packageValue.attendedVehicleIds == null && finalized ? 'Sin registro histórico' :
+  vehiclesDone ? (packageValue.attendedVehicleIds?.length ?? 0) + ' atendidos' : 'Sin confirmar' }}</strong>
+            <small>{{ finalized && packageValue.attendedVehicleIds == null ? 'Este servicio finalizado no conserva datos vehiculares.' :
+  vehiclesDone ? vehicleChangesPending ? 'Guardado en este celular · falta sincronizar.' : 'Selección registrada para esta visita.' : 'Revisa y confirma esta sección antes de finalizar.' }}</small></span>
           <StatusBadge :tone="!vehiclesDone ? 'warning' : vehicleChangesPending ? 'neutral' : 'success'">
-            {{ !vehiclesDone ? 'Pendiente' : vehicleChangesPending ? 'Local' : 'Confirmado' }}
+            {{ finalized && packageValue.attendedVehicleIds == null ? 'Histórico' :
+  !vehiclesDone ? 'Pendiente' : vehicleChangesPending ? 'Local' : 'Confirmado' }}
           </StatusBadge>
         </button>
       </section>

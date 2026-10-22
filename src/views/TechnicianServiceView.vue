@@ -33,6 +33,10 @@ const serviceId = computed(() => String(route.params.id ?? ''))
 const overviewRequested = computed(() => route.query.overview === '1')
 const localLock = computed(() => currentCache.value?.lock ?? null)
 const orderedAreas = computed(() => orderedTechnicianAreas(packageValue.value?.areas ?? []))
+const obsoleteVehiclePackage = computed(() => Boolean(packageValue.value
+  && packageValue.value.service.tipoServicio === 'PRINCIPAL'
+  && packageValue.value.service.tipoSede !== 'RESIDENCIAL'
+  && typeof packageValue.value.vehiclesEnabled !== 'boolean'))
 const canCreateArea = computed(() => packageValue.value?.service.estado === 'EN_PROCESO'
   && packageValue.value.service.tipoServicio === 'PRINCIPAL'
   && packageValue.value.service.tipoSede !== 'RESIDENCIAL' && Boolean(localLock.value))
@@ -127,6 +131,8 @@ function openVehicles(): void {
     <StatusPanel v-else-if="viewError && !packageValue" title="No fue posible abrir el servicio" :message="viewError" tone="danger"><BaseButton :disabled="!online" @click="load">Reintentar</BaseButton></StatusPanel>
     <template v-else-if="packageValue">
       <div class="technician-network" :class="{ 'technician-network--offline': !online }" role="status" aria-live="polite"><Wifi v-if="online" :size="18" aria-hidden="true" /><CloudOff v-else :size="18" aria-hidden="true" /><span>{{ online ? 'En línea' : 'Sin conexión · copia local' }}</span></div>
+      <StatusPanel v-if="obsoleteVehiclePackage" compact title="Actualiza el servicio"
+        message="El paquete guardado es anterior a la gestión vehicular. Conéctate y pulsa Actualizar antes de finalizar." tone="warning" />
       <StatusPanel v-if="packageError || (viewError && packageValue)" title="Revisa el estado del servicio" :message="viewError || packageError" tone="warning" />
       <TechnicianServiceNavigation v-if="packageValue.service.estado !== 'PROGRAMADO'"
         :service-id="serviceId" active="service" :vehicles-enabled="packageValue.vehiclesEnabled"

@@ -205,7 +205,8 @@ export async function getTechnicianPackage(client: PoolClient, userId: string, s
     'select id,nombre,solo_area_externa as "soloAreaExterna" from public.criterios_mip where activo order by lower(btrim(nombre)),id',
   )).rows
   const vehicleContext = (await client.query<{ enabled: boolean; attendedVehicleIds: string[] | null }>(`select
-    (s.tipo_servicio='PRINCIPAL' and se.tipo_sede='NEGOCIO' and se.maneja_vehiculos) as enabled,
+    (s.tipo_servicio='PRINCIPAL' and se.tipo_sede='NEGOCIO'
+      and (se.maneja_vehiculos or (s.estado='FINALIZADO' and s.vehiculos_atendidos_ids_json is not null))) as enabled,
     s.vehiculos_atendidos_ids_json as "attendedVehicleIds"
     from public.servicios s join public.sedes se on se.id=s.sede_id where s.id=$1`, [serviceId])).rows[0]!
   const vehicles = vehicleContext.enabled ? (await client.query<{ id: string; placa: string; activo: boolean }>(`
