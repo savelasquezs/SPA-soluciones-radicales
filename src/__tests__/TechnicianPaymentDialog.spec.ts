@@ -2,10 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 
 const mocked = vi.hoisted(() => ({
-  balance: vi.fn(),
-  report: vi.fn(),
-  upload: vi.fn(),
-  show: vi.fn(),
+  balance: vi.fn<() => Promise<{ disponible: number; estado: string }>>(),
+  report: vi.fn<() => Promise<{ id: string }>>(),
+  upload: vi.fn<() => Promise<void>>(),
+  show: vi.fn<() => void>(),
 }))
 vi.mock('@/services/financeService', () => ({
   getTechnicianServiceBalance: mocked.balance,
