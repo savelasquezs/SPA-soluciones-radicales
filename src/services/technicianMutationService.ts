@@ -44,6 +44,16 @@ function validMutation(value: unknown, actorId?: string, serviceId?: string): va
     && ['PENDING', 'SENDING', 'CONFLICT'].includes(record.status ?? '')
     && typeof record.error !== 'undefined'
   if (!common) return false
+  if (record.kind === 'AREA_CREATE') return isServiceId(record.areaId)
+    && isServiceId(record.serviceAreaId)
+    && typeof record.nombre === 'string'
+    && record.nombre.trim().length > 0 && record.nombre.length <= 150
+    && typeof record.esExterna === 'boolean'
+    && Array.isArray(record.criteria)
+    && record.criteria.length > 0 && record.criteria.length <= 500
+    && new Set(record.criteria.map(item => item.id)).size === record.criteria.length
+    && new Set(record.criteria.map(item => item.criterioId)).size === record.criteria.length
+    && record.criteria.every(item => isServiceId(item.id) && isServiceId(item.criterioId))
   if (record.kind === 'AREA_ORDER') return Array.isArray(record.areaIds)
     && record.areaIds.length <= 500
     && new Set(record.areaIds).size === record.areaIds.length
