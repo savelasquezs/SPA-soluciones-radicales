@@ -181,6 +181,7 @@ function pendingForArea(area: TechnicianArea): number {
 }
 
 function areaOption(area: TechnicianArea, index: number): string {
+  if (area.creacionPendiente) return `○ ${index + 1}. ${area.nombre} · Pendiente de sincronizar`
   if (area.sinAcceso) return `⛔ ${index + 1}. ${area.nombre} · Sin acceso`
   if (technicianAreaResolved(area, serviceId.value)) return `✓ ${index + 1}. ${area.nombre} · Completa`
   const pending = pendingForArea(area)
@@ -598,6 +599,9 @@ async function retryDevice(serviceDeviceId: string): Promise<void> {
         </nav>
       </section>
 
+      <p v-if="currentArea.creacionPendiente" class="area-sync-notice" role="status">
+        Área guardada en este celular · Se registrará en la Sede al sincronizar.
+      </p>
       <p v-if="saveError" class="area-save-error" role="alert">{{ saveError }}</p>
 
       <TechnicianAreaAccessEditor
@@ -673,6 +677,7 @@ async function retryDevice(serviceDeviceId: string): Promise<void> {
 .workspace-footer :deep(.base-button) { min-width:0; min-height:44px; font-size:.8rem; }
 .workspace-footer :deep(.base-button:last-child) { flex:1; max-width:15rem; }
 .area-inline-feedback { margin:0; color:var(--success); font-size:.78rem; }
+.area-sync-notice { margin:0; padding:.5rem .65rem; color:var(--text-secondary); font-size:.78rem; }
 .area-validation, .area-save-error { margin:.4rem 0 0; font-size:.78rem; color:var(--danger); }
 .area-save-error { padding:.55rem .75rem; border:1px solid var(--danger); border-radius:var(--radius); }
 .area-focus-item { border-radius:var(--radius); }
