@@ -11,6 +11,7 @@ Acceso: `/` con rol activo **ADMINISTRADOR**.
 - Alertas accionables: retrasados, visitas por confirmar, cobros pendientes, hallazgos sin resolver, certificados próximos a vencer y errores de Calendar.
 - Tres tablas de cinco registros cada una: próximos servicios, últimas visitas finalizadas y últimos hallazgos. Los nombres enlazan a la vista de detalle.
 - Filtros por 7/30/90/365/730/1826 días, rango personalizado de hasta diez años, Cliente y Sede. El filtro temporal afecta las gráficas y el valor realizado; el alcance Cliente/Sede afecta los indicadores y tablas salvo la alerta de certificados, que es global.
+- Los rangos predeterminados incluyen **hoy en el calendario de Bogotá** (por ejemplo, el 22 de octubre: 7 días = 16–22 de octubre; 30 días = 23 de septiembre–22 de octubre). El subtítulo muestra las fechas exactas. En las gráficas semanales, las etiquetas indican el intervalo real, recortando las semanas parciales al inicio y al final; «19–22 oct» incluye el día 22, aunque el grupo empiece el lunes 19. La API usa un límite superior exclusivo del día siguiente en Bogotá.
 
 ## Definiciones, sin duplicar información
 
