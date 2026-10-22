@@ -12,6 +12,16 @@ describe('administrative dashboard aggregation rules',()=>{
       '2026-01-01','2026-02-01','2026-03-01','2026-04-01','2026-05-01'
     ])
   })
+
+  it('keeps the last day in both daily and weekly bucket series', () => {
+    const today = '2026-10-22'
+    const seven = resolveDashboardRange('7d', null, today)
+    const thirty = resolveDashboardRange('30d', null, today)
+    expect(dashboardKeys(seven.from, '2026-10-23', seven.bucket).at(-1)).toBe(today)
+    expect(dashboardKeys(thirty.from, '2026-10-23', thirty.bucket)).toEqual([
+      '2026-09-21', '2026-09-28', '2026-10-05', '2026-10-12', '2026-10-19'
+    ])
+  })
   it('does not invent growth when no previous services exist',()=>{
     expect(dashValues({ performedValue:'120000',previousValue:'0' })).toEqual({current:120000,change:null})
     expect(dashValues({ performedValue:'150000',previousValue:'100000' })).toEqual({current:150000,change:50})
