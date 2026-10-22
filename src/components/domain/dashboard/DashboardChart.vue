@@ -7,6 +7,7 @@ import { SVGRenderer } from 'echarts/renderers'
 import VChart from 'vue-echarts'
 import type { EChartsOption } from 'echarts'
 import { useAppStore } from '@/stores/app'
+import { dashboardWeekLabel } from '@/helpers/dashboardRanges'
 import type { DashboardSnapshot } from '@/types/dashboard'
 import type { TechnicianDashboardSnapshot } from '@/types/technicianDashboard'
 
@@ -23,6 +24,7 @@ const short=(amount:number)=>Math.abs(amount)>=1_000_000?'$'+(amount/1_000_000).
 function dateLabel(value:string):string {
   const date=new Date(value+'T12:00:00Z')
   const days=Math.round((Date.parse(props.period.to+'T00:00:00Z')-Date.parse(props.period.from+'T00:00:00Z'))/86_400_000)+1
+  if (days > 14 && days <= 120) return dashboardWeekLabel(value, props.period)
   return new Intl.DateTimeFormat('es-CO',{
     month:'short',day:days<=120?'numeric':undefined,year:days>365?'2-digit':undefined,timeZone:'UTC'
   }).format(date)
