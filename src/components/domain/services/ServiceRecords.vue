@@ -7,7 +7,7 @@ import BaseIconButton from '@/components/base/BaseIconButton.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDialog from '@/components/base/BaseDialog.vue'
 import ServiceContactActions from './ServiceContactActions.vue'
-import { formatServiceDate, formatServiceMoney, PAYMENT_LABELS, SERVICE_STATE_LABELS } from '@/helpers/adminServices'
+import { formatServiceDate, formatServiceMoney, serviceHistoryDate, PAYMENT_LABELS, SERVICE_STATE_LABELS } from '@/helpers/adminServices'
 import type { AdminService } from '@/types/adminServices'
 const props=defineProps<{ records: AdminService[]; busy?: boolean; history?: boolean; returnTo?: string }>()
 const serviceLink=(id: string)=>({ name:'service-detail',params:{ id },query:props.returnTo ? { returnTo:props.returnTo } : {} })
@@ -16,8 +16,11 @@ const actionRecord=ref<AdminService|null>(null)
 const shortDay=new Intl.DateTimeFormat('es-CO',{day:'numeric',month:'short',timeZone:'America/Bogota'})
 const shortTime=new Intl.DateTimeFormat('es-CO',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'America/Bogota'})
 const dayKey=new Intl.DateTimeFormat('en-CA',{year:'numeric',month:'2-digit',day:'2-digit',timeZone:'America/Bogota'})
+const historical = (record: AdminService) => props.history && ['FINALIZADO','CANCELADO'].includes(record.estado)
+const recordDate = (record: AdminService) => historical(record) ? serviceHistoryDate(record) : record.inicioProgramado
 function shortSchedule(record:AdminService):string {
-  const start=new Date(record.inicioProgramado), end=new Date(record.finProgramado)
+  const start=new Date(recordDate(record)), end=new Date(record.finProgramado)
+  if (historical(record)) return shortDay.format(start)+' · '+shortTime.format(start)
   return shortDay.format(start)+' · '+shortTime.format(start)+'–'+(dayKey.format(start)===dayKey.format(end) ? '' : shortDay.format(end)+' ')+shortTime.format(end)
 }
 type MobileAction='schedule'|'team'|'payment'|'edit'|'cancel'|'retry-calendar'|'results'
@@ -42,7 +45,7 @@ function selectAction(action:MobileAction):void {
       <thead><tr><th>Fecha y hora</th><th>Servicio</th><th>Tipo</th><th>Equipo</th><th>Contacto</th><th>Pago</th><th>Estado</th><th>Acciones</th></tr></thead>
       <tbody>
         <tr v-for="record in records" :key="record.id" :data-service-id="record.id">
-          <td class="svc-record-time" data-label="Fecha y hora"><button class="svc-cell-button" :disabled="busy || record.estado!=='PROGRAMADO'" :aria-label="`Reprogramar ${record.solicitud}`" @click="emit('schedule',record)"><span class="svc-record-date-desktop">{{ formatServiceDate(record.inicioProgramado) }}</span><span class="svc-record-date-mobile">{{ shortSchedule(record) }}</span><small class="svc-record-date-desktop">{{ formatServiceDate(record.inicioProgramado,true) }} – {{ formatServiceDate(record.finProgramado,true) }}</small></button></td>
+          <td class="svc-record-time" data-label="Fecha y hora"><button class="svc-cell-button" :disabled="busy || record.estado!=='PROGRAMADO'" :aria-label="`Reprogramar ${record.solicitud}`" @click="emit('schedule',record)"><span class="svc-record-date-desktop">{{ formatServiceDate(recordDate(record)) }}</span><span class="svc-record-date-mobile">{{ shortSchedule(record) }}</span><small v-if="historical(record)" class="svc-record-date-desktop">{{ record.estado==='FINALIZADO' ? 'Finalizado' : 'Cancelado' }} · {{ formatServiceDate(recordDate(record),true) }}</small><small v-else class="svc-record-date-desktop">{{ formatServiceDate(record.inicioProgramado,true) }} – {{ formatServiceDate(record.finProgramado,true) }}</small></button></td>
           <td class="svc-record-name" data-label="Servicio"><RouterLink class="svc-link" :to="serviceLink(record.id)">{{ record.clienteNombre }}<template v-if="record.tipoSede!=='RESIDENCIAL'"> · {{ record.sedeNombre }}</template></RouterLink><small class="svc-record-code">{{ record.solicitud }}</small><small class="svc-mobile-service-meta">{{ record.solicitud }} · {{ record.tipoServicio==='REFUERZO' ? 'Refuerzo' : 'Principal' }}<template v-if="record.principal"> · Vinculado</template><template v-else-if="record.refuerzo"> · Con refuerzo</template></small></td>
           <td class="svc-record-kind" data-label="Tipo">{{ record.tipoServicio === 'REFUERZO' ? 'Refuerzo' : 'Principal' }}<small v-if="record.principal">{{ record.principal.solicitud }}</small><small v-else-if="record.refuerzo">Con refuerzo</small></td>
           <td class="svc-record-team" data-label="Equipo"><button class="svc-cell-button" :disabled="busy || record.estado!=='PROGRAMADO'" :aria-label="`Cambiar equipo de ${record.solicitud}`" @click="emit('team',record)">{{ record.responsable.nombreCompleto }}<small v-if="record.colaboradores.length">+ {{ record.colaboradores.map(person=>person.nombreCompleto).join(', ') }}</small></button></td>

@@ -143,7 +143,8 @@ export const useAdminServicesStore = defineStore('admin-services',()=>{
       if (visible && !matches) serviceIds.value=serviceIds.value.filter(id=>id!==row.id)
       if (entered && filter.page===1) serviceIds.value.push(row.id)
     }
-    serviceIds.value=[...new Set(serviceIds.value)].sort((a,b)=>compareServices(records.value[a]!,records.value[b]!)).slice(0,allServicePages ? undefined : (filter?.pageSize ?? 100))
+    const history = filter?.tab === 'history' || ['performed','unpaid','recent'].includes(filter?.metric ?? '')
+    serviceIds.value=[...new Set(serviceIds.value)].sort((a,b)=>compareServices(records.value[a]!,records.value[b]!,history)).slice(0,allServicePages ? undefined : (filter?.pageSize ?? 100))
     pendingCount.value=result.pendingCount; listAt=Date.now()
     if (result.upcoming) applyUpcoming({ upcoming:result.upcoming,pendingCount:result.pendingCount })
   }

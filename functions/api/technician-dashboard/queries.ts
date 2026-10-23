@@ -100,7 +100,7 @@ export async function technicianDashboardSnapshot(
     order by case when s.estado='EN_PROCESO' then 0 else 1 end,s.inicio_programado,s.id limit 5`, [technicianId])
   const { rows: recent } = await client.query<TechnicianDashboardService>(`select ${columns}
     ${serviceFrom} ${serviceScope} and ${finishedInRange}
-    order by s.fin_real desc,s.id limit 5`, dates)
+    order by s.fin_real desc nulls last,s.id desc limit 5`, dates)
 
   const completed = dashboardKeys(range.from, toExclusive, range.bucket)
     .map(date => ({ date, count: byDate.get(date) ?? 0 }))

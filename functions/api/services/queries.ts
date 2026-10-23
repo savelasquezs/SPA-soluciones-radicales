@@ -78,16 +78,18 @@ export async function pendingCount(client: PoolClient): Promise<number> {
       and (p.estado <> 'POSPUESTO' or p.fecha_recontacto <= (now() at time zone 'America/Bogota')::date)`)
   return rows[0]?.count ?? 0
 }
-export async function listServices(client: PoolClient, filter: ServiceFilter): Promise<PagedResult<AdminService>> {
+export async function listServices(client: PoolClient, filter: ServiceFilter, contextualHistory = false): Promise<PagedResult<AdminService>> {
   const params: unknown[]=[]
   const conditions: string[]=[]
+  const history = filter.tab === 'history' || contextualHistory
+  const historyDate = 'coalesce(s.fin_real,s.cancelado_at,s.inicio_programado)'
   const withoutDates=Boolean(filter.metric && serviceMetricsWithoutDates.some(metric=>metric===filter.metric))
   if(!filter.clientId && !filter.siteId && (!filter.from || !filter.to) && !filter.metric)
     throw new ApiError(422,'Selecciona un rango válido.','VALIDATION')
   // Realized revenue is dated by fin_real; live metrics are intentionally unbounded.
   if(filter.from && filter.to && !withoutDates && filter.metric!=='today'){
     params.push(filter.from,filter.to)
-    const column=filter.metric==='performed'?'s.fin_real':'s.inicio_programado'
+    const column=history ? historyDate : filter.metric==='performed'?'s.fin_real':'s.inicio_programado'
     conditions.push(column+" >= ($1::date::timestamp at time zone 'America/Bogota')",
       column+" < (($2::date+1)::timestamp at time zone 'America/Bogota')")
   }
@@ -104,7 +106,8 @@ export async function listServices(client: PoolClient, filter: ServiceFilter): P
   const where=conditions.length?'where '+conditions.join(' and '):''
   const total=(await client.query<{count:number}>('select count(*)::integer as count '+SERVICE_FROM+' '+where,params)).rows[0]?.count ?? 0
   params.push(filter.pageSize,(filter.page-1)*filter.pageSize)
-  const order=filter.metric==='performed'||filter.metric==='unpaid'||filter.metric==='recent'
+  const order=history ? historyDate+' desc,s.id desc'
+    : filter.metric==='performed'||filter.metric==='unpaid'||filter.metric==='recent'
     ? 's.fin_real desc nulls last,s.id desc'
     : filter.metric==='delayed' ? 's.inicio_programado asc,s.id'
     : filter.metric==='next' ? "case when s.estado='EN_PROCESO' then 0 else 1 end,s.inicio_programado,s.id"

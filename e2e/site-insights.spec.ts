@@ -64,6 +64,7 @@ async function setup(page: Page) {
   await page.goto(`/clientes/${ids.client}/sedes/${ids.site}`)
   return calls
 }
+
 test('la configuración de la Sede se edita desde el botón principal, sin pestaña duplicada', async ({ page }) => {
   await setup(page)
   const tabs = page.getByRole('navigation', { name: 'Detalle de Sede' })
@@ -96,6 +97,7 @@ test('monitoring histories, private gallery, bounded requests and keyboard closi
   await page.keyboard.press('Escape')
   await expect(page.getByRole('button', { name: 'Ver puesto P-01', exact: true })).toBeFocused()
 })
+
 test('findings are readonly and reusing tabs does not reload their collections', async ({ page }) => {
   const calls = await setup(page)
   await page.getByRole('button', { name: 'Hallazgos', exact: true }).click()
@@ -111,6 +113,7 @@ test('findings are readonly and reusing tabs does not reload their collections',
   await page.getByRole('button', { name: 'Hallazgos', exact: true }).click()
   expect(calls.filter(path => path.endsWith('/findings'))).toHaveLength(1)
 })
+
 for (const width of [390,1280]) for (const theme of ['light','dark']) {
   test(`site insights responsive ${width} ${theme}`, async ({ page }) => {
     await page.setViewportSize({ width, height: 860 })
@@ -172,4 +175,25 @@ test('los historiales de sede y cliente usan Servicios completos, filtros y acci
   await expect(clientRows.last().getByRole('link', { name: 'Abrir informe de SR-00000024' })).toBeVisible()
   expect(requests.at(-1)?.searchParams.get('clientId')).toBe(ids.client)
   expect(requests.at(-1)?.searchParams.has('siteId')).toBe(false)
+})
+
+test('los historiales muestran primero la fecha real de finalización en móvil y escritorio', async ({ page }, testInfo) => {
+  await page.setViewportSize({width:390,height:860})
+  await setup(page)
+  const older={...completedHistory,id:uid(55),solicitud:'SR-00000055',inicioProgramado:'2026-10-22T13:00:00Z',finReal:'2026-10-22T15:00:00Z'}
+  const latest={...completedHistory,id:uid(56),solicitud:'SR-00000056',inicioProgramado:'2026-10-01T13:00:00Z',finReal:'2026-10-23T15:00:00Z'}
+  await page.route(/\/api\/admin\/services\/context\?/,route=>route.fulfill({json:{items:[latest,older],total:2,page:1,pageSize:20,pendingCount:0}}))
+  await page.getByRole('button',{name:'Historial de servicios',exact:true}).click()
+  const rows=page.locator('.svc-contextual-history .svc-table tbody tr')
+  await expect(rows.first()).toHaveAttribute('data-service-id',latest.id)
+  await expect(rows.first().locator('.svc-record-date-mobile')).toHaveText(/23.*oct.*10:00/)
+  await expect(rows.last().locator('.svc-record-date-mobile')).toHaveText(/22.*oct.*10:00/)
+  await page.screenshot({path:testInfo.outputPath('history-site-mobile.png'),fullPage:true})
+  await page.setViewportSize({width:1280,height:860})
+  await page.goto('/clientes/'+ids.client+'?tab=history')
+  await expect(rows.first()).toHaveAttribute('data-service-id',latest.id)
+  await expect(rows.first().locator('span.svc-record-date-desktop')).toHaveText(/23.*oct.*2026/)
+  await expect(rows.first().locator('small.svc-record-date-desktop')).toContainText('Finalizado')
+  await expect(rows.last()).toHaveAttribute('data-service-id',older.id)
+  await page.screenshot({path:testInfo.outputPath('history-client-desktop.png'),fullPage:true})
 })

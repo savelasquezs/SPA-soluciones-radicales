@@ -1,4 +1,5 @@
 import type { DeviceState, TechnicianArea, TechnicianPackageCache, TechnicianServiceSummary } from '../types/technicianServices'
+import { compareServiceHistory } from './adminServices'
 
 export function technicianServiceStateLabel(state: TechnicianServiceSummary['estado']): string {
   return ({ PROGRAMADO: 'Programado', EN_PROCESO: 'En proceso', FINALIZADO: 'Finalizado', CANCELADO: 'Cancelado' } as const)[state] ?? state
@@ -22,14 +23,13 @@ export function sortTechnicianServices(records: TechnicianServiceSummary[]): Tec
   return [...records].sort((left, right) => {
     const state = priority[left.estado] - priority[right.estado]
     if (state) return state
-    const direction = left.estado === 'FINALIZADO' ? -1 : 1
-    return direction * (new Date(left.inicioProgramado).getTime() - new Date(right.inicioProgramado).getTime())
+    if (left.estado === 'FINALIZADO') return compareServiceHistory(left, right)
+    return Date.parse(left.inicioProgramado) - Date.parse(right.inicioProgramado) || left.id.localeCompare(right.id)
   })
 }
 
 export function sortTechnicianHistory(records: TechnicianServiceSummary[]): TechnicianServiceSummary[] {
-  return [...records].sort((a,b)=>new Date(b.finReal??b.inicioProgramado).getTime()
-    -new Date(a.finReal??a.inicioProgramado).getTime()||a.id.localeCompare(b.id))
+  return [...records].sort(compareServiceHistory)
 }
 
 export function technicianServicesToAutoPrepare(

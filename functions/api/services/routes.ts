@@ -136,7 +136,7 @@ adminServiceRoutes.post('/upcoming/:id/email',async context => {
   return context.json(await write(context,payload,`upcoming:email:${recordId}`,(client,admin)=>queueConfirmationEmail(client,admin.id,recordId,version(payload.version),id(payload.requestId),text(payload.recipient,254,true),payload.reviewedUnknown === true,payload.resend === true)),202)
 })
 adminServiceRoutes.get('/',async context => context.json(await read(context,client=>listServices(client,listFilter(context.req.query())))))
-adminServiceRoutes.get('/context',async context => context.json(await read(context,client=>listServices(client,contextFilter(context.req.query())))))
+adminServiceRoutes.get('/context',async context => context.json(await read(context,client=>listServices(client,contextFilter(context.req.query()),true))))
 adminServiceRoutes.get('/:id',async context => context.json(await read(context,client=>getService(client,id(context.req.param('id'))))))
 adminServiceRoutes.get('/:id/audit',async context => {
   const recordId=id(context.req.param('id')), page=pageNumber(context.req.query('page'),1,100_000)

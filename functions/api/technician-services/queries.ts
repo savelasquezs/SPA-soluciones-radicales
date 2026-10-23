@@ -40,8 +40,8 @@ export async function listTechnicianServices(client: PoolClient, userId: string)
     from public.servicios s join public.sedes se on se.id=s.sede_id join public.negocios n on n.id=se.negocio_id
     where ${technicianServiceAssignmentSql} and s.tipo_servicio in ('PRINCIPAL','REFUERZO') and s.estado<>'CANCELADO'
     order by case s.estado when 'EN_PROCESO' then 0 when 'PROGRAMADO' then 1 else 2 end,
-      case when s.estado='FINALIZADO' then s.inicio_programado end desc,
-      case when s.estado<>'FINALIZADO' then s.inicio_programado end,s.id limit 200`, [userId])
+      case when s.estado='FINALIZADO' then coalesce(s.fin_real,s.inicio_programado) end desc nulls last,
+      case when s.estado<>'FINALIZADO' then s.inicio_programado end,s.id desc limit 200`, [userId])
   return rows.map(row => row.record)
 }
 
@@ -232,15 +232,15 @@ export async function listTechnicianHistory(
   const scope=` from public.servicios s
     join public.sedes se on se.id=s.sede_id join public.negocios n on n.id=se.negocio_id
     where ${technicianServiceAssignmentSql} and s.tipo_servicio in ('PRINCIPAL','REFUERZO') and s.estado='FINALIZADO'
-      and ($2::date is null or s.fin_real>=($2::date::timestamp at time zone 'America/Bogota'))
-      and ($3::date is null or s.fin_real<($3::date::timestamp at time zone 'America/Bogota'))
+      and ($2::date is null or coalesce(s.fin_real,s.inicio_programado)>=($2::date::timestamp at time zone 'America/Bogota'))
+      and ($3::date is null or coalesce(s.fin_real,s.inicio_programado)<($3::date::timestamp at time zone 'America/Bogota'))
       and ($4::text='' or s.solicitud ilike '%'||$4||'%'
         or n.nombre ilike '%'||$4||'%' or se.nombre ilike '%'||$4||'%')`
   const params=[userId,from,toExclusive,q]
   const {rows: totals}=await client.query<{total:number}>(`select count(*)::int as total ${scope}`,params)
   const total=Number(totals[0]?.total ?? 0)
   const {rows}=await client.query<{record:TechnicianServiceSummary}>(`select ${summaryJson} as record
-    ${scope} order by s.fin_real desc,s.id limit $5 offset $6`,
+    ${scope} order by coalesce(s.fin_real,s.inicio_programado) desc,s.id desc limit $5 offset $6`,
     [...params,pageSize,(page-1)*pageSize])
   return {items:rows.map(row=>row.record),total,page,pageSize}
 }

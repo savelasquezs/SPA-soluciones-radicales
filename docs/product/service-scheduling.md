@@ -4,6 +4,10 @@ Decisión funcional aprobada el 6 de octubre de 2026.
 
 Este documento define la programación administrativa de Servicios Principales y Refuerzos, su reprogramación y el seguimiento de próximas visitas pendientes de confirmación.
 
+## Orden del historial
+
+Los historiales de Servicios, Clientes, Casas y Sedes muestran primero las visitas finalizadas más recientemente, por `fin_real` descendente, tanto en servidor antes de paginar como después de actualizar registros o consultar copias locales. Los cancelados usan su fecha de cancelación; los registros sin fecha real y las visitas programadas de los historiales contextuales usan la fecha programada. En caso de empate se usa el ID descendente para mantener páginas estables. La fecha visible y los filtros del historial usan ese mismo criterio. Los resúmenes administrativo y técnico conservan las últimas finalizaciones primero.
+
 ## Principios
 
 - La Agenda contiene Servicios ya confirmados y programados.

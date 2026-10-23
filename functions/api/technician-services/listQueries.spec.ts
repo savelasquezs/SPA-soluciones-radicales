@@ -24,7 +24,7 @@ describe('technician read-only lists',()=>{
     expect(calls[1]?.params).toEqual([actor,'2026-10-01','2026-11-01','Cliente',20,20])
     expect(calls.every(c=>c.sql.includes('s.tecnico_responsable_id=$1::uuid'))).toBe(true)
     expect(calls.every(c=>c.sql.includes("s.estado='FINALIZADO'"))).toBe(true)
-    expect(calls[1]?.sql).toContain('order by s.fin_real desc')
+    expect(calls[1]?.sql).toContain('order by coalesce(s.fin_real,s.inicio_programado) desc,s.id desc')
   })
   it('allows read-only contacts for assigned reinforcements, scoped to the authenticated technician',async()=>{
     const {client,calls}=fake()

@@ -30,6 +30,16 @@ beforeEach(()=>{
   useAuthStore().user={ id,nombreCompleto:'Admin de prueba',correoGoogle:'admin@example.invalid',esAdmin:true,esTecnico:false,rolActivo:'ADMINISTRADOR',requiereSeleccionRol:false }
 })
 describe('service snapshots',()=>{
+  it('keeps the latest completion first after updating history without refetching it',async()=>{
+    const older=record({estado:'FINALIZADO',finReal:'2030-10-07T14:00:00Z',inicioProgramado:'2030-10-07T13:00:00Z'})
+    const latest=record({id:'10000000-0000-4000-8000-000000000002',estado:'FINALIZADO',inicioProgramado:'2030-10-01T14:00:00Z',finReal:'2030-10-07T16:00:00Z'})
+    vi.mocked(api.fetchAdminServices).mockResolvedValue(listing([latest,older]))
+    const store=useAdminServicesStore();await store.loadServices({...filter,tab:'history'})
+    store.applyMutation({services:[{...latest,version:2,observaciones:'Pago actualizado'}],upcoming:null,pendingCount:0})
+    expect(store.rows.map(row=>row.id)).toEqual([latest.id,older.id])
+    expect(store.total).toBe(2)
+    expect(api.fetchAdminServices).toHaveBeenCalledOnce()
+  })
   it('reuses loaded detail and updates without refetching the list',async()=>{
     vi.mocked(api.fetchAdminServices).mockResolvedValue(listing([record()]))
     const store=useAdminServicesStore();await store.loadServices(filter)

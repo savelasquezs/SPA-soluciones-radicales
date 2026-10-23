@@ -147,7 +147,7 @@ export function normalizeServiceSearch(value: string): string {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLocaleLowerCase('es')
 }
 export function matchesServiceFilter(service: AdminService, filter: ServiceFilter): boolean {
-  const day = toBogotaInput(service.inicioProgramado).slice(0, 10)
+  const day = toBogotaInput(filter.tab === 'history' ? serviceHistoryDate(service) : service.inicioProgramado).slice(0, 10)
   return (!filter.from || day >= filter.from) && (!filter.to || day <= filter.to)
     && (!filter.clientId || service.clientId === filter.clientId)
     && (!filter.siteId || service.sedeId === filter.siteId)
@@ -156,7 +156,15 @@ export function matchesServiceFilter(service: AdminService, filter: ServiceFilte
     && (!filter.tecnicoId || service.tecnicoResponsableId === filter.tecnicoId || service.tecnicosColaboradoresIds.includes(filter.tecnicoId))
     && (!filter.query || normalizeServiceSearch(`${service.clienteNombre} ${service.sedeNombre} ${service.solicitud} ${service.direccion}`).includes(normalizeServiceSearch(filter.query)))
 }
-export function compareServices(a: AdminService, b: AdminService): number {
+type HistoricalService = Pick<AdminService, 'id' | 'inicioProgramado'> & Partial<Pick<AdminService, 'finReal' | 'canceladoAt'>>
+export function serviceHistoryDate(service: HistoricalService): string {
+  return service.finReal ?? service.canceladoAt ?? service.inicioProgramado
+}
+export function compareServiceHistory(a: HistoricalService, b: HistoricalService): number {
+  return Date.parse(serviceHistoryDate(b)) - Date.parse(serviceHistoryDate(a)) || b.id.localeCompare(a.id)
+}
+export function compareServices(a: AdminService, b: AdminService, history = false): number {
+  if (history) return compareServiceHistory(a, b)
   const order = { EN_PROCESO: 0, PROGRAMADO: 1, FINALIZADO: 2, CANCELADO: 3 }
   return new Date(a.inicioProgramado).getTime() - new Date(b.inicioProgramado).getTime() || order[a.estado] - order[b.estado] || a.id.localeCompare(b.id)
 }

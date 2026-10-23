@@ -14,6 +14,7 @@ import { dashboardSnapshot } from '../../functions/api/dashboard/queries'
 import { ApiError } from '../../functions/api/auth'
 import { cancelService,command,createService,editService,queueConfirmationEmail,rescheduleService,savePayment,updateUpcoming } from '../../functions/api/services/commands'
 import { getService,getUpcoming,listServices,listUpcoming,pendingCount,workspace } from '../../functions/api/services/queries'
+import { listTechnicianHistory } from '../../functions/api/technician-services/queries'
 import { drainServiceJobs } from '../../functions/api/services/jobs'
 
 const target=new URL(process.env.TEST_DATABASE_URL ?? '')
@@ -67,6 +68,30 @@ beforeEach(async()=>{
 afterAll(async()=>{ await pool.end() })
 
 describe('administrator services · real PostgreSQL',()=>{
+  it('orders every history page by actual completion even when scheduled dates disagree',async()=>{
+    const f=await fixture(false)
+    const older=principal(await create(f,input(f,'2030-10-20T09:00:00-05:00')))
+    const latest=principal(await create(f,input(f,'2030-10-01T09:00:00-05:00')))
+    const tied=principal(await create(f,input(f,'2030-10-02T09:00:00-05:00')))
+    await finish(f,older.id,'2030-10-22T09:00:00-05:00')
+    await finish(f,latest.id,'2030-10-23T09:00:00-05:00')
+    await finish(f,tied.id,'2030-10-23T09:00:00-05:00')
+    const expected=[latest.id,tied.id].sort().reverse().concat(older.id)
+    const filter={from:'2030-10-22',to:'2030-10-23',tab:'history' as const,estado:'' as const,tipo:'' as const,tecnicoId:'',query:'',page:1,pageSize:1,siteId:f.site}
+    const pages:string[]=[]
+    for(const page of [1,2,3]){
+      const result=await transaction(client=>listServices(client,{...filter,page}))
+      expect(result.total).toBe(3)
+      pages.push(...result.items.map(row=>row.id))
+    }
+    expect(pages).toEqual(expected)
+    for(const scope of [{clientId:f.business,siteId:undefined},{siteId:f.site}]){
+      const result=await transaction(client=>listServices(client,{...filter,...scope,from:'',to:'',tab:'agenda',pageSize:20},true))
+      expect(result.items.map(row=>row.id)).toEqual(expected)
+    }
+    const technician=await transaction(client=>listTechnicianHistory(client,f.responsible,1,'','2030-10-22','2030-10-24'))
+    expect(technician.items.map(row=>row.id)).toEqual(expected)
+  })
   it('schedules residential visits with individual prices and no reinforcement, preserving business pricing',async()=>{
     const f=await fixture(false), homeClient=randomUUID(), homeSite=randomUUID()
     await transaction(async client=>{

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { formatTechnicianDateTime, isExactAreaPermutation, moveTechnicianArea, nextTechnicianArea, nextTechnicianRouteStep, orderedTechnicianAreas, sortTechnicianServices, technicianAreaResolved, technicianDevicePhotoRequired, technicianServicesToAutoPrepare, technicianServiceStateLabel } from '@/helpers/technicianServices'
 import type { TechnicianArea, TechnicianServiceSummary } from '@/types/technicianServices'
+import { sortTechnicianHistory } from '@/helpers/technicianServices'
 
 const record = (id: string, estado: TechnicianServiceSummary['estado'], inicioProgramado: string): TechnicianServiceSummary => ({
   id,
@@ -18,6 +19,17 @@ const record = (id: string, estado: TechnicianServiceSummary['estado'], inicioPr
 })
 
 describe('technician service presentation', () => {
+  it('orders completed visits by actual completion, including offline history and stable ties', () => {
+    const records = [
+      { ...record('a', 'FINALIZADO', '2026-10-22T14:00:00Z'), finReal:'2026-10-22T16:00:00Z' },
+      { ...record('b', 'FINALIZADO', '2026-10-01T14:00:00Z'), finReal:'2026-10-23T16:00:00Z' },
+      { ...record('c', 'FINALIZADO', '2026-10-02T14:00:00Z'), finReal:'2026-10-23T16:00:00Z' },
+      record('legacy', 'FINALIZADO', '2026-10-21T14:00:00Z'),
+    ]
+    expect(sortTechnicianHistory(records).map(item=>item.id)).toEqual(['c','b','a','legacy'])
+    expect(sortTechnicianServices(records).map(item=>item.id)).toEqual(['c','b','a','legacy'])
+    expect(records.map(item=>item.id)).toEqual(['a','b','c','legacy'])
+  })
   it('prioritizes active work, upcoming visits and recent history', () => {
     const result = sortTechnicianServices([
       record('final-old', 'FINALIZADO', '2026-10-01T14:00:00Z'),

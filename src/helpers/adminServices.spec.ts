@@ -1,8 +1,18 @@
 import { describe,expect,it } from 'vitest'
 import { addDateDays,draftToServiceInput,emptyServiceDraft,fromBogotaInput,isDateOnly,isZonedInstant,scheduleEnd,suggestReinforcement,toBogotaInput,todayBogota,validateServiceInput,validateSchedule } from './adminServices'
 import type { ServiceInput,ServiceSchedule } from '../types/adminServices'
+import { compareServiceHistory, serviceHistoryDate } from './adminServices'
 const responsible='10000000-0000-4000-8000-000000000001'
 const collaborator='10000000-0000-4000-8000-000000000002'
+it('orders actual completion and cancellation dates with a scheduled fallback and stable ties',()=>{
+  const base={id:'legacy',inicioProgramado:'2026-10-01T10:00:00Z'}
+  const older={...base,id:'a',finReal:'2026-10-22T10:00:00Z'}
+  const latest={...base,id:'b',finReal:'2026-10-23T05:00:00-05:00'}
+  const tied={...latest,id:'c',finReal:'2026-10-23T10:00:00Z'}
+  const cancelled={...base,id:'d',canceladoAt:'2026-10-24T10:00:00Z'}
+  expect([base,older,latest,tied,cancelled].sort(compareServiceHistory).map(row=>row.id)).toEqual(['d','c','b','a','legacy'])
+  expect(serviceHistoryDate({ ...base,finReal:null,canceladoAt:null })).toBe(base.inicioProgramado)
+})
 const schedule: ServiceSchedule={ inicioProgramado:'2026-10-06T09:00:00-05:00',duracionMinutos:90,tecnicoResponsableId:responsible,tecnicosColaboradoresIds:[collaborator] }
 const input=(): ServiceInput=>({ sedeId:responsible,programacion:structuredClone(schedule),refuerzo:null,productos:[],cobro:{ metodoPago:null,tecnicoRecaudoPrevistoId:null },observaciones:'' })
 describe('administrator service contracts',()=>{
