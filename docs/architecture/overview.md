@@ -89,6 +89,8 @@ PostgreSQL continúa siendo la fuente de verdad estructurada.
 
 Los usuarios internos ingresan con Google mediante Neon Managed Better Auth. Neon conserva identidad y sesiones en el esquema administrado `neon_auth`.
 
+El servicio de autenticación normaliza tanto los errores devueltos como las excepciones del SDK de Neon, conservando el estado HTTP y evitando mensajes técnicos en pantalla. Un 400 transitorio al restaurar la sesión o autenticar una lectura permite un único reintento con sesión renovada, sin recargar la página; las escrituras no se reenvían automáticamente. Los errores persistentes mantienen la opción de reintento, y las cancelaciones y los límites de tiempo conservan su comportamiento original.
+
 La tabla de dominio `usuarios` determina qué identidad está autorizada a usar Soluciones Radicales y si tiene rol Administrador, Técnico o ambos. Un usuario con dos roles utiliza uno activo por sesión.
 
 La autorización efectiva vive en servidor/PostgreSQL. Ocultar una acción en la interfaz no concede ni revoca permisos.

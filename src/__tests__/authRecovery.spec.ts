@@ -1,9 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { AuthApiError } from '@neondatabase/auth'
 
 type SessionRequest = { query?: { disableCookieCache: boolean }; fetchOptions: { signal: AbortSignal } }
 type SessionResult = { data: { session: { token: string; id?: string }; user: { id: string } }; error: null }
 const { getSession } = vi.hoisted(() => ({ getSession: vi.fn<(options: SessionRequest) => Promise<SessionResult>>() }))
-vi.mock('@neondatabase/auth', () => ({ createAuthClient: () => ({ getSession }) }))
+vi.mock('@neondatabase/auth', async importOriginal => ({
+  ...await importOriginal<typeof import('@neondatabase/auth')>(),
+  createAuthClient: () => ({ getSession }),
+}))
 import { getAccessToken, getAuthSession } from '@/services/authService'
 import { RequestTimeoutError } from '@/services/requestControl'
 
@@ -13,6 +17,22 @@ beforeEach(() => { vi.useFakeTimers(); vi.resetAllMocks(); sessionStorage.clear(
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals() })
 
 describe('renovación de Neon Auth bajo demanda', () => {
+  it.each([400, 401, 403, 503])('normaliza las excepciones del SDK con estado %i', async status => {
+    window.history.replaceState({}, '', '/?neon_auth_session_verifier=one-time')
+    getSession.mockRejectedValueOnce(new AuthApiError(`HTTP ${status}`, status, 'validation_failed'))
+    await expect(getAuthSession()).rejects.toMatchObject({
+      status, code: 'AUTH_ERROR', message: 'No fue posible consultar la sesión. Vuelve a intentarlo.',
+    })
+    expect(window.location.search).toContain('neon_auth_session_verifier')
+    expect(getSession).toHaveBeenCalledOnce()
+  })
+
+  it('conserva los errores ajenos a Auth sin alterar su identidad', async () => {
+    const failure = new TypeError('Failed to fetch')
+    getSession.mockRejectedValueOnce(failure)
+    await expect(getAuthSession()).rejects.toBe(failure)
+  })
+
   it.each([5, 10, 20])('renueva un JWT vencido tras %i minutos sin polling', async minutes => {
     const start = Date.now()
     const stale = token(start / 1000 + 60)

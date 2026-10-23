@@ -38,7 +38,7 @@ describe('solicitudes después de inactividad', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
-  it.each([401, 403, 422])('no entra en bucle con un error permanente %i', async status => {
+  it.each([400, 401, 403, 422])('no entra en bucle con un error permanente %i', async status => {
     fetchMock.mockImplementation(() => Promise.resolve(json({ error: 'Denegado' }, status)))
     const outcome = apiRequest('api/users').catch((error: unknown) => error)
     await vi.advanceTimersByTimeAsync(750)

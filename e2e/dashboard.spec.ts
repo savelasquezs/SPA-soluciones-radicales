@@ -79,6 +79,7 @@ async function setup(page:Page){
   })
   return requests
 }
+
 test('dashboard renders all charts, three record tables and filters without overflow',async ({page})=>{
   const requests=await setup(page)
   await page.goto('/')
@@ -122,6 +123,7 @@ test('three delayed services open the exact filtered list without a one-year cut
   expect(requests.some(x=>x.startsWith('/api/admin/services?')&&x.includes('metric=delayed')&&
     x.includes('clientId='+clientId)&&x.includes('siteId='+siteId))).toBeTruthy()
 })
+
 test('a custom range longer than a year reaches the completion-date drilldown',async({page})=>{
   const requests=await setup(page)
   await page.goto('/?period=custom&from=2024-01-01&to=2026-10-19')
@@ -131,6 +133,7 @@ test('a custom range longer than a year reaches the completion-date drilldown',a
   await expect(page).toHaveURL(/metric=performed/)
   await expect.poll(()=>requests.some(x=>x.startsWith('/api/admin/services?')&&x.includes('metric=performed')&&x.includes('from=2024-01-01'))).toBeTruthy()
 })
+
 test('pending findings and expiring certificates show their underlying records',async({page})=>{
   await setup(page)
   await page.goto('/')
@@ -143,3 +146,50 @@ test('pending findings and expiring certificates show their underlying records',
   await expect(page.getByRole('heading',{name:'Certificados próximos a vencer'})).toBeVisible()
   await expect(page.getByText('Técnica Ana')).toBeVisible()
 })
+
+for (const width of [1280, 390]) {
+  for (const stage of ['session', 'dashboard'] as const) {
+    test(`recovers ${stage} from an Auth 400 without reloading at ${width}px`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width, height: 860 })
+      const now = new Date('2026-10-23T15:00:00Z')
+      await page.clock.install({ time: now })
+      const requests = await setup(page)
+      let failNext = stage === 'session', failures = 0, documents = 0
+      const authQueries: string[] = []
+      page.on('request', request => {
+        if (request.isNavigationRequest() && request.frame() === page.mainFrame()) documents++
+      })
+      await page.route(/\/get-session(?:\?.*)?$/, async route => {
+        authQueries.push(new URL(route.request().url()).search)
+        if (failNext) {
+          failNext = false
+          failures++
+          await route.fulfill({ status: 400, json: {} })
+          return
+        }
+        const lifetime = stage === 'dashboard' && failures ? 3600 : 900
+        const token = `header.${Buffer.from(JSON.stringify({ exp: now.getTime() / 1000 + lifetime })).toString('base64url')}.signature`
+        await route.fulfill({ json: {
+          session: { id: 'session-1', userId: 'auth-1', token, expiresAt: '2099-01-01T00:00:00Z', createdAt: date, updatedAt: date },
+          user: { id: 'auth-1', name: 'Admin de prueba', email: 'admin@example.test', emailVerified: true, createdAt: date, updatedAt: date },
+        } })
+      })
+      await page.goto('/')
+      await expect(page.getByText('Cerrar punto de ingreso')).toBeVisible()
+      if (stage === 'dashboard') {
+        failNext = true
+        await page.clock.fastForward(16 * 60_000)
+        await page.getByRole('button', { name: 'Actualizar resumen' }).click()
+        await expect.poll(() => requests.filter(path => path.startsWith('/api/admin/dashboard?')).length).toBe(2)
+      }
+      await expect(page.getByRole('button', { name: 'Actualizar resumen' })).toBeEnabled()
+      await expect(page.locator('.dashboard-error')).toHaveCount(0)
+      await expect(page.getByText('Cerrar punto de ingreso')).toBeVisible()
+      expect(failures).toBe(1)
+      expect(authQueries.some(query => query.includes('disableCookieCache=true'))).toBe(true)
+      expect(documents).toBe(1)
+      await expect(page).toHaveURL(/\/$/)
+      await page.screenshot({ path: testInfo.outputPath(`auth-${stage}-${width}.png`), fullPage: true })
+    })
+  }
+}

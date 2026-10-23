@@ -1,4 +1,4 @@
-import { createAuthClient } from '@neondatabase/auth'
+import { createAuthClient, isAuthError } from '@neondatabase/auth'
 import { ApiClientError, withRequestDeadline } from './requestControl'
 import { clearRememberedRole, readRememberedRole } from './sessionRole'
 
@@ -14,7 +14,10 @@ export async function getAuthSession(options: SessionOptions = {}) {
     // The Neon SDK has an in-memory cache in addition to Better Auth cookies.
     // This SDK-only header is stripped before the actual HTTP request.
     fetchOptions: { signal, ...(options.forceRefresh ? { headers: { 'X-Force-Fetch': 'true' } } : {}) },
-  }), 12_000, options.signal)
+  }), 12_000, options.signal).catch((error: unknown) => {
+    if (isAuthError(error)) return { data: null, error }
+    throw error
+  })
   if (error) throw new ApiClientError('No fue posible consultar la sesión. Vuelve a intentarlo.', error.status ?? 0, 'AUTH_ERROR')
   if (data?.session.token) {
     const url = new URL(window.location.href)
