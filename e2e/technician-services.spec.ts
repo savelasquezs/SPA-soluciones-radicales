@@ -93,9 +93,9 @@ const servicePackage = (state: TechnicianServiceSummary['estado'] = 'PROGRAMADO'
   signatures: { technicianStoragePath: null, technicianUserId: null, clientStoragePath: null, clientName: null, clientSignedAt: null },
 })
 
-async function setup(page: Page, withPriorFinding = false, failFirstPackage: boolean | number = false, initialState: TechnicianServiceSummary['estado'] = 'PROGRAMADO', kind: 'PRINCIPAL' | 'REFUERZO' = 'PRINCIPAL', vehicleMode = false) {
-  const asVisit = (value: TechnicianServicePackage): TechnicianServicePackage => kind === 'REFUERZO'
-    ? { ...value, service: { ...value.service, tipoServicio: 'REFUERZO' }, areas: [], deviceTypes: [] }
+async function setup(page: Page, withPriorFinding = false, failFirstPackage: boolean | number = false, initialState: TechnicianServiceSummary['estado'] = 'PROGRAMADO', kind: 'PRINCIPAL' | 'REFUERZO' = 'PRINCIPAL', vehicleMode = false, residential = false) {
+  const asVisit = (value: TechnicianServicePackage): TechnicianServicePackage => kind === 'REFUERZO' || residential
+    ? { ...value, service: { ...value.service, tipoServicio: kind, tipoSede: residential ? 'RESIDENCIAL' : 'NEGOCIO' }, areas: [], deviceTypes: [] }
     : vehicleMode ? { ...value, vehiclesEnabled: true, vehicles: fleet, attendedVehicleIds: null } : value
   let current = asVisit(servicePackage(initialState, withPriorFinding))
   let packageReads = 0
@@ -233,6 +233,30 @@ test('technician can open and start a reinforcement without a full MIP route or 
   await expect(page.getByRole('button', { name: 'Enviar informe' })).toHaveCount(0)
   expect(api.starts).toHaveLength(1)
 })
+
+for (const residential of [true, false]) {
+  test(`el cierre ${residential ? 'residencial' : 'de refuerzo'} muestra solo las acciones disponibles`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    const api = await setup(page, false, false, 'FINALIZADO', residential ? 'PRINCIPAL' : 'REFUERZO', false, residential)
+    await page.goto('/servicios/' + ids.service + '/trabajo/revision')
+    const completion = page.getByRole('region', { name: 'Trabajo completado' })
+    await expect(completion).toBeVisible()
+    await expect(completion.getByText('Firmas confirmadas', { exact: true })).toBeVisible()
+    await expect(completion).not.toContainText(/certificados|documentos/i)
+    await expect(page.getByRole('button', { name: 'Enviar informe' })).toHaveCount(0)
+    await expect(page.getByRole('heading', { name: 'Informe y certificados' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Reportar cobro' })).toHaveCount(residential ? 1 : 0)
+    await expect(completion).toContainText(residential
+      ? 'Ahora puedes reportar el cobro.' : 'El cierre y las firmas están confirmados.')
+    await expect(page.getByRole('button', { name: 'Volver al servicio' })).toBeVisible()
+    expect(api.reportSends).toHaveLength(0)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+    await page.screenshot({ path: `test-results/closure-${residential ? 'residential' : 'reinforcement'}-mobile.png`, fullPage: true })
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await expect(completion).toBeVisible()
+    await page.screenshot({ path: `test-results/closure-${residential ? 'residential' : 'reinforcement'}-desktop.png`, fullPage: true })
+  })
+}
 
 test('technician prepares and starts the service from a mobile-first read-only surface', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
@@ -599,6 +623,8 @@ test('técnico guarda correo offline y lo envía una sola vez al reconectar', as
   const api = await setup(page,false,false,'FINALIZADO')
   await page.goto('/servicios/' + ids.service + '/trabajo/revision')
   await expect(page.getByRole('heading',{name:'Trabajo completado'})).toBeVisible()
+  await expect(page.getByText('Certificados automáticos', { exact: true })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Trabajo completado' })).toContainText('Ahora puedes enviar los documentos y reportar el cobro.')
   await page.screenshot({path:'test-results/service-completed-mobile.png',fullPage:true})
   await expect(page.getByRole('button', { name:'Enviar informe' })).toBeVisible()
   await page.evaluate(() => {

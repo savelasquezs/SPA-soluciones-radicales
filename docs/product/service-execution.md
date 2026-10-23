@@ -72,6 +72,8 @@ Los Servicios de Refuerzo y los Servicios residenciales conservan sus reglas sim
 
 La ejecución móvil admite Servicios `PRINCIPAL` tanto de Negocio como de Casa. Las visitas residenciales usan el mismo control de acceso por Técnico, la ventana de inicio de una hora, el bloqueo de dispositivo, los Productos y ambas firmas, pero no congelan Áreas ni exigen criterios, puestos de monitoreo o hallazgos. Se abre directamente **Revisión y cierre** y no se ofrece informe MIP completo. Los Refuerzos utilizan el mismo flujo simplificado que un Servicio residencial: preparación, inicio autoritativo, Productos previstos y cierre con ambas firmas, sin recorrido MIP por Áreas ni informe MIP completo. Solo se habilitan a los técnicos responsables o colaboradores asignados.
 
+El resumen de cierre residencial confirma el cierre y las firmas y permite reportar el cobro, sin anunciar certificados automáticos ni envío de documentos. En los Refuerzos confirma únicamente el cierre y las firmas. Los mensajes y distintivos de documentos solo aparecen cuando el envío está disponible para ese Servicio.
+
 ## Preparación e inicio
 
 El Servicio sigue visible antes de la visita, pero la ejecución solo puede iniciarse desde una hora antes de `inicio_programado`. La SPA presenta `Disponible desde [hora]`; el servidor calcula la ventana con su reloj y rechaza cualquier inicio anticipado.

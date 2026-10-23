@@ -57,8 +57,10 @@ const vehicleChangesPending = computed(() => services.currentMutations.some(item
 const canFinalize = computed(() => !pending.value.length && !obsoleteVehiclePackage.value && vehiclesDone.value
   && !services.currentMutations.some(item => item.status === 'CONFLICT')
   && technicianSigned.value && clientSigned.value && Boolean(clientName.value.trim()))
-const canOfferReport = computed(() => finalized.value
-  || (finalization.value && finalization.value.status !== 'CONFLICT'))
+const canOfferReport = computed(() => !simplified.value && (finalized.value
+  || (finalization.value && finalization.value.status !== 'CONFLICT')))
+const canReportPayment = computed(() => packageValue.value?.service.tipoServicio === 'PRINCIPAL'
+  && ['EN_PROCESO', 'FINALIZADO'].includes(packageValue.value.service.estado))
 const pendingEmailItems = computed(() => emails.forService(serviceId.value))
 const operationLabels: Record<TechnicianMutation['kind'], string> = {
   AREA_CREATE: 'Nueva Área de Sede',
@@ -209,9 +211,9 @@ async function finish(): Promise<void> {
       <section v-else-if="finalized" class="completion-summary" aria-labelledby="completion-title">
         <CircleCheckBig :size="36" aria-hidden="true" />
         <div><h2 id="completion-title">Trabajo completado</h2>
-          <p>El cierre y las firmas están confirmados. Ahora puedes enviar los documentos y reportar el cobro.</p>
+          <p>El cierre y las firmas están confirmados.<template v-if="canOfferReport"> Ahora puedes enviar los documentos y reportar el cobro.</template><template v-else-if="canReportPayment"> Ahora puedes reportar el cobro.</template></p>
           <span><ShieldCheck :size="14" aria-hidden="true" /> Firmas confirmadas</span>
-          <span><FileCheck2 :size="14" aria-hidden="true" /> Certificados automáticos</span>
+          <span v-if="canOfferReport"><FileCheck2 :size="14" aria-hidden="true" /> Certificados automáticos</span>
         </div>
       </section>
       <StatusPanel v-else-if="pending.length && !vehiclesDone" compact title="Áreas y vehículos pendientes"
@@ -258,7 +260,7 @@ async function finish(): Promise<void> {
         </BaseButton>
         <BaseButton :loading="saving" :disabled="!canFinalize || needsVersionResolution || (Boolean(finalization) && (!online || services.syncing))" @click="finish">{{ finalization?.status === 'CONFLICT' ? 'Reintentar cierre' : finalization ? (online ? 'Reintentar sincronización' : 'Cierre pendiente') : 'Finalizar servicio' }}</BaseButton>
       </section>
-      <section v-if="canOfferReport && !simplified" class="review-email" aria-labelledby="review-email-title">
+      <section v-if="canOfferReport" class="review-email" aria-labelledby="review-email-title">
         <div class="review-email__heading"><Mail :size="23" aria-hidden="true" /><div><h2 id="review-email-title">Informe y certificados</h2>
           <p>Los certificados se generan automáticamente. Selecciona los destinatarios para enviarlos junto con el informe.</p></div>
         </div>
@@ -273,7 +275,7 @@ async function finish(): Promise<void> {
           <Mail :size="16" aria-hidden="true" /> Enviar informe
         </BaseButton>
       </section>
-      <BaseButton v-if="packageValue.service.tipoServicio==='PRINCIPAL' && ['EN_PROCESO','FINALIZADO'].includes(packageValue.service.estado)" variant="secondary" size="compact" class="review-payment" :disabled="!online" @click="paymentOpen=true"><Banknote :size="20" aria-hidden="true" />Reportar cobro</BaseButton>
+      <BaseButton v-if="canReportPayment" variant="secondary" size="compact" class="review-payment" :disabled="!online" @click="paymentOpen=true"><Banknote :size="20" aria-hidden="true" />Reportar cobro</BaseButton>
       <BaseButton variant="secondary" @click="router.push({ name: 'technician-service-work', params: { id: serviceId } })"><ArrowLeft :size="17" aria-hidden="true" />Volver al servicio</BaseButton>
     </template>
   </ServicePage>
