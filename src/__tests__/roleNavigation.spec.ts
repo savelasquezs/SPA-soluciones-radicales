@@ -18,6 +18,8 @@ const routes: RouteRecordRaw[] = [
   { path: '/', name: 'dashboard', component: view },
   { path: '/clientes', name: 'clients', component: view, meta: { roles: ['ADMINISTRADOR'] } },
   { path: '/servicios', name: 'services', component: view },
+  { path: '/seleccionar-rol', name: 'role-selection', component: view },
+  { path: '/acceso', name: 'login', component: view, meta: { public: true } },
 ]
 
 describe('navegación por rol', () => {
@@ -49,5 +51,31 @@ describe('navegación por rol', () => {
     router.beforeEach(authGuard)
     await router.push('/servicios')
     expect(router.currentRoute.value.name).toBe('services')
+  })
+
+  it.each(['TECNICO', 'ADMINISTRADOR'])('retira el verificador OAuth al confirmar la sesión %s y conserva filtros y hash', async role => {
+    session.activeRole = role
+    const router = createRouter({ history: createMemoryHistory(), routes })
+    router.beforeEach(authGuard)
+    await router.push('/servicios?neon_auth_session_verifier=used&period=7d&tag=a&tag=b#pendientes')
+    expect(router.currentRoute.value.fullPath).toBe('/servicios?period=7d&tag=a&tag=b#pendientes')
+  })
+
+  it('no lleva el verificador consumido a la selección de rol ni a su regreso', async () => {
+    session.profile.requiereSeleccionRol = true
+    const router = createRouter({ history: createMemoryHistory(), routes })
+    router.beforeEach(authGuard)
+    await router.push('/servicios?neon_auth_session_verifier=used&period=7d')
+    expect(router.currentRoute.value.name).toBe('role-selection')
+    expect(router.currentRoute.value.query.redirect).toBe('/servicios?period=7d')
+  })
+
+  it('no descarta el verificador antes de confirmar una sesión válida', async () => {
+    session.status = 'unauthenticated'
+    const router = createRouter({ history: createMemoryHistory(), routes })
+    router.beforeEach(authGuard)
+    await router.push('/?neon_auth_session_verifier=pending&period=7d')
+    expect(router.currentRoute.value.name).toBe('login')
+    expect(router.currentRoute.value.query.redirect).toBe('/?neon_auth_session_verifier=pending&period=7d')
   })
 })

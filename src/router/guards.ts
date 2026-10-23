@@ -37,6 +37,11 @@ export const authGuard: NavigationGuard = async (to) => {
   if (auth.status === 'error') return namedUnlessCurrent(to, 'session-error')
   if (auth.status === 'unauthenticated') return to.meta.public ? true : { name: 'login', query: { redirect: to.fullPath } }
   if (auth.status !== 'authenticated') return true
+  if (Object.prototype.hasOwnProperty.call(to.query, 'neon_auth_session_verifier')) {
+    const query = { ...to.query }
+    delete query.neon_auth_session_verifier
+    return { path: to.path, query, hash: to.hash, replace: true }
+  }
   if (auth.profile?.requiereSeleccionRol && to.name !== 'role-selection') {
     return { name: 'role-selection', query: { redirect: to.fullPath } }
   }

@@ -17,8 +17,10 @@ const sample: TechnicianDashboardSnapshot = {
       scheduledAt:date,completedAt:date,status:'FINALIZADO',role:'COLABORADOR'}]},
 }
 
-async function setup(page:Page, empty = false) {
+async function setup(page:Page, empty = false, dualRole = false) {
   const requests:string[]=[],adminRequests:string[]=[]
+  const profile = { id:uid(3),nombreCompleto:'Ana Técnica',correoGoogle:'ana@example.test',
+    esAdmin:dualRole,esTecnico:true,rolActivo:dualRole?null:'TECNICO',requiereSeleccionRol:dualRole }
   await page.route('**/get-session',route=>route.fulfill({json:{
     session:{id:'session-tech',userId:'auth-tech',token:'test-token',expiresAt:'2099-01-01T00:00:00.000Z',createdAt:date,updatedAt:date},
     user:{id:'auth-tech',name:'Ana Técnica',email:'ana@example.test',emailVerified:true,createdAt:date,updatedAt:date}
@@ -27,8 +29,11 @@ async function setup(page:Page, empty = false) {
     const url=new URL(route.request().url())
     if(route.request().method()==='OPTIONS'){await route.fulfill({status:204});return}
     if(url.pathname==='/api/session'){
-      await route.fulfill({json:{id:uid(3),nombreCompleto:'Ana Técnica',correoGoogle:'ana@example.test',
-        esAdmin:false,esTecnico:true,rolActivo:'TECNICO',requiereSeleccionRol:false}});return
+      await route.fulfill({json:profile});return
+    }
+    if(url.pathname==='/api/session/role' && route.request().method()==='POST'){
+      profile.rolActivo='TECNICO';profile.requiereSeleccionRol=false
+      await route.fulfill({json:profile});return
     }
     if(url.pathname==='/api/technician/dashboard'){
       requests.push(url.search)
@@ -76,3 +81,45 @@ test('custom dates use technician endpoint and missing statistics remain empty',
   await expect(page.getByText('Sin evaluación')).toBeVisible()
   await expect(page.getByText('Sin inicios registrados')).toBeVisible()
 })
+
+for (const dualRole of [false, true]) {
+test(`OAuth verifier is consumed once for technician with role selection ${dualRole}`, async ({ page }, testInfo) => {
+  await page.clock.install({ time: new Date('2026-10-23T15:00:00Z') })
+  await page.setViewportSize({ width: 390, height: 860 })
+  const { requests } = await setup(page, false, dualRole)
+  let usedVerifier = false
+  const repeatedVerifiers: string[] = []
+  let documents = 0
+  page.on('request', request => {
+    if (request.isNavigationRequest() && request.frame() === page.mainFrame()) documents++
+  })
+  await page.route(/\/get-session(?:\?.*)?$/, async route => {
+    const verifier = new URL(route.request().url()).searchParams.get('neon_auth_session_verifier')
+    if (verifier && usedVerifier) {
+      repeatedVerifiers.push(verifier)
+      await route.fulfill({ status: 400, json: {} })
+      return
+    }
+    if (verifier) usedVerifier = true
+    await route.fulfill({ json: {
+      session: { id: 'session-tech', userId: 'auth-tech', token: 'test-token', expiresAt: '2099-01-01T00:00:00Z', createdAt: date, updatedAt: date },
+      user: { id: 'auth-tech', name: 'Ana Técnica', email: 'ana@example.test', emailVerified: true, createdAt: date, updatedAt: date },
+    } })
+  })
+  await page.goto('/?neon_auth_session_verifier=consumed-once&period=7d')
+  if (dualRole) await page.getByRole('button', { name: 'Técnico', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Actividad técnica' })).toBeVisible()
+  await expect(page.locator('.dashboard-error')).toHaveCount(0)
+  expect(usedVerifier).toBe(true)
+  expect(repeatedVerifiers).toEqual([])
+  expect(requests.some(query => query.includes('period=7d'))).toBe(true)
+  await expect(page).toHaveURL('/?period=7d')
+  await page.clock.fastForward(16 * 60_000)
+  await page.getByRole('button', { name: 'Actualizar resumen' }).click()
+  await expect.poll(() => requests.length).toBe(2)
+  await expect(page.locator('.dashboard-error')).toHaveCount(0)
+  expect(repeatedVerifiers).toEqual([])
+  expect(documents).toBe(1)
+  await page.screenshot({ path: testInfo.outputPath('technician-oauth-recovered.png'), fullPage: true })
+})
+}
