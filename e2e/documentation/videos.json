@@ -52,5 +52,14 @@
     "output": "clientes-gestion-sedes-v1.mp4",
     "artifact": "documentation-video-clientes-gestion-sedes-v1",
     "metadataTitle": "Gestión de sedes · Manual de usuario"
+  },
+  "clientes-areas-v1": {
+    "id": "clientes-areas-v1",
+    "narration": "e2e/documentation/areas.narration.json",
+    "spec": "e2e/documentation/areas.docs.spec.ts",
+    "storyboard": "e2e/documentation/areas.storyboard.md",
+    "output": "clientes-gestion-areas-v1.mp4",
+    "artifact": "documentation-video-clientes-areas-v1",
+    "metadataTitle": "Gestión y reutilización de Áreas · Manual de usuario"
   }
 }
