@@ -457,3 +457,12 @@ export async function retryCalendar(client: PoolClient, actorId: string, id: str
   await audit(client,actorId,'SERVICIO_CALENDAR_REINTENTO_SOLICITADO',id,{ estado:record.estado })
   return mutation(client,[id])
 }
+
+export async function queueServiceCertificates(client: PoolClient, actorId: string, serviceId: string): Promise<void> {
+  await client.query(`insert into private.integration_jobs(job_type,idempotency_key,payload)
+    select 'DOCUMENT','service-certificates:'||s.id::text,
+      jsonb_build_object('scope','ADMIN_SERVICES','actorId',$1::text,'serviceId',s.id::text)
+    from public.servicios s join public.sedes se on se.id=s.sede_id
+    where s.id=$2 and s.estado='FINALIZADO' and s.tipo_servicio='PRINCIPAL' and se.tipo_sede='NEGOCIO'
+    on conflict(job_type,idempotency_key) do nothing`, [actorId,serviceId])
+}

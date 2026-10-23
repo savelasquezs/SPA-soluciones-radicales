@@ -5,12 +5,13 @@ import { bodyLimit } from 'hono/body-limit'
 import { ApiError, requireAdmin, type Identity } from '../auth'
 import { pool, transaction } from '../db'
 import { sendGmailMessage } from '../google'
-import { createCertificateReadUrl, readMasterObject, putCertificateObject, readCertificateObject } from '../r2'
-import type { CertificateDocument, CertificateGenerationResult, CertificateServiceOption, SendCertificatesInput } from '../../../src/types/certificates'
+import { createCertificateReadUrl, readMasterObject, readCertificateObject } from '../r2'
+import type { CertificateServiceOption, SendCertificatesInput } from '../../../src/types/certificates'
 import { MAX_TEMPLATE_BYTES, sampleCertificateData, validateTemplate } from './docx'
 import { generateCertificatePdf } from './generator'
+import { generateServiceCertificates } from './service'
 import { claimCertificateJob, completeCertificateJob, failCertificateJob, lockCertificateJob, markEmailDispatching } from './jobs'
-import { certificateSnapshot, effectiveTemplate, loadCertificateContext, loadSettings, targetKey, templateKey } from './repository'
+import { loadCertificateContext, loadSettings, templateKey } from './repository'
 import { assertTemplatePath, bodyObject, certificateType, generationInput, sendInput, uuid } from './validation'
 
 export const certificateRoutes = new Hono<{ Variables: { identity: Identity; certificateAdminId: string } }>()
@@ -87,77 +88,8 @@ certificateRoutes.get('/services/:id/context', async (context) => {
 certificateRoutes.post('/generate', async (context) => {
   const input = generationInput(await bodyObject(context.req.raw))
   const actorId = context.get('certificateAdminId')
-  const job = await claimCertificateJob('DOCUMENT', input.requestId, input, actorId)
-  if (job.completed) return context.json(job.result as CertificateGenerationResult)
-  const uploaded: string[] = []
-  try {
-    const loaded = await transaction((client) => loadCertificateContext(client, input.serviceId))
-    const path = effectiveTemplate(loaded, input.type)
-    assertTemplatePath(path, input.type)
-    const targets = input.type === 'VEHICULO' ? input.vehicleIds : [null]
-    const snapshots = targets.map((vehicleId) => certificateSnapshot(loaded, input.type, vehicleId))
-    for (const snapshot of snapshots) {
-      const expected = input.previousPaths[targetKey(input.type, snapshot.vehicleId)]
-      if ((snapshot.previous?.storagePath ?? null) !== expected) throw new ApiError(409, 'Un certificado cambió. Actualiza el servicio antes de regenerar.', 'VERSION_CONFLICT')
-      if (snapshot.previous && snapshot.previous.pdfAvailable !== false && !input.confirmReplace) throw new ApiError(409, 'Confirma el reemplazo de los certificados existentes', 'REPLACEMENT_CONFIRMATION_REQUIRED')
-    }
-    await pool.query("update private.integration_jobs set payload = payload || jsonb_build_object('templatePath', $3::text) where id = $1 and payload->>'token' = $2", [job.id, job.token, path])
-    const template = await readMasterObject(path, MAX_TEMPLATE_BYTES)
-    const documents: CertificateDocument[] = []
-    for (const snapshot of snapshots) {
-      const pdf = await generateCertificatePdf({ template, type: input.type, data: snapshot.data })
-      const storagePath = `certificates/${input.serviceId}/${job.id}/${randomUUID()}.pdf`
-      // Record before PUT too: a timeout can follow a successful R2 write.
-      uploaded.push(storagePath)
-      await putCertificateObject(storagePath, pdf)
-      const { data: _data, previous: _previous, ...metadata } = snapshot
-      documents.push({ ...metadata, storagePath, pdfAvailable: true })
-    }
-    const result = { documents }
-    await transaction(async (client) => {
-      await requireAdmin(client, context.get('identity'))
-      await lockCertificateJob(client, job)
-      const service = await client.query<{ version: string }>('select version::text from public.servicios where id = $1 for update', [input.serviceId])
-      if (service.rows[0]?.version !== loaded.source.version) throw new ApiError(409, 'El servicio cambió durante la generación. Actualiza e inténtalo de nuevo.', 'VERSION_CONFLICT')
-      for (let i = 0; i < snapshots.length; i++) {
-        const snapshot = snapshots[i]!
-        const document = documents[i]!
-        if (snapshot.previous) {
-          const updated = await client.query(
-            `update public.certificados set plantilla_storage_path_usada = $2, pdf_storage_path = $3, pdf_generado_at=now(),
-             estado_generacion = 'GENERADO', error = null, enviado_at = null, destinatarios_json = null
-             where id = $1 and pdf_storage_path = $4`, [document.id, path, document.storagePath, snapshot.previous.storagePath],
-          )
-          if (!updated.rowCount) throw new ApiError(409, 'El certificado cambió en otra sesión. Actualiza el servicio.', 'VERSION_CONFLICT')
-        } else {
-          const months = input.type === 'ESTABLECIMIENTO' ? loaded.source.businessMonths : loaded.source.vehicleMonths
-          await client.query(
-            `insert into public.certificados (id, servicio_id, tipo_certificado, vehiculo_id, fecha_expedicion,
-             vigencia_meses, fecha_vencimiento, plantilla_storage_path_usada, pdf_storage_path, estado_generacion)
-             values ($1, $2, $3, $4, $5::date, $6, $7::date, $8, $9, 'GENERADO')`,
-            [document.id, input.serviceId, input.type, document.vehicleId, document.issuedOn, months, document.expiresOn, path, document.storagePath],
-          )
-        }
-        await client.query(
-          `insert into public.auditoria (usuario_id, accion, entidad, registro_id, detalle_json)
-           values ($1, 'CERTIFICADO_GENERADO', 'Certificados', $2, $3::jsonb)`,
-          [actorId, document.id, JSON.stringify({ jobId: job.id, templatePath: path, previous: snapshot.previous ?? null, current: document })],
-        )
-      }
-      await completeCertificateJob(client, job, result, { sourceVersion: loaded.source.version, templatePath: path, certificates: snapshots.map(({ previous: _previous, ...snapshot }) => snapshot) })
-    })
-    return context.json(result, 201)
-  } catch (error) {
-    // Never delete a possibly committed or historical PDF after a transport/commit error.
-    // The existing durable cleanup queue receives only this attempt's paths, not prior results.
-    if (uploaded.length) await pool.query(
-      `insert into private.integration_jobs (job_type, idempotency_key, payload, run_after)
-       values ('STORAGE_CLEANUP', $1, $2::jsonb, now() + interval '1 day') on conflict do nothing`,
-      [`certificate-orphans:${job.id}:${job.token}`, JSON.stringify({ scope: 'CERTIFICATE_ORPHANS', sourceJobId: job.id, paths: uploaded })],
-    ).catch(() => undefined)
-    await failCertificateJob(job, error).catch(() => undefined)
-    throw error
-  }
+  const result = await generateServiceCertificates(input, actorId, client => requireAdmin(client, context.get('identity')))
+  return context.json({ documents: result.documents }, result.replayed ? 200 : 201)
 })
 
 certificateRoutes.post('/documents/:id/read-url', async (context) => {

@@ -17,6 +17,7 @@ import { isServiceId } from '../../../src/helpers/adminServices'
 import { publicReportData, reportPaths, newReportToken, reportTokenHash, validReportToken } from './public'
 import type { ServiceReportShareOptions, SendServiceReportInput } from '../../../src/types/reportSharing'
 import { buildReportEmailContent } from './email'
+import { ensureReportCertificates } from './certificates'
 
 type Env = { Variables: { identity: Identity } }
 export const reportSharingRoutes = new Hono<Env>()
@@ -130,12 +131,16 @@ for (const [routes, mode] of [
 async function reportShareOptions(context: Context<Env>, mode: ShareMode) {
   const id = serviceId(context.req.param('id'))
   await transaction(client => authorizeSharing(client, context.get('identity'), id, mode))
-  const [options, sharing, google] = await Promise.all([
+  const [options, sharing, google, generation] = await Promise.all([
     transaction(client => loadSharingContext(client, id)),
     transaction(async client => (await client.query<{ activeLinks: number; lastSharedAt: string | null }>(
       "select count(*) filter (where sent_at is not null and revoked_at is null and expires_at>now())::int as \"activeLinks\", " +
       "max(sent_at)::text as \"lastSharedAt\" from private.service_report_links where servicio_id=$1", [id])).rows[0]!),
     getGoogleStatus(),
+    transaction(async client => (await client.query<{
+      status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED'; error: string | null
+    }>("select status,last_error as error from private.integration_jobs where job_type='DOCUMENT' and idempotency_key=$1",
+    ['service-certificates:'+id])).rows[0] ?? null),
   ])
   const response: ServiceReportShareOptions = {
     registeredEmails: options.registeredEmails,
@@ -144,6 +149,7 @@ async function reportShareOptions(context: Context<Env>, mode: ShareMode) {
     lastSharedAt: sharing.lastSharedAt,
     gmailConnected: google.connected,
     gmailNeedsReauthorization: google.needsReauthorization,
+    certificateGeneration: generation,
   }
   return context.json(response)
 }
@@ -178,21 +184,27 @@ async function sendReportWithRole(context: Context<Env>, mode: ShareMode) {
   let dispatching = false
   let shareId: string | null = null
   try {
+    const prepared = await ensureReportCertificates(id, actor.id, async client => {
+      await authorizeSharing(client, context.get('identity'), id, mode)
+      await lockCertificateJob(client, job)
+      await client.query("update private.integration_jobs set lease_until=now()+interval '15 minutes' where id=$1", [job.id])
+    })
     const selected = await transaction(async client => {
       const ready = await loadSharingContext(client, id)
-      const documents = input.certificateIds.map(certificateId => {
-        const found = ready.documents.find(d => d.id === certificateId)
-        if (!found) throw new ApiError(409, 'Un certificado fue reemplazado o no está disponible. Actualiza la selección.', 'CERTIFICATE_CHANGED')
+      const documents = prepared.map(certificate => {
+        const found = ready.documents.find(document => document.id === certificate.id && document.path === certificate.storagePath)
+        if (!found) throw new ApiError(409, 'Un certificado cambió durante la preparación. Reintenta el envío.', 'CERTIFICATE_CHANGED')
         return found
       })
       return { ready, documents }
     })
+    const certificateIds = selected.documents.map(document => document.id)
     const attachments: { name: string; bytes: Uint8Array }[] = []
     let size = 0
     for (const certificate of selected.documents) {
       const bytes = await readCertificateObject(certificate.path)
       size += bytes.length
-      if (size > 15 * 1024 * 1024) throw new ApiError(422, 'Los certificados superan 15 MB. Selecciona menos archivos.')
+      if (size > 15 * 1024 * 1024) throw new ApiError(422, 'Los certificados del servicio superan 15 MB. Solicita al administrador revisar su tamaño antes de enviar.')
       attachments.push({ name: selected.ready.solicitud + '-' + certificate.label + '.pdf', bytes })
     }
     const token = newReportToken()
@@ -239,11 +251,11 @@ async function sendReportWithRole(context: Context<Env>, mode: ShareMode) {
         await transaction(async client => {
           await authorizeSharing(client, context.get('identity'), id, mode)
           await loadSharingContext(client, id)
-          if (input.certificateIds.length) {
+          if (certificateIds.length) {
             const latest = await client.query<{ id: string; path: string }>(
               "select id,pdf_storage_path as path from public.certificados " +
               "where servicio_id=$1 and id=any($2::uuid[]) and estado_generacion in ('GENERADO','ENVIADO')",
-              [id,input.certificateIds])
+              [id,certificateIds])
             for (const item of selected.documents) {
               if (!latest.rows.some(row => row.id === item.id && row.path === item.path)) {
                 throw new ApiError(409, 'Un certificado cambió durante el envío. No se envió el correo.', 'CERTIFICATE_CHANGED')
@@ -254,7 +266,7 @@ async function sendReportWithRole(context: Context<Env>, mode: ShareMode) {
           await client.query("update private.service_report_links set sent_at=now(), " +
             "recipients_json=$2::jsonb,certificate_ids_json=$3::jsonb " +
             "where id=$1 and revoked_at is null",
-          [shareId,JSON.stringify(input.recipients),JSON.stringify(input.certificateIds)])
+          [shareId,JSON.stringify(input.recipients),JSON.stringify(certificateIds)])
         })
         await markEmailDispatching(job)
         dispatching = true
@@ -265,7 +277,10 @@ async function sendReportWithRole(context: Context<Env>, mode: ShareMode) {
       await lockCertificateJob(client, job)
       await client.query("insert into public.auditoria(usuario_id,accion,entidad,registro_id,detalle_json) " +
         "values ($1,'INFORME_ENVIADO','Servicios',$2,$3::jsonb)",
-      [actor.id,id,JSON.stringify({ jobId:job.id,messageId,recipients:input.recipients,certificateIds:input.certificateIds,expiresAt })])
+      [actor.id,id,JSON.stringify({ jobId:job.id,messageId,recipients:input.recipients,certificateIds,expiresAt })])
+      await client.query("update public.certificados c set estado_generacion='ENVIADO',enviado_at=now(),destinatarios_json=$3::jsonb " +
+        "from unnest($2::uuid[],$4::text[]) as sent(id,path) where c.servicio_id=$1 and c.id=sent.id and c.pdf_storage_path=sent.path",
+      [id,certificateIds,JSON.stringify(input.recipients),selected.documents.map(document => document.path)])
       await completeCertificateJob(client, job, result)
     })
     return context.json(result)

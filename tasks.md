@@ -90,7 +90,7 @@ Fuente: `docs/product/file-retention.md`; despliegue: `docs/development/cloudfla
 - [ ] Integrar posteriormente el QR en las plantillas PDF de certificado, la finalización del técnico y el contacto genérico de Clientes.
 - [ ] Ejecutar smoke real autorizado del envío y acceso público en Neon desarrollo.
 - [ ] Definir UX de fotografías vencidas en informe público conforme a retención de R2.
-- [ ] Conectar certificados automáticos al cierre únicamente en una entrega separada y aprobada.
+- [x] Generar automáticamente los certificados al cierre: establecimiento y vehículos atendidos habilitados, commit atómico del conjunto, cola durable y envío obligatorio junto con el informe.
 
 ## Certificados
 

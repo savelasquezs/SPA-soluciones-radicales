@@ -10,6 +10,7 @@ vi.mock('./queries', () => ({
 }))
 vi.mock('../services/commands', () => ({
   audit: vi.fn<() => Promise<void>>(async () => undefined),
+  queueServiceCertificates: vi.fn<() => Promise<void>>(async () => undefined),
   assertVersion: vi.fn<() => void>(),
 }))
 

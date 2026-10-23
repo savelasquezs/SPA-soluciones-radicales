@@ -1,9 +1,19 @@
 import { randomUUID } from 'node:crypto'
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PoolClient } from 'pg'
 
 vi.mock('@neon/functions', () => ({ attachDatabasePool: vi.fn<() => void>(), waitUntil: vi.fn<() => void>() }))
 
+const certificateIO = vi.hoisted(() => ({
+  pdf: vi.fn<typeof import('../../functions/api/certificates/generator').generateCertificatePdf>(),
+  read: vi.fn<typeof import('../../functions/api/r2').readMasterObject>(),
+  write: vi.fn<typeof import('../../functions/api/r2').putCertificateObject>(),
+}))
+vi.mock('../../functions/api/certificates/generator', () => ({generateCertificatePdf:certificateIO.pdf}))
+vi.mock('../../functions/api/r2', async original => ({...await original<typeof import('../../functions/api/r2')>(),
+  readMasterObject:certificateIO.read,putCertificateObject:certificateIO.write}))
+
+import { ensureReportCertificates } from '../../functions/api/service-results/certificates'
 import { pool, transaction } from '../../functions/api/db'
 import { claimTechnicianService, createTechnicianVehicle, saveTechnicianVehicles, createTechnicianSiteArea, createTechnicianDevice, createTechnicianFinding, finalizeTechnicianService, releaseTechnicianServiceLock, saveTechnicianAreaAccess, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, saveTechnicianFindingStatus, startTechnicianService, technicianCommand } from '../../functions/api/technician-services/commands'
 import type { DeviceState } from '../../src/types/technicianServices'
@@ -116,6 +126,7 @@ describe('technician vehicle execution · real PostgreSQL', () => {
     expect(await transaction(client => saveTechnicianVehicles(client, value.technician,
       value.service, phoneId, session.lock.token, [vehicleId]))).toEqual({ attendedVehicleIds: [vehicleId] })
     expect((await finish()).package.service.estado).toBe('FINALIZADO')
+    expect((await pool.query("select status from private.integration_jobs where job_type='DOCUMENT' and idempotency_key=$1", ['service-certificates:'+value.service])).rows[0]?.status).toBe('PENDING')
     expect((await pool.query('select vehiculos_atendidos_ids_json from public.servicios where id=$1',
       [value.service])).rows[0]?.vehiculos_atendidos_ids_json).toEqual([vehicleId])
   })
@@ -541,5 +552,55 @@ describe('technician service execution · real PostgreSQL', () => {
     expect(await asTechnician(value.unrelated, async client => (await client.query('select id from public.revisiones_dispositivos where servicio_id=$1', [value.service])).rows)).toEqual([])
     expect(await asTechnician(value.unrelated, async client => (await client.query('select id from public.servicio_tipos_dispositivo where servicio_id=$1', [value.service])).rows)).toEqual([])
     await expect(asTechnician(value.technician, client => client.query('update public.servicio_areas set posicion_recorrido=0 where servicio_id=$1', [value.service]))).rejects.toMatchObject({ code: '42501' })
+  })
+})
+
+describe('atomic automatic certificates · real PostgreSQL, simulated PDF and R2', () => {
+  beforeEach(() => {
+    certificateIO.pdf.mockReset().mockResolvedValue(Buffer.from('%PDF-test'))
+    certificateIO.read.mockReset().mockResolvedValue(Buffer.from('word'))
+    certificateIO.write.mockReset().mockResolvedValue(undefined)
+  })
+  async function preparedVisit() {
+    const value = await fixture(), vehicles = [randomUUID(),randomUUID()]
+    const {rows:[service]} = await pool.query<{sede_id:string}>('select sede_id from public.servicios where id=$1',[value.service])
+    await pool.query(`update public.sedes set maneja_vehiculos=true,genera_certificado_vehiculo=true,
+      vigencia_cert_vehiculo_meses=12 where id=$1`,[service!.sede_id])
+    await pool.query(`insert into public.vehiculos(id,sede_id,placa) values($1,$3,'ABC123'),($2,$3,'XYZ789')`,[...vehicles,service!.sede_id])
+    await transaction(client => startTechnicianService(client,value.technician,value.service,1,randomUUID()))
+    await pool.query(`update public.servicios set estado='FINALIZADO',inicio_real=now()-interval '1 hour',fin_real=now(),
+      firma_tecnico_storage_path='services/test/technician.png',firma_tecnico_usuario_id=$3,
+      firma_cliente_storage_path='services/test/client.png',firma_cliente_nombre='Cliente',firma_cliente_at=now(),
+      vehiculos_atendidos_ids_json=$2::jsonb where id=$1`,[value.service,JSON.stringify(vehicles),value.technician])
+    for(const [type,prefix] of [['ESTABLECIMIENTO','clients/establishment-templates'],['VEHICULO','sites/vehicle-templates']]) {
+      await pool.query(`insert into public.configuracion(categoria,clave,nombre,valor)
+        values('SISTEMA',$1,'Plantilla de prueba',$2::jsonb) on conflict(categoria,clave) do update set valor=excluded.valor,activo=true`,
+      ['CERTIFICADO_PLANTILLA_'+type,JSON.stringify({storagePath:`${prefix}/${randomUUID()}-test.docx`})])
+    }
+    return {value,vehicles}
+  }
+  it('commits establishment and every attended vehicle together', async () => {
+    const {value}=await preparedVisit()
+    expect(await ensureReportCertificates(value.service,value.technician,async()=>undefined)).toHaveLength(3)
+    const saved=await pool.query('select tipo_certificado from public.certificados where servicio_id=$1',[value.service])
+    expect(saved.rows).toHaveLength(3)
+    expect(saved.rows.filter(row=>row.tipo_certificado==='VEHICULO')).toHaveLength(2)
+  })
+  it('rolls back earlier inserts when the final vehicle conflicts at commit', async () => {
+    const {value,vehicles}=await preparedVisit()
+    certificateIO.pdf.mockResolvedValueOnce(Buffer.from('%PDF-1')).mockResolvedValueOnce(Buffer.from('%PDF-2'))
+      .mockImplementationOnce(async()=>{
+        await pool.query(`insert into public.certificados(id,servicio_id,tipo_certificado,vehiculo_id,fecha_expedicion,
+          vigencia_meses,fecha_vencimiento,plantilla_storage_path_usada,pdf_storage_path,estado_generacion)
+          values($1,$2,'VEHICULO',$3,current_date,12,current_date+365,'sites/vehicle-templates/existing.docx','certificates/existing.pdf','GENERADO')`,
+        [randomUUID(),value.service,vehicles[1]])
+        return Buffer.from('%PDF-3')
+      })
+    await expect(ensureReportCertificates(value.service,value.technician,async()=>undefined)).rejects.toMatchObject({code:'23505'})
+    const saved=await pool.query('select vehiculo_id from public.certificados where servicio_id=$1',[value.service])
+    expect(saved.rows).toEqual([{vehiculo_id:vehicles[1]}])
+    const cleanup=await pool.query(`select payload from private.integration_jobs where job_type='STORAGE_CLEANUP'
+      and payload->>'scope'='CERTIFICATE_ORPHANS' and payload::text like $1`,['%'+value.service+'%'])
+    expect(cleanup.rows[0]?.payload.paths).toHaveLength(3)
   })
 })

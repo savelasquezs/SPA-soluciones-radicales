@@ -2,7 +2,7 @@ import type { PoolClient } from 'pg'
 import type { MipEvaluation, TechnicianAreaAccessResult, TechnicianAreaAccessState, TechnicianSiteAreaCreationInput, TechnicianSiteAreaCreationResult, TechnicianAreaOrderResult, TechnicianAreaOrderVersion, TechnicianCriterion, TechnicianCriterionEvaluationResult, TechnicianDevice, TechnicianDeviceCapture, TechnicianDeviceCreationInput, TechnicianDeviceCreationResult, TechnicianDeviceReview, TechnicianDeviceReviewInput, TechnicianDeviceReviewResult, TechnicianExecutionLock, TechnicianExecutionSession, TechnicianFinding, TechnicianFindingCreateInput, TechnicianFindingResult, TechnicianFindingStatusInput, TechnicianPestSnapshot, TechnicianServicePackage } from '../../../src/types/technicianServices'
 import { technicianDevicePhotoRequired } from '../../../src/helpers/technicianServices'
 import { ApiError } from '../auth'
-import { assertVersion, audit } from '../services/commands'
+import { assertVersion, audit, queueServiceCertificates } from '../services/commands'
 import { assignedServiceState, getTechnicianPackage } from './queries'
 
 function canonical(value: unknown): string {
@@ -870,6 +870,7 @@ export async function finalizeTechnicianService(
     firma_cliente_storage_path=$4,firma_cliente_nombre=$5,firma_cliente_at=now()
     where id=$1`, [serviceId, technicianStoragePath, userId, clientStoragePath, normalizedClientName])
   await client.query('delete from private.service_execution_locks where service_id=$1', [serviceId])
+  await queueServiceCertificates(client, userId, serviceId)
   await audit(client, userId, 'SERVICIO_FINALIZADO', serviceId, { deviceId, clientSigner: normalizedClientName })
   return { package: await getTechnicianPackage(client, userId, serviceId) }
 }

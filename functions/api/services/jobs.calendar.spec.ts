@@ -7,6 +7,8 @@ const state = vi.hoisted(() => ({
   query: vi.fn<(sql: string, values?: unknown[]) => Promise<{ rows: unknown[]; rowCount: number }>>(),
   calendar: vi.fn<(event: CalendarEventInput) => Promise<string>>(),
   snapshot: vi.fn<() => Promise<unknown>>(),
+  certificates: vi.fn<typeof import('../service-results/certificates').ensureReportCertificates>(),
+  assigned: vi.fn<typeof import('../technician-services/queries').assignedServiceState>(),
 }))
 vi.mock('@neon/functions', () => ({ waitUntil: vi.fn<(promise: Promise<unknown>) => void>() }))
 vi.mock('../db', () => ({
@@ -18,6 +20,9 @@ vi.mock('../google', () => ({
 }))
 vi.mock('./queries', () => ({ getCalendarSnapshot: state.snapshot }))
 vi.mock('./commands', () => ({ audit: vi.fn<() => Promise<void>>().mockResolvedValue(undefined) }))
+
+vi.mock('../service-results/certificates', () => ({ensureReportCertificates:state.certificates}))
+vi.mock('../technician-services/queries', () => ({assignedServiceState:state.assigned}))
 
 import { drainServiceJobs } from './jobs'
 
@@ -71,5 +76,24 @@ describe('Calendar scheduled delivery with a direct service link',()=>{
     expect(arg.description).toContain('Abrir servicio en Soluciones Radicales:')
     expect(arg.description).toContain(stable+'/servicios/'+id+'/trabajo')
     expect(arg.description).toContain('SR-0042')
+  })
+})
+
+describe('automatic certificate delivery job',()=>{
+  it('processes the durable document request without sending an email',async()=>{
+    state.query.mockImplementation(async sql=>({rows:sql.includes('select id,job_type,attempts,payload')
+      ? [{id,job_type:'DOCUMENT',attempts:0,payload:{scope:'ADMIN_SERVICES',actorId:actor,serviceId:id}}] : [],rowCount:1}))
+    state.certificates.mockResolvedValue([])
+    await drainServiceJobs(1)
+    expect(state.certificates).toHaveBeenCalledWith(id,actor,expect.any(Function))
+    expect(state.query.mock.calls.some(([sql])=>sql.includes("status='COMPLETED'")&&sql.includes('certificateIds'))).toBe(true)
+  })
+  it('keeps a failed generation retryable without changing the finished service',async()=>{
+    state.query.mockImplementation(async sql=>({rows:sql.includes('select id,job_type,attempts,payload')
+      ? [{id,job_type:'DOCUMENT',attempts:0,payload:{scope:'ADMIN_SERVICES',actorId:actor,serviceId:id}}] : [],rowCount:1}))
+    state.certificates.mockRejectedValue(new Error('conversion failed'))
+    await drainServiceJobs(1)
+    expect(state.query.mock.calls.some(([sql])=>sql.includes("status='FAILED'")&&sql.includes('run_after'))).toBe(true)
+    expect(state.query.mock.calls.some(([sql])=>sql.includes('update public.servicios'))).toBe(false)
   })
 })

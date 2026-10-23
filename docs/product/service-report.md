@@ -5,10 +5,10 @@
 El Administrador abre **Servicios → Historial → Informe** en un servicio Principal finalizado y firmado y selecciona **Enviar informe**.
 
 - Puede marcar cualquier combinación de los correos registrados en cliente y sede (incluido contacto principal), añadir otros correos con validación y enviar a un máximo de 20 destinatarios únicos.
-- Puede adjuntar opcionalmente certificados PDF **generados y todavía disponibles** (máximo 10 archivos, 15 MB). Los vencidos se regeneran por separado con el generador actual.
+- El envío incluye siempre los certificados correspondientes al servicio: establecimiento y vehículos atendidos habilitados. Se preparan automáticamente los PDF faltantes o eliminados por retención y se reutilizan los disponibles, hasta 15 MiB de adjuntos. No se envía el informe solo si falla algún certificado.
 - La aplicación envía un correo mediante Gmail empresarial con un enlace al informe y los certificados seleccionados. El envío es idempotente, auditable y usa loading/toast/errores. Los destinatarios adicionales no modifican el catálogo del cliente.
 - En el mismo diálogo se indica cuántos enlaces siguen vigentes y pueden revocarse con confirmación.
-- La edición del **asunto y mensaje** está dentro de una sección **desplegable cerrada inicialmente** para que el modal no crezca innecesariamente en móvil ni escritorio. Se pueden usar los textos predefinidos o editarlos antes de enviar. El editor `EmailComposerFields` es reutilizable para contactos del cliente y la futura finalización por técnicos; esa integración no se habilita en esta entrega.
+- La edición del **asunto y mensaje** está dentro de una sección **desplegable cerrada inicialmente** para que el modal no crezca innecesariamente en móvil ni escritorio. Se pueden usar los textos predefinidos o editarlos antes de enviar. El editor `EmailComposerFields` se reutiliza en el envío administrativo y técnico.
 - Aunque se edite el mensaje, el enlace de acceso, su vencimiento y el QR son bloques obligatorios añadidos por el servidor; se escapa el contenido del usuario. El QR se genera localmente con una biblioteca JavaScript pura, sin terceros ni nuevos archivos en R2.
 
 ## Informe público y seguridad
@@ -32,7 +32,7 @@ de **Vehículos atendidos**, con cantidad y placas de la visita; se obtiene del 
 la consulta pública y en el PDF impreso. No expone la flota completa ni IDs internos.
 Se diferencia claramente la confirmación de cero vehículos de un servicio histórico
 sin registro (`NULL`). Los certificados siguen emitiéndose únicamente para los vehículos
-atendidos, en lotes de hasta diez por operación y con sus reglas actuales.
+atendidos. La generación automática prepara establecimiento y todos los vehículos habilitados en un solo conjunto atómico; el límite de diez por lote permanece únicamente en la generación manual administrativa.
 
 ## Hallazgos acumulados y seguimiento
 
@@ -92,10 +92,11 @@ Implementación: ampliar `functions/api/service-results/data.ts` (consulta agrup
 El Técnico asignado abre **Trabajo de campo → Revisión y cierre**, completa las evaluaciones y las **dos firmas** y finaliza. A continuación aparece **Enviar informe**, tanto si el cierre ya se confirmó como si está guardado localmente por ausencia de red. El envío **no es obligatorio** ni bloquea el cierre.
 
 - Reutiliza el modal compacto con correos registrados en la sede y en el negocio, posibilidad de agregar destinatarios y personalización desplegable de asunto/mensaje. Las direcciones se preparan dentro del paquete offline. El backend valida que sea un Técnico activo **asignado al servicio**, de tipo Principal y realmente finalizado. El Administrador conserva su flujo y la revocación de enlaces; el Técnico no obtiene el permiso de revocación.
-- Con conexión y cierre confirmado, el mensaje puede enviarse inmediatamente. Sin internet, o mientras se sincroniza el cierre, la **intención de envío** (destinatarios, mensaje, certificados seleccionados y UUID de solicitud) se guarda de forma duradera en IndexedDB, aislada por usuario y servicio. El envío **solo** sale después de que la API confirma la finalización.
+- Con conexión y cierre confirmado, el mensaje puede enviarse inmediatamente. Sin internet, o mientras se sincroniza el cierre, la **intención de envío** (destinatarios, mensaje y UUID de solicitud) se guarda de forma duradera en IndexedDB, aislada por usuario y servicio. El envío **solo** sale después de que la API confirma la finalización.
 - En la aplicación abierta, el reintento se ejecuta al recuperar conexión, al reabrir una vista o al volver a ella. Si el navegador está cerrado, no se garantiza envío en segundo plano: el proceso se reanuda cuando la aplicación vuelva a abrirse con el usuario autenticado y conexión.
 - Los intentos usan **el mismo UUID** para evitar correos duplicados ante reintentos o cierres inesperados. Fallos transitorios conservan la cola con retraso progresivo; fallos de permisos/validación y entregas con resultado **incierto** se marcan **Necesita revisión** y no se reenvían automáticamente.
-- Los certificados PDF siguen siendo opcionales **solo si ya están generados y disponibles al seleccionar el correo con internet**. Cuando el técnico trabaja offline o el cierre no está confirmado todavía, puede guardar el envío del informe **sin certificado**; no se promete adjuntar certificados que todavía no existen.
+- Los certificados se generan automáticamente al confirmar el cierre. El envío siempre incluye el certificado de establecimiento y todos los vehículos atendidos con certificado habilitado. El backend prepara o recupera el conjunto completo antes de Gmail; nunca envía únicamente el informe si falla la generación. Un envío guardado offline espera al cierre y a los documentos. Se reutilizan los PDF disponibles y se regeneran los que vencieron por retención, sin ampliar la vigencia. El total de adjuntos se limita a 15 MiB; no se omiten vehículos para cumplir el límite.
+- Las direcciones añadidas aparecen en la lista superior, seleccionadas y con indicador visual. Añadir se destaca al escribir una dirección válida; Enter la incorpora y Enviar también incluye una dirección válida que todavía esté escrita. El estado finalizado presenta una cabecera de éxito e iconos, con acciones diferenciadas para documentos y cobro.
 - El correo mantiene el botón HTML **Abrir aquí**, QR local, evidencias y firmas originales del informe y vínculo de lectura de 90 días. El mensaje editable nunca permite omitir el enlace seguro.
 
 **No hay migraciones SQL nuevas**. Solo aumenta la versión de almacenamiento IndexedDB para incluir la nueva cola local de correos. Los correos nunca se envían automáticamente por el mero hecho de finalizar; el Técnico confirma expresamente su envío.
@@ -107,7 +108,7 @@ Reutilizar el editor de correo en la acción de contacto de Clientes y en la fin
 ## Verificación
 
 1. Pruebas unitarias: generación de token, SHA-256, anonimización de referencias, ausencia de filtraciones de rutas.
-2. E2E: entrada desde Historial, selección de correos registrados y extras, edición opcional del asunto y el mensaje en un desplegable compacto, adjuntos opcionales, envío simulado y enlace público sin sesión.
+2. E2E: entrada desde Historial, selección de correos registrados y extras, edición opcional del asunto y el mensaje en un desplegable compacto, certificados automáticos, envío simulado y enlace público sin sesión.
 3. Unitarias MIME HTML: multipart/alternative, imágenes CID embebidas y archivos PDF, escapes HTML, texto alternativo y PNG QR válido.
 3. Aplicar migración 20261009_002_service_report_shares.sql y desplegar nueva API únicamente en Neon desarrollo.
 4. Smoke controlado en desarrollo con cuenta de prueba, validación de datos reales, R2, revocación y Gmail. Nunca enviar correos reales a clientes durante pruebas sin revisar los destinatarios.
@@ -128,4 +129,4 @@ Se conserva el campo productos.ficha_tecnica_storage_path y la carga original de
 
 - Las imágenes de firma del cliente y del técnico se conservan durante un año desde la finalización del servicio. Los nombres y fechas permanecen registrados en PostgreSQL.
 - Cuando la imagen se ha eliminado y auditado, el informe muestra «Firma de [nombre] (vencida)» tanto en el área administrativa como en el enlace público. Sigue siendo imprimible.
-- Los certificados PDF opcionales se conservan un mes desde su generación o última regeneración. Se vuelven a generar mediante el motor existente y la plantilla vigente; no se genera un segundo documento por el simple hecho de enviar el informe.
+- Los certificados PDF se conservan un mes desde su generación o última regeneración. Se vuelven a generar mediante el motor existente y la plantilla vigente; enviar el informe reutiliza los PDF disponibles y prepara los que falten, sin duplicar certificados.

@@ -598,6 +598,8 @@ test('técnico guarda correo offline y lo envía una sola vez al reconectar', as
   await page.setViewportSize({ width:390, height:844 })
   const api = await setup(page,false,false,'FINALIZADO')
   await page.goto('/servicios/' + ids.service + '/trabajo/revision')
+  await expect(page.getByRole('heading',{name:'Trabajo completado'})).toBeVisible()
+  await page.screenshot({path:'test-results/service-completed-mobile.png',fullPage:true})
   await expect(page.getByRole('button', { name:'Enviar informe' })).toBeVisible()
   await page.evaluate(() => {
     Object.defineProperty(navigator,'onLine',{configurable:true,get:() => false})

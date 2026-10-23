@@ -11,6 +11,7 @@ export interface ServiceReportShareOptions {
   lastSharedAt: string | null
   gmailConnected: boolean
   gmailNeedsReauthorization?: boolean
+  certificateGeneration?: { status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED'; error: string | null } | null
 }
 export interface SendServiceReportInput {
   requestId: string
