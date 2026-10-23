@@ -3,7 +3,8 @@
 ## Piezas y reutilización
 
 - `src/types/certificates.ts`: contratos y catálogo sin dependencias de proveedores.
-- `functions/api/certificates/`: validación DOCX, conversión, repositorio, idempotencia, rutas y limpieza.
+- `functions/api/certificates/`: validación DOCX, conversión, repositorio, idempotencia, rutas y limpieza. `service.ts` concentra la generación manual y los conjuntos automáticos, con un solo commit después de preparar todos los PDF.
+- La finalización encola un trabajo DOCUMENT en la cola durable existente. `services/jobs.ts` lo procesa tras el commit y mediante el trigger existente, con lease y reintentos. `service-results/certificates.ts` determina los destinos desde el servicio y nunca desde IDs elegidos por el navegador. El envío espera al conjunto completo. No se agregan tablas ni permisos Data API.
 - `functions/api/r2.ts`: misma firma SigV4; se añade el bucket de documentos generados.
 - `functions/api/mailMessage.ts` y `google.ts`: MIME con adjuntos mediante la integración Gmail existente.
 - `useCertificateTemplates`, `useCertificateGeneration`, `certificatesService`: I/O/estado separados de la vista.
@@ -48,7 +49,7 @@ Los maestros se leen de R2 autorizado y los PDF se guardan con rutas nuevas
 `certificates/<service-id>/<job-id>/<random-id>.pdf`. Nunca se sobrescribe el PDF anterior en R2.
 La sustitución en PostgreSQL y su auditoría son atómicas y solo ocurren tras generar/subir todos
 los elementos. El lock de job/token y la comparación del PDF anterior previenen reintentos solapados.
-El lease de 15 min cubre el lote acotado de 10; la validez del intento vuelve a comprobarse al commit.
+El lease de 15 min se renueva entre PDF y la validez del intento se comprueba otra vez al commit. Los lotes manuales se limitan a diez; el conjunto automático incluye todos los destinos del servicio y se confirma en una única transacción.
 No hay una conexión abierta a PostgreSQL mientras se realiza conversión o carga de los PDF.
 
 Después de fallos, se encola STORAGE_CLEANUP solo para rutas creadas por ese intento, no para los

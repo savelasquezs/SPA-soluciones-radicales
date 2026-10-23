@@ -331,7 +331,7 @@ test('un técnico no puede abrir el informe administrativo por URL', async ({pag
 })
 
 
-test('El administrador selecciona emails registrados, agrega otro y adjunta un certificado opcional', async ({page}) => {
+test('El administrador añade destinatarios arriba y envía los certificados automáticos', async ({page}) => {
   const { requests } = await setup(page,'ADMINISTRADOR')
   await page.goto('/servicios/' + serviceId + '/informe')
   await page.getByRole('button',{name:'Enviar informe'}).click()
@@ -347,14 +347,17 @@ test('El administrador selecciona emails registrados, agrega otro y adjunta un c
   await expect(editor).not.toHaveAttribute('open', '')
   await page.getByLabel('sede@example.test').check()
   await page.getByLabel('Agregar otro correo').fill('Extra@Example.test')
+  await expect(page.getByRole('button',{name:'Añadir'})).toHaveClass(/base-button--primary/)
   await page.getByRole('button',{name:'Añadir'}).click()
-  await page.getByText('Certificado de establecimiento').click()
+  await expect(page.getByRole('checkbox',{name:'extra@example.test',exact:true})).toBeChecked()
+  await expect(page.locator('.send-report__choice').first()).toContainText('extra@example.test')
+  await expect(page.getByText('Certificados incluidos', {exact:true})).toBeVisible()
   await page.getByRole('button',{name:'Enviar informe',exact:true}).last().click()
   await expect(page.getByRole('heading',{name:'Enviar informe'})).toHaveCount(0)
   expect(requests).toHaveLength(1)
   expect(requests[0]).toMatchObject({
     recipients:['extra@example.test','sede@example.test'],
-    certificateIds:[certificateId],
+    certificateIds:[],
     origin:new URL(page.url()).origin,
     subject:'Informe MIP personalizado',
     message:'Buenas tardes, compartimos su informe.',
@@ -448,4 +451,25 @@ test('informes administrativo y público se imprimen después de vencer ambas fi
   await expect(page.getByText('Firma de Camila Cliente (vencida)')).toBeVisible()
   await page.getByRole('button', { name: 'Guardar PDF' }).click()
   await expect(page.locator('body')).toHaveAttribute('data-report-printed', 'true')
+})
+
+test('el correo escrito se incorpora al enviar aunque no se pulse Añadir', async ({page}) => {
+  const {requests}=await setup(page,'ADMINISTRADOR')
+  await page.setViewportSize({width:390,height:844})
+  await page.goto('/servicios/'+serviceId+'/informe')
+  await page.getByRole('button',{name:'Enviar informe',exact:true}).click()
+  const dialog=page.getByRole('dialog',{name:'Enviar informe'})
+  await dialog.getByLabel('Agregar otro correo').fill('nuevo@example.test')
+  await expect(dialog.getByRole('button',{name:'Añadir'})).toBeEnabled()
+  await expect(dialog.getByRole('button',{name:'Enviar informe',exact:true})).toBeEnabled()
+  await page.screenshot({path:'test-results/report-mail-mobile.png',fullPage:false})
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
+  await page.setViewportSize({width:1280,height:900})
+  await page.screenshot({path:'test-results/report-mail-desktop.png',fullPage:false})
+  await page.setViewportSize({width:390,height:844})
+  await page.evaluate(()=>document.documentElement.setAttribute('data-theme','dark'))
+  await page.screenshot({path:'test-results/report-mail-mobile-dark.png',fullPage:false})
+  await dialog.getByRole('button',{name:'Enviar informe',exact:true}).click()
+  await expect(dialog).toHaveCount(0)
+  expect(requests[0]).toMatchObject({recipients:['nuevo@example.test'],certificateIds:[]})
 })

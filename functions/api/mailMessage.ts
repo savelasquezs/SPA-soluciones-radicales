@@ -33,8 +33,8 @@ export function buildMailMessage(input: MailInput, from: string): string {
     throw new ApiError(422, 'El contenido HTML del correo no es válido')
   }
   const attachments = input.attachments ?? []
-  if (attachments.length > 10 || attachments.reduce((sum, item) => sum + item.bytes.length, 0) > 15 * 1024 * 1024) {
-    throw new ApiError(422, 'Los adjuntos superan el tamaño permitido. Envía menos certificados a la vez.')
+  if (attachments.length > 2001 || attachments.reduce((sum, item) => sum + item.bytes.length, 0) > 15 * 1024 * 1024) {
+    throw new ApiError(422, 'Los adjuntos superan el tamaño permitido. Revisa los certificados antes de enviar.')
   }
   const inlineImages = input.inlineImages ?? []
   if ((inlineImages.length && !input.html) || inlineImages.length > 3 ||

@@ -6,6 +6,8 @@ import { ApiError } from '../auth'
 import { transaction } from '../db'
 import { sendGmailMessage, upsertCalendarEvent } from '../google'
 import { audit } from './commands'
+import { ensureReportCertificates } from '../service-results/certificates'
+import { assignedServiceState } from '../technician-services/queries'
 import { getCalendarSnapshot } from './queries'
 import { calendarServiceDescription, resolveCalendarAppOrigin } from './calendarLinks'
 
@@ -18,7 +20,7 @@ interface JobPayload {
   email?: ConfirmationEmail
   dispatched?: boolean
 }
-interface ServiceJob { id: string; job_type: 'CALENDAR' | 'EMAIL'; attempts: number; payload: JobPayload }
+interface ServiceJob { id: string; job_type: 'CALENDAR' | 'EMAIL' | 'DOCUMENT'; attempts: number; payload: JobPayload }
 
 /** Durable queue: callers invoke this only after the business transaction commits. */
 export function kickServiceJobs(): void {
@@ -28,7 +30,7 @@ export function kickServiceJobs(): void {
 async function claimJob(): Promise<ServiceJob | null> {
   return transaction(async client => {
     const { rows } = await client.query<ServiceJob>(`select id,job_type,attempts,payload from private.integration_jobs
-      where payload ->> 'scope' = 'ADMIN_SERVICES' and job_type in ('CALENDAR','EMAIL')
+      where payload ->> 'scope' = 'ADMIN_SERVICES' and job_type in ('CALENDAR','EMAIL','DOCUMENT')
         and ((status in ('PENDING','FAILED') and attempts < 5 and run_after <= now())
           or (status='RUNNING' and lease_until < now()))
       order by run_after,created_at,id for update skip locked limit 1`)
@@ -138,6 +140,32 @@ async function processEmail(job: ServiceJob): Promise<void> {
     await recordEmailOutcome(job,mailFailureState(dispatched,error))
   }
 }
+async function processCertificates(job: ServiceJob): Promise<void> {
+  const { serviceId, actorId } = job.payload
+  if (!isServiceId(serviceId) || !isServiceId(actorId)) throw new ApiError(422, 'El trabajo de certificados no es válido.')
+  try {
+    const documents = await ensureReportCertificates(serviceId, actorId, async client => {
+      const user = await client.query('select id from public.usuarios where id=$1 and activo and es_tecnico', [actorId])
+      if (!user.rowCount) throw new ApiError(403, 'El Técnico ya no está autorizado.')
+      const service = await assignedServiceState(client, actorId, serviceId)
+      if (service.estado !== 'FINALIZADO' || service.tipo_servicio !== 'PRINCIPAL') throw new ApiError(409, 'El servicio no está finalizado.')
+      const renewed = await client.query(`update private.integration_jobs set lease_until=now()+interval '15 minutes'
+        where id=$1 and status='RUNNING' and attempts=$2 returning id`, [job.id,job.attempts])
+      if (!renewed.rowCount) throw new ApiError(409, 'Otro intento está generando los certificados.', 'OPERATION_REPLACED')
+    })
+    await transaction(async client => {
+      await client.query(`update private.integration_jobs set status='COMPLETED',lease_until=null,last_error=null,
+        payload=payload||jsonb_build_object('certificateIds',$3::jsonb)
+        where id=$1 and status='RUNNING' and attempts=$2`, [job.id,job.attempts,JSON.stringify(documents.map(document => document.id))])
+    })
+  } catch (error) {
+    await transaction(client => client.query(`update private.integration_jobs set status='FAILED',lease_until=null,last_error=$3,
+      run_after=now()+make_interval(secs => least(3600,60*power(2,least(attempts,6)))::integer)
+      where id=$1 and status='RUNNING' and attempts=$2`, [job.id,job.attempts,
+      error instanceof ApiError ? error.message : 'No fue posible generar los certificados del servicio.']))
+  }
+}
+
 export async function drainServiceJobs(limit = 6): Promise<{ processed: number }> {
   let processed = 0
   const boundedLimit = Math.max(1,Math.min(10,Math.trunc(limit)))
@@ -146,6 +174,7 @@ export async function drainServiceJobs(limit = 6): Promise<{ processed: number }
     if (!job) break
     try {
       if (job.job_type === 'CALENDAR') await processCalendar(job)
+      else if (job.job_type === 'DOCUMENT') await processCertificates(job)
       else await processEmail(job)
     } catch {
       // Leave the lease for recovery. In particular, never blindly retry an email

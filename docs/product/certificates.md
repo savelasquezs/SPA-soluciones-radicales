@@ -1,11 +1,12 @@
-# Certificados: configuración y operación manual
+# Certificados: configuración, generación automática y operación manual
 
 ## Alcance
 
 `Configuración → Certificados` (`/configuracion/certificados`) pertenece al Administrador activo.
 Tiene dos superficies: **Plantillas** y **Generar y enviar**. No se agregan entradas globales
-por cada entidad ni tablas nuevas. Finalizar un Servicio **no** genera ni envía certificados
-con este cambio; su automatización permanece pendiente en `tasks.md`.
+por cada entidad ni tablas nuevas. Al finalizar un Servicio Principal de Negocio se encola automáticamente la generación de su certificado de establecimiento y los certificados de los vehículos atendidos habilitados. El Técnico no los crea ni los selecciona. El envío por correo sigue requiriendo elegir destinatarios y confirmarlo.
+
+El conjunto completo se prepara fuera de la transacción: si falla cualquier PDF, no se persiste ningún certificado nuevo del intento. Tras preparar todos los archivos, certificados, snapshots, auditoría y resultado se guardan en una única transacción PostgreSQL. Un conflicto al guardar revierte todo el conjunto y encola la limpieza de los objetos de ese intento, sin borrar certificados anteriores. La cola durable reintenta errores sin revertir la finalización del servicio. Los PDF existentes disponibles se reutilizan; los eliminados por retención se regeneran conservando sus fechas e historia.
 
 ## Plantillas Word
 
@@ -124,8 +125,7 @@ una transacción. Tras una recarga con resultado incierto también hay que verif
 Carga/contenido/vacío/error/reintento, toasts, confirmaciones y componentes compartidos. El guardado
 bloquea acciones incompatibles y navegación; conserva borradores ante errores. Las respuestas
 obsoletas no reemplazan la selección actual. El catálogo local se reutiliza. Ningún secreto usa
-`VITE_`. Todos los endpoints exigen Administrador en backend; las políticas y privilegios Data API
-existentes no se amplían.
+`VITE_`. Los endpoints de configuración y generación manual exigen Administrador. La generación automática usa la autorización de la operación de cierre y revalida el Técnico activo y su asignación; el envío técnico solo prepara documentos de su servicio finalizado. Las políticas y privilegios Data API existentes no se amplían.
 
 Configuración técnica, límites del conversor y validación real pendiente:
 [`../architecture/certificates.md`](../architecture/certificates.md).

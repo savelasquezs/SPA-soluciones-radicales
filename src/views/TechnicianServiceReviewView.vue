@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { Mail } from 'lucide-vue-next'
+import { ArrowLeft, Banknote, ChevronDown, CircleCheckBig, ClipboardList, FileCheck2, Mail, ShieldCheck } from 'lucide-vue-next'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { useRoute, useRouter } from 'vue-router'
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -199,14 +199,21 @@ async function finish(): Promise<void> {
 </script>
 
 <template>
-  <ServicePage title="Revisión y cierre" :caption="packageValue?.service.solicitud">
+  <ServicePage :title="finalized ? 'Servicio finalizado' : 'Revisión y cierre'" :caption="packageValue?.service.solicitud">
     <LoadingSkeleton v-if="loading" label="Revisando pendientes" :rows="5" />
     <StatusPanel v-else-if="error" title="No fue posible revisar el servicio" :message="error" tone="danger" />
     <template v-else-if="packageValue">
       <TechnicianServiceNavigation :service-id="serviceId" active="review"
         :vehicles-enabled="packageValue.vehiclesEnabled" :first-area-id="areas[0]?.id" />
       <StatusPanel v-if="simplified && !finalized" compact :title="reinforcement ? 'Servicio de refuerzo' : 'Servicio residencial'" message="No requiere recorrido por Áreas. Registra ambas firmas para finalizar." tone="neutral" />
-      <StatusPanel v-else-if="finalized" compact title="Servicio finalizado" message="Las firmas y el cierre fueron confirmados por el servidor." tone="success" />
+      <section v-else-if="finalized" class="completion-summary" aria-labelledby="completion-title">
+        <CircleCheckBig :size="36" aria-hidden="true" />
+        <div><h2 id="completion-title">Trabajo completado</h2>
+          <p>El cierre y las firmas están confirmados. Ahora puedes enviar los documentos y reportar el cobro.</p>
+          <span><ShieldCheck :size="14" aria-hidden="true" /> Firmas confirmadas</span>
+          <span><FileCheck2 :size="14" aria-hidden="true" /> Certificados automáticos</span>
+        </div>
+      </section>
       <StatusPanel v-else-if="pending.length && !vehiclesDone" compact title="Áreas y vehículos pendientes"
         :message="`${pending.length} de ${areas.length} Áreas requieren información y los vehículos aún no se han confirmado.`"
         tone="warning" />
@@ -216,12 +223,15 @@ async function finish(): Promise<void> {
       <StatusPanel v-else-if="!vehiclesDone" compact title="Vehículos sin confirmar"
         message="Revisa la sección Vehículos y confirma los atendidos antes de finalizar." tone="warning" />
       <StatusPanel v-else compact title="Recorrido completo" message="Las Áreas y la atención vehicular están resueltas. Registra ambas firmas para finalizar." tone="success" />
-      <section v-if="!simplified" class="review-list" aria-labelledby="review-areas-title"><h2 id="review-areas-title">Estado por Área</h2>
+      <details v-if="!simplified" class="review-route" :open="!finalized">
+        <summary id="review-areas-title"><span><ClipboardList :size="18" aria-hidden="true" />{{ finalized ? 'Ver recorrido realizado' : 'Estado por Área' }}</span><ChevronDown :size="17" aria-hidden="true" /></summary>
+        <section class="review-list" aria-labelledby="review-areas-title">
         <button v-for="area in areas" :key="area.id" type="button" @click="openArea(area.id)">
           <span class="review-list__name"><strong>{{ area.nombre }}</strong><small v-if="technicianAreaIssues(area, serviceId).length">{{ technicianAreaIssues(area, serviceId).filter(issue => issue.tab === 'criteria').length }} criterios · {{ technicianAreaIssues(area, serviceId).filter(issue => issue.tab === 'points').length }} puestos · {{ technicianAreaIssues(area, serviceId).filter(issue => issue.tab === 'findings').length }} hallazgos pendientes</small></span>
           <StatusBadge :tone="technicianAreaResolved(area, serviceId) ? 'success' : 'neutral'">{{ technicianAreaResolved(area, serviceId) ? 'Resuelta' : 'Pendiente' }}</StatusBadge>
         </button>
-      </section>
+        </section>
+      </details>
       <section v-if="packageValue.vehiclesEnabled" class="review-list" aria-labelledby="review-vehicles-title">
         <h2 id="review-vehicles-title">Vehículos atendidos</h2>
         <button type="button" @click="router.push({ name: 'technician-service-vehicles', params: { id: serviceId } })">
@@ -249,22 +259,22 @@ async function finish(): Promise<void> {
         <BaseButton :loading="saving" :disabled="!canFinalize || needsVersionResolution || (Boolean(finalization) && (!online || services.syncing))" @click="finish">{{ finalization?.status === 'CONFLICT' ? 'Reintentar cierre' : finalization ? (online ? 'Reintentar sincronización' : 'Cierre pendiente') : 'Finalizar servicio' }}</BaseButton>
       </section>
       <section v-if="canOfferReport && !simplified" class="review-email" aria-labelledby="review-email-title">
-        <div><h2 id="review-email-title">Enviar informe al cliente</h2>
-          <p>Opcional · Puedes seleccionar los correos registrados, añadir otros y personalizar el mensaje.</p>
+        <div class="review-email__heading"><Mail :size="23" aria-hidden="true" /><div><h2 id="review-email-title">Informe y certificados</h2>
+          <p>Los certificados se generan automáticamente. Selecciona los destinatarios para enviarlos junto con el informe.</p></div>
         </div>
         <StatusPanel v-if="pendingEmailItems.some(item => item.status === 'NEEDS_REVIEW')" compact
           title="Un correo necesita revisión" tone="danger"
-          message="No se pudo confirmar o completar el envío. Revisa Gmail y solicita apoyo al administrador antes de generar otro intento." />
+          :message="pendingEmailItems.find(item => item.status === 'NEEDS_REVIEW')?.error || 'No se pudo preparar o confirmar el envío. Solicita apoyo al administrador antes de generar otro intento.'" />
         <StatusPanel v-else-if="pendingEmailItems.length" compact
           title="Envío pendiente" tone="warning"
           :message="pendingEmailItems[0]?.error || (syncProblem || finalization?.error ? 'El informe está guardado, pero hay cambios del servicio sin sincronizar. Primero debe confirmarse el cierre.' : 'Guardado en este dispositivo. Se enviará después de confirmar el cierre y recuperar internet.')" />
         <p v-if="emailInfo" class="review-email__notice" role="status">{{ emailInfo }}</p>
-        <BaseButton variant="secondary" size="compact" :disabled="Boolean(pendingEmailItems.length)" @click="reportModalOpen=true">
+        <BaseButton size="compact" :disabled="Boolean(pendingEmailItems.length)" @click="reportModalOpen=true">
           <Mail :size="16" aria-hidden="true" /> Enviar informe
         </BaseButton>
       </section>
-      <BaseButton v-if="packageValue.service.tipoServicio==='PRINCIPAL' && ['EN_PROCESO','FINALIZADO'].includes(packageValue.service.estado)" variant="secondary" size="compact" :disabled="!online" @click="paymentOpen=true">Reportar cobro</BaseButton>
-      <BaseButton variant="secondary" @click="router.push({ name: 'technician-service-work', params: { id: serviceId } })">Volver al servicio</BaseButton>
+      <BaseButton v-if="packageValue.service.tipoServicio==='PRINCIPAL' && ['EN_PROCESO','FINALIZADO'].includes(packageValue.service.estado)" variant="secondary" size="compact" class="review-payment" :disabled="!online" @click="paymentOpen=true"><Banknote :size="20" aria-hidden="true" />Reportar cobro</BaseButton>
+      <BaseButton variant="secondary" @click="router.push({ name: 'technician-service-work', params: { id: serviceId } })"><ArrowLeft :size="17" aria-hidden="true" />Volver al servicio</BaseButton>
     </template>
   </ServicePage>
   <TechnicianPaymentDialog :open="paymentOpen" :service-id="serviceId" @close="paymentOpen=false" />
@@ -284,7 +294,7 @@ h2 { margin:0; font-size:1rem; }
 .review-list__name strong { font-size:.88rem; }
 .review-list__name small { font-size:.75rem; color:var(--text-secondary); }
 .review-list button:hover, .review-list button:focus-visible { border-color:var(--border-strong); background:var(--hover); }
-.review-email{display:grid;gap:.65rem;padding:1rem;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--surface)}
+.review-email{border-left:4px solid var(--accent);display:grid;gap:.65rem;padding:1rem;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--surface)}
 .review-email h2,.review-email p{margin:0}
 .review-email p{font-size:.78rem;color:var(--text-secondary)}
 .review-email__notice{font-size:.78rem;color:var(--text-secondary)}
@@ -294,5 +304,20 @@ h2 { margin:0; font-size:1rem; }
 .signature-section p, .signature-section article span { color:var(--text-muted); }
 .signature-section article { display:flex; min-height:60px; align-items:center; justify-content:space-between; gap:1rem; border-bottom:1px solid var(--border); padding-bottom:.75rem; }
 .signature-section article div { display:grid; gap:.2rem; }
+.review-route{border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--surface)}
+.review-route summary{display:flex;align-items:center;justify-content:space-between;min-height:44px;padding:.7rem;cursor:pointer;font-size:.87rem;font-weight:600;list-style:none}
+.review-route summary::-webkit-details-marker{display:none}
+.review-route summary span{display:flex;align-items:center;gap:.5rem}
+.review-route summary svg{color:var(--text-secondary)}
+.review-route[open] summary>svg{transform:rotate(180deg)}
+.review-route .review-list{border:0;padding-top:0}
+.completion-summary{display:flex;align-items:flex-start;gap:.85rem;padding:1rem;border:1px solid var(--success);border-radius:var(--radius-lg);background:var(--success-subtle)}
+.completion-summary>svg{flex-shrink:0;color:var(--success)}
+.completion-summary p{margin:.35rem 0 .65rem;color:var(--text-secondary);font-size:.82rem;line-height:1.5}
+.completion-summary span{display:inline-flex;align-items:center;gap:.3rem;color:var(--success);font-size:.75rem;margin:.2rem .65rem .2rem 0}
+.review-email__heading{display:flex;align-items:flex-start;gap:.65rem}
+.review-email__heading>svg{flex-shrink:0;color:var(--accent)}
+.review-payment{border-color:var(--warning);background:var(--warning-subtle)}
+.review-payment svg{color:var(--warning)}
 @media (max-width:480px) { .signature-section article { align-items:stretch; flex-direction:column; } .signature-section article button { width:100%; } }
 </style>

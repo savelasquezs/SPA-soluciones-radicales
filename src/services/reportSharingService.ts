@@ -7,7 +7,7 @@ const root = (id: string) => 'api/admin/services/' + encodeURIComponent(id) + '/
 const json = (data: unknown): RequestInit => ({ method:'POST',body:JSON.stringify(data) })
 export const getReportShareOptions = (id: string) => apiRequest<ServiceReportShareOptions>(root(id))
 export const sendServiceReport = (id: string, data: SendServiceReportInput) =>
-  apiRequest<SendServiceReportResult>(root(id) + '/send', json(data))
+  apiRequest<SendServiceReportResult>(root(id) + '/send', { ...json(data), timeoutMs: 15 * 60_000 })
 export const revokeServiceReportLinks = (id: string) =>
   apiRequest<{ revoked: number }>(root(id) + '/revoke', json({ confirm:true }))
 
@@ -32,7 +32,7 @@ export const publicReportPhotoUrl = async (token: string, mediaId: string): Prom
 const technicianRoot = (id: string) => 'api/technician/services/' + encodeURIComponent(id) + '/report-sharing'
 export const getTechnicianReportShareOptions = (id: string) => apiRequest<ServiceReportShareOptions>(technicianRoot(id))
 export const sendTechnicianServiceReport = (id: string, data: SendServiceReportInput) =>
-  apiRequest<SendServiceReportResult>(technicianRoot(id) + '/send', json(data))
+  apiRequest<SendServiceReportResult>(technicianRoot(id) + '/send', { ...json(data), timeoutMs: 15 * 60_000 })
 
 export const publicProductSheetUrl=async(token:string,index:number):Promise<string> =>
   (await publicRequest<{url:string}>('api/public/reports/product-sheet',{token,index})).url

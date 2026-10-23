@@ -52,3 +52,9 @@ describe('rich report email MIME', () => {
     },'sender@example.test')).toThrow('imágenes')
   })
 })
+
+it('includes an entire vehicle fleet without an arbitrary ten-file cutoff', () => {
+  const attachments = Array.from({length:12},(_,i) => ({name:`vehiculo-${i}.pdf`,bytes:Buffer.from('%PDF-test')}))
+  const mime = buildMailMessage({...message,attachments},'a@example.test')
+  expect(mime.match(/Content-Disposition: attachment/g)).toHaveLength(12)
+})

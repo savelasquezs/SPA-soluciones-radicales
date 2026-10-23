@@ -6,11 +6,16 @@ import type { LoadedCertificateContext } from './repository'
 import type { Identity } from '../auth'
 import type { CertificateSettings } from '../../../src/types/certificates'
 const mocks = vi.hoisted(() => ({
+  transactions: [] as string[][],
   query: vi.fn<(sql: string, values?: unknown[]) => Promise<{ rows: unknown[]; rowCount: number }>>(),
   load: vi.fn<typeof import('./repository').loadCertificateContext>(), settings: vi.fn<typeof import('./repository').loadSettings>(), claim: vi.fn<typeof import('./jobs').claimCertificateJob>(), lock: vi.fn<typeof import('./jobs').lockCertificateJob>(), complete: vi.fn<typeof import('./jobs').completeCertificateJob>(), fail: vi.fn<typeof import('./jobs').failCertificateJob>(), dispatch: vi.fn<typeof import('./jobs').markEmailDispatching>(),
   read: vi.fn<typeof import('../r2').readMasterObject>(), write: vi.fn<typeof import('../r2').putCertificateObject>(), pdf: vi.fn<typeof import('./generator').generateCertificatePdf>(), readPdf: vi.fn<typeof import('../r2').readCertificateObject>(), send: vi.fn<(input: MailInput) => Promise<string>>(), admin: vi.fn<(client: unknown, identity: Identity) => Promise<{ id: string }>>(),
 }))
-vi.mock('../db', () => ({ pool: { query: mocks.query }, transaction: (callback: (client: unknown) => unknown) => callback({ query: mocks.query }) }))
+vi.mock('../db', () => ({ pool: { query: mocks.query }, transaction: (callback: (client: unknown) => unknown) => {
+  const statements: string[] = []
+  mocks.transactions.push(statements)
+  return callback({ query: (sql: string, values?: unknown[]) => { statements.push(sql); return mocks.query(sql, values) } })
+} }))
 vi.mock('../auth', async (original) => ({ ...await original<typeof import('../auth')>(), requireAdmin: mocks.admin }))
 vi.mock('../google', () => ({ sendGmailMessage: mocks.send }))
 vi.mock('../r2', async (original) => ({ ...await original<typeof import('../r2')>(), readMasterObject: mocks.read, putCertificateObject: mocks.write, readCertificateObject: mocks.readPdf, createCertificateReadUrl: (_path: string, name?: string) => name ? 'https://test.example/download' : 'https://test.example/inline' }))
@@ -19,6 +24,7 @@ vi.mock('./repository', async (original) => ({ ...await original<typeof import('
 vi.mock('./jobs', () => ({ claimCertificateJob: mocks.claim, lockCertificateJob: mocks.lock, completeCertificateJob: mocks.complete, failCertificateJob: mocks.fail, markEmailDispatching: mocks.dispatch }))
 import { ApiError } from '../auth'
 import { certificateRoutes } from './routes'
+import { ensureReportCertificates } from '../service-results/certificates'
 const id = '11111111-1111-4111-8111-111111111111'
 const vehicle = '22222222-2222-4222-8222-222222222222'
 const templatePath = `clients/establishment-templates/${id}-base.docx`
@@ -33,6 +39,8 @@ function request(path: string, body?: unknown, authorization = 'admin') {
 const generate = () => ({ requestId: id, serviceId: id, type: 'ESTABLECIMIENTO', vehicleIds: [], previousPaths: { ESTABLECIMIENTO: null }, confirmReplace: false })
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.transactions = []
+  mocks.pdf.mockReset()
   loaded = {
     source: { id, version: '1', solicitud: 'SS-123', state: 'FINALIZADO', serviceType: 'PRINCIPAL', siteType: 'NEGOCIO', clientType: 'NEGOCIO', siteId: id, clientName: 'Negocio', nit: '900', siteName: 'Sede', address: 'Dirección', technicianName: 'Ana', issuedOn: '2026-01-31', businessMonths: 1, vehicleMonths: 2, vehicleEnabled: true, businessEmails: [], siteEmails: [], contactEmail: null },
     settings: settings as LoadedCertificateContext['settings'], products: [], historicalData: {},
@@ -177,5 +185,53 @@ describe('inline PDF preview', () => {
     expect(await inline.json()).toEqual({ url:'https://test.example/inline' })
     const download = await request('/documents/' + id + '/read-url', {})
     expect(await download.json()).toEqual({ url:'https://test.example/download' })
+  })
+})
+
+describe('automatic certificates for a completed visit', () => {
+  const secondVehicle = '33333333-3333-4333-8333-333333333333'
+  const authorize = async () => undefined
+  function fleet() {
+    loaded.context.vehicles.push({id:secondVehicle,placa:'XYZ789'})
+  }
+  it('prepares the establishment and every attended vehicle, then saves all in one transaction', async () => {
+    fleet()
+    const result = await ensureReportCertificates(id,id,authorize)
+    expect(result).toHaveLength(3)
+    expect(result.filter(document => document.type === 'VEHICULO')).toHaveLength(2)
+    expect(mocks.pdf).toHaveBeenCalledTimes(3)
+    const commits = mocks.transactions.filter(statements => statements.some(sql => sql.includes('insert into public.certificados')))
+    expect(commits).toHaveLength(1)
+    expect(commits[0]!.filter(sql => sql.includes('insert into public.certificados'))).toHaveLength(3)
+    expect(mocks.complete).toHaveBeenCalledOnce()
+    expect(mocks.send).not.toHaveBeenCalled()
+  })
+  it('does not save any new certificate when the last vehicle PDF fails', async () => {
+    fleet()
+    mocks.pdf.mockResolvedValueOnce(Buffer.from('%PDF-first')).mockResolvedValueOnce(Buffer.from('%PDF-second'))
+      .mockRejectedValueOnce(new ApiError(502,'Falló la conversión del último vehículo'))
+    await expect(ensureReportCertificates(id,id,authorize)).rejects.toThrow('último vehículo')
+    expect(mocks.query.mock.calls.some(([sql]) => sql.includes('insert into public.certificados'))).toBe(false)
+    const cleanup = mocks.query.mock.calls.find(([sql]) => sql.includes('STORAGE_CLEANUP'))
+    expect(JSON.parse(String(cleanup?.[1]?.[1])).paths).toHaveLength(2)
+    expect(mocks.complete).not.toHaveBeenCalled()
+  })
+  it('keeps a fleet larger than ten vehicles in a single commit', async () => {
+    loaded.context.vehicles = Array.from({length:12},(_,index)=>({
+      id:`10000000-0000-4000-8000-${String(index).padStart(12,'0')}`,placa:`ABC${index}`,
+    }))
+    expect(await ensureReportCertificates(id,id,authorize)).toHaveLength(13)
+    const commits = mocks.transactions.filter(statements => statements.some(sql => sql.includes('insert into public.certificados')))
+    expect(commits).toHaveLength(1)
+    expect(commits[0]!.filter(sql => sql.includes('insert into public.certificados'))).toHaveLength(13)
+  })
+  it('reuses complete PDFs without regenerating them or sending mail', async () => {
+    loaded.context.documents = [
+      {id,type:'ESTABLECIMIENTO',vehicleId:null,label:'Establecimiento',storagePath:'certificates/existing.pdf',issuedOn:'2026-01-31',expiresOn:'2026-02-28'},
+      {id:vehicle,type:'VEHICULO',vehicleId:vehicle,label:'ABC123',storagePath:'certificates/vehicle.pdf',issuedOn:'2026-01-31',expiresOn:'2026-03-31'},
+    ]
+    expect(await ensureReportCertificates(id,id,authorize)).toHaveLength(2)
+    expect(mocks.pdf).not.toHaveBeenCalled()
+    expect(mocks.claim).not.toHaveBeenCalled()
   })
 })
