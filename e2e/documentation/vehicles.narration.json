@@ -1,0 +1,90 @@
+{
+  "title": "Gestión de vehículos",
+  "subtitle": "Placas, estados y certificados por Sede",
+  "segments": [
+    {
+      "id": "intro",
+      "text": "Aprende a registrar y administrar vehículos dentro de una Sede, y a consultar sus certificados."
+    },
+    {
+      "id": "open-client",
+      "text": "Ingresa a Clientes y abre el Negocio al que pertenece la Sede."
+    },
+    {
+      "id": "open-site",
+      "text": "Selecciona la Sede que administra los vehículos de ese Negocio."
+    },
+    {
+      "id": "vehicles-tab",
+      "text": "En la ficha de la Sede, abre la pestaña Vehículos."
+    },
+    {
+      "id": "vehicles-list",
+      "text": "Aquí aparecen las placas registradas y el estado activo o inactivo de cada vehículo."
+    },
+    {
+      "id": "new-vehicle",
+      "text": "Para registrar otro vehículo, selecciona Agregar vehículo."
+    },
+    {
+      "id": "plate-input",
+      "text": "Ingresa la placa. El sistema la convierte a mayúsculas y valida que tenga un formato correcto."
+    },
+    {
+      "id": "save-vehicle",
+      "text": "Selecciona Crear vehículo. La nueva placa aparece de inmediato en el listado."
+    },
+    {
+      "id": "search-vehicle",
+      "text": "Puedes localizar una placa usando el buscador, sin recorrer toda la lista."
+    },
+    {
+      "id": "edit-vehicle",
+      "text": "El botón Editar abre el mismo formulario con los datos existentes."
+    },
+    {
+      "id": "change-plate",
+      "text": "Corrige la placa y guarda los cambios. Una placa con historial no puede modificarse."
+    },
+    {
+      "id": "open-certificates",
+      "text": "En Acciones, el icono de documento muestra el historial de certificados de ese vehículo."
+    },
+    {
+      "id": "certificates-list",
+      "text": "Cada certificado muestra el servicio, la fecha de expedición y su vencimiento."
+    },
+    {
+      "id": "certificate-preview",
+      "text": "Selecciona Ver para abrir el documento PDF sin salir de la Sede."
+    },
+    {
+      "id": "certificate-download",
+      "text": "Desde este visor también puedes descargar el certificado."
+    },
+    {
+      "id": "certificate-back",
+      "text": "Vuelve a la lista y cierra el historial para continuar administrando vehículos."
+    },
+    {
+      "id": "delete-attempt",
+      "text": "Si intentas eliminar un vehículo con historial, el sistema conserva sus registros."
+    },
+    {
+      "id": "deactivate",
+      "text": "En ese caso, puedes desactivarlo en lugar de borrarlo."
+    },
+    {
+      "id": "inactive",
+      "text": "El vehículo queda identificado como inactivo, pero sus certificados siguen disponibles."
+    },
+    {
+      "id": "reactivate",
+      "text": "Si necesitas volver a utilizarlo, selecciona Reactivar."
+    },
+    {
+      "id": "outro",
+      "text": "Así mantienes actualizada la flota de cada Sede sin perder su historial."
+    }
+  ]
+}
