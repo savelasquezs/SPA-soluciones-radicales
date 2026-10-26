@@ -1,3 +1,4 @@
+import { findingCriterion, unreferencedFindingPhotos } from './finding-evidence'
 import type { PoolClient } from 'pg'
 import type { MipEvaluation, TechnicianAreaAccessResult, TechnicianAreaAccessState, TechnicianSiteAreaCreationInput, TechnicianSiteAreaCreationResult, TechnicianAreaOrderResult, TechnicianAreaOrderVersion, TechnicianCriterion, TechnicianCriterionEvaluationResult, TechnicianDevice, TechnicianDeviceCapture, TechnicianDeviceCreationInput, TechnicianDeviceCreationResult, TechnicianDeviceReview, TechnicianDeviceReviewInput, TechnicianDeviceReviewResult, TechnicianExecutionLock, TechnicianExecutionSession, TechnicianFinding, TechnicianFindingCreateInput, TechnicianFindingResult, TechnicianFindingStatusInput, TechnicianPestSnapshot, TechnicianServicePackage } from '../../../src/types/technicianServices'
 import { technicianDevicePhotoRequired } from '../../../src/helpers/technicianServices'
@@ -297,7 +298,7 @@ export async function saveTechnicianCriterionEvaluation(
     hasObservation: Boolean(normalizedObservation),
     evidenceCount: evidenceStoragePaths.length,
   })
-  return { criterion: rows[0]!, removedEvidenceStoragePaths }
+  return { criterion: rows[0]!, removedEvidenceStoragePaths: await unreferencedFindingPhotos(client, removedEvidenceStoragePaths) }
 }
 
 type TechnicianDeviceReviewContext = Pick<TechnicianDevice, 'id' | 'dispositivoId' | 'numero' | 'ubicacion' | 'tipoCodigo' | 'estadoAnterior' | 'plagas'> & {
@@ -391,6 +392,7 @@ async function getFinding(client: PoolClient, findingId: string, serviceId: stri
   const row = (await client.query<{ record: TechnicianFinding }>(`select jsonb_build_object(
     'id',h.id,'servicioAperturaId',h.servicio_apertura_id,'fechaApertura',h.fecha_apertura,
     'descripcion',h.descripcion,'recomendacionAccion',h.recomendacion_accion,
+    'criterioId',h.criterio_id,'criterioNombre',h.criterio_nombre_snapshot,'evaluacionAperturaId',h.evaluacion_apertura_id,
     'evidenciasAperturaStoragePaths',coalesce(h.evidencias_apertura_storage_paths,'[]'::jsonb),
     'estado',h.estado,
     'resultadoSeguimiento',(select seg.resultado from public.hallazgo_seguimientos seg
@@ -465,6 +467,7 @@ export async function createTechnicianFinding(
   evidenceStoragePaths: string[],
 ): Promise<TechnicianFindingResult> {
   const context = await editableFindingArea(client, userId, serviceId, deviceId, lockToken, areaId)
+  const criterion = await findingCriterion(client, serviceId, areaId, input.criterionId, evidenceStoragePaths)
   const descripcion = input.descripcion.trim(), recomendacion = input.recomendacionAccion.trim()
   if (!descripcion || descripcion.length > 2_000 || !recomendacion || recomendacion.length > 2_000) {
     throw new ApiError(422, 'Completa la descripción y la acción recomendada del Hallazgo.', 'VALIDATION')
@@ -484,10 +487,12 @@ export async function createTechnicianFinding(
     throw new ApiError(422, 'Las evidencias del Hallazgo no son válidas.', 'VALIDATION')
   }
   await client.query(`insert into public.hallazgos(id,sede_id,area_id,servicio_apertura_id,fecha_apertura,descripcion,
-    recomendacion_accion,evidencias_apertura_storage_paths,estado,responsable_nombre,responsable_correo)
-    values($1,$2,$3,$4,now(),$5,$6,$7::jsonb,'ABIERTO',$8,$9)`,
+    recomendacion_accion,evidencias_apertura_storage_paths,estado,responsable_nombre,responsable_correo,
+    criterio_id,criterio_nombre_snapshot,evaluacion_apertura_id)
+    values($1,$2,$3,$4,now(),$5,$6,$7::jsonb,'ABIERTO',$8,$9,$10,$11,$12)`,
   [findingId, context.siteId, context.sourceAreaId, serviceId, descripcion, recomendacion,
-    JSON.stringify(evidenceStoragePaths), responsableNombre, responsableCorreo])
+    JSON.stringify(evidenceStoragePaths), responsableNombre, responsableCorreo,
+    criterion?.criterioId ?? null, criterion?.nombre ?? null, criterion?.id ?? null])
   const finding = await getFinding(client, findingId)
   if (!finding) throw new ApiError(500, 'No fue posible recuperar el Hallazgo creado.', 'UNEXPECTED')
   await audit(client, userId, 'SERVICIO_HALLAZGO_CREADO', serviceId, { areaId, findingId, evidenceCount: evidenceStoragePaths.length })
@@ -503,6 +508,10 @@ export async function saveTechnicianFindingStatus(
   await client.query('select id from public.hallazgos where id=$1 for update', [findingId])
   const current = await getFinding(client, findingId, serviceId)
   if (!current) throw new ApiError(404, 'El Hallazgo no está disponible.', 'FINDING_NOT_FOUND')
+  const criterion = await findingCriterion(client, serviceId, areaId, input.criterionId, evidenceStoragePaths)
+  if (criterion && current.criterioId && criterion.criterioId !== current.criterioId) {
+    throw new ApiError(422, 'Selecciona el criterio relacionado con este Hallazgo.', 'VALIDATION')
+  }
   if (current.version !== expectedVersion) {
     throw new ApiError(409, 'El Hallazgo cambió. Revisa la versión sincronizada antes de continuar.', 'VERSION_CONFLICT', { remote: current })
   }

@@ -18,6 +18,8 @@ import { pool, transaction } from '../../functions/api/db'
 import { claimTechnicianService, createTechnicianVehicle, saveTechnicianVehicles, createTechnicianSiteArea, createTechnicianDevice, createTechnicianFinding, finalizeTechnicianService, releaseTechnicianServiceLock, saveTechnicianAreaAccess, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, saveTechnicianFindingStatus, startTechnicianService, technicianCommand } from '../../functions/api/technician-services/commands'
 import type { DeviceState } from '../../src/types/technicianServices'
 import { getTechnicianPackage, listTechnicianHistory, listTechnicianServices } from '../../functions/api/technician-services/queries'
+import { loadServiceResultsData } from '../../functions/api/service-results/data'
+import { findSiteEvidence } from '../../functions/api/site-insights/queries'
 
 const target = new URL(process.env.TEST_DATABASE_URL ?? '')
 if (process.env.CI !== 'true' || !['localhost', '127.0.0.1'].includes(target.hostname) || target.pathname !== '/sr_certificates_test') throw new Error('Ephemeral CI database required')
@@ -356,6 +358,35 @@ describe('technician service execution · real PostgreSQL', () => {
     expect((await finish()).package.service.estado).toBe('FINALIZADO')
     const retention = await pool.query('select category from private.storage_retention_candidates where storage_path=$1', [photoPath])
     expect(retention.rows).toEqual([{ category: 'FINDING_FOLLOWUP' }])
+    await pool.query(`update public.servicios set estado='FINALIZADO',fin_real=now()-interval '19 days',
+      firma_tecnico_storage_path='services/synthetic-tech.png',firma_tecnico_usuario_id=tecnico_responsable_id,
+      firma_cliente_storage_path='services/synthetic-client.png',firma_cliente_nombre='Cliente',firma_cliente_at=now()-interval '19 days'
+      where id=$1`, [previousServiceId])
+    const futureService = randomUUID(), futureFollowup = randomUUID()
+    await pool.query(`insert into public.servicios(id,sede_id,tipo_servicio,estado,inicio_programado,fin_programado,inicio_real,fin_real,
+      firma_tecnico_storage_path,firma_tecnico_usuario_id,firma_cliente_storage_path,firma_cliente_nombre,firma_cliente_at,creado_por_id,tecnico_responsable_id,valor_servicio)
+      select $2,sede_id,'PRINCIPAL','FINALIZADO',now()+interval '1 day',now()+interval '2 days',now()+interval '1 day',now()+interval '2 days',
+      'services/synthetic-tech.png',tecnico_responsable_id,'services/synthetic-client.png','Cliente',now()+interval '2 days',creado_por_id,tecnico_responsable_id,0
+      from public.servicios where id=$1`, [value.service,futureService])
+    const futurePath = `services/${futureService}/findings/${findingId}/followup/future.jpg`
+    await pool.query(`insert into public.hallazgo_seguimientos(id,hallazgo_id,servicio_id,resultado,estado_anterior,tecnico_id,observacion,evidencias_storage_paths,registrado_at)
+      values($1,$2,$3,'CERRADO','ABIERTO',$4,'Cierre futuro',$5::jsonb,now()+interval '2 days')`,
+    [futureFollowup,findingId,futureService,value.technician,JSON.stringify([futurePath])])
+    await pool.query(`update public.hallazgos set estado='CERRADO',servicio_cierre_id=$2,fecha_cierre=now()+interval '2 days',
+      observacion_cierre='Cierre futuro',evidencias_cierre_storage_paths=$3::jsonb where id=$1`, [findingId,futureService,JSON.stringify([futurePath])])
+    const snapshot = await transaction(client => getTechnicianPackage(client,value.technician,value.service))
+    const historicalFinding = snapshot.areas.flatMap(item => item.hallazgos).find(item => item.id===findingId)!
+    expect(historicalFinding).toMatchObject({estado:'ABIERTO',resultadoSeguimiento:'SIN_CAMBIOS',servicioCierreId:null,fechaCierre:null,
+      observacionCierre:null,evidenciasCierreStoragePaths:[],historialSeguimientos:[{resultado:'SIN_CAMBIOS',evidenciasStoragePaths:[photoPath]}]})
+    expect(JSON.stringify(historicalFinding)).not.toContain(futureService)
+    const report = await transaction(client => loadServiceResultsData(client,value.service))
+    expect(report.areas.flatMap(item => item.hallazgos)).toEqual([expect.objectContaining({estado:'ABIERTO',
+      seguimientos:[expect.objectContaining({resultado:'SIN_CAMBIOS',fotos:[photoPath]})]})])
+    expect(JSON.stringify(report)).not.toContain(futurePath)
+    const siteId = (await pool.query<{id:string}>('select sede_id as id from public.servicios where id=$1',[value.service])).rows[0]!.id
+    await expect(transaction(client => findSiteEvidence(client,siteId,'FOLLOWUP',futureFollowup,0,value.service))).rejects.toMatchObject({code:'EVIDENCE_NOT_FOUND'})
+    const currentFollowup = historicalFinding.historialSeguimientos![0]!.id
+    expect((await transaction(client => findSiteEvidence(client,siteId,'FOLLOWUP',currentFollowup,0,value.service))).path).toBe(photoPath)
   })
 
   it('uses all catalogue methods without requiring per-visit dose or method', async () => {
@@ -602,5 +633,53 @@ describe('atomic automatic certificates · real PostgreSQL, simulated PDF and R2
     const cleanup=await pool.query(`select payload from private.integration_jobs where job_type='STORAGE_CLEANUP'
       and payload->>'scope'='CERTIFICATE_ORPHANS' and payload::text like $1`,['%'+value.service+'%'])
     expect(cleanup.rows[0]?.payload.paths).toHaveLength(3)
+  })
+})
+
+
+describe('criterion-linked findings · local PostgreSQL', () => {
+  it('keeps criterion snapshots, shares evidence and protects the file after unlinking the evaluation', async () => {
+    const value = await fixture(), phone = randomUUID(), first = randomUUID(), second = randomUUID()
+    const session = await transaction(client => startTechnicianService(client, value.technician, value.service, 1, phone))
+    const area = session.package.areas.find(item => item.areaId === value.internalArea)!
+    const criterion = area.criterios.find(item => item.criterioId === value.generalCriterion)!
+    const path = `services/${value.service}/criteria/${criterion.id}/evidence/shared.jpg`
+    const saved = await transaction(client => saveTechnicianCriterionEvaluation(client, value.technician, value.service,
+      phone, session.lock.token, criterion.id, criterion.version, 'NC', 'Grieta', [path]))
+    for (const findingId of [first, second]) {
+      const result = await transaction(client => createTechnicianFinding(client, value.technician, value.service,
+        phone, session.lock.token, area.id, findingId, { criterionId: criterion.id, descripcion: 'Grieta', recomendacionAccion: 'Sellar' }, [path]))
+      expect(result.finding).toMatchObject({ criterioId: value.generalCriterion, criterioNombre: criterion.nombre,
+        evaluacionAperturaId: criterion.id, evidenciasAperturaStoragePaths: [path] })
+    }
+    const wrongArea = session.package.areas.find(item => item.areaId === value.externalArea)!
+    await expect(transaction(client => createTechnicianFinding(client, value.technician, value.service, phone, session.lock.token,
+      wrongArea.id, randomUUID(), { criterionId: criterion.id, descripcion: 'Otra', recomendacionAccion: 'Sellar' }, [path])))
+      .rejects.toMatchObject({ code: 'VALIDATION' })
+    const removed = await transaction(client => saveTechnicianCriterionEvaluation(client, value.technician, value.service,
+      phone, session.lock.token, criterion.id, saved.criterion.version, 'C', '', []))
+    expect(removed.removedEvidenceStoragePaths).toEqual([])
+    await pool.query('update public.criterios_mip set nombre=$2,activo=false where id=$1', [value.generalCriterion, 'Nombre actualizado ' + value.generalCriterion])
+    const refreshed = await transaction(client => getTechnicianPackage(client, value.technician, value.service))
+    expect(refreshed.areas.find(item => item.id === area.id)!.hallazgos.find(item => item.id === first)!.criterioNombre).toBe(criterion.nombre)
+    await expect(transaction(client => saveTechnicianFindingStatus(client, value.technician, value.service, phone,
+      session.lock.token, area.id, first, 1, { estado: 'CERRADO', observacionCierre: 'No permitido' }, [])))
+      .rejects.toMatchObject({ code: 'FINDING_SAME_SERVICE' })
+    await transaction(client => saveTechnicianCriterionEvaluation(client,value.technician,value.service,phone,session.lock.token,criterion.id,removed.criterion.version,'C','',[path]))
+    for (const currentArea of refreshed.areas) {
+      for (const current of currentArea.criterios) if (!current.evaluacion) await transaction(client => saveTechnicianCriterionEvaluation(client,
+        value.technician,value.service,phone,session.lock.token,current.id,current.version,'C',''))
+      for (const device of currentArea.dispositivos) await transaction(client => saveTechnicianDeviceReview(client,value.technician,value.service,
+        phone,session.lock.token,device.id,randomUUID(),0,{estadoObservado:'ACTIVO',capturas:[],consumo:'',productoQuimico:'',antidoto:'',observaciones:''},null))
+    }
+    await transaction(client => finalizeTechnicianService(client,value.technician,value.service,phone,session.lock.token,
+      'services/synthetic-tech.png','services/synthetic-client.png','Cliente'))
+    const retained = await pool.query("select category,expires_at > now() + interval '11 months' as protected from private.storage_retention_candidates where storage_path=$1",[path])
+    expect(retained.rows).toEqual([{category:'FINDING_OPENING',protected:true}])
+    const report = await transaction(client => loadServiceResultsData(client,value.service))
+    expect(report.areas.flatMap(item => item.hallazgos)).toEqual([
+      expect.objectContaining({criterioId:value.generalCriterion,criterioNombre:criterion.nombre,fotos:[path],estado:'ABIERTO'}),
+      expect.objectContaining({criterioId:value.generalCriterion,criterioNombre:criterion.nombre,fotos:[path],estado:'ABIERTO'}),
+    ])
   })
 })

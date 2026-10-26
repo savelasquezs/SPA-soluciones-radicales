@@ -54,6 +54,22 @@ const findings = computed(() => (report.value?.areas.flatMap(area =>
     finding.estado === 'CERRADO' ? 2 : finding.anterior ? 0 : 1
   return priority(a) - priority(b) || a.fechaApertura.localeCompare(b.fechaApertura)
 }))
+const evidenceOwners = computed(() => {
+  const owners = new Map<string, string>()
+  findings.value.forEach((finding, index) => {
+    for (const path of finding.fotos) if (!owners.has(path)) owners.set(path, `finding-${index}-opening`)
+    finding.seguimientos.forEach((review, visit) => {
+      for (const path of review.fotos) if (!owners.has(path)) owners.set(path, `finding-${index}-visit-${visit}`)
+    })
+  })
+  return owners
+})
+const sharedCriterionPhotos = (photos: string[]) => photos.filter(path => evidenceOwners.value.has(path))
+const criterionPhotos = (photos: string[]) => photos.filter(path => !evidenceOwners.value.has(path))
+function findingPhotos(photos: string[], owner: string): string[] {
+  return [...new Set(photos)].filter(path => evidenceOwners.value.get(path) === owner)
+}
+function evidenceTarget(path: string): string { return evidenceOwners.value.get(path) ?? 'report-findings-title' }
 const unresolvedFindings = computed(() => findings.value.filter(finding => finding.estado !== 'CERRADO').length)
 const findingReviewLabel: Record<string,string> = {
   SIN_CAMBIOS: 'Sigue pendiente', EN_PROCESO: 'En proceso', CERRADO: 'Solucionado',
@@ -316,8 +332,9 @@ watch(() => [serviceId.value, publicToken.value], () => { void loadReport() }, {
               <div v-for="(criterion,index) in area.sinAcceso ? [] : area.criterios" :key="index" class="report-criterion">
                 <div class="report-criterion__text"><strong>{{ criterion.nombre }}</strong><p v-if="criterion.observacion">{{ criterion.observacion }}</p></div>
                 <span class="report-evaluation" :class="'report-evaluation--' + (criterion.evaluacion || 'NA')">{{ grade[criterion.evaluacion ?? ''] || 'Sin evaluar' }}</span>
-                <div v-if="criterion.fotos.length" class="report-photo-row">
-                  <ReportEvidence v-for="(path,i) in criterion.fotos" :key="path" :path="path" :caption="'Evidencia · ' + criterion.nombre + ' · Foto ' + (i+1)" :state="photoState(path)" :url="urls[path]" @open="openImage" @failed="imageError" />
+                <p v-if="sharedCriterionPhotos(criterion.fotos).length" class="report-finding__meta"><a :href="'#' + evidenceTarget(sharedCriterionPhotos(criterion.fotos)[0]!)">Evidencia compartida con el hallazgo</a></p>
+                <div v-if="criterionPhotos(criterion.fotos).length" class="report-photo-row">
+                  <ReportEvidence v-for="(path,i) in criterionPhotos(criterion.fotos)" :key="path" :path="path" :caption="'Evidencia · ' + criterion.nombre + ' · Foto ' + (i+1)" :state="photoState(path)" :url="urls[path]" @open="openImage" @failed="imageError" />
                 </div>
               </div>
             </div>
@@ -375,26 +392,29 @@ watch(() => [serviceId.value, publicToken.value], () => { void loadReport() }, {
                   {{ finding.estado === 'CERRADO' ? 'Solucionado en esta visita' : finding.anterior ? 'Pendiente anterior' : 'Nuevo · Pendiente' }}
                 </span>
               </div>
+              <p v-if="finding.criterioNombre" class="report-finding__meta">Criterio · {{ finding.criterioNombre }}</p>
               <p>{{ finding.descripcion }}</p>
               <p><strong>Acción recomendada:</strong> {{ finding.recomendacion || '—' }}</p>
               <p class="report-finding__meta">Detectado el {{ bogotaDate(finding.fechaApertura) }} · {{ finding.solicitudApertura }}
                 <span v-if="finding.anterior && finding.estado !== 'CERRADO'"> · Presente en {{ finding.visitasDesdeApertura }} visita(s)</span>
               </p>
               <p class="report-finding__meta">Responsable: {{ finding.responsable || 'No indicado' }}</p>
-              <div v-if="finding.fotos.length" class="report-finding__evidence">
+              <div v-if="finding.fotos.length" :id="`finding-${index}-opening`" class="report-finding__evidence">
                 <h4>Evidencia inicial</h4>
                 <div class="report-photo-row">
-                  <ReportEvidence v-for="(path,i) in finding.fotos" :key="path" :path="path" :caption="'Apertura · ' + finding.solicitudApertura + ' · Foto ' + (i+1)" :state="photoState(path)" :url="urls[path]" @open="openImage" @failed="imageError" />
+                  <ReportEvidence v-for="(path,i) in findingPhotos(finding.fotos, `finding-${index}-opening`)" :key="path" :path="path" :caption="'Apertura · ' + finding.solicitudApertura + ' · Foto ' + (i+1)" :state="photoState(path)" :url="urls[path]" @open="openImage" @failed="imageError" />
                 </div>
               </div>
+              <p v-for="path in finding.fotos.filter(photo => evidenceOwners.get(photo) !== `finding-${index}-opening`)" :key="path" class="report-finding__meta"><a :href="'#' + evidenceTarget(path)">Ver evidencia compartida</a></p>
               <div v-if="finding.seguimientos.length" class="report-finding__timeline">
                 <h4>Historial de seguimiento</h4>
-                <div v-for="(review,i) in finding.seguimientos" :key="review.solicitud + ':' + i" class="report-finding__review">
+                <div v-for="(review,i) in finding.seguimientos" :id="`finding-${index}-visit-${i}`" :key="review.solicitud + ':' + i" class="report-finding__review">
                   <div class="report-finding__review-head"><strong>{{ bogotaDate(review.fecha) }} · {{ review.solicitud }}</strong><span>{{ findingReviewLabel[review.resultado] }}</span></div>
                   <p v-if="review.observacion">{{ review.observacion }}</p>
                   <div v-if="review.fotos.length" class="report-photo-row">
-                    <ReportEvidence v-for="(path,j) in review.fotos" :key="path" :path="path" :caption="'Seguimiento · ' + review.solicitud + ' · Foto ' + (j+1)" :state="photoState(path)" :url="urls[path]" @open="openImage" @failed="imageError" />
+                    <ReportEvidence v-for="(path,j) in findingPhotos(review.fotos, `finding-${index}-visit-${i}`)" :key="path" :path="path" :caption="'Seguimiento · ' + review.solicitud + ' · Foto ' + (j+1)" :state="photoState(path)" :url="urls[path]" @open="openImage" @failed="imageError" />
                   </div>
+                  <p v-for="path in review.fotos.filter(photo => evidenceOwners.get(photo) !== `finding-${index}-visit-${i}`)" :key="path" class="report-finding__meta"><a :href="'#' + evidenceTarget(path)">Ver evidencia compartida</a></p>
                 </div>
               </div>
             </article>

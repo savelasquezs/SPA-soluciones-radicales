@@ -108,7 +108,7 @@ export async function listSiteFindings(client: PoolClient, siteId: string, query
     select (select count(*)::integer from filtered) as total, ${areaOptions} as areas,
       coalesce((select jsonb_agg(jsonb_build_object(
         'id',h.id,'areaId',h.area_id,'areaName',coalesce(sa.nombre_snapshot,a.nombre),'state',h.estado,
-        'description',h.descripcion,'recommendation',h.recomendacion_accion,
+        'criterionName',h.criterio_nombre_snapshot,'description',h.descripcion,'recommendation',h.recomendacion_accion,
         'responsibleName',h.responsable_nombre,'responsibleEmail',h.responsable_correo,
         'openedAt',h.fecha_apertura,'closedAt',h.fecha_cierre,'closingNotes',h.observacion_cierre,
         'followups',(select coalesce(jsonb_agg(jsonb_build_object(
@@ -148,9 +148,15 @@ export async function listSiteFindings(client: PoolClient, siteId: string, query
 
 export interface EvidenceSource { path: string; serviceId: string; ownerId: string; retentionAt: string | null }
 /** Resolve a persisted reference, never a caller-supplied storage path. */
-export async function findSiteEvidence(client: PoolClient, siteId: string, kind: EvidenceKind, recordId: string, index: number): Promise<EvidenceSource> {
+export async function findSiteEvidence(client: PoolClient, siteId: string, kind: EvidenceKind, recordId: string, index: number, serviceId?: string): Promise<EvidenceSource> {
   let source: EvidenceSource | undefined
-  if (kind === 'FOLLOWUP') {
+  if (kind === 'CRITERION') {
+    source = (await client.query<EvidenceSource>(`select e.evidencias_storage_paths ->> $3::integer as path,
+      e.servicio_id as "serviceId",e.id as "ownerId",
+      (s.fin_real + interval '3 months')::text as "retentionAt"
+      from public.evaluaciones_mip_area e join public.servicios s on s.id=e.servicio_id
+      where s.sede_id=$1 and e.id=$2`, [siteId,recordId,index])).rows[0]
+  } else if (kind === 'FOLLOWUP') {
     source = (await client.query<EvidenceSource>(`select seg.evidencias_storage_paths ->> $3::integer as path,
       seg.servicio_id as "serviceId",h.id as "ownerId",
       (case when h.estado='CERRADO' and h.fecha_cierre is not null
@@ -180,5 +186,15 @@ export async function findSiteEvidence(client: PoolClient, siteId: string, kind:
       where h.sede_id=$1 and h.id=$2`, [siteId,recordId,index,kind])).rows[0]
   }
   if (!source?.path?.trim()) throw new ApiError(404, 'La evidencia no está registrada.', 'EVIDENCE_NOT_FOUND')
-  return source
+  const access = (await client.query<{ allowed: boolean; retentionAt: string | null }>(`select
+    ($3::uuid is null or $2::uuid=$3::uuid or exists(
+      select 1 from public.servicios origin join public.servicios requested on requested.id=$3
+      where origin.id=$2 and origin.sede_id=requested.sede_id and origin.estado='FINALIZADO'
+        and origin.fin_real<=coalesce(requested.fin_real,requested.inicio_real,requested.inicio_programado)
+    )) as allowed,
+    coalesce((select expires_at::text from private.storage_retention_candidates
+      where bucket='sr-service-media' and storage_path=$1 limit 1),$4::text) as "retentionAt"`,
+  [source.path,source.serviceId,serviceId ?? null,source.retentionAt])).rows[0]
+  if (!access?.allowed) throw new ApiError(404, 'La evidencia no pertenece a esta visita ni a su histórico.', 'EVIDENCE_NOT_FOUND')
+  return { ...source, retentionAt: access.retentionAt }
 }

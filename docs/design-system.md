@@ -160,3 +160,7 @@ Si una pantalla necesita una variante visual no contemplada, primero se evalúa 
 - Usar `admin-compact-filters` en barras de búsqueda y filtros administrativos: controles de 36 px y labels cercanos en escritorio, sin cambiar `BaseInput`/`BaseSelect` dentro de formularios; conservar 44 px o más en móvil.
 - No repetir el breadcrumb simple si ya existe el título de la vista; conservar breadcrumbs navegables en las vistas de detalle.
 - Documentos y certificados pertenecen a Configuración, no a una entrada vacía del sidebar. El enlace de Ayuda lleva a [Mintlify](https://soluciones-radicales.mintlify.app).
+
+## Criterios y hallazgos en campo
+
+El criterio agrupa evaluación, observación, fotografías y hallazgos relacionados en una única superficie. Los detalles y el historial son plegables. El selector de Área y Orden comparten fila en móvil, conservando controles táctiles de 44 px. Otros hallazgos del Área se diferencia mediante un encabezado y borde discreto, sin una pestaña adicional. Se reutilizan tokens y visor existentes en ambos temas.

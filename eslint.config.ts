@@ -16,7 +16,7 @@ export default [
     files: ['**/*.{vue,ts,mts,tsx}'],
   },
 
-  globalIgnores(['**/dist/**', '**/dist-ssr/**', '**/coverage/**']),
+  globalIgnores(['**/dist/**', '**/dist-ssr/**', '**/coverage/**', 'logs/**']),
 
   ...pluginVue.configs['flat/essential'],
   ...vueTsEslintConfig(),

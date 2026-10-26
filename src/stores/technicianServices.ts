@@ -6,7 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import { claimTechnicianService, createTechnicianVehicle, saveTechnicianVehicleSelection, createTechnicianSiteArea, createTechnicianDevice, createTechnicianFinding, fetchTechnicianPackage, fetchTechnicianServices, finalizeTechnicianService, saveTechnicianAreaAccess, saveTechnicianAreaOrder, saveTechnicianCriterionEvaluation, saveTechnicianDeviceReview, saveTechnicianFindingStatus, startTechnicianService } from '@/services/servicesService'
 import { ApiClientError } from '@/services/apiService'
 import { getTechnicianDeviceId, restoreTechnicianDeviceIdFromCaches, listTechnicianPackageCaches, loadTechnicianPackageCache, saveTechnicianPackageCache } from '@/services/technicianPackageService'
-import { deleteTechnicianMutation, listTechnicianMutations, saveTechnicianMutation } from '@/services/technicianMutationService'
+import { deleteTechnicianMutation, listTechnicianMutations, replaceTechnicianMutation, saveTechnicianMutation } from '@/services/technicianMutationService'
 import { deleteTechnicianMedia, loadTechnicianMedia, saveTechnicianMedia } from '@/services/technicianMediaService'
 import { deleteTechnicianAreaPhoto, deleteTechnicianCriterionEvidence, deleteTechnicianDevicePhoto, deleteTechnicianFindingEvidence, uploadTechnicianAreaPhoto, uploadTechnicianCriterionEvidence, uploadTechnicianDevicePhoto, uploadTechnicianFindingEvidence, uploadTechnicianSignature } from '@/services/serviceMediaService'
 import type { MipEvaluation, TechnicianAreaAccessMutation, TechnicianAreaAccessState, TechnicianAreaOrderConflict, TechnicianAreaOrderMutation, TechnicianAreaOrderResult, TechnicianSiteAreaCreationInput, TechnicianSiteAreaCreationMutation, TechnicianArea, TechnicianCriterion, TechnicianCriterionEvaluationMutation, TechnicianDevice, TechnicianDeviceCreationInput, TechnicianDeviceCreationMutation, TechnicianDeviceReview, TechnicianDeviceReviewInput, TechnicianDeviceReviewMutation, TechnicianExecutionSession, TechnicianFinding, TechnicianFindingCreateInput, TechnicianFindingCreateMutation, TechnicianFindingStatusInput, TechnicianFindingStatusMutation, TechnicianMutation, TechnicianPackageCache, TechnicianPendingOperation, TechnicianServiceFinalizeMutation, TechnicianVehicleSelectionMutation, TechnicianServicePackage, TechnicianServiceSummary } from '@/types/technicianServices'
@@ -33,6 +33,14 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
   let loadedActorId = ''
   let listRequest = 0
   let packageRequest = 0
+  const localWrites = new Map<string, Promise<unknown>>()
+
+  async function writeLocally<T>(serviceId: string, write: () => Promise<T>): Promise<T> {
+    const task = (localWrites.get(serviceId) ?? Promise.resolve()).catch(() => {}).then(write)
+    localWrites.set(serviceId, task)
+    try { return await task }
+    finally { if (localWrites.get(serviceId) === task) localWrites.delete(serviceId) }
+  }
 
   const currentCache = computed(() => caches.value[currentServiceId.value] ?? null)
   const currentPackage = computed(() => currentCache.value?.package ?? null)
@@ -409,6 +417,22 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     await persistPackage({ ...cache.package, areas })
   }
 
+  async function persistLocalMutation(operation: TechnicianMutation, previous: TechnicianMutation | undefined, mediaIds: string[], update: () => Promise<void>): Promise<void> {
+    try {
+      await saveTechnicianMutation(operation)
+      await reloadMutations(operation.serviceId)
+      await update()
+    } catch (failure) {
+      try {
+        if (previous) await saveTechnicianMutation(previous)
+        else await deleteTechnicianMutation(operation)
+      } catch { throw failure }
+      for (const mediaId of mediaIds) await deleteTechnicianMedia(operation.actorId, mediaId)
+      await reloadMutations(operation.serviceId)
+      throw failure
+    }
+  }
+
   function reviewFromMutation(device: TechnicianDevice, mutation: TechnicianDeviceReviewMutation, base?: TechnicianDeviceReview): TechnicianDeviceReview {
     const pestNames = new Map(device.plagas.map(pest => [pest.codigo, pest.nombre]))
     return {
@@ -475,6 +499,7 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     let current = operation
     for (const evidence of current.evidences) {
       if (evidence.storagePath) continue
+      if (evidence.criterionId) throw new Error('Primero sincroniza las fotografías del criterio relacionado.')
       const media = await loadTechnicianMedia(current.actorId, evidence.mediaId)
       if (!media) throw new Error('Una evidencia local del Hallazgo no está disponible.')
       const storagePath = await uploadTechnicianFindingEvidence(current.serviceId, current.areaId, current.findingId,
@@ -516,6 +541,10 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
         // The closure must run after every field edit, even when a conflict is resolved
         // and its replacement mutation was created after the original closure intention.
         const operation = pending.find(item => item.kind === 'VEHICLE_CREATE')
+          ?? pending.find(item => item.kind === 'AREA_CREATE')
+          ?? pending.find(item => item.kind === 'CRITERION_EVALUATION' && pending.some(dependent =>
+            (dependent.kind === 'FINDING_CREATE' || dependent.kind === 'FINDING_STATUS')
+            && dependent.evidences.some(photo => photo.criterionId === item.criterionId)))
           ?? pending.find(item => item.kind !== 'SERVICE_FINALIZE' && item.kind !== 'VEHICLE_SELECTION')
           ?? pending.find(item => item.kind === 'VEHICLE_SELECTION') ?? pending[0]
         if (!operation) return 'synced'
@@ -592,21 +621,24 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
             const result = await saveTechnicianCriterionEvaluation(serviceId, criterionOperation.requestId, criterionOperation.deviceId,
               criterionOperation.lockToken, criterionId, criterionOperation.version, criterionOperation.evaluation,
               criterionOperation.observation, evidenceStoragePaths)
-            await deleteTechnicianMutation(criterionOperation)
-            for (const evidence of criterionOperation.evidences) await deleteTechnicianMedia(criterionOperation.actorId, evidence.mediaId)
-            const remaining = await listTechnicianMutations(actorId(), serviceId)
-            const sameCriterion = remaining.filter((item): item is TechnicianCriterionEvaluationMutation => item.kind === 'CRITERION_EVALUATION'
-              && item.criterionId === criterionId && item.status !== 'CONFLICT')
-            for (const queued of sameCriterion) {
-              await saveTechnicianMutation({ ...queued, version: result.criterion.version, updatedAt: new Date().toISOString() })
-            }
-            const latest = sameCriterion[sameCriterion.length - 1]
-            const criterion = latest
-              ? { ...result.criterion, evaluacion: latest.evaluation, observacion: latest.observation || null,
-                  evidenciasStoragePaths: latest.retainedEvidenceStoragePaths,
-                  evidenciasLocalIds: latest.evidences.map(evidence => evidence.mediaId) }
-              : result.criterion
-            await persistCriterionEvaluation(serviceId, criterionOperation.areaId, criterion)
+            await writeLocally(serviceId, async () => {
+              await resolveSharedCriterionEvidence(criterionOperation)
+              const remaining = (await listTechnicianMutations(actorId(), serviceId)).filter(item => item.requestId !== criterionOperation.requestId)
+              const sameCriterion = remaining.filter((item): item is TechnicianCriterionEvaluationMutation => item.kind === 'CRITERION_EVALUATION'
+                && item.criterionId === criterionId && item.status !== 'CONFLICT')
+              for (const queued of sameCriterion) {
+                await saveTechnicianMutation({ ...queued, version: result.criterion.version, updatedAt: new Date().toISOString() })
+              }
+              const latest = sameCriterion[sameCriterion.length - 1]
+              const criterion = latest
+                ? { ...result.criterion, evaluacion: latest.evaluation, observacion: latest.observation || null,
+                    evidenciasStoragePaths: latest.retainedEvidenceStoragePaths,
+                    evidenciasLocalIds: latest.evidences.map(evidence => evidence.mediaId) }
+                : result.criterion
+              await persistCriterionEvaluation(serviceId, criterionOperation.areaId, criterion)
+              await deleteTechnicianMutation(criterionOperation)
+              for (const evidence of criterionOperation.evidences) await deleteTechnicianMedia(criterionOperation.actorId, evidence.mediaId)
+            })
           } else if (sending.kind === 'AREA_ACCESS') {
             const areaId = sending.areaId
             let areaOperation = sending
@@ -661,21 +693,21 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
             sending = findingOperation
             const result = await createTechnicianFinding(serviceId, findingOperation.areaId, findingOperation.requestId,
               findingOperation.deviceId, findingOperation.lockToken, findingOperation.findingId,
-              { descripcion: findingOperation.descripcion, recomendacionAccion: findingOperation.recomendacionAccion },
-              findingOperation.evidences.flatMap(evidence => evidence.storagePath ? [evidence.storagePath] : []))
-            await deleteTechnicianMutation(findingOperation)
-            for (const evidence of findingOperation.evidences) await deleteTechnicianMedia(findingOperation.actorId, evidence.mediaId)
+              { descripcion: findingOperation.descripcion, recomendacionAccion: findingOperation.recomendacionAccion, criterionId: findingOperation.criterionId },
+              [...new Set([...(findingOperation.sharedEvidenceStoragePaths ?? []), ...findingOperation.evidences.flatMap(evidence => evidence.storagePath ? [evidence.storagePath] : [])])])
             await persistFinding(serviceId, findingOperation.areaId, result.finding)
+            await deleteTechnicianMutation(findingOperation)
+            for (const evidence of findingOperation.evidences.filter(photo => !photo.criterionId)) await deleteTechnicianMedia(findingOperation.actorId, evidence.mediaId)
           } else if (sending.kind === 'FINDING_STATUS') {
             const findingOperation = await uploadFindingMutationEvidences(sending, 'FOLLOWUP')
             sending = findingOperation
             const result = await saveTechnicianFindingStatus(serviceId, findingOperation.areaId, findingOperation.findingId,
               findingOperation.requestId, findingOperation.deviceId, findingOperation.lockToken, findingOperation.version,
-              { estado: findingOperation.estado, observacionCierre: findingOperation.observacionCierre },
-              findingOperation.evidences.flatMap(evidence => evidence.storagePath ? [evidence.storagePath] : []))
-            await deleteTechnicianMutation(findingOperation)
-            for (const evidence of findingOperation.evidences) await deleteTechnicianMedia(findingOperation.actorId, evidence.mediaId)
+              { estado: findingOperation.estado, observacionCierre: findingOperation.observacionCierre, criterionId: findingOperation.criterionId },
+              [...new Set([...(findingOperation.sharedEvidenceStoragePaths ?? []), ...findingOperation.evidences.flatMap(evidence => evidence.storagePath ? [evidence.storagePath] : [])])])
             await persistFinding(serviceId, findingOperation.areaId, result.finding)
+            await deleteTechnicianMutation(findingOperation)
+            for (const evidence of findingOperation.evidences.filter(photo => !photo.criterionId)) await deleteTechnicianMedia(findingOperation.actorId, evidence.mediaId)
           } else if (sending.kind === 'SERVICE_FINALIZE') {
             let finalization = sending
             if (!finalization.technicianStoragePath) {
@@ -1018,6 +1050,12 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
 
   async function applyCriterionEvaluation(serviceId: string, areaId: string, criterionId: string, evaluation: MipEvaluation, observation: string,
     files: File[] = [], retainedEvidenceStoragePaths?: string[], deferSync = false): Promise<'synced' | 'pending' | 'conflict'> {
+    const result = await writeLocally(serviceId, () => queueCriterionEvaluation(serviceId, areaId, criterionId, evaluation, observation, files, retainedEvidenceStoragePaths))
+    return result === 'conflict' || deferSync || !onlineNow() ? result : syncPending(serviceId)
+  }
+
+  async function queueCriterionEvaluation(serviceId: string, areaId: string, criterionId: string, evaluation: MipEvaluation, observation: string,
+    files: File[], retainedEvidenceStoragePaths?: string[]): Promise<'pending' | 'conflict'> {
     const cache = caches.value[serviceId]
     if (!cache || cache.package.service.estado !== 'EN_PROCESO' || !cache.lock) throw new Error('Este celular no puede evaluar el servicio.')
     const area = cache.package.areas.find(item => item.id === areaId)
@@ -1030,18 +1068,21 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     if (retained.length + files.length > 5 || new Set(retained).size !== retained.length) throw new Error('Puedes guardar hasta cinco fotografías por criterio.')
     const existing = await reloadMutations(serviceId)
     if (existing.some(item => item.kind === 'CRITERION_EVALUATION' && item.criterionId === criterionId && item.status === 'CONFLICT')) return 'conflict'
+    const protectedPaths = existing.flatMap(item => item.kind === 'FINDING_CREATE' || item.kind === 'FINDING_STATUS'
+      ? [...(item.sharedEvidenceStoragePaths ?? []), ...item.evidences.flatMap(photo => photo.storagePath ? [photo.storagePath] : [])] : [])
+    if (criterion.evidenciasStoragePaths.some(path => !retained.includes(path) && protectedPaths.includes(path))) {
+      throw new Error('Estas fotos respaldan un hallazgo pendiente. Sincronízalo antes de quitar la asociación del criterio.')
+    }
     const reusable = [...existing].reverse().find((item): item is TechnicianCriterionEvaluationMutation => item.kind === 'CRITERION_EVALUATION'
       && item.criterionId === criterionId && item.status === 'PENDING')
-    if ((reusable?.evidences.length ?? 0) + retained.length + files.length > 5) throw new Error('Puedes guardar hasta cinco fotografías por criterio.')
-    const newEvidences = files.map(file => ({ mediaId: crypto.randomUUID(), storagePath: null, file }))
-    for (const evidence of newEvidences) {
-      await saveTechnicianMedia({ schemaVersion: 1, id: evidence.mediaId, actorId: actorId(), serviceId, areaId, criterionId,
-        file: evidence.file, savedAt: new Date().toISOString() })
-    }
+    const carried = existing.flatMap(item => item.kind === 'CRITERION_EVALUATION' && item.criterionId === criterionId ? item.evidences : [])
+      .filter((photo, index, all) => all.findIndex(item => item.mediaId === photo.mediaId) === index && (!photo.storagePath || !retained.includes(photo.storagePath)))
+    if (carried.length + retained.length + files.length > 5) throw new Error('Puedes guardar hasta cinco fotografías por criterio.')
+    const newEvidences = (await saveEvidenceMedia(serviceId, areaId, files, criterionId)).map(mediaId => ({mediaId,storagePath:null}))
     const now = new Date().toISOString()
     const operation: TechnicianCriterionEvaluationMutation = reusable
       ? { ...reusable, evaluation, observation: normalizedObservation, retainedEvidenceStoragePaths: retained,
-          evidences: [...reusable.evidences, ...newEvidences.map(({ mediaId, storagePath }) => ({ mediaId, storagePath }))], updatedAt: now }
+          evidences: [...carried, ...newEvidences.map(({ mediaId, storagePath }) => ({ mediaId, storagePath }))], updatedAt: now }
       : {
           schemaVersion: 1,
           requestId: crypto.randomUUID(),
@@ -1054,7 +1095,7 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
           criterionId,
           evaluation,
           observation: normalizedObservation,
-          evidences: newEvidences.map(({ mediaId, storagePath }) => ({ mediaId, storagePath })),
+          evidences: [...carried, ...newEvidences.map(({ mediaId, storagePath }) => ({ mediaId, storagePath }))],
           retainedEvidenceStoragePaths: retained,
           version: criterion.version,
           status: 'PENDING',
@@ -1063,15 +1104,10 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
           conflict: null,
           error: null,
         }
-    try { await saveTechnicianMutation(operation) }
-    catch (failure) {
-      for (const evidence of newEvidences) await deleteTechnicianMedia(actorId(), evidence.mediaId)
-      throw failure
-    }
-    await reloadMutations(serviceId)
-    await persistCriterionEvaluation(serviceId, areaId, { ...criterion, evaluacion: evaluation, observacion: normalizedObservation || null,
-      evidenciasStoragePaths: retained, evidenciasLocalIds: operation.evidences.map(evidence => evidence.mediaId) })
-    return !deferSync && onlineNow() ? syncPending(serviceId) : 'pending'
+    await persistLocalMutation(operation, reusable, newEvidences.map(photo => photo.mediaId), () => persistCriterionEvaluation(serviceId, areaId,
+      { ...criterion, evaluacion: evaluation, observacion: normalizedObservation || null,
+        evidenciasStoragePaths: retained, evidenciasLocalIds: operation.evidences.map(evidence => evidence.mediaId) }))
+    return 'pending'
   }
 
   async function discardCriterionEvaluationConflict(serviceId: string, criterionId: string): Promise<void> {
@@ -1079,6 +1115,9 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     const conflicted = pending.find((item): item is TechnicianCriterionEvaluationMutation => item.kind === 'CRITERION_EVALUATION'
       && item.criterionId === criterionId && item.status === 'CONFLICT' && Boolean(item.conflict))
     if (!conflicted?.conflict) throw new Error('No hay una respuesta sincronizada disponible.')
+    if (pending.some(item => (item.kind === 'FINDING_CREATE' || item.kind === 'FINDING_STATUS') && item.evidences.some(photo => photo.criterionId === criterionId))) {
+      throw new Error('Estas fotos respaldan un hallazgo pendiente. Reintenta tu respuesta del criterio para conservar ambas capturas.')
+    }
     for (const operation of pending.filter((item): item is TechnicianCriterionEvaluationMutation => item.kind === 'CRITERION_EVALUATION' && item.criterionId === criterionId)) {
       for (const evidence of operation.evidences) {
         if (evidence.storagePath && !conflicted.conflict.evidenciasStoragePaths.includes(evidence.storagePath)) {
@@ -1100,11 +1139,13 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     const area = cache?.package.areas.find(item => item.id === conflicted?.areaId)
     const local = area?.criterios.find(item => item.id === criterionId)
     if (!cache?.lock || !conflicted?.conflict || !local?.evaluacion) throw new Error('No es posible reintentar esta evaluación.')
-    for (const operation of pending.filter(item => item.kind === 'CRITERION_EVALUATION' && item.criterionId === criterionId)) await deleteTechnicianMutation(operation)
+    const superseded = pending.filter((item): item is TechnicianCriterionEvaluationMutation => item.kind === 'CRITERION_EVALUATION' && item.criterionId === criterionId)
+    const evidences = superseded.flatMap(item => item.evidences).filter((photo, index, all) =>
+      local.evidenciasLocalIds?.includes(photo.mediaId) && all.findIndex(item => item.mediaId === photo.mediaId) === index)
     const now = new Date().toISOString()
-    await saveTechnicianMutation({ ...conflicted, requestId: crypto.randomUUID(), evaluation: local.evaluacion, observation: local.observacion ?? '',
+    await replaceTechnicianMutation(conflicted, { ...conflicted, requestId: crypto.randomUUID(), evaluation: local.evaluacion, observation: local.observacion ?? '', evidences,
       retainedEvidenceStoragePaths: local.evidenciasStoragePaths,
-      version: conflicted.conflict.version, status: 'PENDING', conflict: null, error: null, createdAt: now, updatedAt: now })
+      version: conflicted.conflict.version, status: 'PENDING', conflict: null, error: null, createdAt: now, updatedAt: now }, superseded)
     await reloadMutations(serviceId)
     return syncPending(serviceId)
   }
@@ -1337,13 +1378,14 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
       (item.kind === 'FINDING_CREATE' || item.kind === 'FINDING_STATUS') && item.findingId === findingId) ?? null
   }
 
-  async function saveFindingMedia(serviceId: string, areaId: string, files: File[]): Promise<string[]> {
-    if (files.length > 10) throw new Error('Puedes adjuntar máximo 10 evidencias por Hallazgo.')
+  async function saveEvidenceMedia(serviceId: string, areaId: string, files: File[], criterionId?: string): Promise<string[]> {
+    if (files.length > (criterionId ? 5 : 10)) throw new Error('Hay demasiadas fotografías para esta captura.')
     const ids: string[] = []
     try {
       for (const file of files) {
         const id = crypto.randomUUID()
-        await saveTechnicianMedia({ schemaVersion: 1, id, actorId: actorId(), serviceId, areaId, file, savedAt: new Date().toISOString() })
+        await saveTechnicianMedia({ schemaVersion: 1, id, actorId: actorId(), serviceId, areaId,
+          ...(criterionId ? {criterionId} : {}), file, savedAt: new Date().toISOString() })
         ids.push(id)
       }
       return ids
@@ -1353,18 +1395,72 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     }
   }
 
+  async function resolveSharedCriterionEvidence(operation: TechnicianCriterionEvaluationMutation): Promise<void> {
+    const paths = new Map(operation.evidences.filter(photo => photo.storagePath).map(photo => [photo.mediaId, photo.storagePath!]))
+    for (const dependent of await listTechnicianMutations(operation.actorId, operation.serviceId)) {
+      if (dependent.kind === 'CRITERION_EVALUATION' && dependent.requestId !== operation.requestId && dependent.criterionId === operation.criterionId) {
+        await saveTechnicianMutation({ ...dependent,
+          retainedEvidenceStoragePaths: [...new Set([...dependent.retainedEvidenceStoragePaths, ...dependent.evidences.flatMap(photo => paths.has(photo.mediaId) ? [paths.get(photo.mediaId)!] : [])])],
+          evidences: dependent.evidences.filter(photo => !paths.has(photo.mediaId)),
+        })
+      }
+      if (dependent.kind !== 'FINDING_CREATE' && dependent.kind !== 'FINDING_STATUS') continue
+      if (!dependent.evidences.some(photo => photo.criterionId === operation.criterionId && paths.has(photo.mediaId))) continue
+      await saveTechnicianMutation({ ...dependent, evidences: dependent.evidences.map(photo =>
+        photo.criterionId === operation.criterionId && paths.has(photo.mediaId) ? { ...photo, storagePath: paths.get(photo.mediaId)! } : photo) })
+      const finding = caches.value[operation.serviceId]?.package.areas.find(area => area.id === dependent.areaId)?.hallazgos.find(item => item.id === dependent.findingId)
+      if (!finding) continue
+      const resolved = dependent.evidences.filter(photo => photo.criterionId === operation.criterionId && paths.has(photo.mediaId))
+      const uploaded = resolved.map(photo => paths.get(photo.mediaId)!)
+      const remaining = (ids: string[] | undefined) => (ids ?? []).filter(id => !resolved.some(photo => photo.mediaId === id))
+      await persistFinding(operation.serviceId, dependent.areaId, dependent.kind === 'FINDING_CREATE' ? {
+        ...finding, evidenciasAperturaStoragePaths: [...new Set([...finding.evidenciasAperturaStoragePaths, ...uploaded])],
+        evidenciasAperturaLocalIds: remaining(finding.evidenciasAperturaLocalIds),
+      } : {
+        ...finding, evidenciasSeguimientoStoragePaths: [...new Set([...(finding.evidenciasSeguimientoStoragePaths ?? []), ...uploaded])],
+        evidenciasSeguimientoLocalIds: remaining(finding.evidenciasSeguimientoLocalIds),
+        historialSeguimientos: finding.historialSeguimientos?.map(visit => visit.servicioId === operation.serviceId
+          ? { ...visit, evidenciasStoragePaths: [...new Set([...visit.evidenciasStoragePaths, ...uploaded])] } : visit),
+        ...(finding.estado === 'CERRADO' ? {
+          evidenciasCierreStoragePaths: [...new Set([...finding.evidenciasCierreStoragePaths, ...uploaded])],
+          evidenciasCierreLocalIds: remaining(finding.evidenciasCierreLocalIds),
+        } : {}),
+      })
+    }
+  }
+
+  function sharedFindingEvidence(area: TechnicianArea, input: TechnicianFindingCreateInput | TechnicianFindingStatusInput) {
+    const criterion = input.criterionId ? area.criterios.find(item => item.id === input.criterionId) : null
+    if (input.criterionId && !criterion) throw new Error('El criterio no pertenece al Área.')
+    return {
+      criterion,
+      paths: input.useCriterionEvidence && criterion ? [...criterion.evidenciasStoragePaths] : [],
+      evidences: input.useCriterionEvidence && criterion ? (criterion.evidenciasLocalIds ?? [])
+        .map(mediaId => ({ mediaId, storagePath: null, criterionId: criterion.id })) : [],
+    }
+  }
+
   async function applyFindingCreate(
     serviceId: string,
     areaId: string,
     input: TechnicianFindingCreateInput,
     files: File[],
   ): Promise<'synced' | 'pending' | 'conflict'> {
+    await writeLocally(serviceId, () => queueFindingCreate(serviceId, areaId, input, files))
+    return onlineNow() ? syncPending(serviceId) : 'pending'
+  }
+
+  async function queueFindingCreate(serviceId: string, areaId: string, input: TechnicianFindingCreateInput, files: File[]): Promise<void> {
     const cache = caches.value[serviceId]
     if (!cache || cache.package.service.estado !== 'EN_PROCESO' || !cache.lock) throw new Error('Este celular no puede registrar Hallazgos en el servicio.')
     const area = cache.package.areas.find(item => item.id === areaId)
     if (!area) throw new Error('El Área no pertenece al servicio preparado.')
     if (area.sinAcceso) throw new Error('Habilita el acceso al Área antes de registrar Hallazgos.')
+    const shared = sharedFindingEvidence(area, input)
+    if (shared.paths.length + shared.evidences.length + files.length > 10) throw new Error('Puedes adjuntar máximo 10 evidencias por Hallazgo.')
     const normalized = {
+      criterionId: input.criterionId,
+      sharedEvidenceStoragePaths: shared.paths,
       descripcion: input.descripcion.trim(),
       recomendacionAccion: input.recomendacionAccion.trim(),
     }
@@ -1372,29 +1468,26 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
       || normalized.recomendacionAccion.length > 2_000) {
       throw new Error('Completa la descripción y la acción recomendada del Hallazgo.')
     }
-    const mediaIds = await saveFindingMedia(serviceId, areaId, files)
+    const mediaIds = await saveEvidenceMedia(serviceId, areaId, files)
     const now = new Date().toISOString(), findingId = crypto.randomUUID()
     const operation: TechnicianFindingCreateMutation = {
       schemaVersion: 1, requestId: crypto.randomUUID(), actorId: actorId(), serviceId,
       deviceId: cache.deviceId, lockToken: cache.lock.token, kind: 'FINDING_CREATE', areaId, findingId,
-      ...normalized, evidences: mediaIds.map(mediaId => ({ mediaId, storagePath: null })),
+      ...normalized, evidences: [...shared.evidences, ...mediaIds.map(mediaId => ({ mediaId, storagePath: null }))],
       status: 'PENDING', createdAt: now, updatedAt: now, error: null,
     }
-    try { await saveTechnicianMutation(operation) }
-    catch (failure) { for (const mediaId of mediaIds) await deleteTechnicianMedia(operation.actorId, mediaId); throw failure }
-    await reloadMutations(serviceId)
-    await persistFinding(serviceId, areaId, {
+    await persistLocalMutation(operation, undefined, mediaIds, () => persistFinding(serviceId, areaId, {
       id: findingId, servicioAperturaId: serviceId, fechaApertura: now,
+      criterioId: shared.criterion?.criterioId ?? null, criterioNombre: shared.criterion?.nombre ?? null, evaluacionAperturaId: shared.criterion?.id ?? null,
       descripcion: normalized.descripcion, recomendacionAccion: normalized.recomendacionAccion,
-      evidenciasAperturaStoragePaths: [], evidenciasAperturaLocalIds: mediaIds,
+      evidenciasAperturaStoragePaths: shared.paths, evidenciasAperturaLocalIds: operation.evidences.map(photo => photo.mediaId),
       estado: 'ABIERTO', resultadoSeguimiento: null,
       // Solo para la vista offline: al sincronizar se guarda el snapshot definitivo del servidor.
       responsableNombre: cache.package.service.contactoPrincipalNombre?.trim() || 'Contacto de la sede',
       responsableCorreo: cache.package.service.contactoPrincipalCorreo?.trim().toLowerCase() || null,
       servicioCierreId: null, fechaCierre: null,
       evidenciasCierreStoragePaths: [], observacionCierre: null, version: 1,
-    })
-    return onlineNow() ? syncPending(serviceId) : 'pending'
+    }))
   }
 
   async function applyFindingStatus(
@@ -1404,6 +1497,11 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     input: TechnicianFindingStatusInput,
     files: File[],
   ): Promise<'synced' | 'pending' | 'conflict'> {
+    const result = await writeLocally(serviceId, () => queueFindingStatus(serviceId, areaId, findingId, input, files))
+    return result === 'conflict' || !onlineNow() ? result : syncPending(serviceId)
+  }
+
+  async function queueFindingStatus(serviceId: string, areaId: string, findingId: string, input: TechnicianFindingStatusInput, files: File[]): Promise<'pending' | 'conflict'> {
     const cache = caches.value[serviceId]
     if (!cache || cache.package.service.estado !== 'EN_PROCESO' || !cache.lock) {
       throw new Error('Este celular no puede actualizar Hallazgos en el servicio.')
@@ -1422,31 +1520,30 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
       item.kind === 'FINDING_STATUS' && item.findingId === findingId)
     if (outstanding?.status === 'CONFLICT') return 'conflict'
     if (outstanding?.status === 'SENDING') throw new Error('Espera a que se sincronice la revisión anterior.')
-    const oldPaths = finding.evidenciasSeguimientoStoragePaths ?? []
-    const previousPhotos = outstanding?.evidences.length ?? 0
-    if (oldPaths.length + previousPhotos + files.length > 10) throw new Error('Puedes guardar hasta diez fotos por visita.')
-    if (input.estado === 'CERRADO' && oldPaths.length + previousPhotos + files.length === 0) {
+    const shared = sharedFindingEvidence(area, input)
+    if (shared.criterion && finding.criterioId && shared.criterion.criterioId !== finding.criterioId) throw new Error('El Hallazgo pertenece a otro criterio.')
+    const oldPaths = [...new Set([...(finding.evidenciasSeguimientoStoragePaths ?? []), ...shared.paths])]
+    const sharedEvidences = shared.evidences.filter(photo => !outstanding?.evidences.some(existing => existing.mediaId === photo.mediaId))
+    const previousPhotos = new Set([...oldPaths, ...(outstanding?.evidences ?? []).map(photo => photo.storagePath ?? 'local:' + photo.mediaId), ...sharedEvidences.map(photo => 'local:' + photo.mediaId)]).size
+    if (previousPhotos + files.length > 10) throw new Error('Puedes guardar hasta diez fotos por visita.')
+    if (input.estado === 'CERRADO' && previousPhotos + files.length === 0) {
       throw new Error('Adjunta una evidencia fotográfica para cerrar el Hallazgo.')
     }
-    const mediaIds = await saveFindingMedia(serviceId, areaId, files)
+    const mediaIds = await saveEvidenceMedia(serviceId, areaId, files)
     const now = new Date().toISOString()
     const operation: TechnicianFindingStatusMutation = outstanding
-      ? { ...outstanding, estado: input.estado, observacionCierre: normalizedObservation,
-          evidences: [...outstanding.evidences, ...mediaIds.map(mediaId => ({ mediaId, storagePath: null }))],
+      ? { ...outstanding, estado: input.estado, observacionCierre: normalizedObservation, criterionId: input.criterionId,
+          sharedEvidenceStoragePaths: [...new Set([...(outstanding.sharedEvidenceStoragePaths ?? []), ...shared.paths])],
+          evidences: [...outstanding.evidences, ...sharedEvidences, ...mediaIds.map(mediaId => ({ mediaId, storagePath: null }))],
           updatedAt: now, error: null }
       : {
           schemaVersion: 1, requestId: crypto.randomUUID(), actorId: actorId(), serviceId,
           deviceId: cache.deviceId, lockToken: cache.lock.token, kind: 'FINDING_STATUS', areaId, findingId,
-          estado: input.estado, observacionCierre: normalizedObservation, version: finding.version,
-          evidences: mediaIds.map(mediaId => ({ mediaId, storagePath: null })), conflict: null,
+          estado: input.estado, observacionCierre: normalizedObservation, version: finding.version, criterionId: input.criterionId,
+          sharedEvidenceStoragePaths: shared.paths,
+          evidences: [...sharedEvidences, ...mediaIds.map(mediaId => ({ mediaId, storagePath: null }))], conflict: null,
           status: 'PENDING', createdAt: now, updatedAt: now, error: null,
         }
-    try { await saveTechnicianMutation(operation) }
-    catch (failure) {
-      for (const mediaId of mediaIds) await deleteTechnicianMedia(operation.actorId, mediaId)
-      throw failure
-    }
-    await reloadMutations(serviceId)
     const original = finding.estadoAnteriorSeguimiento ?? finding.estado
     const nextState = input.estado === 'SIN_CAMBIOS' ? original
       : input.estado === 'EN_PROCESO' ? 'EN_PROCESO' : 'CERRADO'
@@ -1455,7 +1552,7 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
       solicitud: cache.package.service.solicitud, fecha: now, resultado: input.estado,
       observacion: normalizedObservation || null, evidenciasStoragePaths: oldPaths },
     ...(finding.historialSeguimientos ?? []).filter(item => item.servicioId !== serviceId)]
-    await persistFinding(serviceId, areaId, {
+    await persistLocalMutation(operation, outstanding, mediaIds, () => persistFinding(serviceId, areaId, {
       ...finding, estado: nextState, estadoAnteriorSeguimiento: original,
       resultadoSeguimiento: input.estado, observacionSeguimiento: normalizedObservation || null,
       evidenciasSeguimientoStoragePaths: oldPaths, evidenciasSeguimientoLocalIds: operation.evidences.map(item => item.mediaId),
@@ -1465,13 +1562,13 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
       evidenciasCierreStoragePaths: nextState === 'CERRADO' ? oldPaths : [],
       evidenciasCierreLocalIds: nextState === 'CERRADO' ? operation.evidences.map(item => item.mediaId) : [],
       observacionCierre: nextState === 'CERRADO' ? normalizedObservation || null : null,
-    })
-    return onlineNow() ? syncPending(serviceId) : 'pending'
+    }))
+    return 'pending'
   }
 
   async function cleanupFindingMutation(operation: TechnicianFindingCreateMutation | TechnicianFindingStatusMutation): Promise<void> {
     const phase = operation.kind === 'FINDING_CREATE' ? 'OPENING' : 'FOLLOWUP'
-    for (const evidence of operation.evidences) {
+    for (const evidence of operation.evidences.filter(photo => !photo.criterionId)) {
       if (evidence.storagePath) {
         await deleteTechnicianFindingEvidence(operation.serviceId, operation.areaId, operation.findingId, phase,
           operation.deviceId, operation.lockToken, evidence.storagePath)
@@ -1500,11 +1597,11 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
     if (!conflicted) throw new Error('No hay un conflicto pendiente para este Hallazgo.')
     const now = new Date().toISOString()
     if (conflicted.kind === 'FINDING_STATUS') {
-      if (!conflicted.conflict || conflicted.conflict.estado === 'CERRADO') throw new Error('Usa la versión sincronizada del Hallazgo.')
-      await saveTechnicianMutation({ ...conflicted, requestId: crypto.randomUUID(), version: conflicted.conflict.version,
+      if (!conflicted.conflict || (conflicted.conflict.estado === 'CERRADO' && conflicted.conflict.servicioCierreId !== serviceId)) throw new Error('Usa la versión sincronizada del Hallazgo.')
+      await replaceTechnicianMutation(conflicted, { ...conflicted, requestId: crypto.randomUUID(), version: conflicted.conflict.version,
         status: 'PENDING', conflict: null, error: null, createdAt: now, updatedAt: now })
     } else {
-      await saveTechnicianMutation({ ...conflicted, requestId: crypto.randomUUID(), status: 'PENDING', error: null,
+      await replaceTechnicianMutation(conflicted, { ...conflicted, requestId: crypto.randomUUID(), status: 'PENDING', error: null,
         createdAt: now, updatedAt: now })
     }
     await reloadMutations(serviceId)

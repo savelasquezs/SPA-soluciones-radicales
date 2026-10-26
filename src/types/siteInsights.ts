@@ -9,7 +9,7 @@ export interface InsightService {
   technician: string
 }
 
-export type EvidenceKind = 'REVIEW' | 'OPENING' | 'CLOSURE' | 'FOLLOWUP'
+export type EvidenceKind = 'CRITERION' | 'REVIEW' | 'OPENING' | 'CLOSURE' | 'FOLLOWUP'
 export interface EvidenceReference {
   kind: EvidenceKind
   recordId: string
@@ -68,6 +68,7 @@ export interface MonitoringReview {
 
 export interface SiteFinding {
   id: string
+  criterionName?: string | null
   areaId: string
   areaName: string
   state: FindingState

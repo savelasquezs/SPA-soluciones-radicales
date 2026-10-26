@@ -14,7 +14,7 @@ export default mergeConfig(
         VITE_NEON_DATA_API_URL: 'https://data.example.test',
         VITE_NEON_FUNCTION_URL: 'https://api.example.test',
       },
-      exclude: [...configDefaults.exclude, 'e2e/**', 'cloudflare/storage-retention/**'],
+      exclude: [...configDefaults.exclude, 'e2e/**', 'logs/**', 'cloudflare/storage-retention/**'],
       root: fileURLToPath(new URL('./', import.meta.url)),
     },
   }),

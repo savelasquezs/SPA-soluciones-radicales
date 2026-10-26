@@ -75,15 +75,14 @@ La completitud de captura y la sincronización son dimensiones diferentes. Regis
 
 El botón muestra siempre el siguiente paso visible del flujo. Mientras exista otra Área después de la actual en el orden aplicado, muestra su nombre, por ejemplo «Siguiente: Oficinas». En la última Área muestra «Revisar servicio».
 
-La navegación libre y el avance guiado son responsabilidades diferentes. Selector de Áreas y pestañas son libres y siempre permiten moverse sin evaluar. El botón Siguiente de cada sección comprueba los campos obligatorios de su etapa; al salir de Hallazgos comprueba toda el Área y señala el primer pendiente con desplazamiento contextual. «Anterior» nunca valida completitud. La revisión final explica qué Áreas requieren información antes de finalizar.
+La navegación libre y el avance guiado son responsabilidades diferentes. Selector de Áreas y pestañas son libres y siempre permiten moverse sin evaluar. El botón Siguiente de cada sección comprueba los campos obligatorios de su etapa; al salir de Puestos comprueba toda el Área y señala el primer pendiente con desplazamiento contextual. «Anterior» nunca valida completitud. La revisión final explica qué Áreas requieren información antes de finalizar.
 
 Algoritmo de avance guiado:
 
-1. Criterios → Puestos: comprobar que todos los Criterios estén evaluados; si falta uno, marcarlo y desplazarlo a la vista.
-2. Puestos → Hallazgos: comprobar que todos los Puestos estén revisados; si falta uno, abrir su tarjeta y enfocar la información pendiente.
-3. Hallazgos → Siguiente Área o Cierre: comprobar Criterios, Puestos y evaluaciones de Hallazgos heredados (un Hallazgo nuevo no se evalúa en su propia visita).
+1. Criterios y hallazgos → Puestos: comprobar que todos los Criterios estén evaluados y los hallazgos anteriores revisados; si falta uno, marcarlo y desplazarlo a la vista.
+2. Puestos → Siguiente Área o Cierre: comprobar el Área completa: Criterios, Puestos y seguimientos de Hallazgos heredados (un Hallazgo nuevo no se evalúa en su propia visita).
 4. Mostrar siempre las acciones «Anterior» y «Siguiente» al final de cada etapa, sin bloquear la navegación manual entre pestañas y Áreas.
-5. El avance desde Hallazgos respeta el orden aplicado y termina en la revisión global después de la última Área.
+5. El avance desde Puestos respeta el orden aplicado y termina en la revisión global después de la última Área.
 6. La revisión final permite volver directamente al primer pendiente de cualquier Área y no confirma la finalización mientras existan pendientes.
 
 Antes de navegar se conserva el borrador técnico mediante la capa compartida. Un guardado remoto pendiente no debe forzar permanecer en un Área si los datos están guardados localmente; un fallo real de persistencia local sí requiere advertencia para evitar pérdida de trabajo.
@@ -95,7 +94,7 @@ El conjunto vacío o de una sola Área debe manejarse sin índices inválidos ni
 | Situación | Acción | Resultado |
 | --- | --- | --- |
 | Criterio sin evaluación | Siguiente: Puestos | Enfoca y destaca el criterio pendiente |
-| Puesto sin revisión | Siguiente: Hallazgos | Abre y destaca el puesto pendiente |
+| Puesto sin revisión | Siguiente Área | Abre y destaca el puesto pendiente |
 | Hallazgo previo abierto sin revisión | Siguiente área | Destaca el Hallazgo y ofrece Sigue igual / En proceso / Cerrado |
 | Área completa | Siguiente área | Avanza en el orden aplicado |
 | Última Área completa | Ir al cierre | Abre revisión y firmas |
@@ -167,3 +166,5 @@ Archivo `AWHeFImzH9BHPjEydCKJZT`, página `2:4`.
 El prototipo usa tres Áreas ilustrativas, variables compartidas de orden y controles Subir/Bajar operativos. La implementación debe admitir N Áreas; no copiar el número ni las identidades del ejemplo al dominio. Los escenarios de guía y el guardado simulado no son controles de la aplicación ni evidencia de sincronización real.
 
 La lógica de acciones del prototipo se contrastó para las 6 permutaciones de tres Áreas, 8 combinaciones de completitud y 3 posiciones actuales en ambos temas: 288 casos de navegación. También se revisaron aplicar, cancelar y feedback local. Esta validación no reemplaza las futuras pruebas unitarias, de autorización, persistencia y E2E de la aplicación.
+
+Las URLs antiguas con `tab=findings` muestran Criterios y hallazgos; los enlaces a pendientes siguen abriendo el hallazgo por su ID estable. No existe una tercera etapa vacía.

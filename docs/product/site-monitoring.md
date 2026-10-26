@@ -41,3 +41,5 @@ El visor del historial recorre las fotografías de la página cargada, indicado 
 ## Pruebas
 
 Pruebas de autorización, filtros, aislamiento de referencias, disponibilidad R2, errores recuperables, renovación acotada, galería/teclado/zoom y presentación de vencimiento. Pruebas SQL sobre PostgreSQL efímero y flujos E2E en Chromium, con revisión visual desktop/mobile y ambos temas. La validación no equivale a un despliegue del backend.
+
+Los Hallazgos vinculados muestran el nombre histórico del criterio. El cierre y sus fotos se muestran una sola vez en el detalle; el historial conserva el resto de seguimientos. Los originales sin criterio permanecen consultables. Las fotografías compartidas se resuelven desde las referencias autorizadas en PostgreSQL, incluso si el objeto pertenece al criterio de la visita.

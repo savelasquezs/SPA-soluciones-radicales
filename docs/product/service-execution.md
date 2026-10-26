@@ -19,11 +19,8 @@ Servicio
 ├─ Contexto del cliente y la Sede
 ├─ Productos previstos/aplicados
 ├─ Recorrido por Áreas
-│  ├─ Condiciones del Área
-│  │  └─ Criterios MIP aplicables
-│  ├─ Monitoreo
-│  │  └─ Puestos de monitoreo permanentes + revisión del Servicio
-│  └─ Hallazgos y evidencias
+│  ├─ Criterios MIP, hallazgos relacionados y evidencias compartidas
+│  └─ Monitoreo: puestos permanentes + revisión del Servicio
 ├─ Vehículos atendidos (solo Sede de Negocio con maneja_vehiculos)
 ├─ Resumen de la ejecución
 ├─ Firma del Técnico
@@ -32,7 +29,7 @@ Servicio
 
 El Técnico puede desplazarse entre Áreas en cualquier orden y volver a una anterior. No existe un orden obligatorio de inspección.
 
-El orden del recorrido es editable dentro del Servicio. Lista, selector y navegación secuencial comparten la misma secuencia. El Técnico puede abrir libremente cualquier Área o pestaña sin evaluar para cambiar de sección. Los botones de avance guiado (Criterios → Puestos → Hallazgos → Siguiente Área/Cierre) comprueban la sección correspondiente y envían al primer elemento pendiente con mensaje contextual; «Anterior» nunca exige completitud. Al llegar a Cierre se ofrece la revisión global con enlaces a los pendientes, y la finalización permanece bloqueada hasta completar la matriz requerida. Reorganizar no modifica la Sede ni los datos de evaluación. Véase [service-area-route.md](service-area-route.md).
+El orden del recorrido es editable dentro del Servicio. Lista, selector y navegación secuencial comparten la misma secuencia. El Técnico puede abrir libremente cualquier Área o pestaña sin evaluar para cambiar de sección. Los botones de avance guiado (Criterios y hallazgos → Puestos → Siguiente Área/Cierre) comprueban la sección correspondiente y envían al primer elemento pendiente con mensaje contextual; «Anterior» nunca exige completitud. Al llegar a Cierre se ofrece la revisión global con enlaces a los pendientes, y la finalización permanece bloqueada hasta completar la matriz requerida. Reorganizar no modifica la Sede ni los datos de evaluación. Véase [service-area-route.md](service-area-route.md).
 
 ## Vehículos atendidos
 
@@ -192,13 +189,23 @@ El Administrador selecciona los Productos y edita únicamente el lote y la fecha
 
 El Técnico ve los Productos en solo lectura. La dosis y los métodos visibles antes del inicio reflejan el catálogo vigente; lote y vencimiento provienen del Servicio. Al iniciar, el servidor marca el conjunto previsto como aplicado y congela nombre, principio activo, registro sanitario, dosis del catálogo y nombres de todos los métodos asociados para que cambios posteriores del catálogo no reinterpreten el histórico. Los Servicios antiguos con dosis o método por visita vacíos también pueden iniciar si lote y catálogo están completos. No se sobrescribe la fabricación histórica almacenada.
 
-## Hallazgos
+## Hallazgos integrados en los criterios
 
-Los Hallazgos pertenecen al Servicio, Sede y Área correspondientes.
+Decisión aprobada el 26 de octubre de 2026. Cada Área tiene dos pestañas: **Criterios y hallazgos** y **Puestos**. La navegación libre conserva borradores; el avance guiado comprueba primero evaluaciones y seguimientos y, al salir de Puestos, el Área completa.
 
-Desde el Área el Técnico puede registrar descripción, recomendación/acción correctiva, evidencia y demás datos definidos por el dominio. Los Hallazgos anteriores pendientes deben seguir disponibles para verificación y eventual cierre según las reglas ya aprobadas.
+Un criterio puede tener varios hallazgos. El Técnico captura observación y fotos una sola vez y elige explícitamente **Registrar hallazgo** dentro del criterio. La descripción se precarga con lo observado y se completa la recomendación/acción. Puede usar las fotos ya capturadas o añadir otras, sin duplicar archivos. CP y NC hacen visible la observación, pero no crean hallazgos automáticamente. C y NA nunca cierran ni ocultan un hallazgo por sí solos.
 
-Al abrir un Hallazgo, el backend toma el nombre y correo del contacto principal vigente de la Sede y los guarda como responsable histórico; el Técnico no los escribe ni puede sustituirlos mediante la API. En registros offline se usa el contacto del paquete solo para la vista provisional: el snapshot definitivo se obtiene al sincronizar. Si falta una configuración válida del contacto, se indica que debe completarse desde la administración. Modificar el contacto de la Sede no altera los hallazgos históricos. La apertura puede incluir varias fotografías. Un Hallazgo nuevo permanece `ABIERTO` y no puede verificarse ni cerrarse dentro del mismo Servicio. En un Servicio posterior de la misma Sede, el Técnico evalúa el hallazgo como «Sigue igual» (conserva su estado previo), `EN_PROCESO` o cerrado; la evaluación puede corregirse mientras el Servicio continúe en proceso y se registra en `hallazgo_seguimientos` con servicio, técnico, fecha, observación y fotografías; el cierre exige al menos una fotografía de evidencia y conserva el Servicio, la fecha y la observación de cierre. Las fotografías se guardan primero en el dispositivo local y se sincronizan individualmente con el almacenamiento privado cuando existe conexión.
+El backend vincula el hallazgo con la identidad del criterio, la evaluación de apertura y su nombre congelado; comprueba Servicio, Área y pertenencia de cada evidencia. Renombrar o desactivar el catálogo no cambia el histórico. No se clasifican los hallazgos anteriores por similitud textual: permanecen en **Otros hallazgos del Área**, junto a los generales y a los que corresponden a criterios que ya no aplican. No desaparecen por un cambio de catálogo.
+
+La apertura conserva descripción, recomendación y el responsable histórico obtenido por el backend desde el contacto principal de la Sede. Las fotos de apertura son opcionales. Un hallazgo nuevo permanece abierto durante su Servicio de origen. En una visita posterior se registra **Sigue igual**, **En proceso** o **Cerrado**, con la observación y las fotos de esa visita; Cierre exige al menos una fotografía. Sigue igual conserva el estado anterior. La revisión puede corregirse durante el mismo Servicio en proceso y no reescribe revisiones finalizadas.
+
+Las evidencias compartidas conservan un único objeto privado. Quitar su asociación con un criterio no autoriza borrar el archivo si respalda un hallazgo o seguimiento. La conservación se determina por el plazo más largo de todas sus referencias vigentes. Se conservan los límites actuales de cinco fotos por criterio y diez por apertura/revisión de hallazgo.
+
+La consulta de una visita finalizada conserva el estado y las revisiones existentes a su cierre; no incorpora cierres ni fotografías de visitas posteriores. La revisión de la visita consultada muestra su observación y fotografías también en solo lectura. Un nombre de criterio distinto al vigente se identifica como criterio de apertura.
+
+Las fotos locales pueden abrirse desde el criterio y desde el hallazgo sin copiarlas. Si falla el guardado de una foto del criterio, permanece seleccionada y ofrece reintento; una confirmación recibida en segundo plano no borra fotos o notas nuevas. Las asociaciones que necesita un hallazgo pendiente se conservan hasta sincronizarlo.
+
+Los borradores parciales de descripción, acción, resultado, observación y fotos permanecen en IndexedDB por usuario/Servicio/Área/registro. Una fotografía local compartida utiliza el mismo identificador; se sincroniza primero el criterio, se propaga su ruta definitiva a los hallazgos pendientes y no se repite la subida. Los conflictos no descartan las evidencias compartidas. El cierre del Servicio sigue exigiendo sincronización confirmada, ambas firmas y la matriz completa. Un hallazgo abierto revisado no bloquea la inspección; un seguimiento sin revisar sí.
 
 ## Firmas y finalización
 

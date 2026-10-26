@@ -92,6 +92,11 @@ async function deleteEligibleObject(item: RetentionCandidate): Promise<boolean> 
   return transaction(async client => {
     // Re-check under lock; an opening photo can have an extended life when its
     // finding closes. A concurrent close waits for this short transaction.
+    if (item.bucket === 'sr-service-media') await client.query(`select h.id from public.hallazgos h
+      where coalesce(h.evidencias_apertura_storage_paths,'[]'::jsonb) ? $1
+        or coalesce(h.evidencias_cierre_storage_paths,'[]'::jsonb) ? $1
+        or exists(select 1 from public.hallazgo_seguimientos s where s.hallazgo_id=h.id and s.evidencias_storage_paths ? $1)
+      order by h.id for update`, [item.storage_path])
     await lockSourceRow(client, item)
     const refreshed = await client.query<RetentionCandidate>(
       `select bucket,category,source_id,storage_path,expires_at

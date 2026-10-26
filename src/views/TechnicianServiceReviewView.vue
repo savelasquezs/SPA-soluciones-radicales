@@ -13,7 +13,7 @@ import TechnicianPaymentDialog from '@/components/domain/services/TechnicianPaym
 import SendReportDialog from '@/components/domain/services/SendReportDialog.vue'
 import TechnicianSignaturePad from '@/components/domain/services/TechnicianSignaturePad.vue'
 import TechnicianServiceNavigation from '@/components/domain/services/TechnicianServiceNavigation.vue'
-import { orderedTechnicianAreas, technicianAreaResolved, technicianAreaIssues } from '@/helpers/technicianServices'
+import { orderedTechnicianAreas, technicianAreaResolved, technicianAreaIssues, technicianFindingPending } from '@/helpers/technicianServices'
 import { vehicleChecklistResolved } from '@/helpers/technicianVehicles'
 import { useTechnicianServicesStore } from '@/stores/technicianServices'
 import { useTechnicianReportEmailStore } from '@/stores/technicianReportEmails'
@@ -145,7 +145,7 @@ function reviewSyncProblem(): void {
   }
   const tab = problem.kind === 'CRITERION_EVALUATION' ? 'criteria'
     : problem.kind === 'DEVICE_CREATE' || problem.kind === 'DEVICE_REVIEW' ? 'points'
-      : problem.kind === 'FINDING_CREATE' || problem.kind === 'FINDING_STATUS' ? 'findings' : ''
+      : problem.kind === 'FINDING_CREATE' || problem.kind === 'FINDING_STATUS' ? 'criteria' : ''
   const focus = problem.kind === 'CRITERION_EVALUATION' ? problem.criterionId
     : problem.kind === 'DEVICE_REVIEW' ? problem.serviceDeviceId
       : problem.kind === 'FINDING_CREATE' || problem.kind === 'FINDING_STATUS' ? problem.findingId : ''
@@ -229,7 +229,7 @@ async function finish(): Promise<void> {
         <summary id="review-areas-title"><span><ClipboardList :size="18" aria-hidden="true" />{{ finalized ? 'Ver recorrido realizado' : 'Estado por Área' }}</span><ChevronDown :size="17" aria-hidden="true" /></summary>
         <section class="review-list" aria-labelledby="review-areas-title">
         <button v-for="area in areas" :key="area.id" type="button" @click="openArea(area.id)">
-          <span class="review-list__name"><strong>{{ area.nombre }}</strong><small v-if="technicianAreaIssues(area, serviceId).length">{{ technicianAreaIssues(area, serviceId).filter(issue => issue.tab === 'criteria').length }} criterios · {{ technicianAreaIssues(area, serviceId).filter(issue => issue.tab === 'points').length }} puestos · {{ technicianAreaIssues(area, serviceId).filter(issue => issue.tab === 'findings').length }} hallazgos pendientes</small></span>
+          <span class="review-list__name"><strong>{{ area.nombre }}</strong><small v-if="technicianAreaIssues(area, serviceId).length">{{ area.criterios.filter(item => !item.evaluacion).length }} criterios · {{ technicianAreaIssues(area, serviceId).filter(issue => issue.tab === 'points').length }} puestos · {{ area.hallazgos.filter(item => technicianFindingPending(item, serviceId)).length }} seguimientos sin revisar</small></span>
           <StatusBadge :tone="technicianAreaResolved(area, serviceId) ? 'success' : 'neutral'">{{ technicianAreaResolved(area, serviceId) ? 'Resuelta' : 'Pendiente' }}</StatusBadge>
         </button>
         </section>

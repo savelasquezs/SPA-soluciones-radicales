@@ -148,3 +148,11 @@ Detalle técnico y comandos de verificación: `docs/architecture/admin-services.
 
 - [x] Reutilizar multiselector con búsqueda y Aceptar para productos; cliente buscable con sede filtrada; fecha de servicio futura; cobro confirmado al crear con receptor administrador o técnico.
 - [x] Enlaces privados temporales de fichas técnicas de productos para técnico e informe público, habilitar PDF en selector de archivos Android, sin duplicar storage.
+
+
+## Hallazgos dentro de criterios · 2026-10-26
+
+- [x] Aprobar captura única, seguimiento histórico, evidencias compartidas y navegación contextual de dos pestañas.
+- [x] Completar y validar implementación local sobre `develop`; sin push, despliegue ni migración a Neon. Pasaron 576 pruebas unitarias, 56 de integración con PostgreSQL local y 49 de interfaz con API simulada; revisadas las capturas móvil y escritorio.
+- [x] Revisar y corregir el histórico al cierre exacto, acceso a fotos de visitas posteriores, referencias compartidas durante sincronización, reintentos de conflictos en IndexedDB, pérdida de fotos por confirmaciones de fondo y guardados locales parciales. Validación final: 586 pruebas unitarias, 56 de PostgreSQL local y 50 de interfaz con API simulada; build, lint sin errores y 37 migraciones válidas. Evidencia en `logs/criterion-findings-review-*.log`; capturas móvil/escritorio en `test-results/criterion-findings-*.png`. Base temporal eliminada y PostgreSQL de pruebas detenido.
+- [ ] Ejecutar posteriormente validación integrada de Development cuando se autoricen la migración y publicación. La validación local no acredita Neon/R2 reales.

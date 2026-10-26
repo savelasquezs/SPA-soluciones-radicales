@@ -12,7 +12,8 @@ const props = defineProps<{ siteId: string; finding: SiteFinding }>()
 const emit = defineEmits<{ close: [] }>()
 const opening = computed(() => props.finding.photos.filter(photo => photo.kind === 'OPENING'))
 const closure = computed(() => props.finding.photos.filter(photo => photo.kind === 'CLOSURE'))
-const followupPhotos = computed(() => props.finding.followups?.flatMap(review => review.photos ?? []) ?? [])
+const followups = computed(() => (props.finding.followups ?? []).filter(review => review.result !== 'CERRADO' || review.service.id !== props.finding.closingService?.id))
+const followupPhotos = computed(() => followups.value.flatMap(review => review.photos ?? []) ?? [])
 const allPhotos = computed(() => [...opening.value, ...followupPhotos.value, ...closure.value])
 const gallery = useEvidenceGallery(() => props.siteId)
 const { open, index, state, url, current, photos } = gallery
@@ -29,15 +30,16 @@ function showFollowup(reviewPhotos: SiteFinding['photos']): void {
     <div class="insight-detail">
       <div class="insight-tags"><StatusBadge :tone="findingTone(finding.state)">{{ findingLabel(finding.state) }}</StatusBadge><span class="insight-muted">{{ finding.areaName }}</span></div>
       <p v-if="finding.openingService.state === 'EN_PROCESO'" class="insight-provisional">Registrado en un servicio en curso.</p>
+      <p v-if="finding.criterionName" class="insight-muted">Criterio · {{ finding.criterionName }}</p>
       <div><h3>Hallazgo</h3><p>{{ finding.description }}</p></div>
       <div><h3>Recomendación o acción correctiva</h3><p>{{ finding.recommendation }}</p></div>
       <dl><div><dt>Responsable de la acción</dt><dd>{{ finding.responsibleName }}</dd></div><div v-if="finding.responsibleEmail"><dt>Correo del responsable</dt><dd>{{ finding.responsibleEmail }}</dd></div></dl>
       <div class="insight-divider"><h3>Apertura</h3></div>
       <dl><div><dt>Fecha</dt><dd>{{ insightDate(finding.openedAt,true) }}</dd></div><div><dt>Servicio</dt><dd><RouterLink class="insight-link" :to="`/servicios/${finding.openingService.id}`">{{ finding.openingService.number }}</RouterLink></dd></div><div><dt>Técnico responsable del servicio</dt><dd>{{ finding.openingService.technician }}</dd></div></dl>
       <div class="insight-photos"><BaseButton v-if="opening.length" size="compact" variant="secondary" @click="show('OPENING')"><Camera :size="16" />Fotos de apertura ({{ opening.length }})</BaseButton><span v-else class="insight-muted">Sin evidencia fotográfica de apertura.</span></div>
-      <section v-if="finding.followups?.length" class="finding-followup-history">
+      <section v-if="followups.length" class="finding-followup-history">
         <div class="insight-divider"><h3>Seguimiento por visita</h3></div>
-        <dl v-for="review in finding.followups" :key="review.service.id" class="finding-followup-row">
+        <dl v-for="review in followups" :key="review.service.id" class="finding-followup-row">
           <div><dt>Resultado</dt><dd>{{ review.result === 'SIN_CAMBIOS' ? 'Sigue igual' : review.result === 'EN_PROCESO' ? 'En proceso' : 'Cerrado' }}</dd></div>
           <div><dt>Visita</dt><dd><RouterLink class="insight-link" :to="`/servicios/${review.service.id}`">{{ review.service.number }}</RouterLink> · {{ insightDate(review.reviewedAt, true) }}</dd></div>
           <div><dt>Técnico</dt><dd>{{ review.service.technician }}</dd></div>

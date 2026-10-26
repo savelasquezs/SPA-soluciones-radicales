@@ -1,3 +1,4 @@
+import { criterionPhotoOwner } from '../../../src/helpers/serviceEvidence'
 import { Hono, type Context } from 'hono'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import type { PoolClient } from 'pg'
@@ -6,7 +7,7 @@ import { isDateOnly } from '../../../src/helpers/dateTime'
 import type { EvidenceAccess, EvidenceKind, InsightQuery } from '../../../src/types/siteInsights'
 import { ApiError, requireAdmin, type Identity } from '../auth'
 import { transaction } from '../db'
-import { createServiceMediaReadUrl, deviceReviewMediaObjectExists, findingEvidenceObjectExists } from '../r2'
+import { createServiceMediaReadUrl, criterionEvidenceObjectExists, deviceReviewMediaObjectExists, findingEvidenceObjectExists } from '../r2'
 import { findSiteEvidence, listMonitoringPoints, listMonitoringReviews, listSiteFindings } from './queries'
 
 type Environment = { Variables: { identity: Identity } }
@@ -65,11 +66,12 @@ siteInsightsRoutes.get('/:siteId/photos/:kind/:recordId/:index', async context =
   const folder = `services/${source.serviceId}/findings/${source.ownerId}/`
   const storageKind = source.path.startsWith(folder + 'followup/') ? 'FOLLOWUP'
     : source.path.startsWith(folder + 'closure/') ? 'CLOSURE' : kind
-  const exists = kind === 'REVIEW'
+  const criterion = criterionPhotoOwner(source.path)
+  const exists = criterion ? await criterionEvidenceObjectExists(source.path, source.serviceId, criterion.criterionId) : kind === 'REVIEW'
     ? await deviceReviewMediaObjectExists(source.path, source.serviceId, source.ownerId)
     : await findingEvidenceObjectExists(source.path, source.serviceId, source.ownerId, storageKind as 'OPENING' | 'CLOSURE' | 'FOLLOWUP')
   const result: EvidenceAccess = exists
-    ? { status: 'AVAILABLE', ...createServiceMediaReadUrl(source.path, source.serviceId, source.ownerId, storageKind) }
+    ? { status: 'AVAILABLE', ...createServiceMediaReadUrl(source.path, source.serviceId, criterion?.criterionId ?? source.ownerId, criterion ? 'CRITERION' : storageKind) }
     : { status: missingEvidenceStatus(source.retentionAt), url: null, expiresAt: null }
   return context.json(result)
 })

@@ -54,6 +54,7 @@ vi.mock('@/services/technicianMutationService', () => ({
   listTechnicianMutations: vi.fn<typeof mutationService.listTechnicianMutations>(),
   saveTechnicianMutation: vi.fn<typeof mutationService.saveTechnicianMutation>(),
   deleteTechnicianMutation: vi.fn<typeof mutationService.deleteTechnicianMutation>(),
+  replaceTechnicianMutation: vi.fn<typeof mutationService.replaceTechnicianMutation>(),
 }))
 
 let mutationRecords: TechnicianMutation[] = []
@@ -163,6 +164,9 @@ beforeEach(() => {
   })
   vi.mocked(mutationService.deleteTechnicianMutation).mockImplementation(async value => {
     mutationRecords = mutationRecords.filter(item => item.requestId !== value.requestId)
+  })
+  vi.mocked(mutationService.replaceTechnicianMutation).mockImplementation(async (previous, value, superseded = []) => {
+    mutationRecords = [...mutationRecords.filter(item => ![previous, ...superseded].some(old => old.requestId === item.requestId)), structuredClone(value)]
   })
   vi.mocked(mediaService.saveTechnicianMedia).mockResolvedValue()
   vi.mocked(mediaService.loadTechnicianMedia).mockResolvedValue(null)
@@ -878,5 +882,150 @@ describe('technician services state', () => {
     expect(await store.applyAreaOrder(serviceId, areaIds)).toBe('pending')
     expect(mutationRecords).toHaveLength(2)
     expect(new Set(mutationRecords.map(item => item.requestId)).size).toBe(2)
+  })
+})
+
+
+describe('criterion findings share physical evidence', () => {
+  async function prepareSharedPhoto() {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+    vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([executionCache()])
+    const store = useTechnicianServicesStore()
+    await store.ensurePackage(serviceId)
+    const photo = new File(['shared'], 'shared.jpg', { type: 'image/jpeg' })
+    await store.applyCriterionEvaluation(serviceId, areaIds[0]!, criterionId, 'NC', 'Grieta', [photo])
+    const source = mutationRecords.find(item => item.kind === 'CRITERION_EVALUATION')!
+    if (source.kind !== 'CRITERION_EVALUATION') throw new Error('Missing source')
+    const mediaId = source.evidences[0]!.mediaId
+    const storagePath = `services/${serviceId}/criteria/${criterionId}/evidence/shared.jpg`
+    vi.mocked(mediaService.loadTechnicianMedia).mockResolvedValue({ schemaVersion: 1, id: mediaId, actorId, serviceId,
+      areaId: areaIds[0], criterionId, fileName: photo.name, contentType: photo.type, size: photo.size,
+      lastModified: photo.lastModified, savedAt: new Date().toISOString(), file: photo })
+    vi.mocked(serviceMedia.uploadTechnicianCriterionEvidence).mockResolvedValue(storagePath)
+    const criterion = { ...store.currentPackage!.areas[0]!.criterios[0]!, evidenciasStoragePaths: [storagePath], evidenciasLocalIds: [], version: 2 }
+    vi.mocked(api.saveTechnicianCriterionEvaluation).mockResolvedValue({ criterion, removedEvidenceStoragePaths: [] })
+    vi.mocked(api.createTechnicianFinding).mockImplementation(async (_service, _area, _request, _device, _lock, findingId) => ({
+      finding: { ...store.currentPackage!.areas[0]!.hallazgos.find(item => item.id === findingId)!,
+        evidenciasAperturaStoragePaths: [storagePath], evidenciasAperturaLocalIds: [], version: 1 },
+    }))
+    return { store, source, storagePath, criterion, mediaId }
+  }
+
+  it('preserves shared media when a finding and another answer are saved during an in-flight source request', async () => {
+    const { store, storagePath, criterion } = await prepareSharedPhoto()
+    let complete!: (value: Awaited<ReturnType<typeof api.saveTechnicianCriterionEvaluation>>) => void
+    vi.mocked(api.saveTechnicianCriterionEvaluation).mockImplementationOnce(() => new Promise(resolve => { complete = resolve }))
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: true })
+    const syncing = store.syncPending(serviceId)
+    await vi.waitFor(() => expect(api.saveTechnicianCriterionEvaluation).toHaveBeenCalledTimes(1))
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+    await store.applyCriterionEvaluation(serviceId, areaIds[0]!, criterionId, 'CP', 'Reparación parcial')
+    await store.applyFindingCreate(serviceId, areaIds[0]!, { criterionId, useCriterionEvidence: true,
+      descripcion: 'Reparación parcial', recomendacionAccion: 'Completar' }, [])
+    complete({ criterion, removedEvidenceStoragePaths: [] })
+    expect(await syncing).toBe('synced')
+    expect(serviceMedia.uploadTechnicianCriterionEvidence).toHaveBeenCalledTimes(1)
+    expect(serviceMedia.uploadTechnicianFindingEvidence).not.toHaveBeenCalled()
+    expect(api.saveTechnicianCriterionEvaluation).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(api.saveTechnicianCriterionEvaluation).mock.calls[1]?.[8]).toEqual([storagePath])
+    expect(vi.mocked(api.createTechnicianFinding).mock.calls[0]?.[7]).toEqual([storagePath])
+    expect(mutationRecords).toHaveLength(0)
+  })
+
+  it('keeps the original request and bytes if persisting the acknowledged criterion fails', async () => {
+    const { store, source, mediaId } = await prepareSharedPhoto()
+    vi.mocked(cacheService.saveTechnicianPackageCache).mockRejectedValueOnce(new Error('IndexedDB write failed'))
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: true })
+    expect(await store.syncPending(serviceId)).toBe('pending')
+    expect(mutationRecords).toEqual([expect.objectContaining({ requestId: source.requestId, status: 'SENDING' })])
+    expect(mediaService.deleteTechnicianMedia).not.toHaveBeenCalledWith(actorId, mediaId)
+    expect(await store.syncPending(serviceId)).toBe('synced')
+    expect(vi.mocked(api.saveTechnicianCriterionEvaluation).mock.calls.map(call => call[1])).toEqual([source.requestId, source.requestId])
+    expect(serviceMedia.uploadTechnicianCriterionEvidence).toHaveBeenCalledTimes(1)
+  })
+
+  it('atomically replaces a conflicted creation instead of leaving a blocker in the queue', async () => {
+    const { store } = await prepareSharedPhoto()
+    await store.applyFindingCreate(serviceId, areaIds[0]!, { descripcion: 'Grieta', recomendacionAccion: 'Reparar' }, [])
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: true })
+    vi.mocked(api.createTechnicianFinding).mockRejectedValueOnce(new ApiClientError('Contacto inválido', 409, 'SITE_CONTACT_INVALID'))
+    expect(await store.syncPending(serviceId)).toBe('conflict')
+    const old = mutationRecords.find(item => item.kind === 'FINDING_CREATE')!
+    expect(await store.retryFindingConflict(serviceId, old.kind === 'FINDING_CREATE' ? old.findingId : '')).toBe('synced')
+    expect(mutationRecords).toHaveLength(0)
+    expect(vi.mocked(api.createTechnicianFinding).mock.calls[0]?.[2]).not.toBe(vi.mocked(api.createTechnicianFinding).mock.calls[1]?.[2])
+  })
+
+  it('refuses to unlink a remote photo still borrowed by a queued finding', async () => {
+    const { store, criterion, storagePath } = await prepareSharedPhoto()
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: true })
+    expect(await store.syncPending(serviceId)).toBe('synced')
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+    await store.applyFindingCreate(serviceId, areaIds[0]!, { criterionId, useCriterionEvidence: true, descripcion: 'Grieta', recomendacionAccion: 'Reparar' }, [])
+    await expect(store.applyCriterionEvaluation(serviceId, areaIds[0]!, criterionId, 'C', '', [], [])).rejects.toThrow('hallazgo pendiente')
+    expect(store.currentPackage?.areas[0]?.criterios[0]).toMatchObject({ version: criterion.version, evidenciasStoragePaths: [storagePath] })
+  })
+
+  it('rolls back a local creation when the package cannot be saved, preserving the borrowed source photo', async () => {
+    const {store,source,mediaId} = await prepareSharedPhoto()
+    const input={criterionId,useCriterionEvidence:true,descripcion:'Grieta',recomendacionAccion:'Sellar'}
+    const photo=new File(['extra'],'extra.jpg',{type:'image/jpeg'})
+    vi.mocked(cacheService.saveTechnicianPackageCache).mockRejectedValueOnce(new Error('Local quota exceeded'))
+    await expect(store.applyFindingCreate(serviceId,areaIds[0]!,input,[photo])).rejects.toThrow('Local quota exceeded')
+    expect(mutationRecords).toEqual([source])
+    expect(store.currentPackage?.areas[0]?.hallazgos).toHaveLength(0)
+    expect(mediaService.deleteTechnicianMedia).toHaveBeenCalledTimes(1)
+    expect(mediaService.deleteTechnicianMedia).not.toHaveBeenCalledWith(actorId,mediaId)
+    expect(await store.applyFindingCreate(serviceId,areaIds[0]!,input,[photo])).toBe('pending')
+    expect(mutationRecords.filter(item=>item.kind==='FINDING_CREATE')).toHaveLength(1)
+    expect(store.currentPackage?.areas[0]?.hallazgos).toHaveLength(1)
+  })
+
+  it('cleans only newly copied files if a criterion photo batch fails midway', async () => {
+    const {store,source,mediaId} = await prepareSharedPhoto()
+    vi.mocked(mediaService.saveTechnicianMedia).mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('Disk write failed'))
+    const files=[new File(['one'],'one.jpg',{type:'image/jpeg'}),new File(['two'],'two.jpg',{type:'image/jpeg'})]
+    await expect(store.applyCriterionEvaluation(serviceId,areaIds[0]!,criterionId,'NC','Grieta',files)).rejects.toThrow('Disk write failed')
+    expect(mutationRecords).toEqual([source])
+    expect(mediaService.deleteTechnicianMedia).toHaveBeenCalledTimes(1)
+    expect(mediaService.deleteTechnicianMedia).not.toHaveBeenCalledWith(actorId,mediaId)
+  })
+
+  it('uploads a criterion photo only once when two offline findings reuse it', async () => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+    vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([executionCache()])
+    const store = useTechnicianServicesStore()
+    await store.ensurePackage(serviceId)
+    const photo = new File(['shared'], 'shared.jpg', { type: 'image/jpeg' })
+    await store.applyCriterionEvaluation(serviceId, areaIds[0]!, criterionId, 'NC', 'Grieta', [photo])
+    const source = mutationRecords.find(item => item.kind === 'CRITERION_EVALUATION')!
+    if (source.kind !== 'CRITERION_EVALUATION') throw new Error('Missing source')
+    const mediaId = source.evidences[0]!.mediaId
+    for (const description of ['Grieta', 'Filtración']) await store.applyFindingCreate(serviceId, areaIds[0]!, {
+      criterionId, useCriterionEvidence: true, descripcion: description, recomendacionAccion: 'Reparar',
+    }, [])
+    expect(mediaService.saveTechnicianMedia).toHaveBeenCalledTimes(1)
+    const findings = mutationRecords.filter(item => item.kind === 'FINDING_CREATE')
+    expect(findings).toHaveLength(2)
+    expect(findings.every(item => item.evidences[0]?.mediaId === mediaId)).toBe(true)
+    const storagePath = `services/${serviceId}/criteria/${criterionId}/evidence/shared.jpg`
+    vi.mocked(mediaService.loadTechnicianMedia).mockResolvedValue({ schemaVersion: 1, id: mediaId, actorId, serviceId,
+      areaId: areaIds[0], criterionId, fileName: photo.name, contentType: photo.type, size: photo.size,
+      lastModified: photo.lastModified, savedAt: new Date().toISOString(), file: photo })
+    vi.mocked(serviceMedia.uploadTechnicianCriterionEvidence).mockResolvedValue(storagePath)
+    vi.mocked(api.saveTechnicianCriterionEvaluation).mockResolvedValue({ criterion: {
+      ...store.currentPackage!.areas[0]!.criterios[0]!, evidenciasStoragePaths: [storagePath], evidenciasLocalIds: [], version: 2,
+    }, removedEvidenceStoragePaths: [] })
+    vi.mocked(api.createTechnicianFinding).mockImplementation(async (_service, _area, _request, _device, _lock, findingId) => ({
+      finding: { ...store.currentPackage!.areas[0]!.hallazgos.find(item => item.id === findingId)!,
+        evidenciasAperturaStoragePaths: [storagePath], evidenciasAperturaLocalIds: [], version: 1 },
+    }))
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: true })
+    expect(await store.syncPending(serviceId)).toBe('synced')
+    expect(serviceMedia.uploadTechnicianCriterionEvidence).toHaveBeenCalledTimes(1)
+    expect(serviceMedia.uploadTechnicianFindingEvidence).not.toHaveBeenCalled()
+    expect(api.createTechnicianFinding).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(api.createTechnicianFinding).mock.calls.every(call => JSON.stringify(call[7]) === JSON.stringify([storagePath]))).toBe(true)
+    expect(store.pendingSyncCount).toBe(0)
   })
 })

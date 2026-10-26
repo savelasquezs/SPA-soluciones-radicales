@@ -130,3 +130,9 @@ Se conserva el campo productos.ficha_tecnica_storage_path y la carga original de
 - Las imágenes de firma del cliente y del técnico se conservan durante un año desde la finalización del servicio. Los nombres y fechas permanecen registrados en PostgreSQL.
 - Cuando la imagen se ha eliminado y auditado, el informe muestra «Firma de [nombre] (vencida)» tanto en el área administrativa como en el enlace público. Sigue siendo imprimible.
 - Los certificados PDF se conservan un mes desde su generación o última regeneración. Se vuelven a generar mediante el motor existente y la plantilla vigente; enviar el informe reutiliza los PDF disponibles y prepara los que falten, sin duplicar certificados.
+
+## Hallazgos relacionados con criterios
+
+El histórico se reconstruye al cierre exacto de la visita consultada, incluyendo sus propios seguimientos y excluyendo cambios de visitas posteriores. El mismo corte limita el acceso del técnico a las fotos del histórico de esa visita. Una evidencia compartida usa el mayor plazo de conservación entre sus referencias al informar si está vencida.
+
+Las consultas y el informe identifican el criterio de apertura por su snapshot. La observación de cada visita y la descripción histórica del hallazgo mantienen su significado. Los archivos compartidos se descargan una sola vez y se presentan una vez en el informe; las otras referencias enlazan a esa evidencia. El informe público conserva referencias opacas para fotos y criterios, sin exponer rutas R2 ni IDs internos nuevos. La vista de resultados reutiliza el visor de evidencias en lugar de abrir una pestaña de navegador por foto.

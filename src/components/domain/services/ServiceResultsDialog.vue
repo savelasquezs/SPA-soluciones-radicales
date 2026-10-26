@@ -1,18 +1,21 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ExternalLink, FileText } from 'lucide-vue-next'
+import { ExternalLink, FileText, Images } from 'lucide-vue-next'
 import BaseDialog from '@/components/base/BaseDialog.vue'
+import EvidenceLightbox from '@/components/base/EvidenceLightbox.vue'
+import { reportEvidence } from '@/helpers/serviceReport'
+import { useEvidenceGallery } from '@/composables/useEvidenceGallery'
+import type { EvidenceReference } from '@/types/siteInsights'
 import BaseButton from '@/components/base/BaseButton.vue'
 import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
 import StatusPanel from '@/components/base/StatusPanel.vue'
 import { fetchServiceResults, serviceEvidenceUrl } from '@/services/serviceResultsService'
-import { useNotificationsStore } from '@/stores/notifications'
 import type { ServiceResultsResponse } from '@/types/serviceResults'
 
 const props=defineProps<{serviceId:string;solicitud:string}>()
 const emit=defineEmits<{close:[]}>()
-const router=useRouter(),notifications=useNotificationsStore()
+const router=useRouter()
 const current=ref<ServiceResultsResponse|null>(null)
 const loading=ref(true),error=ref('')
 const tab=ref<'criterios'|'hallazgos'|'puestos'|'detalles'>('criterios')
@@ -39,17 +42,17 @@ async function load():Promise<void>{
 }
 onMounted(()=>{void load()})
 
-async function openEvidence(path:string):Promise<void>{
-  const windowRef=window.open('about:blank','_blank')
-  if(windowRef)windowRef.opener=null
-  try{
-    const url=await serviceEvidenceUrl(props.serviceId,path)
-    if(windowRef)windowRef.location.replace(url)
-    else window.location.assign(url)
-  }catch(e){
-    windowRef?.close()
-    notifications.show(e instanceof Error?e.message:'No fue posible abrir la fotografía.','error')
-  }
+const gallery = useEvidenceGallery(() => props.serviceId, async (_service, reference) => ({
+  status: 'AVAILABLE' as const, url: await serviceEvidenceUrl(props.serviceId, reference.recordId),
+  expiresAt: new Date(Date.now() + 60_000).toISOString(),
+}))
+const { open, index, state, url, current: currentPhoto, photos: galleryPhotos } = gallery
+function openEvidence(path: string): void {
+  if (!current.value) return
+  const collection: EvidenceReference[] = reportEvidence(current.value.data).map(item => ({
+    kind: 'CRITERION', recordId: item.path, index: 0, label: item.caption, date: '',
+  }))
+  gallery.show(collection, collection.findIndex(item => item.recordId === path))
 }
 function certificates():void{
   emit('close')
@@ -75,8 +78,8 @@ function certificates():void{
             <table v-else class="results-table">
               <thead><tr><th>Criterio</th><th>Evaluación</th><th>Observaciones / Evidencias</th></tr></thead>
               <tbody><tr v-for="(criterion,index) in area.criterios" :key="index">
-                <td>{{ criterion.nombre }}</td><td>{{ evaluation[criterion.evaluacion??'']??'—' }}</td>
-                <td><span>{{ criterion.observacion||'—' }}</span><div v-if="criterion.fotos.length" class="photos"><button v-for="(path,i) in criterion.fotos" :key="path" @click="openEvidence(path)">Foto {{ i+1 }}</button></div></td>
+                <td data-label="Criterio">{{ criterion.nombre }}<small v-if="area.hallazgos.some(finding => finding.criterioId === criterion.criterioId)">Con hallazgos relacionados</small></td><td data-label="Evaluación">{{ evaluation[criterion.evaluacion??'']??'—' }}</td>
+                <td data-label="Observación y evidencias"><span>{{ criterion.observacion||'—' }}</span><div v-if="criterion.fotos.length" class="photos"><button v-for="(path,i) in criterion.fotos" :key="path" @click="openEvidence(path)">Foto {{ i+1 }}</button></div></td>
               </tr></tbody>
             </table>
           </section>
@@ -86,7 +89,7 @@ function certificates():void{
         <p v-if="!findings.length" class="muted">No había hallazgos pendientes ni se registraron nuevos o cierres.</p>
         <section v-for="(finding,index) in findings" :key="index" class="result-section">
           <div class="section-title"><h3>{{ finding.area }}</h3><small>{{ finding.estado === 'CERRADO' ? 'Solucionado' : finding.anterior ? 'Pendiente anterior' : 'Nuevo · Pendiente' }}</small></div>
-          <p>{{ finding.descripcion }}</p>
+          <p v-if="finding.criterioNombre" class="muted">{{ finding.criterioNombre }}</p><p>{{ finding.descripcion }}</p>
           <p class="muted">Acción correctiva: {{ finding.recomendacion }}</p>
           <p class="muted">Responsable: {{ finding.responsable }}</p>
           <p class="muted">Apertura: {{ fmt(finding.fechaApertura) }} · {{ finding.solicitudApertura }}<span v-if="finding.anterior"> · {{ finding.visitasDesdeApertura }} visitas</span></p>
@@ -125,8 +128,8 @@ function certificates():void{
         </section>
         <section class="result-section">
           <h3>Firmas</h3>
-          <div class="document-row"><span>Técnico · {{ current.data.tecnico }}</span><button @click="openEvidence(current.data.firmaTecnico)">Ver firma <ExternalLink :size="13"/></button></div>
-          <div class="document-row"><span>Cliente · {{ current.data.firmanteCliente }}</span><button @click="openEvidence(current.data.firmaCliente)">Ver firma <ExternalLink :size="13"/></button></div>
+          <div class="document-row"><span>Técnico · {{ current.data.tecnico }}</span><button @click="openEvidence(current.data.firmaTecnico)">Ver firma <Images :size="13"/></button></div>
+          <div class="document-row"><span>Cliente · {{ current.data.firmanteCliente }}</span><button @click="openEvidence(current.data.firmaCliente)">Ver firma <Images :size="13"/></button></div>
         </section>
         <section class="result-section">
           <h3>Documentos</h3>
@@ -135,6 +138,7 @@ function certificates():void{
       </div>
     </template>
   </BaseDialog>
+  <EvidenceLightbox :open="open" :index="index" :total="galleryPhotos.length" :state="state" :url="url" :title="currentPhoto?.label ?? 'Evidencia'" caption="Evidencia de la visita" @close="gallery.close" @select="gallery.select" @retry="gallery.retry" @image-error="gallery.imageFailed" />
 </template>
 <style scoped>
 .results-tabs{display:flex;gap:1.2rem;border-bottom:1px solid var(--border);overflow-x:auto;margin:-.5rem 0 1rem}
@@ -152,11 +156,20 @@ function certificates():void{
 .results-table th:first-child,.results-table td:first-child{padding-left:0}
 .results-table td strong{font-weight:550}.results-table td small{display:block;color:var(--text-secondary);margin-top:3px}
 .photos{display:flex;gap:.5rem;flex-wrap:wrap}
-.photos button,.photo-action,.document-row>button{border:0;background:transparent;padding:0;color:var(--text-secondary);font-size:.77rem;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.photos button,.photo-action,.document-row>button{min-height:44px;min-width:44px;border:0;background:transparent;padding:0;color:var(--text-secondary);font-size:.77rem;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
 .details-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1rem;padding:.35rem 0}
 .details-grid>div{display:grid;gap:.2rem}.details-grid strong{font-size:.86rem;font-weight:550}
 .document-row{display:flex;align-items:center;justify-content:space-between;gap:1rem;min-height:2.6rem;border-bottom:1px solid var(--border)}
 .document-row>button{display:flex;align-items:center;gap:.3rem}
 .document-title{display:flex;align-items:center;gap:.5rem;font-size:.83rem}
 @media(max-width:640px){.details-grid{grid-template-columns:repeat(2,1fr)}.results-tabs{gap:.8rem}.results-table{min-width:530px}.result-section:has(.results-table){overflow-x:auto}}
+@media(max-width:640px){
+  .criteria-results{display:block;min-width:0}
+  .criteria-results thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+  .criteria-results tbody{display:grid;gap:.6rem}
+  .criteria-results tr{display:grid;grid-template-columns:minmax(0,1fr) auto;border-bottom:1px solid var(--border);padding:.45rem 0}
+  .criteria-results td{border:0;padding:.2rem 0;overflow-wrap:anywhere}
+  .criteria-results td:last-child{grid-column:1/-1}
+  .criteria-results td:last-child::before{content:attr(data-label);display:block;color:var(--text-secondary);font-size:.7rem;margin-bottom:.2rem}
+}
 </style>

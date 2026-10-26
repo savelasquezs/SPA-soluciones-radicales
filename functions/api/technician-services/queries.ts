@@ -91,8 +91,10 @@ async function findings(client: PoolClient, serviceId: string): Promise<Array<Te
   const { rows } = await client.query<{ areaId: string; record: TechnicianFinding }>(`select h.area_id as "areaId",jsonb_build_object(
     'id',h.id,'servicioAperturaId',h.servicio_apertura_id,'fechaApertura',h.fecha_apertura,
     'descripcion',h.descripcion,'recomendacionAccion',h.recomendacion_accion,
-    'evidenciasAperturaStoragePaths',coalesce(h.evidencias_apertura_storage_paths,'[]'::jsonb),
-    'estado',h.estado,
+    'criterioId',h.criterio_id,'criterioNombre',h.criterio_nombre_snapshot,'evaluacionAperturaId',h.evaluacion_apertura_id,
+      'evidenciasAperturaStoragePaths',coalesce(h.evidencias_apertura_storage_paths,'[]'::jsonb),
+    'estado',case when current_service.estado='FINALIZADO' then
+      case when h.servicio_cierre_id=$1 then 'CERRADO' else coalesce(last_review.estado,'ABIERTO') end else h.estado end,
     'resultadoSeguimiento',(select seg.resultado from public.hallazgo_seguimientos seg
       where seg.hallazgo_id=h.id and seg.servicio_id=$1),
     'estadoAnteriorSeguimiento',(select seg.estado_anterior from public.hallazgo_seguimientos seg
@@ -106,18 +108,31 @@ async function findings(client: PoolClient, serviceId: string): Promise<Array<Te
       'resultado',seg.resultado,'observacion',seg.observacion,
       'evidenciasStoragePaths',seg.evidencias_storage_paths) order by seg.registrado_at desc),'[]'::jsonb)
       from public.hallazgo_seguimientos seg join public.servicios visit on visit.id=seg.servicio_id
-      where seg.hallazgo_id=h.id),
+      where seg.hallazgo_id=h.id and (visit.id=$1 or (visit.estado='FINALIZADO'
+        and (current_service.estado<>'FINALIZADO' or visit.fin_real<=current_service.fin_real)))),
     'responsableNombre',h.responsable_nombre,'responsableCorreo',h.responsable_correo,
-    'servicioCierreId',h.servicio_cierre_id,'fechaCierre',h.fecha_cierre,
-    'evidenciasCierreStoragePaths',coalesce(h.evidencias_cierre_storage_paths,'[]'::jsonb),
-    'observacionCierre',h.observacion_cierre,'version',h.version
+    'servicioCierreId',case when closure.visible then h.servicio_cierre_id end,
+    'fechaCierre',case when closure.visible then h.fecha_cierre end,
+    'evidenciasCierreStoragePaths',case when closure.visible then coalesce(h.evidencias_cierre_storage_paths,'[]'::jsonb) else '[]'::jsonb end,
+    'observacionCierre',case when closure.visible then h.observacion_cierre end,'version',h.version
   ) as record
   from public.hallazgos h join public.servicios current_service on current_service.id=$1
   join public.servicios opening_service on opening_service.id=h.servicio_apertura_id
-  where h.sede_id=current_service.sede_id and (
+  left join lateral (select current_service.estado<>'FINALIZADO' or h.servicio_cierre_id=$1
+    or h.fecha_cierre<=current_service.fin_real as visible) closure on true
+  left join lateral (
+    select case when seg.resultado='SIN_CAMBIOS' then seg.estado_anterior else seg.resultado end as estado
+    from public.hallazgo_seguimientos seg join public.servicios visit on visit.id=seg.servicio_id
+    where seg.hallazgo_id=h.id and visit.estado='FINALIZADO' and visit.fin_real<=current_service.fin_real
+    order by visit.fin_real desc,seg.registrado_at desc,seg.id desc limit 1
+  ) last_review on true
+  where h.sede_id=current_service.sede_id and (case when current_service.estado='FINALIZADO' then
+    opening_service.estado='FINALIZADO' and opening_service.fin_real<=current_service.fin_real
+    and (h.servicio_cierre_id=$1 or h.fecha_cierre is null or h.fecha_cierre>current_service.fin_real)
+  else (
     h.servicio_apertura_id=current_service.id or h.servicio_cierre_id=current_service.id
     or (h.estado in ('ABIERTO','EN_PROCESO') and opening_service.inicio_programado<current_service.inicio_programado)
-  ) order by h.area_id,case h.estado when 'ABIERTO' then 0 when 'EN_PROCESO' then 1 else 2 end,h.fecha_apertura,h.id`, [serviceId])
+  ) end) order by h.area_id,h.fecha_apertura,h.id`, [serviceId])
   return rows.map(row => ({ ...row.record, areaId: row.areaId }))
 }
 

@@ -207,20 +207,20 @@ La configuración de plantillas, la prueba sintética, la generación oficial y 
 ## Espacio de trabajo móvil del Técnico
 
 - El encabezado del trabajo muestra solo el selector de Área (con estado textual e icono), un acceso a su orden y la navegación Servicio / Áreas / Cierre. El código y el estado de red permanecen en el detalle global; no se repiten sobre los criterios.
-- Las pestañas **Criterios**, **Puestos** y **Hallazgos** distribuyen una sola responsabilidad visual por superficie. Cada pestaña tiene su propio indicador: criterios sin evaluar, puestos sin revisar o hallazgos abiertos, respectivamente. Un hallazgo abierto **no** cuenta como bloqueo de la inspección.
+- Las pestañas **Criterios y hallazgos** y **Puestos** agrupan el trabajo del Área. La primera muestra criterios sin evaluar y seguimientos sin revisar; la segunda, puestos sin revisar. Un hallazgo abierto revisado no cuenta como bloqueo. Cada criterio contiene sus hallazgos y la acción explícita para registrar otro con la observación y las fotos de esta visita.
 - Cambiar de pestaña o Área debe conservar los borradores. La pestaña activa viaja en la URL, y el selector permite regresar a un Área incompleta sin flujos circulares ni botón global “Siguiente pendiente”.
 - «No fue posible acceder» es una acción de peligro **secundaria** que abre un diálogo, no una tarjeta roja ocupando toda el área. El botón **Habilitar Área** aparece inmediatamente en el diálogo, aunque no se hayan ingresado motivo ni fotografías. Cuando la excepción se guarda, se ocultan criterios, puestos y hallazgos de esa Área.
 - La excepción exige un motivo y entre una y cinco fotografías; después de guardar ofrece continuar a otra Área incompleta o ir al cierre. No inicia firmas automáticamente ni da por completo el servicio.
 - Las evidencias nuevas se ven como miniaturas con visor antes de guardar. La cámara integrada permite capturar, repetir, usar foto y «Usar y tomar otra»; cuando el permiso/cámara no está disponible, utiliza el selector nativo.
 - La persistencia de fotografías funciona mediante cola local e identificadores de medio; la sincronización por archivo no debe perder los restantes ni reiniciar un envío ya confirmado.
 
-- Al abrir un Hallazgo, el formulario técnico pide solamente descripción, recomendación/acción y evidencias; la responsabilidad la determina el backend desde el contacto principal de la Sede. Se muestra en el detalle, no se edita en campo.
+- Al abrir un Hallazgo desde un criterio, la descripción se precarga con la observación y se ofrece reutilizar sus fotos. Solo se completa la recomendación/acción y los datos que falten; la responsabilidad la determina el backend desde el contacto principal de la Sede. Se muestra en el detalle, no se edita en campo.
 
 ## Ejecución móvil del Técnico (navegación guiada)
 
 - Compactar encabezados, tarjetas y pies de sección; preservar controles táctiles de 44 px y la identidad de ambos temas mediante tokens existentes.
-- Navegación manual de Área, Servicio, Cierre y pestañas Criterios/Puestos/Hallazgos siempre disponible, sin exigir completitud.
-- Los botones Anterior/Siguiente al pie de cada sección guían el recorrido. Anterior no valida. Siguiente valida exclusivamente el paso que intenta dejar; en Hallazgos valida el Área completa.
+- Navegación manual de Área, Servicio, Cierre y pestañas Criterios y hallazgos/Puestos siempre disponible, sin exigir completitud.
+- Los botones Anterior/Siguiente al pie de cada sección guían el recorrido. Anterior no valida. Siguiente valida exclusivamente el paso que intenta dejar; al salir de Puestos valida el Área completa.
 - El primer pendiente se desplaza a la vista, abre su tarjeta y muestra error inline, sin toasts duplicados ni diálogos grandes para validaciones.
 - Los borradores parciales se conservan antes de cambiar de sección, incluso si aún no existe una calificación.
 - Los indicadores distinguen Hallazgos abiertos de Hallazgos sin evaluación durante la visita. «Sigue igual» registra una revisión sin cerrar el Hallazgo.
@@ -236,3 +236,13 @@ La configuración de plantillas, la prueba sintética, la generación oficial y 
 - La identidad Google se conserva temporalmente **solo para identificar la cuenta denegada en pantalla**. Un `403` elimina el perfil de aplicación y sus roles; errores de sesión distintos de `403` limpian también la identidad visible.
 - Cambiar de cuenta invalida la sesión anterior antes de abrir el selector de Google. Cerrar sesión regresa a `/acceso`; ambas acciones tienen feedback ante fallo y se bloquean mientras se procesan.
 - El texto y la navegación del frontend no constituyen autorización: Neon Functions y PostgreSQL/RLS deben continuar rechazando cuentas sin permiso. No exponer URL firmadas de R2 a identidades denegadas.
+
+## Evidencia y seguimiento dentro del criterio
+
+- Mantener el selector de Área y su acción de Orden en una fila compacta móvil; las acciones conservan nombres accesibles y 44 px.
+- Los controles de edición que no aplican a un Servicio finalizado se ocultan. Sus datos históricos siguen consultables.
+- Mostrar y ampliar las fotos guardadas o pendientes bajo demanda; no ofrecer eliminación sin poder identificar la evidencia. Identificar una foto utilizada en un hallazgo.
+- Otros hallazgos del Área conserva los registros históricos o generales sin una relación vigente con un criterio. Su seguimiento tiene los mismos controles.
+- Los formularios parciales se recuperan después de navegar o recargar. Un error de persistencia local se explica en el editor y bloquea una salida que perdería trabajo.
+- Revisión y cierre distingue **seguimientos sin revisar** de **hallazgos abiertos** y dirige al registro exacto dentro de Criterios y hallazgos.
+- Resultados usa el visor compartido de evidencias. El informe representa una fotografía compartida una sola vez y enlaza sus demás referencias, también en la versión pública e imprimible.

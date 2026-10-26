@@ -50,7 +50,7 @@ export function technicianFindingPending(finding: TechnicianArea['hallazgos'][nu
     && finding.servicioCierreId !== serviceId && !finding.resultadoSeguimiento
 }
 
-export type TechnicianAreaIssue = { tab: 'criteria' | 'points' | 'findings'; id: string; message: string }
+export type TechnicianAreaIssue = { tab: 'criteria' | 'points'; id: string; message: string }
 export function technicianAreaIssues(area: TechnicianArea, serviceId: string): TechnicianAreaIssue[] {
   if (area.sinAcceso) return []
   return [
@@ -59,7 +59,7 @@ export function technicianAreaIssues(area: TechnicianArea, serviceId: string): T
     ...area.dispositivos.filter(device => !device.revisado)
       .map(device => ({ tab: 'points' as const, id: device.id, message: 'Revisa este puesto antes de continuar.' })),
     ...area.hallazgos.filter(finding => technicianFindingPending(finding, serviceId))
-      .map(finding => ({ tab: 'findings' as const, id: finding.id, message: 'Indica si este hallazgo sigue igual, está en proceso o se cerró.' })),
+      .map(finding => ({ tab: 'criteria' as const, id: finding.id, message: 'Indica si este hallazgo sigue igual, está en proceso o se cerró.' })),
   ]
 }
 

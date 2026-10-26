@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { ArrowLeft, ArrowRight, CheckCheck, CheckCircle2, ListChecks, ListOrdered, Plus, Search, Wrench } from 'lucide-vue-next'
+import { ArrowLeft, ArrowRight, CheckCheck, CheckCircle2, ListChecks, ListOrdered, Plus, Wrench } from 'lucide-vue-next'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import BaseButton from '@/components/base/BaseButton.vue'
 import LoadingSkeleton from '@/components/base/LoadingSkeleton.vue'
@@ -17,10 +17,10 @@ import TechnicianServiceNavigation from '@/components/domain/services/Technician
 import '@/components/domain/services/services.css'
 import { nextTechnicianRouteStep, orderedTechnicianAreas, technicianAreaIssues, technicianAreaResolved, type TechnicianAreaIssue } from '@/helpers/technicianServices'
 import { useTechnicianServicesStore } from '@/stores/technicianServices'
-import { clearAreaAccessDraft, loadAreaAccessDraft, loadCriterionNotes, saveAreaAccessDraft, saveCriterionNote, type AreaAccessDraft } from '@/services/technicianWorkDraftService'
+import { clearAreaAccessDraft, loadAreaAccessDraft, loadCriterionNotes, loadCriterionPhotos, saveAreaAccessDraft, saveCriterionNote, loadFindingWorkDraft, type AreaAccessDraft } from '@/services/technicianWorkDraftService'
 import type { MipEvaluation, TechnicianArea, TechnicianAreaAccessMutation, TechnicianCriterionEvaluationMutation, TechnicianDeviceCreationInput, TechnicianDeviceCreationMutation, TechnicianDeviceReviewInput, TechnicianDeviceReviewMutation, TechnicianFindingCreateInput, TechnicianFindingCreateMutation, TechnicianFindingStatusInput, TechnicianFindingStatusMutation } from '@/types/technicianServices'
 
-type AreaTab = 'CRITERIA' | 'POINTS' | 'FINDINGS'
+type AreaTab = 'CRITERIA' | 'POINTS'
 
 const route = useRoute()
 const router = useRouter()
@@ -38,12 +38,13 @@ const newDeviceOpen = ref(false)
 const newAreaOpen = ref(false)
 const newDeviceSaving = ref(false)
 const openDeviceId = ref('')
-const newFindingOpen = ref(false)
+const newFindingOpen = ref('')
 const findingSavingId = ref('')
-const drafts = ref<Record<string, { evaluation: MipEvaluation | null; observation: string }>>({})
+const drafts = ref<Record<string, { evaluation: MipEvaluation | null; observation: string; files: File[] }>>({})
 const deviceDrafts = ref<Record<string, { input: TechnicianDeviceReviewInput; photo: File | null }>>({})
 const accessDraft = ref<{ areaId: string; withoutAccess: boolean; description: string; photos: File[] } | null>(null)
 const restoredAccessDraft = ref<AreaAccessDraft | null>(null)
+const unratedPhotos = ref<Record<string, File[]>>({})
 const unratedDrafts = ref<Record<string, string>>({})
 const validationTarget = ref('')
 const bulkSaving = ref(false)
@@ -57,13 +58,19 @@ const canEditRoute = computed(() => packageValue.value?.service.estado === 'EN_P
 const findings = computed(() => currentArea.value?.hallazgos ?? [])
 const activeTab = computed<AreaTab>(() => {
   const value = String(route.query.tab ?? '').toUpperCase()
-  return value === 'POINTS' || value === 'FINDINGS' ? value : 'CRITERIA'
+  return value === 'POINTS' ? value : 'CRITERIA'
 })
+async function openFinding(criterionId: string): Promise<void> {
+  if (await flushDrafts()) newFindingOpen.value = criterionId
+}
 const pendingCriteria = computed(() => currentArea.value?.criterios.filter(item => !item.evaluacion).length ?? 0)
 const pendingPoints = computed(() => currentArea.value?.dispositivos.filter(item => !item.revisado).length ?? 0)
-const openFindings = computed(() => findings.value.filter(item => item.estado !== 'CERRADO').length)
+const generalFindings = computed(() => findings.value.filter(item => !currentArea.value?.criterios.some(criterion => criterion.criterioId === item.criterioId)))
+const protectedPhotoPaths = computed(() => [...findings.value.flatMap(item => [...item.evidenciasAperturaStoragePaths, ...(item.evidenciasSeguimientoStoragePaths ?? [])]),
+  ...currentMutations.value.flatMap(item => item.kind === 'FINDING_CREATE' || item.kind === 'FINDING_STATUS'
+    ? [...(item.sharedEvidenceStoragePaths ?? []), ...item.evidences.flatMap(photo => photo.storagePath ? [photo.storagePath] : [])] : [])])
 const areaIssues = computed(() => currentArea.value ? technicianAreaIssues(currentArea.value, serviceId.value) : [])
-const pendingFindings = computed(() => areaIssues.value.filter(issue => issue.tab === 'findings').length)
+const pendingFindings = computed(() => areaIssues.value.filter(issue => issue.tab === 'criteria' && findings.value.some(item => item.id === issue.id)).length)
 const activeIssue = computed(() => areaIssues.value.find(issue => issue.id === validationTarget.value) ?? null)
 const stepAfterArea = computed(() => nextTechnicianRouteStep(orderedAreas.value, routeAreaId.value))
 const creationConflict = computed(() => currentMutations.value.find((item): item is TechnicianDeviceCreationMutation => item.kind === 'DEVICE_CREATE'
@@ -79,7 +86,7 @@ watch(routeAreaId, value => {
   void restoreDrafts(value).then(() => revealRequested())
   selectedAreaId.value = value
   newDeviceOpen.value = false
-  newFindingOpen.value = false
+  newFindingOpen.value = ''
   openDeviceId.value = ''
 })
 watch(creationConflict, value => { if (value) newDeviceOpen.value = true })
@@ -100,18 +107,23 @@ async function restoreDrafts(areaId: string): Promise<void> {
   const area = orderedAreas.value.find(item => item.id === areaId)
   const actorId = currentCache.value?.actorId
   if (!area || !actorId) return
-  const [notes, access] = await Promise.all([
+  const [notes, access, findingDrafts, photos] = await Promise.all([
     loadCriterionNotes(actorId, serviceId.value, areaId, area.criterios.map(item => item.id)),
     loadAreaAccessDraft(actorId, serviceId.value, areaId),
+    Promise.all([area.id, ...area.criterios.map(item => item.id)].map(async id => ({ id, draft: await loadFindingWorkDraft(actorId, serviceId.value, areaId, id) }))),
+    loadCriterionPhotos(actorId, serviceId.value, areaId, area.criterios.map(item => item.id)),
   ])
   if (areaId !== routeAreaId.value) return
   unratedDrafts.value = Object.fromEntries(Object.entries(notes).filter(([id]) => !area.criterios.find(item => item.id === id)?.evaluacion))
+  unratedPhotos.value = photos
   restoredAccessDraft.value = access
+  const unfinished = findingDrafts.find(item => item.draft && (item.draft.description || item.draft.recommendation || item.draft.photos?.length))
+  if (unfinished) newFindingOpen.value = unfinished.id === area.id ? 'general' : unfinished.id
 }
 
 async function revealRequested(): Promise<void> {
   const id = String(route.query.focus ?? '')
-  if (!id || !areaIssues.value.some(issue => issue.id === id)) return
+  if (!id || !currentArea.value || ![...currentArea.value.criterios, ...currentArea.value.dispositivos, ...findings.value].some(item => item.id === id)) return
   validationTarget.value = id
   const issue = areaIssues.value.find(item => item.id === id)
   if (issue?.tab === 'points') openDeviceId.value = id
@@ -127,24 +139,24 @@ async function showIssue(issue: TechnicianAreaIssue): Promise<void> {
   document.getElementById(`area-item-${issue.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
 
-async function goNext(section: 'criteria' | 'points' | 'findings'): Promise<void> {
+async function goNext(section: 'criteria' | 'points'): Promise<void> {
   if (!await flushDrafts()) return
-  const issues = areaIssues.value.filter(issue => section === 'findings' || issue.tab === section)
+  const issues = section === 'points'
+    ? [...areaIssues.value.filter(issue => issue.tab === 'points'), ...areaIssues.value.filter(issue => issue.tab !== 'points')]
+    : areaIssues.value.filter(issue => issue.tab === section)
   if (issues[0]) { await showIssue(issues[0]); return }
   validationTarget.value = ''
   if (section === 'criteria') { selectTab('POINTS'); return }
-  if (section === 'points') { selectTab('FINDINGS'); return }
   if (stepAfterArea.value.kind === 'AREA') selectArea(stepAfterArea.value.area.id)
   else openReview()
 }
 
-function goPrevious(section: 'criteria' | 'points' | 'findings'): void {
+function goPrevious(section: 'criteria' | 'points'): void {
   validationTarget.value = ''
-  if (section === 'findings') { selectTab('POINTS'); return }
   if (section === 'points') { selectTab('CRITERIA'); return }
   const index = orderedAreas.value.findIndex(area => area.id === routeAreaId.value)
   const previous = orderedAreas.value[index - 1]
-  if (previous) void router.push({ name: 'technician-service-area', params: { id: serviceId.value, areaId: previous.id }, query: { tab: 'findings' } })
+  if (previous) void router.push({ name: 'technician-service-area', params: { id: serviceId.value, areaId: previous.id }, query: { tab: 'points' } })
   else openServiceOverview()
 }
 
@@ -281,26 +293,30 @@ async function discardNewDevice(): Promise<void> {
   }
 }
 
-async function saveNewFinding(input: TechnicianFindingCreateInput, files: File[]): Promise<void> {
+async function saveNewFinding(input: TechnicianFindingCreateInput, files: File[], done?: (saved: boolean) => Promise<void>): Promise<void> {
   if (!currentArea.value) return
-  findingSavingId.value = 'new'
+  if (!await flushDrafts()) { await done?.(false); return }
+  findingSavingId.value = input.criterionId ?? 'general'
   saveError.value = ''
   try {
     await services.applyFindingCreate(serviceId.value, currentArea.value.id, input, files)
-    newFindingOpen.value = false
+    await done?.(true)
+    newFindingOpen.value = ''
   } catch (failure) {
+    await done?.(false)
     saveError.value = failure instanceof Error ? failure.message : 'No fue posible registrar el Hallazgo.'
   } finally {
     findingSavingId.value = ''
   }
 }
 
-async function saveFindingStatus(findingId: string, input: TechnicianFindingStatusInput, files: File[]): Promise<void> {
+async function saveFindingStatus(findingId: string, input: TechnicianFindingStatusInput, files: File[], done?: (saved: boolean) => Promise<void>): Promise<void> {
   if (!currentArea.value) return
+  if (!await flushDrafts()) { await done?.(false); return }
   findingSavingId.value = findingId
   saveError.value = ''
-  try { await services.applyFindingStatus(serviceId.value, currentArea.value.id, findingId, input, files) }
-  catch (failure) { saveError.value = failure instanceof Error ? failure.message : 'No fue posible actualizar el Hallazgo.' }
+  try { await services.applyFindingStatus(serviceId.value, currentArea.value.id, findingId, input, files); await done?.(true) }
+  catch (failure) { await done?.(false); saveError.value = failure instanceof Error ? failure.message : 'No fue posible actualizar el Hallazgo.' }
   finally { findingSavingId.value = '' }
 }
 
@@ -392,15 +408,16 @@ async function saveAccess(withoutAccess: boolean, description: string, photos: F
   return saved
 }
 
-function trackCriterionDraft(criterionId: string, evaluation: MipEvaluation | null, observation: string): void {
-  drafts.value = { ...drafts.value, [criterionId]: { evaluation, observation } }
+function trackCriterionDraft(criterionId: string, evaluation: MipEvaluation | null, observation: string, files: File[] = []): void {
+  drafts.value = { ...drafts.value, [criterionId]: { evaluation, observation, files } }
   if (evaluation) { if (validationTarget.value === criterionId) validationTarget.value = ''; return }
   unratedDrafts.value = { ...unratedDrafts.value, [criterionId]: observation }
+  unratedPhotos.value = { ...unratedPhotos.value, [criterionId]: files }
   const actorId = currentCache.value?.actorId
   const areaId = currentArea.value?.id
   if (!actorId || !areaId) return
   const previous = localDraftQueue.get(criterionId) ?? Promise.resolve()
-  const task = previous.then(() => saveCriterionNote(actorId, serviceId.value, areaId, criterionId, observation))
+  const task = previous.catch(() => {}).then(() => saveCriterionNote(actorId, serviceId.value, areaId, criterionId, observation, files))
   localDraftQueue.set(criterionId, task)
   void task.catch(() => { saveError.value = 'No fue posible conservar una observación en este celular.' })
 }
@@ -498,7 +515,7 @@ async function flushDrafts(): Promise<boolean> {
     if (saveQueue.size) await Promise.all(saveQueue.values())
     for (const [criterionId, draft] of Object.entries(drafts.value)) {
       if (!draft.evaluation) continue
-      if (!await saveCriterion(criterionId, draft.evaluation, draft.observation)) return false
+      if (!await saveCriterion(criterionId, draft.evaluation, draft.observation, draft.files)) return false
     }
     if (deviceSaveQueue.size) await Promise.all(deviceSaveQueue.values())
     for (const [serviceDeviceId, draft] of Object.entries(deviceDrafts.value)) {
@@ -579,7 +596,7 @@ async function retryDevice(serviceDeviceId: string): Promise<void> {
           </select>
           <div class="area-picker__actions">
             <BaseButton v-if="canEditRoute" size="compact" variant="secondary" @click="newAreaOpen=true"><Plus :size="18" aria-hidden="true" />Nueva Área</BaseButton>
-            <BaseButton size="compact" variant="ghost" aria-label="Ordenar Áreas" @click="orderAreas"><ListOrdered :size="18" aria-hidden="true" />Orden</BaseButton>
+            <BaseButton size="compact" variant="ghost" aria-label="Ordenar Áreas" @click="orderAreas"><ListOrdered :size="18" aria-hidden="true" /><span class="order-label">Orden</span></BaseButton>
           </div>
         </div>
 
@@ -588,14 +605,12 @@ async function retryDevice(serviceDeviceId: string): Promise<void> {
 
         <nav v-if="!currentArea.sinAcceso" class="area-tabs" aria-label="Contenido del Área">
           <button type="button" :class="{ 'area-tabs__active': activeTab === 'CRITERIA' }" :aria-current="activeTab === 'CRITERIA' ? 'page' : undefined" @click="selectTab('CRITERIA')">
-            <ListChecks :size="18" aria-hidden="true" /><span>Criterios</span><strong v-if="pendingCriteria">{{ pendingCriteria }}</strong><CheckCircle2 v-else :size="16" aria-label="Completo" />
+            <ListChecks :size="18" aria-hidden="true" /><span>Criterios y hallazgos</span><strong v-if="pendingCriteria + pendingFindings">{{ pendingCriteria + pendingFindings }}</strong><CheckCircle2 v-else :size="16" aria-label="Completo" />
           </button>
           <button type="button" :class="{ 'area-tabs__active': activeTab === 'POINTS' }" :aria-current="activeTab === 'POINTS' ? 'page' : undefined" @click="selectTab('POINTS')">
             <Wrench :size="18" aria-hidden="true" /><span>Puestos</span><strong v-if="pendingPoints">{{ pendingPoints }}</strong><CheckCircle2 v-else :size="16" aria-label="Completo" />
           </button>
-          <button type="button" :class="{ 'area-tabs__active': activeTab === 'FINDINGS' }" :aria-current="activeTab === 'FINDINGS' ? 'page' : undefined" @click="selectTab('FINDINGS')">
-            <Search :size="18" aria-hidden="true" /><span>Hallazgos</span><strong v-if="pendingFindings">{{ pendingFindings }}</strong><CheckCircle2 v-else :size="16" aria-label="Completo" />
-          </button>
+
         </nav>
       </section>
 
@@ -604,7 +619,7 @@ async function retryDevice(serviceDeviceId: string): Promise<void> {
       </p>
       <p v-if="saveError" class="area-save-error" role="alert">{{ saveError }}</p>
 
-      <TechnicianAreaAccessEditor
+      <TechnicianAreaAccessEditor v-if="canEditRoute || currentArea.sinAcceso"
         :area="currentArea"
         :mutation="accessMutation()"
         :failure-message="saveError"
@@ -621,12 +636,28 @@ async function retryDevice(serviceDeviceId: string): Promise<void> {
       />
 
       <section v-show="!currentArea.sinAcceso && activeTab === 'CRITERIA'" class="workspace-panel" aria-labelledby="criteria-title">
-        <header class="workspace-panel__actions"><div><h2 id="criteria-title">Criterios del Área</h2><p>{{ currentArea.criterios.length - pendingCriteria }} de {{ currentArea.criterios.length }} completados</p></div>
+        <header class="workspace-panel__actions"><div><h2 id="criteria-title">Criterios y hallazgos</h2><p>{{ currentArea.criterios.length - pendingCriteria }} de {{ currentArea.criterios.length }} completados</p></div>
           <BaseButton v-if="canEditRoute && pendingCriteria" variant="secondary" size="compact" :loading="bulkSaving" :disabled="syncing" @click="markPendingAsCompliant"><CheckCheck :size="16" aria-hidden="true" />Marcar pendientes como C</BaseButton></header>
         <p v-if="bulkMessage" class="area-inline-feedback" role="status">{{ bulkMessage }}</p>
         <div class="criteria-list"><div v-for="criterion in currentArea.criterios" :id="`area-item-${criterion.id}`" :key="criterion.id">
-          <TechnicianCriterionEditor :criterion="criterion" :mutation="criterionMutation(criterion.id)" :draft-text="unratedDrafts[criterion.id]" :validation-error="activeIssue?.id === criterion.id ? activeIssue.message : ''" :editable="canEditRoute" :syncing="syncing" @draft="(evaluation, observation) => trackCriterionDraft(criterion.id, evaluation, observation)" @save="(evaluation, observation, files, retainedPaths) => saveCriterion(criterion.id, evaluation, observation, files, retainedPaths)" @use-remote="useRemoteCriterion(criterion.id)" @retry="retryCriterion(criterion.id)" />
+          <TechnicianCriterionEditor :service-id="serviceId" :actor-id="currentCache?.actorId" :draft-files="unratedPhotos[criterion.id]" :protected-paths="protectedPhotoPaths" :criterion="criterion" :mutation="criterionMutation(criterion.id)" :draft-text="unratedDrafts[criterion.id]" :validation-error="activeIssue?.id === criterion.id ? activeIssue.message : ''" :editable="canEditRoute" :syncing="syncing" @draft="(evaluation, observation, files) => trackCriterionDraft(criterion.id, evaluation, observation, files)" @save="(evaluation, observation, files, retainedPaths, done) => saveCriterion(criterion.id, evaluation, observation, files, retainedPaths).then(done)" @use-remote="useRemoteCriterion(criterion.id)" @retry="retryCriterion(criterion.id)">
+            <div class="criterion-findings">
+              <div v-for="finding in findings.filter(item => item.criterioId === criterion.criterioId)" :id="`area-item-${finding.id}`" :key="finding.id">
+                <TechnicianFindingCard :finding="finding" :criterion="criterion" :current-service-id="serviceId" :area-id="currentArea.id" :actor-id="currentCache?.actorId" :mutation="findingMutation(finding.id)" :focus-pending="validationTarget === finding.id" :validation-error="activeIssue?.id === finding.id ? activeIssue.message : ''" :editable="canEditRoute" :saving="findingSavingId === finding.id" @status="(input, files, done) => saveFindingStatus(finding.id, input, files, done)" @use-remote="useRemoteFinding(finding.id)" @retry="retryFinding(finding.id)" />
+              </div>
+              <BaseButton v-if="canEditRoute && newFindingOpen !== criterion.id" size="compact" variant="ghost" :disabled="Boolean(findingSavingId)" @click="openFinding(criterion.id)"><Plus :size="16" />Registrar hallazgo</BaseButton>
+              <TechnicianFindingCreateEditor v-if="newFindingOpen === criterion.id" :criterion="{ ...criterion, observacion: drafts[criterion.id]?.observation ?? unratedDrafts[criterion.id] ?? criterion.observacion }" :actor-id="currentCache?.actorId" :service-id="serviceId" :area-id="currentArea.id" :saving="findingSavingId === criterion.id" @save="saveNewFinding" @cancel="newFindingOpen = ''" />
+            </div>
+          </TechnicianCriterionEditor>
         </div></div>
+        <section v-if="generalFindings.length || canEditRoute" class="general-findings" aria-labelledby="general-findings-title">
+          <header class="workspace-panel__actions"><h3 id="general-findings-title">Otros hallazgos del Área</h3><BaseButton v-if="canEditRoute && newFindingOpen !== 'general'" size="compact" variant="ghost" @click="openFinding('general')"><Plus :size="16" />Agregar</BaseButton></header>
+          <p v-if="generalFindings.length" class="area-empty">Históricos o sin un criterio relacionado.</p>
+          <TechnicianFindingCreateEditor v-if="newFindingOpen === 'general'" :actor-id="currentCache?.actorId" :service-id="serviceId" :area-id="currentArea.id" :saving="findingSavingId === 'general'" @save="saveNewFinding" @cancel="newFindingOpen = ''" />
+          <div v-for="finding in generalFindings" :id="`area-item-${finding.id}`" :key="finding.id">
+            <TechnicianFindingCard :finding="finding" :current-service-id="serviceId" :area-id="currentArea.id" :actor-id="currentCache?.actorId" :mutation="findingMutation(finding.id)" :focus-pending="validationTarget === finding.id" :validation-error="activeIssue?.id === finding.id ? activeIssue.message : ''" :editable="canEditRoute" :saving="findingSavingId === finding.id" @status="(input, files, done) => saveFindingStatus(finding.id, input, files, done)" @use-remote="useRemoteFinding(finding.id)" @retry="retryFinding(finding.id)" />
+          </div>
+        </section>
         <footer class="workspace-footer"><BaseButton variant="secondary" @click="goPrevious('criteria')"><ArrowLeft :size="17" />Anterior</BaseButton><BaseButton @click="goNext('criteria')">Siguiente: Puestos<ArrowRight :size="17" /></BaseButton></footer>
       </section>
 
@@ -639,31 +670,26 @@ async function retryDevice(serviceDeviceId: string): Promise<void> {
           <TechnicianDeviceReviewEditor :device="device" :expanded="openDeviceId === device.id" :creation-mutation="creationMutation(device.id)" :mutation="deviceMutation(device.id)" :editable="canEditRoute" :syncing="syncing" @toggle="toggleDevice(device.id)" @draft="(input, photo) => trackDeviceDraft(device.id, input, photo)" @save="(input, photo) => saveDeviceAndCollapse(device.id, input, photo)" @use-remote="useRemoteDevice(device.id)" @retry="retryDevice(device.id)" />
           <p v-if="activeIssue?.id === device.id" class="area-validation" role="alert">{{ activeIssue.message }}</p>
         </div></div>
-        <footer class="workspace-footer"><BaseButton variant="secondary" @click="goPrevious('points')"><ArrowLeft :size="17" />Anterior</BaseButton><BaseButton @click="goNext('points')">Siguiente: Hallazgos<ArrowRight :size="17" /></BaseButton></footer>
+        <footer class="workspace-footer"><BaseButton variant="secondary" @click="goPrevious('points')"><ArrowLeft :size="17" />Anterior</BaseButton><BaseButton @click="goNext('points')">{{ stepAfterArea.kind === 'AREA' ? 'Siguiente área' : packageValue?.vehiclesEnabled ? 'Ir a vehículos' : 'Ir al cierre' }}<ArrowRight :size="17" /></BaseButton></footer>
       </section>
 
-      <section v-show="!currentArea.sinAcceso && activeTab === 'FINDINGS'" class="workspace-panel" aria-labelledby="findings-title">
-        <header class="workspace-panel__actions"><div><h2 id="findings-title">Hallazgos</h2><p>{{ findings.length }} registrados · {{ openFindings }} abiertos</p></div><BaseButton v-if="canEditRoute" size="compact" variant="secondary" :disabled="findingSavingId === 'new'" @click="newFindingOpen = true"><Plus :size="17" aria-hidden="true" />Agregar hallazgo</BaseButton></header>
-        <TechnicianFindingCreateEditor v-if="newFindingOpen" :saving="findingSavingId === 'new'" @save="saveNewFinding" @cancel="newFindingOpen = false" />
-        <p v-if="!findings.length" class="area-empty">No hay Hallazgos registrados para esta Área.</p>
-        <div v-else class="finding-list"><div v-for="finding in findings" :id="`area-item-${finding.id}`" :key="finding.id">
-          <TechnicianFindingCard :finding="finding" :current-service-id="serviceId" :mutation="findingMutation(finding.id)" :focus-pending="validationTarget === finding.id" :validation-error="activeIssue?.id === finding.id ? activeIssue.message : ''" :editable="canEditRoute" :saving="findingSavingId === finding.id" @status="(input, files) => saveFindingStatus(finding.id, input, files)" @use-remote="useRemoteFinding(finding.id)" @retry="retryFinding(finding.id)" />
-        </div></div>
-        <footer class="workspace-footer"><BaseButton variant="secondary" @click="goPrevious('findings')"><ArrowLeft :size="17" />Anterior</BaseButton><BaseButton @click="goNext('findings')">{{ stepAfterArea.kind === 'AREA' ? 'Siguiente área' : packageValue?.vehiclesEnabled ? 'Ir a vehículos' : 'Ir al cierre' }}<ArrowRight :size="17" /></BaseButton></footer>
-      </section>
+
     </template>
     <TechnicianSiteAreaDialog :open="newAreaOpen" :service-id="serviceId" @close="newAreaOpen=false" @created="openNewArea" />
   </div>
 </template>
 
 <style scoped>
+.criterion-findings,.general-findings { display:grid; gap:.55rem; }
+.general-findings { border-top:1px solid var(--border); padding-top:.75rem; }
+.general-findings h3 { margin:0; font-size:.9rem; }
 .area-workspace { gap:0.75rem; padding-top:0.5rem; }
 .area-workspace__sticky { position:sticky; top:0; z-index:5; display:grid; gap:0.55rem; margin-inline:-0.25rem; border-bottom:1px solid var(--border); background:color-mix(in srgb,var(--page) 96%,transparent); padding:0.35rem 0.25rem 0.65rem; backdrop-filter:blur(12px); }
 .area-picker { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:0.55rem; }
 .area-picker label { font-size:0.8125rem; font-weight:700; }
 .area-picker__actions { display:flex; align-items:center; gap:0.35rem; }
 .area-picker select { min-width:0; min-height:44px; border:1px solid var(--control-border); border-radius:var(--radius); background:var(--control-bg); padding:0 2.25rem 0 0.75rem; color:var(--text); font:inherit; font-weight:650; }
-.area-tabs { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:0.35rem; }
+.area-tabs { display:grid; grid-template-columns:minmax(0,1.4fr) minmax(0,1fr); gap:0.35rem; }
 .area-tabs button { display:flex; min-width:0; min-height:44px; align-items:center; justify-content:center; gap:0.35rem; border:1px solid transparent; border-radius:var(--radius); background:transparent; color:var(--text-secondary); font:inherit; font-size:0.8125rem; font-weight:650; cursor:pointer; }
 .area-tabs button:hover { background:var(--hover); color:var(--text); }
 .area-tabs { border-radius:var(--radius); background:var(--surface); padding:0.25rem; }
@@ -690,5 +716,5 @@ async function retryDevice(serviceDeviceId: string): Promise<void> {
 .area-without-access { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:start; gap:0.75rem; border:1px solid var(--warning); border-radius:var(--radius-lg); background:var(--warning-subtle); padding:1rem; color:var(--warning); }
 @media (min-width:760px) { .area-workspace__sticky { grid-template-columns:minmax(20rem,1fr) auto; align-items:end; } .area-tabs { grid-column:1/-1; } .workspace-panel { padding:1rem; } }
 @media (max-width:520px) { .workspace-panel__actions { flex-wrap:wrap; } .workspace-panel__actions > .base-button { width:auto; } .workspace-footer :deep(.base-button) { padding-inline:.5rem; } }
-@media (max-width:420px) { .area-picker { grid-template-columns:auto minmax(0,1fr); } .area-picker__actions { grid-column:1/-1; justify-self:end; } .area-tabs button { font-size:0.75rem; } }
+@media (max-width:520px) { .area-picker { grid-template-columns:auto minmax(0,1fr) auto; gap:.35rem; } .area-picker__actions { gap:0; } .area-picker__actions .order-label { display:none; } .area-picker__actions > :first-child:not(:last-child) { font-size:0; padding-inline:.5rem; } .area-tabs button { font-size:.75rem; } }
 </style>

@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import TechnicianCriterionEditor from '@/components/domain/services/TechnicianCriterionEditor.vue'
+import TechnicianEvidencePicker from '@/components/domain/services/TechnicianEvidencePicker.vue'
 import type { TechnicianCriterion, TechnicianCriterionEvaluationMutation } from '@/types/technicianServices'
 
 const criterion: TechnicianCriterion = {
@@ -20,6 +21,8 @@ describe('TechnicianCriterionEditor', () => {
     expect(wrapper.text()).toContain('Debes evaluar este criterio.')
     await wrapper.get('button[aria-label="No cumple"]').trigger('click')
     expect(wrapper.text()).toContain('Se recomienda agregar una observación o foto (opcional).')
+    ;(wrapper.emitted('save')![0]![4] as (saved:boolean)=>void)(true)
+    await wrapper.vm.$nextTick()
     await wrapper.get('button[aria-label="Cumple"]').trigger('click')
     expect(wrapper.text()).not.toContain('Se recomienda agregar una observación o foto (opcional).')
   })
@@ -29,7 +32,7 @@ describe('TechnicianCriterionEditor', () => {
     await wrapper.findAll('.criterion-tools button')[0]!.trigger('click')
     await wrapper.get('textarea').setValue('Limpieza parcial')
     await wrapper.get('button[aria-label="Cumple parcialmente"]').trigger('click')
-    expect(wrapper.emitted('save')?.[0]).toEqual(['CP', 'Limpieza parcial', [], []])
+    expect(wrapper.emitted('save')?.[0]).toEqual(['CP', 'Limpieza parcial', [], [], expect.any(Function)])
   })
 
   it('blocks editing during a conflict and exposes explicit resolution actions', async () => {
@@ -61,5 +64,17 @@ describe('TechnicianCriterionEditor', () => {
     await actions[1]!.trigger('click')
     expect(wrapper.emitted('useRemote')).toHaveLength(1)
     expect(wrapper.emitted('retry')).toHaveLength(1)
+  })
+  it('keeps a photograph and offers retry if durable saving fails', async () => {
+    const wrapper = mount(TechnicianCriterionEditor, {props:{criterion:{...criterion,evaluacion:'NC'},mutation:null,editable:true,syncing:false}})
+    await wrapper.findAll('.criterion-tools button')[1]!.trigger('click')
+    const files=[new File(['photo'],'pending.jpg',{type:'image/jpeg'})]
+    wrapper.getComponent(TechnicianEvidencePicker).vm.$emit('update:modelValue',files)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.getComponent(TechnicianEvidencePicker).props('disabled')).toBe(true)
+    ;(wrapper.emitted('save')![0]![4] as (saved:boolean)=>void)(false)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.getComponent(TechnicianEvidencePicker).props('modelValue')).toEqual(files)
+    expect(wrapper.text()).toContain('Guardar fotos pendientes')
   })
 })

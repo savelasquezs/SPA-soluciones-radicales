@@ -136,6 +136,9 @@ export interface TechnicianFindingVisit {
 
 export interface TechnicianFinding {
   id: string
+  criterioId?: string | null
+  criterioNombre?: string | null
+  evaluacionAperturaId?: string | null
   servicioAperturaId: string
   fechaApertura: string
   descripcion: string
@@ -161,11 +164,17 @@ export interface TechnicianFinding {
 }
 
 export interface TechnicianFindingCreateInput {
+  criterionId?: string
+  sharedEvidenceStoragePaths?: string[]
+  useCriterionEvidence?: boolean
   descripcion: string
   recomendacionAccion: string
 }
 
 export interface TechnicianFindingStatusInput {
+  criterionId?: string
+  sharedEvidenceStoragePaths?: string[]
+  useCriterionEvidence?: boolean
   estado: FindingReview
   observacionCierre: string
 }
@@ -389,6 +398,7 @@ export interface TechnicianDeviceReviewMutation extends TechnicianMutationBase, 
 }
 
 export interface TechnicianFindingEvidenceMutation {
+  criterionId?: string
   mediaId: string
   storagePath: string | null
 }

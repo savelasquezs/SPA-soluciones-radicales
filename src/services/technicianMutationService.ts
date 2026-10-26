@@ -14,20 +14,20 @@ function validVersions(value: unknown): boolean {
     && value.every(item => item && typeof item === 'object' && isServiceId(item.id) && Number.isSafeInteger(item.version) && item.version > 0)
 }
 
-function validFindingEvidences(value: unknown): boolean {
+function validEvidences(value: unknown, limit: number): boolean {
   return Array.isArray(value)
-    && value.length <= 10
+    && value.length <= limit
     && new Set(value.map(item => item?.mediaId)).size === value.length
     && value.every(item => item && typeof item === 'object' && isServiceId(item.mediaId)
+      && (item.criterionId === undefined || isServiceId(item.criterionId))
       && (item.storagePath === null || typeof item.storagePath === 'string'))
 }
 
-function validCriterionEvidences(value: unknown): boolean {
-  return Array.isArray(value)
-    && value.length <= 5
-    && new Set(value.map(item => item?.mediaId)).size === value.length
-    && value.every(item => item && typeof item === 'object' && isServiceId(item.mediaId)
-      && (item.storagePath === null || typeof item.storagePath === 'string'))
+function validFindingContext(value: { criterionId?: string; sharedEvidenceStoragePaths?: string[] }): boolean {
+  const paths = value.sharedEvidenceStoragePaths
+  return (value.criterionId === undefined || isServiceId(value.criterionId))
+    && (paths === undefined || (Array.isArray(paths) && paths.length <= 10
+      && new Set(paths).size === paths.length && paths.every(path => typeof path === 'string')))
 }
 
 function validMutation(value: unknown, actorId?: string, serviceId?: string): value is TechnicianMutation {
@@ -73,7 +73,7 @@ function validMutation(value: unknown, actorId?: string, serviceId?: string): va
     && typeof record.observation === 'string'
     && record.observation.length <= 2_000
     && Array.isArray(record.evidences)
-    && validCriterionEvidences(record.evidences)
+    && validEvidences(record.evidences, 5)
     && Array.isArray(record.retainedEvidenceStoragePaths)
     && record.retainedEvidenceStoragePaths.length <= 5
     && record.retainedEvidenceStoragePaths.length + record.evidences.length <= 5
@@ -110,13 +110,15 @@ function validMutation(value: unknown, actorId?: string, serviceId?: string): va
     && isServiceId(record.findingId)
     && typeof record.descripcion === 'string' && record.descripcion.trim().length > 0 && record.descripcion.length <= 2_000
     && typeof record.recomendacionAccion === 'string' && record.recomendacionAccion.trim().length > 0 && record.recomendacionAccion.length <= 2_000
-    && validFindingEvidences(record.evidences)
+    && validFindingContext(record)
+    && validEvidences(record.evidences, 10)
   if (record.kind === 'FINDING_STATUS') return isServiceId(record.areaId)
     && isServiceId(record.findingId)
     && ['SIN_CAMBIOS', 'EN_PROCESO', 'CERRADO'].includes(record.estado ?? '')
     && typeof record.observacionCierre === 'string' && record.observacionCierre.length <= 2_000
     && Number.isSafeInteger(record.version) && Number(record.version) > 0
-    && validFindingEvidences(record.evidences)
+    && validFindingContext(record)
+    && validEvidences(record.evidences, 10)
     && (record.conflict === null || (Boolean(record.conflict) && isServiceId(record.conflict?.id)
       && typeof record.conflict?.version === 'number'))
   if (record.kind === 'VEHICLE_CREATE') return isServiceId(record.vehicleId)
@@ -172,4 +174,16 @@ export async function saveTechnicianMutation(value: TechnicianMutation): Promise
 
 export async function deleteTechnicianMutation(value: Pick<TechnicianMutation, 'actorId' | 'serviceId' | 'requestId'>): Promise<void> {
   await (await offlineDatabase).delete('technicianMutations', mutationKey(value))
+}
+
+export async function replaceTechnicianMutation(previous: TechnicianMutation, value: TechnicianMutation, superseded: TechnicianMutation[] = []): Promise<void> {
+  if (!validMutation(value, previous.actorId, previous.serviceId)
+    || superseded.some(item => item.actorId !== previous.actorId || item.serviceId !== previous.serviceId)) throw new Error('La operación local no es válida.')
+  const plain = JSON.parse(JSON.stringify(value)) as TechnicianMutation
+  if (JSON.stringify(plain).length > 100_000) throw new Error('La operación local supera el tamaño permitido.')
+  const previousKeys = [previous, ...superseded].filter(item => item.requestId !== value.requestId).map(mutationKey)
+  const transaction = (await offlineDatabase).transaction('technicianMutations', 'readwrite')
+  await transaction.store.put(plain, mutationKey(plain))
+  for (const key of previousKeys) await transaction.store.delete(key)
+  await transaction.done
 }

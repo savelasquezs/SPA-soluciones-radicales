@@ -222,8 +222,9 @@ async function privateServiceMediaObjectExists(storagePath: string): Promise<boo
 }
 
 /** Call only after resolving the reference and authorizing its owner in PostgreSQL. */
-export function createServiceMediaReadUrl(storagePath: string, serviceId: string, ownerId: string, kind: 'REVIEW' | FindingEvidencePhase): { url: string; expiresAt: string } {
-  if (kind === 'REVIEW') assertDeviceReviewStoragePath(storagePath, serviceId, ownerId)
+export function createServiceMediaReadUrl(storagePath: string, serviceId: string, ownerId: string, kind: 'CRITERION' | 'REVIEW' | FindingEvidencePhase): { url: string; expiresAt: string } {
+  if (kind === 'CRITERION') assertCriterionEvidenceStoragePath(storagePath, serviceId, ownerId)
+  else if (kind === 'REVIEW') assertDeviceReviewStoragePath(storagePath, serviceId, ownerId)
   else assertFindingEvidenceStoragePath(storagePath, serviceId, ownerId, kind)
   return {
     url: presign('GET', storagePath, undefined, serviceMediaBucket(), { 'response-cache-control': 'private, no-store' }),
@@ -350,7 +351,7 @@ export async function deleteRetainedServiceSignature(storagePath: string, servic
  * Nunca admitir firmas ni otros objetos de la misma carpeta services/.
  */
 export async function deleteRetainedServicePhoto(storagePath: string): Promise<void> {
-  const pattern = /^services\/[0-9a-f-]{36}\/(?:areas\/[0-9a-f-]{36}\/no-access|devices\/[0-9a-f-]{36}\/review|criteria\/[0-9a-f-]{36}\/evidence|findings\/[0-9a-f-]{36}\/(?:opening|closure))\/[^/]+$/i
+  const pattern = /^services\/[0-9a-f-]{36}\/(?:areas\/[0-9a-f-]{36}\/no-access|devices\/[0-9a-f-]{36}\/review|criteria\/[0-9a-f-]{36}\/evidence|findings\/[0-9a-f-]{36}\/(?:opening|closure|followup))\/[^/]+$/i
   if (!pattern.test(storagePath) || storagePath.includes('..')) throw new ApiError(422, 'Ruta de fotografía no permitida para retención')
   await deleteServiceMediaObject(storagePath)
 }

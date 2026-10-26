@@ -13,7 +13,7 @@ export function validReportToken(raw: unknown): raw is string {
 
 export function reportPaths(data: ServiceResultsData): string[] {
   const unique = new Set<string>()
-  const historicFinding = /^services\/[0-9a-f-]{36}\/findings\/[0-9a-f-]{36}\/(?:opening|closure|followup)\/[^/]+\.(?:png|jpe?g|webp)$/i
+  const historicFinding = /^services\/[0-9a-f-]{36}\/(?:findings\/[0-9a-f-]{36}\/(?:opening|closure|followup)|criteria\/[0-9a-f-]{36}\/evidence)\/[^/]+\.(?:png|jpe?g|webp)$/i
   const add = (path: string | null | undefined, finding = false) => {
     if (path && !path.includes('..') &&
       (path.startsWith('services/' + data.id + '/') || (finding && historicFinding.test(path)))) unique.add(path)
@@ -45,10 +45,11 @@ export function publicReportData(data: ServiceResultsData): ServiceResultsData {
       ...area,
       id: String(index + 1),
       fotos: area.fotos.map(key).filter(Boolean),
-      criterios: area.criterios.map(item => ({ ...item, fotos: item.fotos.map(key).filter(Boolean) })),
+      criterios: area.criterios.map((item, position) => ({ ...item, id: String(position + 1), criterioId: item.criterioId ? 'criterion:' + (position + 1) : undefined, fotos: item.fotos.map(key).filter(Boolean) })),
       puntos: area.puntos.map(item => ({ ...item, foto: item.foto ? key(item.foto) : null })),
       hallazgos: area.hallazgos.map(item => ({
-        ...item, fotos: item.fotos.map(key).filter(Boolean),
+        ...item, criterioId: item.criterioId && area.criterios.some(criterion => criterion.criterioId === item.criterioId)
+          ? 'criterion:' + (area.criterios.findIndex(criterion => criterion.criterioId === item.criterioId) + 1) : null, fotos: item.fotos.map(key).filter(Boolean),
         seguimientos:item.seguimientos.map(review=>({...review,fotos:review.fotos.map(key).filter(Boolean)})),
       })),
     })),

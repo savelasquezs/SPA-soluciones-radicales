@@ -1,3 +1,5 @@
+import { criterionPhotoOwner } from '../../../src/helpers/serviceEvidence'
+import { unreferencedFindingPhotos } from './finding-evidence'
 import { Hono, type Context } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
@@ -315,23 +317,17 @@ technicianServiceRoutes.post('/:id/criteria/:criterionId', async context => {
   }
   const evaluation = payload.evaluation as 'C' | 'CP' | 'NC' | 'NA'
   const evidenceStoragePaths = criterionEvidencePaths(payload.evidenceStoragePaths)
-  if (evidenceStoragePaths.length) {
-    await read(context, async (client, technician) => {
-      await authorizeTechnicianServiceChange(client, technician.id, serviceId, deviceId, lockToken)
-      const found = (await client.query('select 1 from public.evaluaciones_mip_area where servicio_id=$1 and id=$2', [serviceId, criterionId])).rowCount
-      if (!found) throw new ApiError(404, 'El criterio no pertenece a este servicio.', 'CRITERION_NOT_FOUND')
-    })
-  }
-  for (const storagePath of evidenceStoragePaths) {
-    assertCriterionEvidenceStoragePath(storagePath, serviceId, criterionId)
-    if (!await criterionEvidenceObjectExists(storagePath, serviceId, criterionId)) {
-      throw new ApiError(422, 'Una fotografía todavía no está disponible. Vuelve a cargarla.', 'PHOTO_NOT_FOUND', { storagePath })
-    }
-  }
+  for (const storagePath of evidenceStoragePaths) assertCriterionEvidenceStoragePath(storagePath, serviceId, criterionId)
   const input = { deviceId, criterionId, version: expected, evaluation, observation: payload.observation, evidenceStoragePaths }
   const saved = await read(context, (client, technician) => technicianCommand(client, technician.id, requestId, 'CRITERION_EVALUATION', serviceId, expected,
-    input, () => saveTechnicianCriterionEvaluation(client, technician.id, serviceId, deviceId, lockToken, criterionId, expected, evaluation, payload.observation as string, evidenceStoragePaths)))
-  for (const storagePath of saved.removedEvidenceStoragePaths) await deleteCriterionEvidenceObject(storagePath, serviceId, criterionId)
+    input, async () => {
+      const result = await saveTechnicianCriterionEvaluation(client, technician.id, serviceId, deviceId, lockToken, criterionId, expected, evaluation, payload.observation as string, evidenceStoragePaths)
+      for (const storagePath of evidenceStoragePaths) if (!await criterionEvidenceObjectExists(storagePath, serviceId, criterionId)) {
+        throw new ApiError(422, 'Una fotografía todavía no está disponible. Vuelve a cargarla.', 'PHOTO_NOT_FOUND', { storagePath })
+      }
+      return result
+    }))
+  if (saved.removedEvidenceStoragePaths.length) await deleteUnusedCriterionPhotos(context, serviceId, criterionId, deviceId, lockToken, saved.removedEvidenceStoragePaths)
   return context.json(saved)
 })
 
@@ -361,15 +357,22 @@ technicianServiceRoutes.post('/:id/criteria/:criterionId/media/delete', async co
   const lockToken = id(payload.lockToken)
   const storagePath = requiredString(payload.storagePath, 'La ruta de la fotografía es obligatoria.', 1_000)
   assertCriterionEvidenceStoragePath(storagePath, serviceId, criterionId)
-  await read(context, async (client, technician) => {
-    await authorizeTechnicianServiceChange(client, technician.id, serviceId, deviceId, lockToken)
-    const referenced = (await client.query<{ found: boolean }>(`select exists(select 1 from public.evaluaciones_mip_area
-      where servicio_id=$1 and id=$2 and evidencias_storage_paths ? $3) as found`, [serviceId, criterionId, storagePath])).rows[0]?.found
-    if (referenced) throw new ApiError(409, 'La fotografía está asociada al servicio y no puede eliminarse.', 'FILE_IN_USE')
-  })
-  await deleteCriterionEvidenceObject(storagePath, serviceId, criterionId)
+  await deleteUnusedCriterionPhotos(context, serviceId, criterionId, deviceId, lockToken, [storagePath], true)
   return context.body(null, 204)
 })
+
+async function deleteUnusedCriterionPhotos(context: Context<Environment>, serviceId: string, criterionId: string, deviceId: string, lockToken: string, paths: string[], rejectInUse = false): Promise<void> {
+  await read(context, async (client, technician) => {
+    await authorizeTechnicianServiceChange(client, technician.id, serviceId, deviceId, lockToken)
+    const unused = await unreferencedFindingPhotos(client, paths)
+    const criterion = (await client.query<{ paths: string[] }>(`select evidencias_storage_paths as paths
+      from public.evaluaciones_mip_area where servicio_id=$1 and id=$2`, [serviceId, criterionId])).rows[0]
+    if (!criterion) throw new ApiError(404, 'El criterio no pertenece a este servicio.', 'CRITERION_NOT_FOUND')
+    const deletable = unused.filter(path => !criterion.paths.includes(path))
+    if (rejectInUse && deletable.length !== paths.length) throw new ApiError(409, 'La fotografía está asociada al servicio o a un Hallazgo y no puede eliminarse.', 'FILE_IN_USE')
+    for (const path of deletable) await deleteCriterionEvidenceObject(path, serviceId, criterionId)
+  })
+}
 
 technicianServiceRoutes.post('/:id/areas/:areaId/devices', async context => {
   const payload = await body(context.req.raw)
@@ -396,7 +399,7 @@ technicianServiceRoutes.get('/:id/photos/:kind/:recordId/:index', async context 
   const serviceId = id(context.req.param('id'))
   const kind = context.req.param('kind') as EvidenceKind
   const position = context.req.param('index')
-  if (!['OPENING','CLOSURE','FOLLOWUP'].includes(kind) || !/^(0|[1-9]\\d?)$/.test(position)) {
+  if (!['CRITERION','OPENING','CLOSURE','FOLLOWUP'].includes(kind) || !/^(0|[1-9]\d?)$/.test(position)) {
     throw new ApiError(422, 'La fotografía solicitada no es válida.', 'VALIDATION')
   }
   const source = await read(context, async (client, technician) => {
@@ -404,15 +407,20 @@ technicianServiceRoutes.get('/:id/photos/:kind/:recordId/:index', async context 
     const site = (await client.query<{ siteId: string }>(
       'select sede_id as "siteId" from public.servicios where id=$1', [serviceId])).rows[0]
     if (!site) throw new ApiError(404, 'El servicio no está disponible.', 'SERVICE_NOT_FOUND')
-    return findSiteEvidence(client, site.siteId, kind, id(context.req.param('recordId')), Number(position))
+    const source = await findSiteEvidence(client, site.siteId, kind, id(context.req.param('recordId')), Number(position), serviceId)
+    if (kind === 'CRITERION' && source.serviceId !== serviceId) throw new ApiError(404, 'La fotografía no pertenece a este servicio.', 'EVIDENCE_NOT_FOUND')
+    return source
   })
   const prefix = `services/${source.serviceId}/findings/${source.ownerId}/`
   const storagePhase = (source.path.startsWith(prefix + 'followup/') ? 'FOLLOWUP'
     : source.path.startsWith(prefix + 'closure/') ? 'CLOSURE' : kind) as 'OPENING' | 'CLOSURE' | 'FOLLOWUP'
-  const exists = await findingEvidenceObjectExists(source.path, source.serviceId, source.ownerId, storagePhase)
+  const criterion = criterionPhotoOwner(source.path)
+  const exists = criterion
+    ? await criterionEvidenceObjectExists(source.path, source.serviceId, criterion.criterionId)
+    : await findingEvidenceObjectExists(source.path, source.serviceId, source.ownerId, storagePhase)
   const until = source.retentionAt ? new Date(source.retentionAt).getTime() : NaN
   const result: EvidenceAccess = exists
-    ? { status: 'AVAILABLE', ...createServiceMediaReadUrl(source.path,source.serviceId,source.ownerId,storagePhase) }
+    ? { status: 'AVAILABLE', ...createServiceMediaReadUrl(source.path,source.serviceId,criterion?.criterionId ?? source.ownerId,criterion ? 'CRITERION' : storagePhase) }
     : { status: Number.isFinite(until) && until <= Date.now() ? 'EXPIRED' : 'MISSING', url: null, expiresAt: null }
   return context.json(result)
 })
@@ -454,19 +462,22 @@ technicianServiceRoutes.post('/:id/areas/:areaId/findings', async context => {
   const input = {
     descripcion: requiredString(payload.descripcion, 'Describe el Hallazgo.'),
     recomendacionAccion: requiredString(payload.recomendacionAccion, 'Describe la recomendación o acción correctiva.'),
+    criterionId: payload.criterionId == null ? undefined : id(payload.criterionId),
   }
   const evidenceStoragePaths = findingEvidencePaths(payload.evidenceStoragePaths)
   for (const storagePath of evidenceStoragePaths) {
-    assertFindingEvidenceStoragePath(storagePath, serviceId, findingId, 'OPENING')
+    if (criterionPhotoOwner(storagePath) && input.criterionId) assertCriterionEvidenceStoragePath(storagePath, serviceId, input.criterionId)
+    else assertFindingEvidenceStoragePath(storagePath, serviceId, findingId, 'OPENING')
   }
-  if (evidenceStoragePaths.length) {
+  const newEvidencePaths = evidenceStoragePaths.filter(path => !criterionPhotoOwner(path))
+  if (newEvidencePaths.length) {
     await read(context, async (client, technician) => {
       const area = await authorizeTechnicianAreaChange(client, technician.id, serviceId, deviceId, lockToken, areaId)
       if (area.sinAcceso) throw new ApiError(409, 'Habilita el acceso al Área antes de registrar Hallazgos.', 'AREA_WITHOUT_ACCESS')
     })
-    const exists = await Promise.all(evidenceStoragePaths.map(path => findingEvidenceObjectExists(path, serviceId, findingId, 'OPENING')))
+    const exists = await Promise.all(newEvidencePaths.map(path => findingEvidenceObjectExists(path, serviceId, findingId, 'OPENING')))
     const missing = exists.findIndex(value => !value)
-    if (missing >= 0) throw new ApiError(422, 'Una evidencia todavía no está disponible. Vuelve a cargarla.', 'PHOTO_NOT_FOUND', { storagePath: evidenceStoragePaths[missing] })
+    if (missing >= 0) throw new ApiError(422, 'Una evidencia todavía no está disponible. Vuelve a cargarla.', 'PHOTO_NOT_FOUND', { storagePath: newEvidencePaths[missing] })
   }
   const commandPayload = { deviceId, areaId, findingId, ...input, evidenceStoragePaths }
   return context.json(await read(context, (client, technician) => technicianCommand(client, technician.id, requestId, 'FINDING_CREATE', serviceId, null,
@@ -483,16 +494,19 @@ technicianServiceRoutes.post('/:id/areas/:areaId/findings/:findingId/status', as
   const lockToken = id(payload.lockToken)
   const expected = version(payload.version)
   if (payload.estado !== 'SIN_CAMBIOS' && payload.estado !== 'EN_PROCESO' && payload.estado !== 'CERRADO') throw new ApiError(422, 'El estado del Hallazgo no es válido.', 'VALIDATION')
-  const input = { estado: payload.estado, observacionCierre: optionalString(payload.observacionCierre) } as const
+  const input = { estado: payload.estado, observacionCierre: optionalString(payload.observacionCierre),
+    criterionId: payload.criterionId == null ? undefined : id(payload.criterionId) } as const
   const evidenceStoragePaths = findingEvidencePaths(payload.evidenceStoragePaths)
   for (const storagePath of evidenceStoragePaths) {
-    assertFindingEvidenceStoragePath(storagePath, serviceId, findingId, 'FOLLOWUP')
+    if (criterionPhotoOwner(storagePath) && input.criterionId) assertCriterionEvidenceStoragePath(storagePath, serviceId, input.criterionId)
+    else assertFindingEvidenceStoragePath(storagePath, serviceId, findingId, 'FOLLOWUP')
   }
-  if (evidenceStoragePaths.length) {
+  const newEvidencePaths = evidenceStoragePaths.filter(path => !criterionPhotoOwner(path))
+  if (newEvidencePaths.length) {
     await read(context, (client, technician) => authorizeTechnicianFindingChange(client, technician.id, serviceId, deviceId, lockToken, areaId, findingId))
-    const exists = await Promise.all(evidenceStoragePaths.map(path => findingEvidenceObjectExists(path, serviceId, findingId, 'FOLLOWUP')))
+    const exists = await Promise.all(newEvidencePaths.map(path => findingEvidenceObjectExists(path, serviceId, findingId, 'FOLLOWUP')))
     const missing = exists.findIndex(value => !value)
-    if (missing >= 0) throw new ApiError(422, 'Una evidencia todavía no está disponible. Vuelve a cargarla.', 'PHOTO_NOT_FOUND', { storagePath: evidenceStoragePaths[missing] })
+    if (missing >= 0) throw new ApiError(422, 'Una evidencia todavía no está disponible. Vuelve a cargarla.', 'PHOTO_NOT_FOUND', { storagePath: newEvidencePaths[missing] })
   }
   const commandPayload = { deviceId, areaId, findingId, version: expected, ...input, evidenceStoragePaths }
   return context.json(await read(context, (client, technician) => technicianCommand(client, technician.id, requestId, 'FINDING_STATUS', serviceId, expected,

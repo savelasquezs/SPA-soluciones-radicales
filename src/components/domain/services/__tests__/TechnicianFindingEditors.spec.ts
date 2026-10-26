@@ -65,12 +65,46 @@ describe('technician finding editors', () => {
     expect(wrapper.text()).toContain('Recomendado: añade foto u observación')
     await wrapper.get('.finding-review > .base-button').trigger('click')
     expect(wrapper.emitted('status')?.[0]?.[0]).toEqual({ estado: 'SIN_CAMBIOS', observacionCierre: '' })
+    await (wrapper.emitted('status')![0]![2] as (saved: boolean) => Promise<void>)(true)
     await wrapper.setProps({ finding: { ...finding, resultadoSeguimiento: 'SIN_CAMBIOS', observacionSeguimiento: null, version: 2 } })
     await choices[1]!.trigger('click')
     await wrapper.get('.finding-review > .base-button').trigger('click')
     expect(wrapper.emitted('status')?.[1]?.[0]).toEqual({ estado: 'EN_PROCESO', observacionCierre: '' })
+    await (wrapper.emitted('status')![1]![2] as (saved: boolean) => Promise<void>)(true)
     await choices[2]!.trigger('click')
     await wrapper.get('.finding-review > .base-button').trigger('click')
     expect(wrapper.text()).toContain('debes adjuntar una fotografía')
     expect(wrapper.emitted('status')).toHaveLength(2)
-  })})
+  })
+
+  it('preserves newly selected photos and comments across a background acknowledgement', async () => {
+    const wrapper = mount(TechnicianFindingCard, { props: {
+      finding: { ...finding, resultadoSeguimiento: 'SIN_CAMBIOS', observacionSeguimiento: 'Texto guardado' },
+      currentServiceId: '10000000-0000-4000-8000-000000000003', editable: true, saving: false,
+    } })
+    await wrapper.get('.finding-card__summary').trigger('click')
+    await wrapper.get('textarea').setValue('Nueva observación sin guardar')
+    await wrapper.get('.finding-review__extras .base-button:nth-child(2)').trigger('click')
+    const files = [new File(['new'], 'nueva.jpg', {type:'image/jpeg'})]
+    wrapper.getComponent(TechnicianEvidencePicker).vm.$emit('update:modelValue',files)
+    await wrapper.setProps({ finding: { ...finding, version: 2, resultadoSeguimiento: 'SIN_CAMBIOS', observacionSeguimiento: 'Texto guardado', evidenciasSeguimientoLocalIds: [crypto.randomUUID()] } })
+    expect(wrapper.getComponent(TechnicianEvidencePicker).props('modelValue')).toEqual(files)
+    expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('Nueva observación sin guardar')
+  })
+
+  it('shows the current visit notes and photos in read-only mode without duplicating its history row', async () => {
+    const currentServiceId = '10000000-0000-4000-8000-000000000003'
+    const wrapper = mount(TechnicianFindingCard, { props: {
+      finding: { ...finding, resultadoSeguimiento:'EN_PROCESO',observacionSeguimiento:'Reparación parcial',
+        evidenciasSeguimientoStoragePaths:['services/current/photo.jpg'],
+        historialSeguimientos:[{id:crypto.randomUUID(),servicioId:currentServiceId,solicitud:'SR-101',fecha:'2026-10-01T14:00:00Z',
+          resultado:'EN_PROCESO',observacion:'Reparación parcial',evidenciasStoragePaths:['services/current/photo.jpg']}] },
+      currentServiceId, editable:false,saving:false,
+    } })
+    await wrapper.get('.finding-card__summary').trigger('click')
+    expect(wrapper.text()).toContain('Reparación parcial')
+    expect(wrapper.text()).toContain('Ver fotos de esta visita (1)')
+    expect(wrapper.find('.finding-history').exists()).toBe(false)
+    expect(wrapper.find('textarea').exists()).toBe(false)
+  })
+})

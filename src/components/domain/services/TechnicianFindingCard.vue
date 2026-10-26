@@ -7,12 +7,16 @@ import EvidenceLightbox from '@/components/base/EvidenceLightbox.vue'
 import StatusBadge from '@/components/base/StatusBadge.vue'
 import TechnicianEvidencePicker from './TechnicianEvidencePicker.vue'
 import { formatTechnicianDateTime } from '@/helpers/technicianServices'
-import { useEvidenceGallery } from '@/composables/useEvidenceGallery'
-import { getTechnicianEvidenceAccess } from '@/services/servicesService'
+import { useTechnicianFindingDraft } from '@/composables/useTechnicianFindingDraft'
+import { useTechnicianEvidenceGallery } from '@/composables/useTechnicianEvidenceGallery'
+import { criterionPhotoOwner } from '@/helpers/serviceEvidence'
 import type { EvidenceReference } from '@/types/siteInsights'
-import type { FindingReview, TechnicianFinding, TechnicianFindingCreateMutation, TechnicianFindingStatusInput, TechnicianFindingStatusMutation, TechnicianFindingVisit } from '@/types/technicianServices'
+import type { FindingReview, TechnicianCriterion, TechnicianFinding, TechnicianFindingCreateMutation, TechnicianFindingStatusInput, TechnicianFindingStatusMutation, TechnicianFindingVisit } from '@/types/technicianServices'
 
 const props = defineProps<{
+  criterion?: TechnicianCriterion | null
+  actorId?: string
+  areaId?: string
   finding: TechnicianFinding
   currentServiceId: string
   mutation?: TechnicianFindingCreateMutation | TechnicianFindingStatusMutation | null
@@ -22,19 +26,25 @@ const props = defineProps<{
   focusPending?: boolean
 }>()
 const emit = defineEmits<{
-  status: [input: TechnicianFindingStatusInput, files: File[]]
+  status: [input: TechnicianFindingStatusInput, files: File[], done: (saved: boolean) => Promise<void>]
   useRemote: []
   retry: []
 }>()
 
-const expanded = ref(Boolean(props.focusPending))
-const choice = ref<FindingReview | null>(props.finding.resultadoSeguimiento ?? null)
-const note = ref(props.finding.observacionSeguimiento ?? '')
-const photos = ref<File[]>([])
+const { draft, ready, failure, clear } = useTechnicianFindingDraft(() => ({ actorId: props.actorId,
+  serviceId: props.currentServiceId, areaId: props.areaId, itemId: props.finding.id }), {
+  outcome: props.finding.resultadoSeguimiento ?? null, note: props.finding.observacionSeguimiento ?? props.criterion?.observacion ?? '',
+  open: Boolean(props.focusPending),
+})
+const expanded = computed({ get: () => draft.value.open, set: value => { draft.value.open = value } })
+const choice = computed({ get: () => draft.value.outcome, set: value => { draft.value.outcome = value } })
+const note = computed({ get: () => draft.value.note, set: value => { draft.value.note = value } })
+const photos = computed({ get: () => draft.value.photos, set: value => { draft.value.photos = value } })
 const notesOpen = ref(Boolean(props.finding.observacionSeguimiento))
 const photosOpen = ref(false)
 const validation = ref('')
-const gallery = useEvidenceGallery(() => props.currentServiceId, getTechnicianEvidenceAccess)
+const submitting = ref(false)
+const gallery = useTechnicianEvidenceGallery(() => props.currentServiceId, () => props.actorId)
 const { open, index, state, url, current, photos: galleryPhotos } = gallery
 const priorFinding = computed(() => props.finding.servicioAperturaId !== props.currentServiceId)
 const canFollowUp = computed(() => props.editable && priorFinding.value
@@ -42,30 +52,37 @@ const canFollowUp = computed(() => props.editable && priorFinding.value
   && props.mutation?.status !== 'CONFLICT')
 const savedPaths = computed(() => props.finding.evidenciasSeguimientoStoragePaths ?? [])
 const localCount = computed(() => props.finding.evidenciasSeguimientoLocalIds?.length ?? 0)
-const totalPhotos = computed(() => savedPaths.value.length + localCount.value + photos.value.length)
+const sharedCount = computed(() => !props.criterion || !draft.value.useEvidence ? 0 : props.criterion.evidenciasStoragePaths.filter(path => !savedPaths.value.includes(path)).length
+  + (props.criterion.evidenciasLocalIds ?? []).filter(id => !props.finding.evidenciasSeguimientoLocalIds?.includes(id)).length)
+const totalPhotos = computed(() => savedPaths.value.length + localCount.value + photos.value.length + sharedCount.value)
 const changed = computed(() => Boolean(choice.value && (choice.value !== props.finding.resultadoSeguimiento
   || note.value.trim() !== (props.finding.observacionSeguimiento ?? '')
-  || photos.value.length)))
+  || photos.value.length || sharedCount.value)))
 const stateTone = computed(() => props.finding.estado === 'CERRADO' ? 'success' : props.finding.estado === 'EN_PROCESO' ? 'info' : 'warning')
 const stateLabel = computed(() => props.finding.estado === 'EN_PROCESO' ? 'En proceso' : props.finding.estado === 'CERRADO' ? 'Cerrado' : 'Abierto')
 const openingCount = computed(() => props.finding.evidenciasAperturaStoragePaths.length + (props.finding.evidenciasAperturaLocalIds?.length ?? 0))
-const history = computed(() => props.finding.historialSeguimientos ?? [])
+const history = computed(() => (props.finding.historialSeguimientos ?? []).filter(visit => visit.servicioId !== props.currentServiceId))
 
+watch(() => props.criterion?.observacion, (value, previous) => { if (!props.finding.observacionSeguimiento && (!note.value || note.value === previous)) note.value = value ?? '' })
 watch(() => props.focusPending, value => { if (value) expanded.value = true })
-watch(() => props.finding.resultadoSeguimiento, value => { choice.value = value ?? null })
-watch(() => props.finding.observacionSeguimiento, value => { if (!props.saving) note.value = value ?? '' })
-watch(() => props.finding.version, () => { photos.value = []; validation.value = '' })
-watch(() => props.finding.evidenciasSeguimientoLocalIds?.join('|'), value => {
-  if (value) photos.value = []
-})
+watch(() => props.finding.resultadoSeguimiento, (value, previous) => { if (choice.value === (previous ?? null)) choice.value = value ?? null })
+watch(() => props.finding.observacionSeguimiento, (value, previous) => { if (note.value === (previous ?? '')) note.value = value ?? '' })
 
-function references(kind: 'OPENING' | 'CLOSURE', count: number, date: string): EvidenceReference[] {
-  return Array.from({ length: count }, (_, index) => ({
-    kind, recordId: props.finding.id, index, label: kind === 'OPENING' ? 'Fotos de apertura' : 'Fotos de cierre', date,
-  }))
+function references(kind: 'OPENING' | 'CLOSURE' | 'FOLLOWUP', paths: string[], localIds: string[], date: string, recordId = props.finding.id): EvidenceReference[] {
+  const label = kind === 'OPENING' ? 'Fotos de apertura' : kind === 'CLOSURE' ? 'Fotos de cierre' : 'Fotos de esta visita'
+  return [...paths.map((path, index): EvidenceReference => {
+    const owner = criterionPhotoOwner(path)
+    const sourceIndex = props.criterion?.evidenciasStoragePaths.indexOf(path) ?? -1
+    return owner?.serviceId === props.currentServiceId && sourceIndex >= 0
+      ? { kind: 'CRITERION', recordId: owner.criterionId, index: sourceIndex, label, date }
+      : { kind, recordId, index, label, date }
+  }), ...localIds.map((id): EvidenceReference => ({ kind, recordId: 'local:' + id, index: 0, label, date }))]
 }
-const opening = computed(() => references('OPENING',props.finding.evidenciasAperturaStoragePaths.length,props.finding.fechaApertura))
-const closing = computed(() => references('CLOSURE',props.finding.evidenciasCierreStoragePaths.length,props.finding.fechaCierre ?? props.finding.fechaApertura))
+const opening = computed(() => references('OPENING',props.finding.evidenciasAperturaStoragePaths,props.finding.evidenciasAperturaLocalIds ?? [],props.finding.fechaApertura))
+const closing = computed(() => references('CLOSURE',props.finding.evidenciasCierreStoragePaths,props.finding.evidenciasCierreLocalIds ?? [],props.finding.fechaCierre ?? props.finding.fechaApertura))
+const currentVisit = computed(() => props.finding.historialSeguimientos?.find(visit => visit.servicioId === props.currentServiceId))
+const reviewPhotos = computed(() => references('FOLLOWUP', savedPaths.value, props.finding.evidenciasSeguimientoLocalIds ?? [],
+  currentVisit.value?.fecha ?? '', currentVisit.value?.id ?? props.finding.id))
 function visitPhotos(visit: TechnicianFindingVisit): EvidenceReference[] {
   return visit.evidenciasStoragePaths.map((_, index) => ({
     kind: 'FOLLOWUP', recordId: visit.id, index, label: `Revisión · ${visit.solicitud}`, date: visit.fecha,
@@ -75,6 +92,7 @@ function showPhotos(collection: EvidenceReference[]): void {
   if (collection.length) gallery.show(collection)
 }
 function submit(): void {
+  if (props.saving || submitting.value || !ready.value) return
   validation.value = ''
   if (!choice.value) { validation.value = 'Selecciona el resultado de la revisión.'; return }
   if (choice.value === 'CERRADO' && totalPhotos.value === 0) {
@@ -82,7 +100,8 @@ function submit(): void {
     validation.value = 'Para cerrar el hallazgo debes adjuntar una fotografía.'
     return
   }
-  emit('status', { estado: choice.value, observacionCierre: note.value.trim() }, photos.value)
+  submitting.value = true
+  emit('status', { estado: choice.value, observacionCierre: note.value.trim(), ...(props.criterion ? { criterionId: props.criterion.id, useCriterionEvidence: draft.value.useEvidence } : {}) }, photos.value, async saved => { try { if (saved) { photos.value = []; validation.value = ''; await clear() } } finally { submitting.value = false } })
 }
 function reviewLabel(value: FindingReview): string {
   return value === 'SIN_CAMBIOS' ? 'Sigue igual' : value === 'EN_PROCESO' ? 'En proceso' : 'Cerrado'
@@ -92,7 +111,7 @@ function reviewLabel(value: FindingReview): string {
 <template>
   <article class="finding-card" :class="{ 'finding-card--invalid': validationError }">
     <button class="finding-card__summary" type="button" :aria-expanded="expanded" @click="expanded = !expanded">
-      <span><strong>{{ finding.descripcion }}</strong><small>{{ priorFinding ? `Abierto ${formatTechnicianDateTime(finding.fechaApertura)}` : 'Abierto en este servicio' }}</small></span>
+      <span><strong>{{ finding.descripcion }}</strong><small v-if="finding.criterioNombre && finding.criterioNombre !== criterion?.nombre">Criterio de apertura: {{ finding.criterioNombre }}</small><small>{{ priorFinding ? `Abierto ${formatTechnicianDateTime(finding.fechaApertura)}` : 'Abierto en este servicio' }}</small></span>
       <StatusBadge :tone="stateTone">{{ stateLabel }}</StatusBadge>
       <ChevronDown :size="18" aria-hidden="true" :class="{ 'finding-card__chevron--open': expanded }" />
     </button>
@@ -102,35 +121,38 @@ function reviewLabel(value: FindingReview): string {
         <div><dt>Responsable</dt><dd>{{ finding.responsableNombre }}<small v-if="finding.responsableCorreo">{{ finding.responsableCorreo }}</small></dd></div>
       </dl>
       <div class="finding-card__media">
-        <BaseButton v-if="finding.evidenciasAperturaStoragePaths.length" size="compact" variant="ghost" @click="showPhotos(opening)"><Camera :size="16" />Apertura · {{ openingCount }} fotos</BaseButton>
-        <span v-else>{{ openingCount ? `${openingCount} fotos de apertura pendientes de sincronizar` : 'Sin fotos disponibles' }}</span>
-        <BaseButton v-if="finding.estado === 'CERRADO' && finding.evidenciasCierreStoragePaths.length" size="compact" variant="ghost" @click="showPhotos(closing)">Fotos del cierre</BaseButton>
+        <BaseButton v-if="opening.length" size="compact" variant="ghost" @click="showPhotos(opening)"><Camera :size="16" />Apertura · {{ openingCount }} fotos</BaseButton>
+        <span v-else>Sin fotos disponibles</span>
+        <BaseButton v-if="finding.estado === 'CERRADO' && closing.length" size="compact" variant="ghost" @click="showPhotos(closing)">Fotos del cierre</BaseButton>
       </div>
 
       <p v-if="mutation && mutation.status !== 'CONFLICT'" class="finding-card__pending">{{ mutation.status === 'SENDING' ? 'Sincronizando revisión…' : 'Revisión guardada en este celular' }}</p>
       <div v-if="mutation?.status === 'CONFLICT'" class="finding-card__conflict" role="alert">
         <p>{{ mutation.error ?? 'Este hallazgo cambió. Elige cuál versión conservar.' }}</p>
-        <div><BaseButton size="compact" variant="secondary" :disabled="saving" @click="emit('useRemote')">Usar versión sincronizada</BaseButton><BaseButton size="compact" :loading="saving" @click="emit('retry')">Reintentar</BaseButton></div>
+        <div><BaseButton size="compact" variant="secondary" :disabled="saving" @click="emit('useRemote')">Usar versión sincronizada</BaseButton><BaseButton size="compact" :loading="saving || submitting" @click="emit('retry')">Reintentar</BaseButton></div>
       </div>
       <p v-if="validationError" class="finding-card__validation" role="alert">{{ validationError }}</p>
+      <p v-if="!canFollowUp && finding.observacionSeguimiento" class="finding-review__saved-note">{{ finding.observacionSeguimiento }}</p>
+      <BaseButton v-if="finding.resultadoSeguimiento && reviewPhotos.length && finding.estado !== 'CERRADO'" size="compact" variant="ghost" @click="showPhotos(reviewPhotos)"><Camera :size="16" />Ver fotos de esta visita ({{ reviewPhotos.length }})</BaseButton>
 
       <p v-if="finding.resultadoSeguimiento && canFollowUp" class="finding-card__reviewed">Revisado en esta visita · {{ reviewLabel(finding.resultadoSeguimiento) }}</p>
-      <section v-if="canFollowUp" class="finding-review" aria-label="Evaluación de esta visita">
+      <section v-if="canFollowUp" :aria-busy="saving || submitting || !ready" class="finding-review" aria-label="Evaluación de esta visita">
         <div class="finding-review__title"><strong>Evaluación de esta visita</strong><small v-if="finding.resultadoSeguimiento">Guardada · puedes modificarla</small></div>
         <div class="finding-review__choices" role="group" aria-label="Resultado del hallazgo">
           <button v-for="option in ([['SIN_CAMBIOS','Sigue igual'],['EN_PROCESO','En proceso'],['CERRADO','Cerrado']] as const)"
-            :key="option[0]" type="button" :aria-pressed="choice === option[0]" :disabled="saving"
+            :key="option[0]" type="button" :aria-pressed="choice === option[0]" :disabled="saving || submitting || !ready"
             @click="choice = option[0]; validation = ''">{{ option[1] }}</button>
         </div>
         <p v-if="choice && !note.trim() && totalPhotos === 0" class="finding-review__hint"><AlertTriangle :size="16" aria-hidden="true" />{{ choice === 'CERRADO' ? 'Para cerrar debes adjuntar una foto.' : 'Recomendado: añade foto u observación (opcional).' }}</p>
+        <label v-if="criterion && (criterion.evidenciasStoragePaths.length || criterion.evidenciasLocalIds?.length)" class="finding-review__shared"><input v-model="draft.useEvidence" type="checkbox" :disabled="saving || submitting || !ready" />Usar fotos del criterio de esta visita</label>
         <div class="finding-review__extras">
           <BaseButton size="compact" variant="ghost" @click="notesOpen = !notesOpen"><MessageSquareText :size="16" />Observación<span v-if="note.trim()"> ✓</span></BaseButton>
           <BaseButton size="compact" variant="ghost" @click="photosOpen = !photosOpen"><Camera :size="16" />Fotos · {{ totalPhotos }}/10</BaseButton>
         </div>
-        <BaseTextarea v-if="notesOpen" v-model="note" :name="`finding-review-note-${finding.id}`" label="Observación de la visita" :rows="2" maxlength="2000" :disabled="saving" />
-        <TechnicianEvidencePicker v-if="photosOpen" v-model="photos" :name="`finding-review-photos-${finding.id}`" label="Agregar fotografías de la visita" :max="Math.max(0,10 - savedPaths.length - localCount)" :disabled="saving" />
-        <p v-if="validation" class="finding-card__validation" role="alert">{{ validation }}</p>
-        <BaseButton size="compact" :disabled="!changed || saving" :loading="saving" @click="submit">{{ finding.resultadoSeguimiento ? 'Actualizar revisión' : 'Guardar revisión' }}</BaseButton>
+        <BaseTextarea v-if="notesOpen" v-model="note" :name="`finding-review-note-${finding.id}`" label="Observación de la visita" :rows="2" maxlength="2000" :disabled="saving || submitting || !ready" />
+        <TechnicianEvidencePicker v-if="photosOpen" v-model="photos" :name="`finding-review-photos-${finding.id}`" label="Agregar fotografías de la visita" :max="Math.max(0,10 - savedPaths.length - localCount - sharedCount)" :disabled="saving || submitting || !ready" />
+        <p v-if="validation || failure" class="finding-card__validation" role="alert">{{ validation || failure }}</p>
+        <BaseButton size="compact" :disabled="!changed || saving || submitting || !ready || Boolean(failure)" :loading="saving || submitting" @click="submit">{{ finding.resultadoSeguimiento ? 'Actualizar revisión' : 'Guardar revisión' }}</BaseButton>
       </section>
       <p v-else-if="finding.resultadoSeguimiento" class="finding-card__reviewed">Revisado en esta visita · {{ reviewLabel(finding.resultadoSeguimiento) }}</p>
       <details v-if="history.length" class="finding-history">
@@ -170,6 +192,8 @@ dd { display:grid; gap:.15rem; margin:0; font-size:.84rem; overflow-wrap:anywher
 .finding-card__conflict { display:grid; gap:.5rem; padding:.65rem; border-radius:var(--radius); background:var(--warning-subtle); color:var(--warning); }
 .finding-card__conflict p { margin:0; font-size:.78rem; }
 .finding-card__conflict>div { display:flex; flex-wrap:wrap; gap:.35rem; }
+.finding-review__shared { display:flex; gap:.5rem; align-items:center; min-height:44px; font-size:.78rem; }
+.finding-review__shared input { width:18px; height:18px; accent-color:var(--accent); }
 .finding-review { display:grid; gap:.5rem; border-top:1px solid var(--border); padding-top:.6rem; }
 .finding-review__title { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:.3rem; }
 .finding-review__title strong { font-size:.84rem; }

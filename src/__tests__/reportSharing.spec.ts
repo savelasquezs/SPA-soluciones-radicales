@@ -43,6 +43,16 @@ describe('Enlace público del informe', () => {
     expect(reportPaths(data)).not.toContain(invalid)
     expect(publicReportData(data).areas[0]!.fotos).toEqual([])
   })
+  it('keeps unmatched criterion snapshots without manufacturing a criterion association', () => {
+    const criterionId = crypto.randomUUID()
+    const data: ServiceResultsData = {...source,areas:[{...source.areas[0]!,hallazgos:[{
+      criterioId:criterionId,criterioNombre:'Criterio inactivo',descripcion:'Pendiente',recomendacion:'Corregir',estado:'ABIERTO',
+      responsable:'Cliente',fotos:[],fechaApertura:source.inicioReal,solicitudApertura:'SR-0009',anterior:true,
+      visitasDesdeApertura:2,seguimientos:[],
+    }]}]}
+    expect(publicReportData(data).areas[0]?.hallazgos[0]).toMatchObject({criterioId:null,criterioNombre:'Criterio inactivo'})
+    expect(JSON.stringify(publicReportData(data))).not.toContain(criterionId)
+  })
   it('habilita evidencias históricas del hallazgo sin autorizar fotos arbitrarias de otros servicios', () => {
     const historicId = '20000000-0000-4000-8000-000000000020'
     const findingId = '30000000-0000-4000-8000-000000000030'

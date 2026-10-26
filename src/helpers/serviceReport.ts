@@ -39,7 +39,7 @@ export function reportMetrics(data: ServiceResultsData) {
 /** Keep evidence next to its technical record, and signatures in the final section. */
 export function reportEvidence(data: ServiceResultsData): ReportEvidence[] {
   const unique = new Map<string, string>()
-  const historicFinding = /^services\/[0-9a-f-]{36}\/findings\/[0-9a-f-]{36}\/(?:opening|closure|followup)\/[^/]+\.(?:png|jpe?g|webp)$/i
+  const historicFinding = /^services\/[0-9a-f-]{36}\/(?:findings\/[0-9a-f-]{36}\/(?:opening|closure|followup)|criteria\/[0-9a-f-]{36}\/evidence)\/[^/]+\.(?:png|jpe?g|webp)$/i
   function add(path: string | null | undefined, caption: string, finding = false): void {
     if (path && (path.startsWith('services/' + data.id + '/') || /^e:(0|[1-9]\d{0,3})$/.test(path)
       || (finding && historicFinding.test(path))) && !unique.has(path)) unique.set(path, caption)

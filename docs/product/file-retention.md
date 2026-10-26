@@ -85,3 +85,7 @@ Con 7 servicios/día, 6 días/semana (aprox. 182 servicios/mes) y 15–20 fotos 
 10. La ejecución diaria solo se dispara desde Cloudflare Cron y el Worker de la SPA no cambia.
 
 Referencia técnica del despliegue: [automatización de retención en Cloudflare](../development/cloudflare-retention.md).
+
+## Fotografías compartidas entre criterio y hallazgo
+
+Una ruta puede respaldar varias referencias sin duplicar el objeto en R2. El candidato de limpieza es único por bucket/ruta y utiliza el vencimiento más lejano de sus referencias vigentes. Antes de borrar se bloquean y revalidan todos los hallazgos que protegen ese archivo. Retirar una foto del criterio no elimina una evidencia utilizada por un hallazgo o seguimiento. Los datos estructurados y las referencias históricas se conservan después del vencimiento.

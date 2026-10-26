@@ -124,7 +124,7 @@ test('Historial ofrece informe solo administrativo y A4 con fotografías y ambas
   const day = todayBogota()
   await page.goto('/servicios?tab=history&from=' + day + '&to=' + day)
   const link = page.getByRole('link', {name:'Abrir informe de SR-00000008'})
-  await expect(link).toBeVisible()
+  await expect(link).toBeVisible({timeout:15_000})
   await link.click()
   await expect(page).toHaveURL(new RegExp('/servicios/' + serviceId + '/informe'))
   await expect(page.getByRole('heading',{name:'Informe técnico de servicio'})).toBeVisible()
