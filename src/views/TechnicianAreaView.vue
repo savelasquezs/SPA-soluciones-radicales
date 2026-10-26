@@ -422,9 +422,10 @@ function trackCriterionDraft(criterionId: string, evaluation: MipEvaluation | nu
   void task.catch(() => { saveError.value = 'No fue posible conservar una observación en este celular.' })
 }
 
-function clearCriterionDraft(criterionId: string, expected?: { evaluation: MipEvaluation; observation: string }): void {
+function clearCriterionDraft(criterionId: string, expected?: { evaluation: MipEvaluation; observation: string; files: File[] }): void {
   const current = drafts.value[criterionId]
-  if (!current || (expected && (current.evaluation !== expected.evaluation || current.observation.trim() !== expected.observation))) return
+  if (!current || (expected && (current.evaluation !== expected.evaluation || current.observation.trim() !== expected.observation
+    || current.files.length !== expected.files.length || current.files.some((file, index) => file !== expected.files[index])))) return
   const next = { ...drafts.value }
   delete next[criterionId]
   drafts.value = next
@@ -433,7 +434,7 @@ function clearCriterionDraft(criterionId: string, expected?: { evaluation: MipEv
 async function saveCriterion(criterionId: string, evaluation: MipEvaluation, observation: string, files: File[] = [], retainedEvidenceStoragePaths?: string[], deferSync = false): Promise<boolean> {
   if (!currentArea.value) return false
   const areaId = currentArea.value.id
-  const expected = { evaluation, observation: observation.trim() }
+  const expected = { evaluation, observation: observation.trim(), files: [...files] }
   const previous = saveQueue.get(criterionId) ?? Promise.resolve(true)
   const task = previous.then(async () => {
     saveError.value = ''
