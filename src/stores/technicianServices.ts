@@ -823,7 +823,7 @@ export const useTechnicianServicesStore = defineStore('technician-services', () 
             await reloadMutations(serviceId)
             return 'pending'
           }
-          const retryable = !(failure instanceof ApiClientError) || failure.status >= 500 || failure.status === 408 || failure.status === 429
+          const retryable = !(failure instanceof ApiClientError) || failure.status === 0 || failure.status >= 500 || failure.status === 408 || failure.status === 429
           const error = failure instanceof Error ? failure.message : 'No fue posible sincronizar el cambio.'
           if (sending.kind === 'VEHICLE_CREATE' || sending.kind === 'VEHICLE_SELECTION') {
             await saveTechnicianMutation({ ...sending, status: retryable ? 'SENDING' : 'CONFLICT',

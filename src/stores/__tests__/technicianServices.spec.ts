@@ -428,6 +428,26 @@ describe('technician services state', () => {
     expect(api.saveTechnicianCriterionEvaluation).toHaveBeenCalledWith(serviceId, expect.any(String), deviceId, lockToken, criterionId, 1, 'CP', 'Mejora pendiente', [])
   })
 
+  it('replays an unconfirmed criterion write with the same request ID when the network recovers', async () => {
+    vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([executionCache()])
+    vi.mocked(api.saveTechnicianCriterionEvaluation).mockRejectedValueOnce(
+      new ApiClientError('No pudimos confirmar si se guardó la operación.', 0, 'MUTATION_UNCONFIRMED'))
+    const store = useTechnicianServicesStore()
+    await store.ensurePackage(serviceId)
+    expect(await store.applyCriterionEvaluation(serviceId, areaIds[0]!, criterionId, 'NC', 'Limpieza requerida')).toBe('pending')
+    const requestId = mutationRecords[0]!.requestId
+    expect(mutationRecords[0]).toMatchObject({ status: 'SENDING', requestId })
+    expect(store.pendingSyncCount).toBe(1)
+    vi.mocked(api.saveTechnicianCriterionEvaluation).mockResolvedValue({ criterion: {
+      id: criterionId, criterioId: criterionId, nombre: 'Orden y aseo', soloAreaExterna: false,
+      evaluacion: 'NC', observacion: 'Limpieza requerida', evidenciasStoragePaths: [], version: 2,
+    }, removedEvidenceStoragePaths: [] })
+    expect(await store.syncPending(serviceId)).toBe('synced')
+    expect(vi.mocked(api.saveTechnicianCriterionEvaluation).mock.calls.map(call => call[1])).toEqual([requestId, requestId])
+    expect(mutationRecords).toHaveLength(0)
+    expect(store.currentPackage?.areas[0]?.criterios[0]).toMatchObject({ evaluacion: 'NC', version: 2 })
+  })
+
   it('keeps a criterion response in the shared queue while offline', async () => {
     Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
     vi.mocked(cacheService.listTechnicianPackageCaches).mockResolvedValue([executionCache()])

@@ -240,6 +240,8 @@ El inicio no se encola offline. Requiere confirmación online para fijar la hora
 
 La unidad de trabajo offline debe seguir entidades reales del dominio, no una definición de formulario.
 
+Si se pierde la red después de enviar una mutación idempotente y no se puede confirmar su respuesta, la operación permanece pendiente de sincronización con el mismo identificador. El siguiente intento reutiliza ese identificador para recuperar la confirmación sin duplicar escrituras ni fotografías; una respuesta ausente no es un conflicto de versiones.
+
 ## Limpieza del modelo anterior
 
 La migración `20261006_011_remove_legacy_mip_forms.sql` retira:
