@@ -77,4 +77,12 @@ describe('TechnicianCriterionEditor', () => {
     expect(wrapper.getComponent(TechnicianEvidencePicker).props('modelValue')).toEqual(files)
     expect(wrapper.text()).toContain('Guardar fotos pendientes')
   })
+  it('clears a graded photo draft acknowledged by the parent without counting it twice', async () => {
+    const files=[new File(['photo'],'pending.jpg',{type:'image/jpeg'})]
+    const wrapper=mount(TechnicianCriterionEditor,{props:{criterion:{...criterion,evaluacion:'NC'},draftFiles:files,mutation:null,editable:true,syncing:false}})
+    await wrapper.findAll('.criterion-tools button')[1]!.trigger('click')
+    await wrapper.setProps({criterion:{...criterion,evaluacion:'NC',evidenciasLocalIds:[crypto.randomUUID()]},draftFiles:[]})
+    expect(wrapper.getComponent(TechnicianEvidencePicker).props('modelValue')).toEqual([])
+    expect(wrapper.text()).toContain('Fotos · 1/5')
+  })
 })

@@ -97,7 +97,7 @@ function updatePhotos(value: File[]): void {
   }
 }
 
-watch(() => props.draftFiles, files => { if (!draftEvaluation.value && files) photos.value = files })
+watch(() => props.draftFiles, files => { if (files) photos.value = files })
 const gallery = useTechnicianEvidenceGallery(() => props.serviceId ?? '', () => props.actorId)
 const { open, index: photoIndex, state, url, photos: galleryPhotos } = gallery
 function showStoredPhoto(index: number, local = false): void {

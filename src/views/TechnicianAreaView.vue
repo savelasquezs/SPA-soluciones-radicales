@@ -410,9 +410,9 @@ async function saveAccess(withoutAccess: boolean, description: string, photos: F
 
 function trackCriterionDraft(criterionId: string, evaluation: MipEvaluation | null, observation: string, files: File[] = []): void {
   drafts.value = { ...drafts.value, [criterionId]: { evaluation, observation, files } }
+  unratedPhotos.value = { ...unratedPhotos.value, [criterionId]: files }
   if (evaluation) { if (validationTarget.value === criterionId) validationTarget.value = ''; return }
   unratedDrafts.value = { ...unratedDrafts.value, [criterionId]: observation }
-  unratedPhotos.value = { ...unratedPhotos.value, [criterionId]: files }
   const actorId = currentCache.value?.actorId
   const areaId = currentArea.value?.id
   if (!actorId || !areaId) return
@@ -442,6 +442,8 @@ async function saveCriterion(criterionId: string, evaluation: MipEvaluation, obs
       const result = await services.applyCriterionEvaluation(serviceId.value, areaId, criterionId, expected.evaluation, expected.observation, files, retainedEvidenceStoragePaths, deferSync)
       if (result === 'conflict') return false
       clearCriterionDraft(criterionId, expected)
+      unratedPhotos.value = { ...unratedPhotos.value,
+        [criterionId]: (unratedPhotos.value[criterionId] ?? []).filter(file => !expected.files.includes(file)) }
       const actorId = currentCache.value?.actorId
       if (actorId) {
         await (localDraftQueue.get(criterionId) ?? Promise.resolve())

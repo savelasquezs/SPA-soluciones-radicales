@@ -163,11 +163,11 @@ Este archivo registra decisiones permanentes. Las tareas pendientes se mantienen
 
 ## ADR-021 · Hallazgos vinculados a criterios y evidencia compartida
 
-- **Estado:** Aprobada para implementación local sobre `develop`.
+- **Estado:** Implementada y publicada en desarrollo sobre `develop`; validación visual integrada pendiente.
 - **Fecha:** 2026-10-26.
 - **Decisión:** Hallazgo mantiene identidad y ciclo de vida propios, con vínculo opcional al criterio y evaluación de apertura y nombre snapshot. No se fusionan las evaluaciones entre Servicios ni se reclasifica el histórico automáticamente.
 - **Evidencia:** Un objeto R2 puede respaldar criterio y hallazgos/seguimientos mediante sus referencias existentes. El backend valida Servicio/Área/evaluación y la pertenencia de la ruta. Desasociar no implica borrar un objeto referenciado. Retención agrupa por bucket/ruta con el vencimiento máximo y revalidación bajo bloqueo.
 - **Offline:** Los hallazgos reutilizan IDs de medios del criterio; la outbox sincroniza primero el origen y propaga las rutas definitivas antes de liberar los bytes. Los borradores parciales son durables por usuario/Servicio/Área/registro.
 - **Consistencia local:** Las escrituras de criterios y hallazgos se serializan por Servicio mientras se confirma el origen compartido. Una respuesta pendiente conserva los medios del envío anterior; el resultado confirmado se guarda en el paquete antes de retirar la operación y los bytes. Los reintentos de conflictos sustituyen las solicitudes anteriores en una transacción IndexedDB.
 - **Histórico:** Paquetes finalizados e informes limitan estados, cierre y seguimientos al `fin_real` exacto almacenado en PostgreSQL. No convierten ese corte a `Date` para volver a consultarlo: la pérdida de microsegundos excluiría registros de la propia visita.
-- **Entrega:** Migración `20261026_001_criterion_findings.sql` preparada y validada en PostgreSQL local. No aplicada a Neon ni desplegada por esta tarea.
+- **Entrega:** Migración `20261026_001_criterion_findings.sql` aplicada en Neon `desarrollo` el 2026-10-26 y API `66` activa. Su SHA-256 canónico es `2ba14cd28f00f8dbc88692345b9029af35291096c980b75e4402bc6304c57ea7`; se normalizó el checksum inicial de CRLF a LF para coincidir con Git, sin cambiar el SQL. Los registros operativos previos se conservaron. Producción no fue modificada.
